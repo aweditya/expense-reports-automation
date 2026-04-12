@@ -156,12 +156,12 @@ and produce fake PDFs or PNGs that are meant to yield those facts.
 
 Without the document-fact contract first, synthetic docs would be hard to evaluate because “correct extraction” would still be underspecified.
 
-## Immediate next step
+## Implemented next step
 
-Build synthetic fixtures for:
+The first synthetic extraction loop now exists for:
 
 1. `FlightItineraryFacts`
 2. `HotelFolioFacts`
 3. `ReceiptFacts`
 
-Then write narrow extractors that output `ExtractedDocumentFacts` for those fake documents before mapping them into the report schema.
+See [synthetic-pipeline.md](/Users/adityasriram/Labs/stanford/research/expense-reports/synthetic-pipeline.md:1) for the generator, extractor, and testing commands.
