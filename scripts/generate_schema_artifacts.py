@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import keyword
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -27,6 +26,60 @@ META_KEYS = {
 }
 
 ITEM_SEGMENT = "__item__"
+RUST_KEYWORDS = {
+    "Self",
+    "abstract",
+    "as",
+    "async",
+    "await",
+    "become",
+    "box",
+    "break",
+    "const",
+    "continue",
+    "crate",
+    "do",
+    "dyn",
+    "else",
+    "enum",
+    "extern",
+    "false",
+    "final",
+    "fn",
+    "for",
+    "if",
+    "impl",
+    "in",
+    "let",
+    "loop",
+    "macro",
+    "match",
+    "mod",
+    "move",
+    "mut",
+    "override",
+    "priv",
+    "pub",
+    "ref",
+    "return",
+    "self",
+    "static",
+    "struct",
+    "super",
+    "trait",
+    "true",
+    "try",
+    "type",
+    "typeof",
+    "union",
+    "unsafe",
+    "unsized",
+    "use",
+    "virtual",
+    "where",
+    "while",
+    "yield",
+}
 
 
 @dataclass
@@ -176,14 +229,14 @@ def titleize(value: str) -> str:
     return " ".join(word.capitalize() for word in words) if words else value
 
 
-def python_identifier(name: str) -> str:
+def rust_identifier(name: str) -> str:
     identifier = re.sub(r"\W", "_", name)
     if not identifier:
         identifier = "field"
     if identifier[0].isdigit():
         identifier = f"field_{identifier}"
-    if keyword.iskeyword(identifier):
-        identifier = f"{identifier}_"
+    if identifier in RUST_KEYWORDS:
+        identifier = f"r#{identifier}"
     return identifier
 
 
@@ -217,13 +270,26 @@ def object_nodes(node: SchemaNode) -> list[SchemaNode]:
     return nodes
 
 
-def python_type(node: SchemaNode) -> str:
+def rust_variant_name(value: str) -> str:
+    parts = [part for part in re.split(r"[^A-Za-z0-9]+", value) if part]
+    if not parts:
+        candidate = "Value"
+    else:
+        candidate = "".join(part[:1].upper() + part[1:] for part in parts)
+    if candidate[0].isdigit():
+        candidate = f"Value{candidate}"
+    if candidate in RUST_KEYWORDS or candidate in {"Self"}:
+        candidate = f"{candidate}Value"
+    return candidate
+
+
+def rust_type(node: SchemaNode) -> str:
     if node.node_type == "string":
-        return "str"
+        return "String"
     if node.node_type == "date":
-        return "date"
+        return "IsoDate"
     if node.node_type == "number":
-        return "Decimal"
+        return "DecimalAmount"
     if node.node_type == "boolean":
         return "bool"
     if node.node_type == "enum":
@@ -231,20 +297,16 @@ def python_type(node: SchemaNode) -> str:
     if node.node_type == "object":
         return class_name(node)
     if node.node_type == "array":
-        item_type = python_type(node.item) if node.item is not None else "Any"
-        return f"list[{item_type}]"
+        item_type = rust_type(node.item) if node.item is not None else "String"
+        return f"Vec<{item_type}>"
     raise ValueError(f"Unsupported schema type: {node.node_type}")
 
 
-def format_literal_alias(values: list[str]) -> list[str]:
-    rendered = [json.dumps(value) for value in values]
-    if len(", ".join(rendered)) <= 88:
-        return [f"Literal[{', '.join(rendered)}]"]
-    lines = ["Literal["]
-    for rendered_value in rendered:
-        lines.append(f"    {rendered_value},")
-    lines.append("]")
-    return lines
+def rust_field_type(node: SchemaNode) -> str:
+    base_type = rust_type(node)
+    if node.required and node.required_expression is None:
+        return base_type
+    return f"Option<{base_type}>"
 
 
 def wrap_comment(prefix: str, text: str, width: int = 96) -> list[str]:
@@ -264,64 +326,118 @@ def wrap_comment(prefix: str, text: str, width: int = 96) -> list[str]:
     return lines
 
 
-def generate_python_model(root: SchemaNode, schema_version: str) -> str:
+def node_doc_lines(node: SchemaNode, indent: str = "") -> list[str]:
+    lines: list[str] = []
+    if node.description:
+        lines.extend(wrap_comment(f"{indent}/// ", node.description))
+    if node.required_expression:
+        lines.extend(wrap_comment(f"{indent}/// Conditionally required when: ", node.required_expression))
+    if node.depends_on:
+        lines.extend(wrap_comment(f"{indent}/// Depends on: ", ", ".join(node.depends_on)))
+    if node.effective_source:
+        lines.append(f"{indent}/// Source tier: {node.effective_source}")
+    if node.infer_from:
+        lines.extend(wrap_comment(f"{indent}/// Infer from: ", node.infer_from))
+    if node.validation:
+        lines.extend(wrap_comment(f"{indent}/// Validation rule: ", node.validation))
+    return lines
+
+
+def generate_rust_model(root: SchemaNode, schema_version: str) -> str:
     lines: list[str] = [
-        '"""Auto-generated typed model from schema.yaml. Do not edit manually."""',
+        "// Auto-generated typed model from schema.yaml. Do not edit manually.",
         "",
-        "from __future__ import annotations",
+        f'pub const SCHEMA_VERSION: &str = "{schema_version}";',
         "",
-        "from datetime import date",
-        "from decimal import Decimal",
-        "from typing import Literal, NotRequired, Required, TypedDict, TypeAlias",
+        "#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]",
+        "pub struct IsoDate(pub String);",
         "",
-        f'SCHEMA_VERSION = "{schema_version}"',
+        "impl From<String> for IsoDate {",
+        "    fn from(value: String) -> Self {",
+        "        Self(value)",
+        "    }",
+        "}",
+        "",
+        "impl From<&str> for IsoDate {",
+        "    fn from(value: &str) -> Self {",
+        "        Self(value.to_owned())",
+        "    }",
+        "}",
+        "",
+        "#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]",
+        "pub struct DecimalAmount(pub String);",
+        "",
+        "impl From<String> for DecimalAmount {",
+        "    fn from(value: String) -> Self {",
+        "        Self(value)",
+        "    }",
+        "}",
+        "",
+        "impl From<&str> for DecimalAmount {",
+        "    fn from(value: &str) -> Self {",
+        "        Self(value.to_owned())",
+        "    }",
+        "}",
         "",
     ]
 
     enum_nodes = [node for node in leaf_nodes(root) if node.node_type == "enum"]
     if enum_nodes:
         for node in enum_nodes:
-            alias = enum_alias_name(node)
-            literal_lines = format_literal_alias(node.allowed_values)
-            if len(literal_lines) == 1:
-                lines.append(f"{alias}: TypeAlias = {literal_lines[0]}")
-            else:
-                lines.append(f"{alias}: TypeAlias = {literal_lines[0]}")
-                lines.extend(literal_lines[1:])
+            enum_name = enum_alias_name(node)
+            lines.extend(node_doc_lines(node))
+            lines.append("#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]")
+            lines.append(f"pub enum {enum_name} {{")
+            for value in node.allowed_values:
+                lines.append(f"    {rust_variant_name(value)},")
+            lines.append("}")
+            lines.append("")
+            lines.append(f"impl {enum_name} {{")
+            lines.append("    pub const fn as_str(&self) -> &'static str {")
+            lines.append("        match self {")
+            for value in node.allowed_values:
+                lines.append(f"            Self::{rust_variant_name(value)} => {json.dumps(value)},")
+            lines.append("        }")
+            lines.append("    }")
+            lines.append("}")
+            lines.append("")
+            lines.append(f"impl core::str::FromStr for {enum_name} {{")
+            lines.append("    type Err = &'static str;")
+            lines.append("")
+            lines.append("    fn from_str(value: &str) -> Result<Self, Self::Err> {")
+            lines.append("        match value {")
+            for value in node.allowed_values:
+                lines.append(f"            {json.dumps(value)} => Ok(Self::{rust_variant_name(value)}),")
+            lines.append('            _ => Err("invalid enum value"),')
+            lines.append("        }")
+            lines.append("    }")
+            lines.append("}")
+            lines.append("")
+            lines.append(f"impl core::fmt::Display for {enum_name} {{")
+            lines.append("    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {")
+            lines.append("        f.write_str(self.as_str())")
+            lines.append("    }")
+            lines.append("}")
             lines.append("")
 
     for node in object_nodes(root):
-        lines.append(f"class {class_name(node)}(TypedDict, total=False):")
-        if node.description:
-            lines.extend(wrap_comment("    # ", node.description))
+        lines.extend(node_doc_lines(node))
+        lines.append("#[derive(Debug, Clone, PartialEq)]")
+        lines.append(f"pub struct {class_name(node)} {{")
         if not node.fields:
-            lines.append("    pass")
+            lines.append("}")
             lines.append("")
             continue
 
         for child in node.fields:
-            if child.description:
-                lines.extend(wrap_comment("    # ", child.description))
-            if child.required_expression:
-                lines.extend(
-                    wrap_comment(
-                        "    # Conditionally required when: ",
-                        child.required_expression,
-                    )
-                )
-            if child.depends_on:
-                lines.extend(
-                    wrap_comment(
-                        "    # Depends on: ",
-                        ", ".join(child.depends_on),
-                    )
-                )
-            wrapper = "Required" if child.required and child.required_expression is None else "NotRequired"
-            identifier = python_identifier(child.name)
-            lines.append(f"    {identifier}: {wrapper}[{python_type(child)}]")
+            lines.extend(node_doc_lines(child, indent="    "))
+            identifier = rust_identifier(child.name)
+            lines.append(f"    pub {identifier}: {rust_field_type(child)},")
+        lines.append("")
+        lines.append("}")
         lines.append("")
 
-    lines.append(f"ExpenseReportModel = {class_name(root)}")
+    lines.append(f"pub type ExpenseReportModel = {class_name(root)};")
     lines.append("")
     return "\n".join(lines)
 
@@ -403,7 +519,7 @@ def build_validation_rules(root: SchemaNode, schema_version: str, generated_at: 
                 "path": node.path_string,
                 "node_kind": node_kind(node),
                 "schema_type": node.node_type,
-                "python_type": python_type(node) if node.node_type != "object" else class_name(node),
+                "rust_type": rust_type(node) if node.node_type != "object" else class_name(node),
                 "required": node.required and node.required_expression is None,
                 "required_expression": node.required_expression,
                 "source": node.source,
@@ -504,12 +620,13 @@ def generate(schema_path: Path, output_dir: Path) -> None:
     hydrate_effective_source(root)
     generated_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
-    model_contents = generate_python_model(root, schema_version)
+    model_contents = generate_rust_model(root, schema_version)
     validation_rules = build_validation_rules(root, schema_version, generated_at)
     ui_field_map = build_ui_field_map(root, schema_version, generated_at)
 
-    write_text(output_dir / "__init__.py", '"""Generated schema artifacts."""\n')
-    write_text(output_dir / "expense_report_model.py", model_contents)
+    for stale_path in (output_dir / "__init__.py", output_dir / "expense_report_model.py"):
+        stale_path.unlink(missing_ok=True)
+    write_text(output_dir / "expense_report_model.rs", model_contents)
     write_yaml(output_dir / "validation_rules.yaml", validation_rules)
     write_yaml(output_dir / "ui_field_map.yaml", ui_field_map)
 
