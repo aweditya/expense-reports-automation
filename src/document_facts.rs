@@ -1,10 +1,11 @@
 use std::fmt;
+use std::path::Path;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::draft::{ConfidenceLevel, EvidenceReference};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DocumentKind {
     FlightItinerary,
@@ -36,7 +37,7 @@ impl DocumentKind {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExtractionStatus {
     Complete,
@@ -45,14 +46,14 @@ pub enum ExtractionStatus {
     Unsupported,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum IssueSeverity {
     Warning,
     Error,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Observed<T> {
     pub value: T,
     pub confidence: ConfidenceLevel,
@@ -75,7 +76,7 @@ impl<T> Observed<T> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DocumentClassification {
     pub kind: DocumentKind,
     pub confidence: ConfidenceLevel,
@@ -89,7 +90,7 @@ impl DocumentClassification {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DocumentExtractionIssue {
     pub severity: IssueSeverity,
     pub code: String,
@@ -97,19 +98,19 @@ pub struct DocumentExtractionIssue {
     pub evidence: Vec<EvidenceReference>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MoneyAmount {
     pub amount: String,
     pub currency: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DateRange {
     pub start_date: String,
     pub end_date: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Location {
     pub city: Option<String>,
     pub region: Option<String>,
@@ -117,7 +118,7 @@ pub struct Location {
     pub airport_code: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FlightSegmentFacts {
     pub departure_airport: Observed<String>,
     pub arrival_airport: Observed<String>,
@@ -128,7 +129,7 @@ pub struct FlightSegmentFacts {
     pub cabin_class: Option<Observed<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FlightItineraryFacts {
     pub traveler_names: Vec<Observed<String>>,
     pub confirmation_code: Option<Observed<String>>,
@@ -141,7 +142,7 @@ pub struct FlightItineraryFacts {
     pub total_paid: Option<Observed<MoneyAmount>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HotelNightChargeFacts {
     pub date: Observed<String>,
     pub room_rate: Option<Observed<MoneyAmount>>,
@@ -149,7 +150,7 @@ pub struct HotelNightChargeFacts {
     pub description: Option<Observed<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HotelFolioFacts {
     pub guest_name: Option<Observed<String>>,
     pub property_name: Option<Observed<String>>,
@@ -161,13 +162,13 @@ pub struct HotelFolioFacts {
     pub meals_included: Vec<Observed<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReceiptLineItemFacts {
     pub description: Observed<String>,
     pub amount: Observed<MoneyAmount>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReceiptFacts {
     pub merchant_name: Option<Observed<String>>,
     pub merchant_location: Option<Observed<Location>>,
@@ -179,7 +180,7 @@ pub struct ReceiptFacts {
     pub line_items: Vec<ReceiptLineItemFacts>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConferenceRegistrationFacts {
     pub attendee_name: Option<Observed<String>>,
     pub event_name: Option<Observed<String>>,
@@ -190,14 +191,14 @@ pub struct ConferenceRegistrationFacts {
     pub included_meals: Vec<Observed<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PresentationFact {
     pub title: Observed<String>,
     pub presentation_date: Option<Observed<String>>,
     pub presenters: Vec<Observed<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConferenceProgramFacts {
     pub attendee_name: Option<Observed<String>>,
     pub event_name: Option<Observed<String>>,
@@ -205,7 +206,7 @@ pub struct ConferenceProgramFacts {
     pub presentations: Vec<PresentationFact>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CurrencyConversionFacts {
     pub conversion_date: Option<Observed<String>>,
     pub provider_name: Option<Observed<String>>,
@@ -214,7 +215,7 @@ pub struct CurrencyConversionFacts {
     pub exchange_rate: Option<Observed<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AirfarePriceComparisonFacts {
     pub comparison_date: Option<Observed<String>>,
     pub selected_fare: Option<Observed<MoneyAmount>>,
@@ -222,7 +223,7 @@ pub struct AirfarePriceComparisonFacts {
     pub policy_outcome: Option<Observed<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MissingReceiptDeclarationFacts {
     pub claimant_name: Option<Observed<String>>,
     pub merchant_name: Option<Observed<String>>,
@@ -231,7 +232,7 @@ pub struct MissingReceiptDeclarationFacts {
     pub explanation: Option<Observed<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StanfordExpenseSummaryFacts {
     pub payee_name: Option<Observed<String>>,
     pub event_name: Option<Observed<String>>,
@@ -250,13 +251,13 @@ pub struct StanfordExpenseSummaryFacts {
     pub authorized_by: Option<Observed<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UnknownDocumentFacts {
     pub title_hint: Option<Observed<String>>,
     pub text_summary: Option<Observed<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DocumentFactsPayload {
     FlightItinerary(FlightItineraryFacts),
@@ -288,7 +289,7 @@ impl DocumentFactsPayload {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExtractedDocumentFacts {
     pub document_id: String,
     pub filename: String,
@@ -361,10 +362,25 @@ pub fn render_document_facts_json_pretty(
     serde_json::to_string_pretty(facts)
 }
 
+pub fn parse_document_facts_json_str(
+    value: &str,
+) -> Result<ExtractedDocumentFacts, serde_json::Error> {
+    serde_json::from_str(value)
+}
+
+pub fn parse_document_facts_json_path(
+    path: impl AsRef<Path>,
+) -> Result<ExtractedDocumentFacts, Box<dyn std::error::Error>> {
+    let value = std::fs::read_to_string(path)?;
+    Ok(parse_document_facts_json_str(&value)?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::draft::EvidenceKind;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn sample_evidence() -> EvidenceReference {
         EvidenceReference {
@@ -375,6 +391,18 @@ mod tests {
             quote: Some("Flight Confirmation".to_owned()),
             origin: None,
         }
+    }
+
+    fn write_temp_json(contents: &str) -> std::path::PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be valid")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("expense_report_document_facts_{unique}"));
+        fs::create_dir_all(&dir).expect("temp dir should be creatable");
+        let path = dir.join("facts.json");
+        fs::write(&path, contents).expect("json fixture should be writable");
+        path
     }
 
     #[test]
@@ -471,5 +499,45 @@ mod tests {
 
         assert!(facts.validate_contract().is_ok());
         assert!(facts.needs_review());
+    }
+
+    #[test]
+    fn parses_rendered_document_facts_from_path() {
+        let facts = ExtractedDocumentFacts {
+            document_id: "doc_001".to_owned(),
+            filename: "sample.pdf".to_owned(),
+            classification: DocumentClassification {
+                kind: DocumentKind::Receipt,
+                confidence: ConfidenceLevel::High,
+                evidence: vec![sample_evidence()],
+                flags: Vec::new(),
+            },
+            extraction_status: ExtractionStatus::Complete,
+            facts: DocumentFactsPayload::Receipt(ReceiptFacts {
+                merchant_name: Some(Observed::new(
+                    "East Bay Bistro".to_owned(),
+                    ConfidenceLevel::High,
+                    vec![sample_evidence()],
+                )),
+                merchant_location: None,
+                transaction_date: Some(Observed::new(
+                    "2025-04-24".to_owned(),
+                    ConfidenceLevel::High,
+                    vec![sample_evidence()],
+                )),
+                total_paid: None,
+                subtotal: None,
+                tax_amount: None,
+                tip_amount: None,
+                line_items: Vec::new(),
+            }),
+            issues: Vec::new(),
+        };
+        let rendered = render_document_facts_json_pretty(&facts).expect("facts should render");
+        let path = write_temp_json(&rendered);
+        let reparsed = parse_document_facts_json_path(&path).expect("facts should parse from path");
+
+        assert_eq!(reparsed, facts);
+        fs::remove_dir_all(path.parent().unwrap()).expect("temp dir should be removable");
     }
 }

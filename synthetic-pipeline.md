@@ -22,6 +22,14 @@ The relevant code lives in:
 
 The markdown files are meant to stand in for OCR-transcribed markdown.
 
+This repo also includes a checked-in curated corpus of more realistic markdown transcriptions under `fixtures/curated/`:
+
+- `fixtures/curated/flight_itinerary/`
+- `fixtures/curated/hotel_folio/`
+- `fixtures/curated/receipt/`
+
+Those fixtures are paired with expected `ExtractedDocumentFacts` values in [src/curated_corpus.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/curated_corpus.rs:1), and they are meant to pin the interface against layouts that look closer to real OCR output than the generated smoke fixtures.
+
 ## Commands
 
 Run the full Rust test suite:
@@ -54,6 +62,12 @@ Extract document facts from a generated markdown document:
 cargo run --bin extract_document_facts -- /tmp/expense_synth_baseline/synthetic_receipt_baseline.md
 ```
 
+Verify the checked-in curated corpus:
+
+```bash
+cargo run --bin verify_curated_corpus
+```
+
 Transcribe a markdown document through the same transcription layer:
 
 ```bash
@@ -66,10 +80,13 @@ The current tests cover:
 
 - baseline round-trip extraction for all three synthetic document kinds
 - noisy round-trip extraction for all three synthetic document kinds
+- curated realistic corpus regression checks for flights, hotel folios, and receipts
 - deterministic inference when a flight trip window is missing
 - deterministic inference when hotel and receipt totals are missing
 - error reporting when a non-derivable required field is missing
+- label parsing regressions for hyphenated and slashed field names
+- receipt row parsing regressions for dotted leaders, inline currency codes, and uppercase tax lines
 
 ## Why this matters
 
-These fixtures give the document-fact layer a stable contract and a repeatable evaluation set before real receipts and folios are available.
+These fixtures give the document-fact layer a stable contract and a repeatable evaluation set before real receipts and folios are available. The generated packet is useful for quick smoke coverage, while the curated corpus is the stricter regression suite that should fail whenever interface behavior changes unexpectedly.

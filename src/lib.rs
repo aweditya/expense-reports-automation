@@ -1,4 +1,5 @@
 pub mod bootstrap;
+pub mod curated_corpus;
 pub mod document_extract;
 pub mod document_facts;
 #[path = "../generated/expense_report_model.rs"]
@@ -16,6 +17,12 @@ pub mod value;
 pub use bootstrap::extract_stanford_summary_document;
 pub use bootstrap::extract_stanford_summary_path;
 pub use bootstrap::BootstrapExtractionError;
+pub use curated_corpus::curated_corpus_cases;
+pub use curated_corpus::curated_corpus_root;
+pub use curated_corpus::verify_curated_corpus;
+pub use curated_corpus::CuratedCorpusCase;
+pub use curated_corpus::CuratedCorpusFailure;
+pub use curated_corpus::CuratedCorpusVerificationReport;
 pub use document_extract::extract_document_facts;
 pub use document_extract::extract_document_facts_path;
 pub use document_facts::AirfarePriceComparisonFacts;
@@ -42,6 +49,8 @@ pub use document_facts::Observed;
 pub use document_facts::PresentationFact;
 pub use document_facts::ReceiptFacts;
 pub use document_facts::ReceiptLineItemFacts;
+pub use document_facts::parse_document_facts_json_path;
+pub use document_facts::parse_document_facts_json_str;
 pub use document_facts::render_document_facts_json_pretty;
 pub use document_facts::StanfordExpenseSummaryFacts;
 pub use document_facts::UnknownDocumentFacts;

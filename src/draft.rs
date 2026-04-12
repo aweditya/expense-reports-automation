@@ -2,12 +2,12 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::path::Path;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::parse::{parse_document_path, ParseReportError};
 use crate::value::ReportValue;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConfidenceLevel {
     High,
@@ -15,7 +15,7 @@ pub enum ConfidenceLevel {
     Low,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EvidenceKind {
     Document,
@@ -24,7 +24,7 @@ pub enum EvidenceKind {
     UserInput,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EvidenceReference {
     pub kind: EvidenceKind,
     pub document_id: Option<String>,

@@ -46,7 +46,7 @@ fn collect_lines(document: &TranscribedDocument) -> Vec<LineRef> {
                 continue;
             }
 
-            let is_heading = trimmed.starts_with('#');
+            let is_heading = looks_like_heading(trimmed);
             let is_bullet = trimmed.starts_with('-') || trimmed.starts_with('*');
             lines.push(LineRef {
                 page_number: page.page_number,
@@ -61,11 +61,14 @@ fn collect_lines(document: &TranscribedDocument) -> Vec<LineRef> {
 }
 
 fn classify_document(document: &TranscribedDocument, lines: &[LineRef]) -> DocumentClassification {
-    if let Some(line) = find_line_with_any(lines, &["itinerary / receipt", "e-ticket itinerary"]) {
+    if let Some(line) = find_line_with_any(
+        lines,
+        &["itinerary / receipt", "itinerary receipt", "e-ticket itinerary", "e ticket itinerary"],
+    ) {
         return classification_from_line(document, DocumentKind::FlightItinerary, line, ConfidenceLevel::High);
     }
 
-    if let Some(line) = find_line_with_any(lines, &["hotel folio", "guest folio"]) {
+    if let Some(line) = find_line_with_any(lines, &["hotel folio", "guest folio", "guest bill"]) {
         return classification_from_line(document, DocumentKind::HotelFolio, line, ConfidenceLevel::High);
     }
 
@@ -95,19 +98,51 @@ fn extract_flight_itinerary(
     lines: &[LineRef],
     classification: DocumentClassification,
 ) -> ExtractedDocumentFacts {
-    let traveler_name = observed_string(document, lines, &["traveler name"], ConfidenceLevel::High);
-    let confirmation_code =
-        observed_string(document, lines, &["booking reference", "confirmation code"], ConfidenceLevel::High);
-    let ticket_number = observed_string(document, lines, &["ticket number", "ticket no"], ConfidenceLevel::High);
-    let booking_date = observed_string(document, lines, &["booking date", "booked"], ConfidenceLevel::High);
-    let departure_location =
-        observed_location(document, lines, &["origin", "from"], ConfidenceLevel::High);
-    let arrival_location =
-        observed_location(document, lines, &["destination", "to"], ConfidenceLevel::High);
+    let traveler_name = observed_string(
+        document,
+        lines,
+        &["traveler name", "passenger name", "traveler", "passenger"],
+        ConfidenceLevel::High,
+    );
+    let confirmation_code = observed_string(
+        document,
+        lines,
+        &["booking reference", "confirmation code", "record locator", "reservation code"],
+        ConfidenceLevel::High,
+    );
+    let ticket_number = observed_string(
+        document,
+        lines,
+        &["ticket number", "ticket no"],
+        ConfidenceLevel::High,
+    );
+    let booking_date = observed_string(
+        document,
+        lines,
+        &["booking date", "issue date", "issued", "booked"],
+        ConfidenceLevel::High,
+    );
+    let departure_location = observed_location(document, lines, &["origin", "from"], ConfidenceLevel::High);
+    let arrival_location = observed_location(document, lines, &["destination", "to"], ConfidenceLevel::High);
     let explicit_trip_window =
-        observed_date_range(document, lines, &["trip window", "travel window"], ConfidenceLevel::High);
-    let total_paid = observed_money(document, lines, &["total paid", "fare paid"], ConfidenceLevel::High);
-    let segment_lines = collect_section_bullets(lines, &["segments"]);
+        observed_date_range(document, lines, &["trip window", "travel window"], ConfidenceLevel::High)
+            .or_else(|| {
+                observed_date_range_from_labels(
+                    document,
+                    lines,
+                    &["departure", "outbound"],
+                    &["return", "arrival"],
+                    ConfidenceLevel::Medium,
+                    "document_extract.infer_trip_window_from_departure_return",
+                )
+            });
+    let total_paid = observed_money(
+        document,
+        lines,
+        &["total paid", "fare paid", "total fare paid", "fare total"],
+        ConfidenceLevel::High,
+    );
+    let segment_lines = collect_section_rows(lines, &["segments", "flight segments"]);
     let segments = segment_lines
         .iter()
         .filter_map(|line| parse_flight_segment(document, line))
@@ -150,22 +185,49 @@ fn extract_hotel_folio(
     lines: &[LineRef],
     classification: DocumentClassification,
 ) -> ExtractedDocumentFacts {
-    let guest_name = observed_string(document, lines, &["guest name"], ConfidenceLevel::High);
-    let property_name = observed_string(document, lines, &["property name", "hotel name"], ConfidenceLevel::High);
-    let folio_number = observed_string(document, lines, &["folio number"], ConfidenceLevel::High);
-    let property_location =
-        observed_location(document, lines, &["property location", "hotel location"], ConfidenceLevel::High);
+    let guest_name =
+        observed_string(document, lines, &["guest name", "guest"], ConfidenceLevel::High);
+    let property_name = observed_string(
+        document,
+        lines,
+        &["property name", "hotel name"],
+        ConfidenceLevel::High,
+    )
+    .or_else(|| infer_heading_value(document, lines, &["hotel folio", "guest folio", "guest bill"]));
+    let folio_number =
+        observed_string(document, lines, &["folio number", "folio #", "folio"], ConfidenceLevel::High);
+    let property_location = observed_location(
+        document,
+        lines,
+        &["property location", "hotel location", "city/country", "location"],
+        ConfidenceLevel::High,
+    );
     let explicit_stay_window =
-        observed_date_range(document, lines, &["stay window", "check-in / check-out"], ConfidenceLevel::High);
-    let nightly_lines = collect_section_bullets(lines, &["nightly charges"]);
+        observed_date_range(document, lines, &["stay window", "check-in / check-out"], ConfidenceLevel::High)
+            .or_else(|| {
+                observed_date_range_from_labels(
+                    document,
+                    lines,
+                    &["check in", "arrival"],
+                    &["check out", "departure"],
+                    ConfidenceLevel::Medium,
+                    "document_extract.infer_stay_window_from_checkin_checkout",
+                )
+            });
+    let nightly_lines = collect_section_rows(lines, &["nightly charges", "charges"]);
     let nightly_charges = nightly_lines
         .iter()
         .filter_map(|line| parse_hotel_night_charge(document, line))
         .collect::<Vec<_>>();
     let stay_window = explicit_stay_window.or_else(|| infer_stay_window_from_nights(&nightly_charges));
-    let total_paid = observed_money(document, lines, &["total paid", "amount paid"], ConfidenceLevel::High)
+    let total_paid = observed_money(
+        document,
+        lines,
+        &["total paid", "amount paid", "balance due", "total amount"],
+        ConfidenceLevel::High,
+    )
         .or_else(|| infer_hotel_total_from_nights(&nightly_charges));
-    let meals_included = collect_section_bullets(lines, &["meals included"])
+    let meals_included = collect_section_rows(lines, &["meals included", "included in rate", "included in room rate"])
         .into_iter()
         .map(|line| observed_from_line(line, normalize_bullet_content(&line.raw), ConfidenceLevel::High, document))
         .collect::<Vec<_>>();
@@ -207,17 +269,23 @@ fn extract_receipt(
     lines: &[LineRef],
     classification: DocumentClassification,
 ) -> ExtractedDocumentFacts {
-    let merchant_name = observed_string(document, lines, &["merchant name"], ConfidenceLevel::High);
+    let merchant_name = observed_string(
+        document,
+        lines,
+        &["merchant name", "merchant"],
+        ConfidenceLevel::High,
+    )
+    .or_else(|| infer_heading_value(document, lines, &["merchant receipt", "card receipt"]));
     let merchant_location =
         observed_location(document, lines, &["merchant location", "location"], ConfidenceLevel::High);
     let transaction_date =
         observed_string(document, lines, &["transaction date", "date"], ConfidenceLevel::High);
     let subtotal = observed_money(document, lines, &["subtotal"], ConfidenceLevel::High);
-    let tax_amount = observed_money(document, lines, &["tax"], ConfidenceLevel::High);
+    let tax_amount = observed_money(document, lines, &["tax", "gst", "vat"], ConfidenceLevel::High);
     let tip_amount = observed_money(document, lines, &["tip"], ConfidenceLevel::High);
-    let total_paid = observed_money(document, lines, &["total paid"], ConfidenceLevel::High)
+    let total_paid = observed_money(document, lines, &["total paid", "total", "amount paid"], ConfidenceLevel::High)
         .or_else(|| infer_receipt_total(subtotal.as_ref(), tax_amount.as_ref(), tip_amount.as_ref()));
-    let line_items = collect_section_bullets(lines, &["line items"])
+    let line_items = collect_section_rows(lines, &["line items", "items", "purchased items", "items purchased"])
         .into_iter()
         .filter_map(|line| parse_receipt_line_item(document, line))
         .collect::<Vec<_>>();
@@ -310,51 +378,150 @@ fn extraction_status_from_issues(issues: &[DocumentExtractionIssue]) -> Extracti
 }
 
 fn parse_flight_segment(document: &TranscribedDocument, line: &LineRef) -> Option<FlightSegmentFacts> {
-    let departure_airport = observed_pipe_field(document, line, &["departure airport"], ConfidenceLevel::High)?;
-    let arrival_airport = observed_pipe_field(document, line, &["arrival airport"], ConfidenceLevel::High)?;
-    let departure_date = observed_pipe_field(document, line, &["departure date"], ConfidenceLevel::High)?;
-    let arrival_date = observed_pipe_field(document, line, &["arrival date"], ConfidenceLevel::High);
-    let marketing_carrier =
-        observed_pipe_field(document, line, &["marketing carrier", "carrier"], ConfidenceLevel::High);
-    let flight_number = observed_pipe_field(document, line, &["flight number"], ConfidenceLevel::High);
-    let cabin_class = observed_pipe_field(document, line, &["cabin class"], ConfidenceLevel::High);
+    if let Some(departure_airport) =
+        observed_pipe_field(document, line, &["departure airport"], ConfidenceLevel::High)
+    {
+        let arrival_airport =
+            observed_pipe_field(document, line, &["arrival airport"], ConfidenceLevel::High)?;
+        let departure_date =
+            observed_pipe_field(document, line, &["departure date"], ConfidenceLevel::High)?;
+        let arrival_date = observed_pipe_field(document, line, &["arrival date"], ConfidenceLevel::High);
+        let marketing_carrier =
+            observed_pipe_field(document, line, &["marketing carrier", "carrier"], ConfidenceLevel::High);
+        let flight_number = observed_pipe_field(document, line, &["flight number"], ConfidenceLevel::High);
+        let cabin_class = observed_pipe_field(document, line, &["cabin class"], ConfidenceLevel::High);
+
+        return Some(FlightSegmentFacts {
+            departure_airport,
+            arrival_airport,
+            departure_date,
+            arrival_date,
+            marketing_carrier,
+            flight_number,
+            cabin_class,
+        });
+    }
+
+    let columns = split_columns(&normalize_bullet_content(&line.raw));
+    if columns.len() < 4 {
+        return None;
+    }
+
+    let route = columns.iter().find(|column| column.contains("->"))?;
+    let dates = columns
+        .iter()
+        .find(|column| column.contains("->") && column.contains("202"))
+        .or_else(|| columns.iter().find(|column| column.contains("202")))?;
+    let route_parts = route.split("->").map(str::trim).collect::<Vec<_>>();
+    if route_parts.len() != 2 {
+        return None;
+    }
+
+    let date_parts = dates.split("->").map(str::trim).collect::<Vec<_>>();
+    let departure_date = date_parts.first()?.to_string();
+    let arrival_date = date_parts.get(1).map(|value| value.to_string());
+    let airline_and_flight = columns.iter().find(|column| {
+        column.split_whitespace().count() >= 2
+            && column.chars().any(|ch| ch.is_ascii_digit())
+            && column.chars().any(|ch| ch.is_ascii_alphabetic())
+            && !column.contains("->")
+    })?;
+    let mut airline_tokens = airline_and_flight.split_whitespace();
+    let marketing_carrier = airline_tokens.next()?.to_owned();
+    let flight_number = airline_tokens.next()?.to_owned();
+    let cabin_class = columns.last().map(|value| value.trim().to_owned());
 
     Some(FlightSegmentFacts {
-        departure_airport,
-        arrival_airport,
-        departure_date,
-        arrival_date,
-        marketing_carrier,
-        flight_number,
-        cabin_class,
+        departure_airport: observed_from_line(line, route_parts[0].to_owned(), ConfidenceLevel::High, document),
+        arrival_airport: observed_from_line(line, route_parts[1].to_owned(), ConfidenceLevel::High, document),
+        departure_date: observed_from_line(line, departure_date, ConfidenceLevel::High, document),
+        arrival_date: arrival_date.map(|value| observed_from_line(line, value, ConfidenceLevel::High, document)),
+        marketing_carrier: Some(observed_from_line(
+            line,
+            marketing_carrier,
+            ConfidenceLevel::High,
+            document,
+        )),
+        flight_number: Some(observed_from_line(
+            line,
+            flight_number,
+            ConfidenceLevel::High,
+            document,
+        )),
+        cabin_class: cabin_class.map(|value| observed_from_line(line, value, ConfidenceLevel::High, document)),
     })
 }
 
 fn parse_hotel_night_charge(document: &TranscribedDocument, line: &LineRef) -> Option<HotelNightChargeFacts> {
-    let date = observed_pipe_field(document, line, &["date"], ConfidenceLevel::High)?;
-    let description = observed_pipe_field(document, line, &["description"], ConfidenceLevel::High);
-    let room_rate = observed_pipe_field_money(document, line, &["room rate"], ConfidenceLevel::High);
-    let taxes_and_fees = observed_pipe_field_money(document, line, &["taxes & fees"], ConfidenceLevel::High)
-        .into_iter()
-        .collect::<Vec<_>>();
+    if let Some(date) = observed_pipe_field(document, line, &["date"], ConfidenceLevel::High) {
+        let description = observed_pipe_field(document, line, &["description"], ConfidenceLevel::High);
+        let room_rate = observed_pipe_field_money(document, line, &["room rate"], ConfidenceLevel::High);
+        let taxes_and_fees = observed_pipe_field_money(document, line, &["taxes & fees"], ConfidenceLevel::High)
+            .into_iter()
+            .collect::<Vec<_>>();
+
+        return Some(HotelNightChargeFacts {
+            date,
+            room_rate,
+            taxes_and_fees,
+            description,
+        });
+    }
+
+    let columns = split_columns(&normalize_bullet_content(&line.raw));
+    if columns.len() < 4 {
+        return None;
+    }
+
+    let date = columns.first()?.to_owned();
+    let description = columns.get(1)?.to_owned();
+    let room_rate = parse_money(columns.get(2)?)?;
+    let taxes_and_fees = parse_money(columns.get(3)?)?;
 
     Some(HotelNightChargeFacts {
-        date,
-        room_rate,
-        taxes_and_fees,
-        description,
+        date: observed_from_line(line, date, ConfidenceLevel::High, document),
+        room_rate: Some(observed_from_line(line, room_rate, ConfidenceLevel::High, document)),
+        taxes_and_fees: vec![observed_from_line(
+            line,
+            taxes_and_fees,
+            ConfidenceLevel::High,
+            document,
+        )],
+        description: Some(observed_from_line(line, description, ConfidenceLevel::High, document)),
     })
 }
 
 fn parse_receipt_line_item(document: &TranscribedDocument, line: &LineRef) -> Option<ReceiptLineItemFacts> {
     let content = normalize_bullet_content(&line.raw);
-    let mut parts = content.split('|').map(str::trim);
-    let description = parts.next()?;
-    let amount = parts.next()?;
-    let amount = parse_money(amount)?;
+    let (description, amount) = if content.contains('|') {
+        let mut parts = content.split('|').map(str::trim);
+        let description = parts.next()?.to_owned();
+        let amount = parse_money(parts.next()?)?;
+        (description, amount)
+    } else {
+        split_description_and_money(&content)?
+    };
+
+    let description_key = normalize_key(&description);
+    let summary_labels = [
+        "subtotal",
+        "tax",
+        "gst",
+        "vat",
+        "tip",
+        "total",
+        "total paid",
+        "amount paid",
+    ];
+    if summary_labels
+        .iter()
+        .any(|label| description_key == normalize_key(label))
+    {
+        return None;
+    }
 
     Some(ReceiptLineItemFacts {
-        description: observed_from_line(line, description.to_owned(), ConfidenceLevel::High, document),
+        description: observed_from_line(line, description, ConfidenceLevel::High, document),
         amount: observed_from_line(line, amount, ConfidenceLevel::High, document),
     })
 }
@@ -519,6 +686,30 @@ fn observed_date_range(
     Some(observed_from_line(line, value, confidence, document))
 }
 
+fn observed_date_range_from_labels(
+    document: &TranscribedDocument,
+    lines: &[LineRef],
+    start_labels: &[&str],
+    end_labels: &[&str],
+    confidence: ConfidenceLevel,
+    origin: &str,
+) -> Option<Observed<DateRange>> {
+    let (start_line, start_value) = find_label_value(lines, start_labels)?;
+    let (end_line, end_value) = find_label_value(lines, end_labels)?;
+    let mut evidence = vec![document_span_evidence(document, start_line), document_span_evidence(document, end_line)];
+    evidence.push(system_generated_evidence(origin));
+
+    Some(Observed {
+        value: DateRange {
+            start_date: start_value,
+            end_date: end_value,
+        },
+        confidence,
+        evidence,
+        flags: Vec::new(),
+    })
+}
+
 fn observed_pipe_field(
     document: &TranscribedDocument,
     line: &LineRef,
@@ -562,15 +753,13 @@ fn find_line_with_any<'a>(lines: &'a [LineRef], needles: &[&str]) -> Option<&'a 
     })
 }
 
-fn collect_section_bullets<'a>(lines: &'a [LineRef], headings: &[&str]) -> Vec<&'a LineRef> {
+fn collect_section_rows<'a>(lines: &'a [LineRef], headings: &[&str]) -> Vec<&'a LineRef> {
     let mut in_section = false;
     let mut collected = Vec::new();
 
     for line in lines {
         if line.is_heading {
-            let is_target = headings
-                .iter()
-                .any(|heading| normalize_key(&line.normalized) == normalize_key(heading));
+            let is_target = headings.iter().any(|heading| matches_heading(line, heading));
             if is_target {
                 in_section = true;
                 continue;
@@ -581,7 +770,7 @@ fn collect_section_bullets<'a>(lines: &'a [LineRef], headings: &[&str]) -> Vec<&
             }
         }
 
-        if in_section && line.is_bullet {
+        if in_section {
             collected.push(line);
         }
     }
@@ -591,28 +780,74 @@ fn collect_section_bullets<'a>(lines: &'a [LineRef], headings: &[&str]) -> Vec<&
 
 fn find_label_value<'a>(lines: &'a [LineRef], labels: &[&str]) -> Option<(&'a LineRef, String)> {
     for line in lines {
-        if let Some(value) = strip_label_value(&line.normalized, labels) {
+        if let Some(value) = strip_label_value(&line.raw, labels, !line.is_heading) {
             return Some((line, value));
         }
     }
     None
 }
 
-fn strip_label_value(line: &str, labels: &[&str]) -> Option<String> {
-    let (lhs, rhs) = line.split_once(':')?;
-    let lhs_key = normalize_key(lhs);
+fn strip_label_value(line: &str, labels: &[&str], allow_loose_prefix: bool) -> Option<String> {
+    let content = normalize_bullet_content(line);
+    let lhs_rhs = content.split_once(':');
     for label in labels {
-        if lhs_key == normalize_key(label) {
-            return Some(rhs.trim().to_owned());
+        let label_key = normalize_key(label);
+        if let Some((lhs, rhs)) = lhs_rhs {
+            if normalize_key(lhs) == label_key {
+                return Some(rhs.trim().to_owned());
+            }
+        }
+
+        if !allow_loose_prefix {
+            continue;
+        }
+
+        let raw_tokens = content.split_whitespace().collect::<Vec<_>>();
+        let mut matched_prefix_len = None;
+        let mut normalized_prefix = String::new();
+
+        for (index, raw_token) in raw_tokens.iter().enumerate() {
+            let token_key = normalize_key(raw_token);
+            if token_key.is_empty() {
+                continue;
+            }
+
+            if normalized_prefix.is_empty() {
+                normalized_prefix = token_key;
+            } else {
+                normalized_prefix.push(' ');
+                normalized_prefix.push_str(&token_key);
+            }
+
+            if normalized_prefix == label_key {
+                matched_prefix_len = Some(index + 1);
+                break;
+            }
+
+            if !label_key.starts_with(&normalized_prefix) {
+                break;
+            }
+        }
+
+        if let Some(prefix_len) = matched_prefix_len {
+            if raw_tokens.len() <= prefix_len {
+                continue;
+            }
+
+            let value = raw_tokens[prefix_len..].join(" ");
+            let value = value.trim_start_matches(|ch: char| ch == ':' || ch == '-' || ch == '#').trim();
+            if !value.is_empty() {
+                return Some(value.to_owned());
+            }
         }
     }
     None
 }
 
 fn find_pipe_value(line: &LineRef, labels: &[&str]) -> Option<String> {
-    normalize_bullet_content(&line.raw)
-        .split('|')
-        .find_map(|part| strip_label_value(part.trim(), labels))
+    split_columns(&normalize_bullet_content(&line.raw))
+        .into_iter()
+        .find_map(|part| strip_label_value(part.trim(), labels, true))
 }
 
 fn normalize_line(value: &str) -> String {
@@ -629,6 +864,62 @@ fn normalize_bullet_content(value: &str) -> String {
         .trim_start_matches('*')
         .trim()
         .to_owned()
+}
+
+fn looks_like_heading(value: &str) -> bool {
+    if value.trim_start().starts_with('#') {
+        return true;
+    }
+
+    if value.trim_start().starts_with('-') || value.trim_start().starts_with('*') {
+        return false;
+    }
+
+    let normalized = normalize_key(&normalize_bullet_content(value));
+    let heading_candidates = [
+        "passenger",
+        "passenger details",
+        "trip summary",
+        "segments",
+        "flight segments",
+        "stay summary",
+        "nightly charges",
+        "charges",
+        "line items",
+        "items",
+        "items purchased",
+        "purchase summary",
+        "meals included",
+        "included in rate",
+        "included in room rate",
+        "guest folio",
+        "hotel folio",
+        "merchant receipt",
+        "card receipt",
+        "e ticket itinerary receipt",
+        "e ticket itinerary",
+    ];
+
+    if heading_candidates
+        .iter()
+        .any(|candidate| normalized == normalize_key(candidate))
+    {
+        return true;
+    }
+
+    let content = normalize_bullet_content(value);
+    !content.contains(':')
+        && !content.contains('|')
+        && !content.chars().any(|ch| ch.is_ascii_digit())
+        && content.chars().filter(|ch| ch.is_ascii_alphabetic()).count() >= 3
+        && content
+            .chars()
+            .filter(|ch| ch.is_ascii_alphabetic())
+            .all(|ch| ch.is_ascii_uppercase())
+}
+
+fn matches_heading(line: &LineRef, heading: &str) -> bool {
+    normalize_key(&line.normalized) == normalize_key(heading)
 }
 
 fn normalize_key(value: &str) -> String {
@@ -724,6 +1015,107 @@ fn parse_location(value: &str) -> Option<Location> {
         country,
         airport_code,
     })
+}
+
+fn split_columns(value: &str) -> Vec<String> {
+    if value.contains('|') {
+        return value
+            .split('|')
+            .map(str::trim)
+            .filter(|part| !part.is_empty())
+            .map(ToOwned::to_owned)
+            .collect();
+    }
+
+    let mut columns = Vec::new();
+    let mut current = String::new();
+    let mut space_run = 0usize;
+
+    for ch in value.chars() {
+        if ch == ' ' {
+            space_run += 1;
+            if space_run == 1 {
+                current.push(ch);
+            } else if !current.trim().is_empty() {
+                columns.push(current.trim().to_owned());
+                current.clear();
+            }
+            continue;
+        }
+
+        if space_run > 1 && !current.is_empty() {
+            current.push(' ');
+        }
+        space_run = 0;
+        current.push(ch);
+    }
+
+    if !current.trim().is_empty() {
+        columns.push(current.trim().to_owned());
+    }
+
+    if columns.len() <= 1 {
+        vec![value.trim().to_owned()]
+    } else {
+        columns
+    }
+}
+
+fn split_description_and_money(value: &str) -> Option<(String, MoneyAmount)> {
+    let tokens = value.split_whitespace().collect::<Vec<_>>();
+    if tokens.len() < 2 {
+        return None;
+    }
+
+    let amount = sanitize_amount(tokens.last()?)?;
+    let mut description_end = tokens.len() - 1;
+    let mut currency = None;
+
+    if tokens.len() >= 2 {
+        let maybe_currency = tokens[tokens.len() - 2];
+        if maybe_currency.len() == 3 && maybe_currency.chars().all(|ch| ch.is_ascii_alphabetic()) {
+            currency = Some(maybe_currency.to_ascii_uppercase());
+            description_end -= 1;
+        }
+    }
+
+    let description = tokens[..description_end].join(" ");
+    let description = description
+        .trim_end_matches(|ch: char| ch == '.' || ch == ':' || ch == '-')
+        .trim();
+    if description.is_empty() {
+        return None;
+    }
+
+    Some((
+        description.to_owned(),
+        MoneyAmount {
+            amount,
+            currency,
+        },
+    ))
+}
+
+fn infer_heading_value(
+    document: &TranscribedDocument,
+    lines: &[LineRef],
+    excluded_headings: &[&str],
+) -> Option<Observed<String>> {
+    lines.iter()
+        .find(|line| {
+            line.is_heading
+                && !excluded_headings
+                    .iter()
+                    .any(|excluded| normalize_key(&line.normalized) == normalize_key(excluded))
+        })
+        .map(|line| {
+            observed_from_line(
+                line,
+                normalize_bullet_content(&line.raw),
+                ConfidenceLevel::Medium,
+                document,
+            )
+        })
 }
 
 fn amount_to_cents(amount: &str) -> Option<i64> {
@@ -914,5 +1306,52 @@ mod tests {
             .expect("facts should render to json");
         assert!(rendered.contains("\"classification\""));
         assert!(rendered.contains("East Bay Bistro"));
+    }
+
+    #[test]
+    fn parses_loose_labels_with_hyphen_and_slash_variants() {
+        assert_eq!(
+            strip_label_value("City/Country Singapore, Singapore", &["city/country"], true),
+            Some("Singapore, Singapore".to_owned())
+        );
+        assert_eq!(
+            strip_label_value("Check-in 2025-04-21", &["check in"], true),
+            Some("2025-04-21".to_owned())
+        );
+        assert_eq!(
+            strip_label_value("Record Locator H7K9Q2", &["record locator"], true),
+            Some("H7K9Q2".to_owned())
+        );
+    }
+
+    #[test]
+    fn splits_receipt_lines_with_currency_suffixes() {
+        assert_eq!(
+            split_description_and_money("Laksa Lunch ........ SGD 18.00"),
+            Some((
+                "Laksa Lunch".to_owned(),
+                MoneyAmount {
+                    amount: "18.00".to_owned(),
+                    currency: Some("SGD".to_owned()),
+                },
+            ))
+        );
+        assert_eq!(
+            split_description_and_money("Service Charge SGD 4.00"),
+            Some((
+                "Service Charge".to_owned(),
+                MoneyAmount {
+                    amount: "4.00".to_owned(),
+                    currency: Some("SGD".to_owned()),
+                },
+            ))
+        );
+    }
+
+    #[test]
+    fn uppercase_summary_lines_are_not_misclassified_as_headings() {
+        assert!(!looks_like_heading("GST SGD 2.52"));
+        assert!(looks_like_heading("EAST BAY BISTRO"));
+        assert!(looks_like_heading("Guest Folio"));
     }
 }
