@@ -566,6 +566,168 @@ def build_validation_rules(root: SchemaNode, schema_version: str, generated_at: 
     }
 
 
+def rust_string(value: str) -> str:
+    rendered = json.dumps(value, ensure_ascii=True)
+    return re.sub(r"\\u([0-9a-fA-F]{4})", r"\\u{\1}", rendered)
+
+
+def rust_optional_string(value: Any) -> str:
+    if value is None:
+        return "None"
+    if isinstance(value, bool):
+        rendered = "true" if value else "false"
+    else:
+        rendered = str(value)
+    return f"Some({rust_string(rendered)})"
+
+
+def rust_string_slice(values: list[str]) -> str:
+    if not values:
+        return "&[]"
+    return "&[" + ", ".join(rust_string(value) for value in values) + "]"
+
+
+def rust_node_kind(kind: str) -> str:
+    mapping = {"object": "Object", "array": "Array", "field": "Field"}
+    return f"NodeKind::{mapping[kind]}"
+
+
+def rust_schema_type(schema_type: str) -> str:
+    mapping = {
+        "object": "Object",
+        "array": "Array",
+        "string": "String",
+        "number": "Number",
+        "date": "Date",
+        "enum": "Enum",
+        "boolean": "Boolean",
+    }
+    return f"SchemaType::{mapping[schema_type]}"
+
+
+def rust_source_tier(source: str | None) -> str:
+    if source is None:
+        return "None"
+    return f"Some(SourceTier::{source})"
+
+
+def rust_rule_type(rule_type: str) -> str:
+    mapping = {
+        "required_when": "RequiredWhen",
+        "depends_on": "DependsOn",
+        "validation_expression": "ValidationExpression",
+    }
+    return f"ConditionalRuleType::{mapping[rule_type]}"
+
+
+def generate_rust_validation_rules(validation_rules: dict[str, Any], schema_version: str) -> str:
+    lines: list[str] = [
+        "// Auto-generated validation rules from schema.yaml. Do not edit manually.",
+        "",
+        f'pub const VALIDATION_SCHEMA_VERSION: &str = "{schema_version}";',
+        "",
+        "#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]",
+        "pub enum NodeKind {",
+        "    Object,",
+        "    Array,",
+        "    Field,",
+        "}",
+        "",
+        "#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]",
+        "pub enum SchemaType {",
+        "    Object,",
+        "    Array,",
+        "    String,",
+        "    Number,",
+        "    Date,",
+        "    Enum,",
+        "    Boolean,",
+        "}",
+        "",
+        "#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]",
+        "pub enum SourceTier {",
+        "    T1,",
+        "    T2,",
+        "    T3,",
+        "}",
+        "",
+        "#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]",
+        "pub enum ConditionalRuleType {",
+        "    RequiredWhen,",
+        "    DependsOn,",
+        "    ValidationExpression,",
+        "}",
+        "",
+        "#[derive(Debug, Clone, Copy, PartialEq, Eq)]",
+        "pub struct FieldRule {",
+        "    pub path: &'static str,",
+        "    pub node_kind: NodeKind,",
+        "    pub schema_type: SchemaType,",
+        "    pub rust_type: &'static str,",
+        "    pub required: bool,",
+        "    pub required_expression: Option<&'static str>,",
+        "    pub source: Option<SourceTier>,",
+        "    pub effective_source: Option<SourceTier>,",
+        "    pub depends_on: &'static [&'static str],",
+        "    pub allowed_values: &'static [&'static str],",
+        "    pub default_value: Option<&'static str>,",
+        "    pub description: Option<&'static str>,",
+        "    pub infer_from: Option<&'static str>,",
+        "    pub validation: Option<&'static str>,",
+        "}",
+        "",
+        "#[derive(Debug, Clone, Copy, PartialEq, Eq)]",
+        "pub struct ConditionalRule {",
+        "    pub rule_type: ConditionalRuleType,",
+        "    pub target_path: &'static str,",
+        "    pub expression: Option<&'static str>,",
+        "    pub depends_on: &'static [&'static str],",
+        "}",
+        "",
+        "pub const FIELD_RULES: &[FieldRule] = &[",
+    ]
+
+    for rule in validation_rules["field_rules"]:
+        lines.append("    FieldRule {")
+        lines.append(f"        path: {rust_string(rule['path'])},")
+        lines.append(f"        node_kind: {rust_node_kind(rule['node_kind'])},")
+        lines.append(f"        schema_type: {rust_schema_type(rule['schema_type'])},")
+        lines.append(f"        rust_type: {rust_string(rule['rust_type'])},")
+        lines.append(f"        required: {'true' if rule['required'] else 'false'},")
+        lines.append(f"        required_expression: {rust_optional_string(rule['required_expression'])},")
+        lines.append(f"        source: {rust_source_tier(rule['source'])},")
+        lines.append(f"        effective_source: {rust_source_tier(rule['effective_source'])},")
+        lines.append(f"        depends_on: {rust_string_slice(rule['depends_on'])},")
+        lines.append(f"        allowed_values: {rust_string_slice(rule['allowed_values'])},")
+        lines.append(f"        default_value: {rust_optional_string(rule['default'])},")
+        lines.append(f"        description: {rust_optional_string(rule['description'])},")
+        lines.append(f"        infer_from: {rust_optional_string(rule['infer_from'])},")
+        lines.append(f"        validation: {rust_optional_string(rule['validation'])},")
+        lines.append("    },")
+    lines.append("];")
+    lines.append("")
+    lines.append("pub const CONDITIONAL_RULES: &[ConditionalRule] = &[")
+    for rule in validation_rules["conditional_rules"]:
+        depends_on = rule.get("depends_on", [])
+        lines.append("    ConditionalRule {")
+        lines.append(f"        rule_type: {rust_rule_type(rule['rule_type'])},")
+        lines.append(f"        target_path: {rust_string(rule['target_path'])},")
+        lines.append(f"        expression: {rust_optional_string(rule.get('expression'))},")
+        lines.append(f"        depends_on: {rust_string_slice(depends_on)},")
+        lines.append("    },")
+    lines.append("];")
+    lines.append("")
+    lines.append("pub fn field_rule(path: &str) -> Option<&'static FieldRule> {")
+    lines.append("    FIELD_RULES.iter().find(|rule| rule.path == path)")
+    lines.append("}")
+    lines.append("")
+    lines.append("pub fn conditional_rules_for(path: &str) -> Vec<&'static ConditionalRule> {")
+    lines.append("    CONDITIONAL_RULES.iter().filter(|rule| rule.target_path == path).collect()")
+    lines.append("}")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def build_ui_field_map(root: SchemaNode, schema_version: str, generated_at: str) -> dict[str, Any]:
     sections: list[dict[str, Any]] = []
     for section in root.fields:
@@ -622,11 +784,13 @@ def generate(schema_path: Path, output_dir: Path) -> None:
 
     model_contents = generate_rust_model(root, schema_version)
     validation_rules = build_validation_rules(root, schema_version, generated_at)
+    rust_validation_rules = generate_rust_validation_rules(validation_rules, schema_version)
     ui_field_map = build_ui_field_map(root, schema_version, generated_at)
 
     for stale_path in (output_dir / "__init__.py", output_dir / "expense_report_model.py"):
         stale_path.unlink(missing_ok=True)
     write_text(output_dir / "expense_report_model.rs", model_contents)
+    write_text(output_dir / "validation_rules.rs", rust_validation_rules)
     write_yaml(output_dir / "validation_rules.yaml", validation_rules)
     write_yaml(output_dir / "ui_field_map.yaml", ui_field_map)
 

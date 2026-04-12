@@ -6,6 +6,10 @@ This project now generates three concrete artifacts from [`schema.yaml`](./schem
 - [`generated/validation_rules.yaml`](./generated/validation_rules.yaml)
 - [`generated/ui_field_map.yaml`](./generated/ui_field_map.yaml)
 
+It also generates a Rust-native validation artifact:
+
+- [`generated/validation_rules.rs`](./generated/validation_rules.rs)
+
 The Rust crate entrypoint is [`src/lib.rs`](./src/lib.rs).
 
 Generation command:
@@ -48,7 +52,12 @@ Why this matters:
 
 The validation rule set is the runtime contract extracted from the schema into a normalized, machine-readable format.
 
-In this repo, that is [`generated/validation_rules.yaml`](./generated/validation_rules.yaml). It flattens the schema into rules such as:
+In this repo, that contract is produced in two forms:
+
+- [`generated/validation_rules.yaml`](./generated/validation_rules.yaml) for human inspection and debugging
+- [`generated/validation_rules.rs`](./generated/validation_rules.rs) for Rust code to consume directly
+
+They flatten the schema into rules such as:
 
 - field path
 - schema type
