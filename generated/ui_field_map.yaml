@@ -1,0 +1,1117 @@
+schema_version: 0.1.0
+generated_at_utc: '2026-04-12T07:32:59+00:00'
+sections:
+- key: general_information
+  label: General Information
+  path: expense_report.general_information
+  repeated: false
+  fields:
+  - path: expense_report.general_information.category
+    label: Category
+    control: select
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values:
+    - expenses_domestic
+    - expenses_foreign
+    - athletic_use_only
+    - hr_use_only
+    - human_subjects
+    - relocation
+  - path: expense_report.general_information.payee.name
+    label: Name
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: high
+    allowed_values: []
+  - path: expense_report.general_information.payee.affiliation
+    label: Affiliation
+    control: select
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: high
+    allowed_values:
+    - stanford_student
+    - stanford_postdoc
+    - stanford_faculty
+    - stanford_staff
+    - other
+  - path: expense_report.general_information.rush_processing
+    label: Rush Processing
+    control: select
+    source: T1
+    entry_mode: user_confirmed_input
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values:
+    - 'yes'
+    - 'no'
+  - path: expense_report.general_information.payment_method
+    label: Payment Method
+    control: text
+    source: T2
+    entry_mode: computed_readonly
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.general_information.business_purpose.who
+    label: Who
+    control: textarea
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.general_information.business_purpose.what
+    label: What
+    control: textarea
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.general_information.business_purpose.when
+    label: When
+    control: textarea
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.general_information.business_purpose.where
+    label: Where
+    control: textarea
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.general_information.business_purpose.why
+    label: Why
+    control: textarea
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.general_information.business_purpose.key_30char
+    label: Key 30char
+    control: textarea
+    source: T2
+    entry_mode: computed_readonly
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.general_information.event_name
+    label: Event Name
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.general_information.student_certification.supports_faculty_research
+    label: Supports Faculty Research
+    control: checkbox
+    source: T3
+    entry_mode: model_prefill_review
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.general_information.student_certification.presenting_at_conference
+    label: Presenting At Conference
+    control: checkbox
+    source: T3
+    entry_mode: model_prefill_review
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.general_information.student_certification.integral_to_degree_work
+    label: Integral To Degree Work
+    control: checkbox
+    source: T3
+    entry_mode: model_prefill_review
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.general_information.student_certification.related_to_employment
+    label: Related To Employment
+    control: checkbox
+    source: T3
+    entry_mode: model_prefill_review
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.general_information.student_certification.other
+    label: Other
+    control: checkbox
+    source: T3
+    entry_mode: model_prefill_review
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.general_information.student_certification.other_explanation
+    label: Other Explanation
+    control: textarea
+    source: T3
+    entry_mode: model_prefill_review
+    required: false
+    required_expression: student_certification.other == true
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.general_information.authorized_by
+    label: Authorized By
+    control: text
+    source: T1
+    entry_mode: user_confirmed_input
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+- key: transaction_summary
+  label: Transaction Summary
+  path: expense_report.transaction_summary
+  repeated: false
+  fields:
+  - path: expense_report.transaction_summary.transaction_type
+    label: Transaction Type
+    control: select
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values:
+    - domestic
+    - foreign
+  - path: expense_report.transaction_summary.transaction_number
+    label: Transaction Number
+    control: text
+    source: T2
+    entry_mode: computed_readonly
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.transaction_summary.transaction_date
+    label: Transaction Date
+    control: date
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: high
+    allowed_values: []
+  - path: expense_report.transaction_summary.status
+    label: Status
+    control: select
+    source: T2
+    entry_mode: computed_readonly
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values:
+    - draft
+    - submitted
+    - approved
+    - returned
+    - paid
+  - path: expense_report.transaction_summary.total_usd
+    label: Total Usd
+    control: currency
+    source: T2
+    entry_mode: computed_readonly
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+- key: transaction_lines
+  label: Transaction Lines
+  path: expense_report.transaction_lines
+  repeated: true
+  fields:
+  - path: expense_report.transaction_lines[].common.date
+    label: Date
+    control: date
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: high
+    allowed_values: []
+  - path: expense_report.transaction_lines[].common.line_amount_usd
+    label: Line Amount Usd
+    control: currency
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: high
+    allowed_values: []
+  - path: expense_report.transaction_lines[].common.original_currency
+    label: Original Currency
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: false
+    required_expression: general_information.category == expenses_foreign
+    review_priority: high
+    allowed_values: []
+  - path: expense_report.transaction_lines[].common.original_amount
+    label: Original Amount
+    control: currency
+    source: T3
+    entry_mode: model_prefill_review
+    required: false
+    required_expression: general_information.category == expenses_foreign
+    review_priority: high
+    allowed_values: []
+  - path: expense_report.transaction_lines[].common.exchange_rate
+    label: Exchange Rate
+    control: currency
+    source: T2
+    entry_mode: computed_readonly
+    required: false
+    required_expression: general_information.category == expenses_foreign
+    review_priority: high
+    allowed_values: []
+  - path: expense_report.transaction_lines[].common.expense_type
+    label: Expense Type
+    control: select
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: high
+    allowed_values:
+    - adjusted_per_diem
+    - airfare_domestic
+    - airfare_foreign
+    - ancillary_airline_fee
+    - business_meal
+    - business_meal_with_alcohol
+    - car_rental
+    - conference_registration
+    - gift_card_employee_foreign
+    - gifts_foreign_activity
+    - ground_transportation_foreign
+    - ground_transportation_domestic
+    - group_travel_meal
+    - group_travel_meal_with_alcohol
+    - human_subject_incentive
+    - lodging_domestic
+    - lodging_foreign
+  - path: expense_report.transaction_lines[].common.remarks
+    label: Remarks
+    control: textarea
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].common.country_of_activity
+    label: Country Of Activity
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: false
+    required_expression: general_information.category == expenses_foreign
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].common.foreign_activity_type
+    label: Foreign Activity Type
+    control: select
+    source: T3
+    entry_mode: model_prefill_review
+    required: false
+    required_expression: general_information.category == expenses_foreign
+    review_priority: medium
+    allowed_values:
+    - conference
+    - research_collaboration
+    - fieldwork
+    - other
+  - path: expense_report.transaction_lines[].common.source_documents[].filename
+    label: Filename
+    control: text
+    source: T1
+    entry_mode: user_confirmed_input
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.transaction_lines[].common.source_documents[].document_type
+    label: Document Type
+    control: select
+    source: T1
+    entry_mode: user_confirmed_input
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values:
+    - receipt
+    - booking_confirmation
+    - price_comparison
+    - currency_conversion
+    - conference_program
+    - missing_receipt_form
+    - other
+  - path: expense_report.transaction_lines[].airfare_details.travelers_name
+    label: Travelers Name
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].airfare_details.ticket_number
+    label: Ticket Number
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].airfare_details.ticket_amount
+    label: Ticket Amount
+    control: currency
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: high
+    allowed_values: []
+  - path: expense_report.transaction_lines[].airfare_details.booking_method
+    label: Booking Method
+    control: select
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values:
+    - stanford_travel_egencia
+    - stanford_travel_key_travel
+    - stanford_travel_connect_ua
+    - stanford_travel_connect_dl
+    - stanford_travel_connect_aa
+    - stanford_travel_connect_as
+    - stanford_travel_connect_ha
+    - other
+  - path: expense_report.transaction_lines[].airfare_details.airline
+    label: Airline
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: high
+    allowed_values: []
+  - path: expense_report.transaction_lines[].airfare_details.class_of_ticket
+    label: Class Of Ticket
+    control: select
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values:
+    - coach
+    - premium_economy
+    - business
+    - first
+  - path: expense_report.transaction_lines[].airfare_details.departure_airport
+    label: Departure Airport
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].airfare_details.destination_airport
+    label: Destination Airport
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].airfare_details.round_trip
+    label: Round Trip
+    control: checkbox
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].airfare_details.price_comparison.comparison_date
+    label: Comparison Date
+    control: date
+    source: T2
+    entry_mode: computed_readonly
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.transaction_lines[].airfare_details.price_comparison.comparable_fares[].airline
+    label: Airline
+    control: text
+    source: T2
+    entry_mode: computed_readonly
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.transaction_lines[].airfare_details.price_comparison.comparable_fares[].amount
+    label: Amount
+    control: currency
+    source: T2
+    entry_mode: computed_readonly
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.transaction_lines[].airfare_details.price_comparison.comparable_fares[].class
+    label: Class
+    control: text
+    source: T2
+    entry_mode: computed_readonly
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.transaction_lines[].airfare_details.price_comparison.source
+    label: Source
+    control: select
+    source: T2
+    entry_mode: computed_readonly
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values:
+    - payee_provided
+    - system_generated
+  - path: expense_report.transaction_lines[].lodging_details.hotel_name
+    label: Hotel Name
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: high
+    allowed_values: []
+  - path: expense_report.transaction_lines[].lodging_details.location
+    label: Location
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].lodging_details.check_in_date
+    label: Check In Date
+    control: date
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: high
+    allowed_values: []
+  - path: expense_report.transaction_lines[].lodging_details.check_out_date
+    label: Check Out Date
+    control: date
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: high
+    allowed_values: []
+  - path: expense_report.transaction_lines[].lodging_details.number_of_nights
+    label: Number Of Nights
+    control: number
+    source: T2
+    entry_mode: computed_readonly
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].lodging_details.daily_rate
+    label: Daily Rate
+    control: currency
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: high
+    allowed_values: []
+  - path: expense_report.transaction_lines[].lodging_details.booking_method
+    label: Booking Method
+    control: select
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values:
+    - conference_hotel
+    - stanford_travel_egencia
+    - stanford_travel_key_travel
+    - other
+  - path: expense_report.transaction_lines[].lodging_details.is_shared_lodging
+    label: Is Shared Lodging
+    control: checkbox
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].lodging_details.shared_with_transaction_number
+    label: Shared With Transaction Number
+    control: text
+    source: T1
+    entry_mode: user_confirmed_input
+    required: false
+    required_expression: lodging_details.is_shared_lodging == true
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].lodging_details.personal_nights_excluded
+    label: Personal Nights Excluded
+    control: number
+    source: T2
+    entry_mode: computed_readonly
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.transaction_lines[].ground_transport_details.origin
+    label: Origin
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].ground_transport_details.destination
+    label: Destination
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].ground_transport_details.service_provider
+    label: Service Provider
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].ground_transport_details.missing_receipt
+    label: Missing Receipt
+    control: checkbox
+    source: T1
+    entry_mode: user_confirmed_input
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].conference_registration_details.conference_name
+    label: Conference Name
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].conference_registration_details.order_number
+    label: Order Number
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].conference_registration_details.conference_start_date
+    label: Conference Start Date
+    control: date
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: high
+    allowed_values: []
+  - path: expense_report.transaction_lines[].conference_registration_details.conference_end_date
+    label: Conference End Date
+    control: date
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: high
+    allowed_values: []
+  - path: expense_report.transaction_lines[].conference_registration_details.meals_included.schedule[].date
+    label: Date
+    control: date
+    source: T3
+    entry_mode: model_prefill_review
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.transaction_lines[].conference_registration_details.meals_included.schedule[].breakfast
+    label: Breakfast
+    control: checkbox
+    source: T3
+    entry_mode: model_prefill_review
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.transaction_lines[].conference_registration_details.meals_included.schedule[].lunch
+    label: Lunch
+    control: checkbox
+    source: T3
+    entry_mode: model_prefill_review
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.transaction_lines[].conference_registration_details.meals_included.schedule[].dinner
+    label: Dinner
+    control: checkbox
+    source: T3
+    entry_mode: model_prefill_review
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.transaction_lines[].meal_details.venue_name
+    label: Venue Name
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].meal_details.attendees[].name
+    label: Name
+    control: text
+    source: T1
+    entry_mode: user_confirmed_input
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.transaction_lines[].meal_details.attendees[].affiliation
+    label: Affiliation
+    control: text
+    source: T1
+    entry_mode: user_confirmed_input
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.transaction_lines[].meal_details.meal_purpose
+    label: Meal Purpose
+    control: textarea
+    source: T1
+    entry_mode: user_confirmed_input
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].meal_details.alcohol_amount
+    label: Alcohol Amount
+    control: currency
+    source: T3
+    entry_mode: model_prefill_review
+    required: false
+    required_expression: expense_type in [business_meal_with_alcohol, group_travel_meal_with_alcohol]
+    review_priority: high
+    allowed_values: []
+  - path: expense_report.transaction_lines[].meal_details.tip_amount
+    label: Tip Amount
+    control: currency
+    source: T3
+    entry_mode: model_prefill_review
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.transaction_lines[].meal_details.has_alcohol_on_receipt
+    label: Has Alcohol On Receipt
+    control: checkbox
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].car_rental_details.rental_company
+    label: Rental Company
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].car_rental_details.pickup_location
+    label: Pickup Location
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].car_rental_details.return_location
+    label: Return Location
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].car_rental_details.rental_start_date
+    label: Rental Start Date
+    control: date
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: high
+    allowed_values: []
+  - path: expense_report.transaction_lines[].car_rental_details.rental_end_date
+    label: Rental End Date
+    control: date
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: high
+    allowed_values: []
+  - path: expense_report.transaction_lines[].car_rental_details.vehicle_class
+    label: Vehicle Class
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].car_rental_details.insurance_included
+    label: Insurance Included
+    control: checkbox
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].gift_details.recipient_name
+    label: Recipient Name
+    control: text
+    source: T1
+    entry_mode: user_confirmed_input
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].gift_details.recipient_relationship
+    label: Recipient Relationship
+    control: text
+    source: T1
+    entry_mode: user_confirmed_input
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].gift_details.gift_purpose
+    label: Gift Purpose
+    control: textarea
+    source: T1
+    entry_mode: user_confirmed_input
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].human_subject_details.irb_protocol_number
+    label: Irb Protocol Number
+    control: text
+    source: T1
+    entry_mode: user_confirmed_input
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].human_subject_details.number_of_subjects
+    label: Number Of Subjects
+    control: number
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].human_subject_details.per_subject_amount
+    label: Per Subject Amount
+    control: currency
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: high
+    allowed_values: []
+- key: per_diem_expenses
+  label: Per Diem Expenses
+  path: expense_report.per_diem_expenses
+  repeated: true
+  fields:
+  - path: expense_report.per_diem_expenses[].expense_type
+    label: Expense Type
+    control: select
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: high
+    allowed_values:
+    - alaska_hawaii_lodging
+    - alaska_hawaii_meals
+    - continental_us_lodging
+    - continental_us_meals
+    - international_lodging
+    - international_meals
+  - path: expense_report.per_diem_expenses[].start_date
+    label: Start Date
+    control: date
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: high
+    allowed_values: []
+  - path: expense_report.per_diem_expenses[].end_date
+    label: End Date
+    control: date
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: high
+    allowed_values: []
+  - path: expense_report.per_diem_expenses[].number_of_days
+    label: Number Of Days
+    control: number
+    source: T2
+    entry_mode: computed_readonly
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.per_diem_expenses[].location
+    label: Location
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.per_diem_expenses[].country_of_activity
+    label: Country Of Activity
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.per_diem_expenses[].foreign_activity_type
+    label: Foreign Activity Type
+    control: select
+    source: T3
+    entry_mode: model_prefill_review
+    required: false
+    required_expression: expense_type in [international_lodging, international_meals]
+    review_priority: medium
+    allowed_values:
+    - conference
+    - research_collaboration
+    - fieldwork
+    - other
+  - path: expense_report.per_diem_expenses[].per_diem_rate
+    label: Per Diem Rate
+    control: currency
+    source: T2
+    entry_mode: computed_readonly
+    required: true
+    required_expression: null
+    review_priority: high
+    allowed_values: []
+  - path: expense_report.per_diem_expenses[].remarks
+    label: Remarks
+    control: textarea
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.per_diem_expenses[].meal_deductions[].date
+    label: Date
+    control: date
+    source: T2
+    entry_mode: computed_readonly
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.per_diem_expenses[].meal_deductions[].breakfast_provided
+    label: Breakfast Provided
+    control: checkbox
+    source: T2
+    entry_mode: computed_readonly
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.per_diem_expenses[].meal_deductions[].lunch_provided
+    label: Lunch Provided
+    control: checkbox
+    source: T2
+    entry_mode: computed_readonly
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.per_diem_expenses[].meal_deductions[].dinner_provided
+    label: Dinner Provided
+    control: checkbox
+    source: T2
+    entry_mode: computed_readonly
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.per_diem_expenses[].meal_deductions[].deduction_amount
+    label: Deduction Amount
+    control: currency
+    source: T2
+    entry_mode: computed_readonly
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.per_diem_expenses[].reimbursement_summary[].date
+    label: Date
+    control: date
+    source: T2
+    entry_mode: computed_readonly
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.per_diem_expenses[].reimbursement_summary[].per_diem_amount
+    label: Per Diem Amount
+    control: currency
+    source: T2
+    entry_mode: computed_readonly
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.per_diem_expenses[].reimbursement_summary[].meal_deduction
+    label: Meal Deduction
+    control: currency
+    source: T2
+    entry_mode: computed_readonly
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.per_diem_expenses[].reimbursement_summary[].net_amount
+    label: Net Amount
+    control: currency
+    source: T2
+    entry_mode: computed_readonly
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+- key: mileage_expenses
+  label: Mileage Expenses
+  path: expense_report.mileage_expenses
+  repeated: true
+  fields: []
+- key: allocation_and_approvers
+  label: Allocation And Approvers
+  path: expense_report.allocation_and_approvers
+  repeated: false
+  fields:
+  - path: expense_report.allocation_and_approvers.other_beneficiaries
+    label: Other Beneficiaries
+    control: checkbox
+    source: T1
+    entry_mode: user_confirmed_input
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.allocation_and_approvers.beneficiary_list[].name
+    label: Name
+    control: text
+    source: T1
+    entry_mode: user_confirmed_input
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.allocation_and_approvers.beneficiary_list[].relationship
+    label: Relationship
+    control: text
+    source: T1
+    entry_mode: user_confirmed_input
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
