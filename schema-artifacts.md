@@ -13,6 +13,7 @@ It also generates a Rust-native validation artifact:
 The Rust crate entrypoint is [`src/lib.rs`](./src/lib.rs).
 The runtime validator built on top of these artifacts is in [`src/validator.rs`](./src/validator.rs).
 The file loader is in [`src/parse.rs`](./src/parse.rs), and the CLI entrypoint is [`src/bin/validate_report.rs`](./src/bin/validate_report.rs).
+The draft-instance metadata parser is in [`src/draft.rs`](./src/draft.rs), with a dedicated CLI in [`src/bin/validate_draft_instance.rs`](./src/bin/validate_draft_instance.rs).
 
 Generation command:
 
@@ -103,10 +104,28 @@ You can validate a draft file directly with:
 cargo run --bin validate_report -- examples/minimal_report.yaml
 ```
 
+You can validate an evidence-bearing extracted draft instance with:
+
+```bash
+cargo run --bin validate_draft_instance -- examples/draft_instance.yaml
+```
+
 The parser accepts both:
 
 - a top-level wrapped document with `expense_report: ...`
 - an unwrapped document whose root is the report object itself
+
+For draft instances, leaf fields can use the schema’s wrapped form:
+
+```yaml
+class_of_ticket:
+  value: coach
+  _meta:
+    confidence: high
+    source_document: flight_confirmation.pdf
+    needs_review: false
+    flags: []
+```
 
 ## What the UI field map is for
 

@@ -1,0 +1,127 @@
+schema_version: "0.1.0"
+expense_report:
+  general_information:
+    category:
+      value: expenses_domestic
+      _meta:
+        confidence: high
+        source_document: itinerary.pdf
+        needs_review: false
+        flags: []
+    payee:
+      name:
+        value: Olivia
+        _meta:
+          confidence: high
+          source_document: itinerary.pdf
+          needs_review: false
+          flags: []
+      affiliation:
+        value: stanford_student
+        _meta:
+          confidence: medium
+          source_document: fa_input
+          needs_review: true
+          flags: []
+    rush_processing:
+      value: "no"
+      _meta:
+        confidence: high
+        source_document: payee_form
+        needs_review: false
+        flags: []
+    payment_method:
+      value: electronic
+      _meta:
+        confidence: high
+        source_document: system_generated
+        needs_review: false
+        flags: []
+    business_purpose:
+      who:
+        value: Olivia
+        _meta:
+          confidence: high
+          source_document: itinerary.pdf
+          needs_review: false
+          flags: []
+      what:
+        value: ICLR 2025
+        _meta:
+          confidence: high
+          source_document: registration.pdf
+          needs_review: false
+          flags: []
+      when:
+        value: 2025-04-21 to 2025-04-29
+        _meta:
+          confidence: high
+          source_document: itinerary.pdf
+          needs_review: false
+          flags: []
+      where:
+        value: Singapore
+        _meta:
+          confidence: high
+          source_document: itinerary.pdf
+          needs_review: false
+          flags: []
+      why:
+        value: Presenting accepted paper
+        _meta:
+          confidence: medium
+          source_document: program.pdf
+          needs_review: true
+          flags: []
+      key_30char:
+        value: OLIVIAKOICLR2025
+        _meta:
+          confidence: high
+          source_document: system_generated
+          needs_review: false
+          flags: []
+    event_name:
+      value: PPL Domestic Expenses
+      _meta:
+        confidence: high
+        source_document: system_generated
+        needs_review: false
+        flags: []
+    student_certification: {}
+    authorized_by:
+      value: Olukotun, Oyekunle A.
+      _meta:
+        confidence: high
+        source_document: payee_form
+        needs_review: false
+        flags: []
+  transaction_summary:
+    transaction_type:
+      value: domestic
+      _meta:
+        confidence: high
+        source_document: system_generated
+        needs_review: false
+        flags: []
+    transaction_date:
+      value: "2025-04-29"
+      _meta:
+        confidence: high
+        source_document: itinerary.pdf
+        needs_review: false
+        flags: []
+    total_usd:
+      value: 0.00
+      _meta:
+        confidence: high
+        source_document: system_generated
+        needs_review: false
+        flags: []
+  allocation_and_approvers:
+    other_beneficiaries:
+      value: false
+      _meta:
+        confidence: high
+        source_document: payee_form
+        needs_review: false
+        flags: []
