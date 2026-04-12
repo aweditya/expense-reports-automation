@@ -173,6 +173,15 @@ Then extract document-local facts with evidence references, for example:
 
 This stage should produce a **document fact object**, not final report YAML.
 
+Suggested runtime contract:
+
+- `ExtractedDocumentFacts`
+- `DocumentClassification`
+- `Observed<T>` for evidence-bearing normalized values
+- `DocumentFactsPayload::{FlightItinerary, HotelFolio, Receipt, ...}`
+
+The concrete Rust model for this now lives in [src/document_facts.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/document_facts.rs:1), with a design note in [document-facts.md](/Users/adityasriram/Labs/stanford/research/expense-reports/document-facts.md:1).
+
 Why this matters:
 
 - it localizes failures
