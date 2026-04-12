@@ -1,3 +1,4 @@
+pub mod bootstrap;
 #[path = "../generated/expense_report_model.rs"]
 pub mod expense_report_model;
 #[path = "../generated/validation_rules.rs"]
@@ -9,6 +10,9 @@ pub mod transcribe;
 pub mod validator;
 pub mod value;
 
+pub use bootstrap::extract_stanford_summary_document;
+pub use bootstrap::extract_stanford_summary_path;
+pub use bootstrap::BootstrapExtractionError;
 pub use draft::parse_draft_report_path;
 pub use draft::parse_draft_report_value;
 pub use draft::ConfidenceLevel;
