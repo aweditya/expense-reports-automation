@@ -1,0 +1,773 @@
+# =============================================================================
+# Expense Report Schema Definition
+# =============================================================================
+#
+# This file defines the structure of an expense report as the agent sees it.
+# Two complementary files:
+#   1. THIS FILE: schema definition (field names, types, constraints, dependencies)
+#   2. expense_report_instance.yaml: example of a populated report showing how
+#      the agent fills in values with confidence scores and flags
+#
+# Field metadata:
+#   type          - data type (string, number, date, enum, boolean, array, object)
+#   required      - true, false, or a conditional expression referencing other fields
+#   source        - T1 (payee-provided), T2 (system-generated), T3 (system-inferred)
+#   depends_on    - list of fields that must be populated before this one
+#   allowed_values - for enum types
+#   description   - human-readable explanation
+#   infer_from    - hint to the agent about which documents / fields to derive this from
+# =============================================================================
+
+schema_version: "0.1.0"
+
+# -----------------------------------------------------------------------------
+# Top-level: one expense report
+# -----------------------------------------------------------------------------
+expense_report:
+  # ===========================================================================
+  # SECTION 1: General Information
+  # ===========================================================================
+  general_information:
+    category:
+      type: enum
+      required: true
+      source: T3
+      allowed_values:
+        - expenses_domestic
+        - expenses_foreign
+        - athletic_use_only
+        - hr_use_only
+        - human_subjects
+        - relocation
+      infer_from: "Destination in flight/hotel docs. Foreign destination → expenses_foreign; domestic → expenses_domestic. Other categories require explicit context."
+
+    payee:
+      type: object
+      required: true
+      source: T3
+      description: "Person being reimbursed"
+      fields:
+        name:
+          type: string
+          required: true
+          infer_from: "Traveler name on flight booking or hotel folio"
+        affiliation:
+          type: enum
+          required: true
+          allowed_values:
+            - stanford_student
+            - stanford_postdoc
+            - stanford_faculty
+            - stanford_staff
+            - other
+          infer_from: "Context from uploaded docs or FA input"
+
+    rush_processing:
+      type: enum
+      required: true
+      source: T1
+      allowed_values: [yes, no]
+      description: "Defaults to 'no' unless explicitly requested"
+
+    payment_method:
+      type: string
+      required: true
+      source: T2
+      description: "Always 'electronic' — system pre-fills"
+      default: "electronic"
+
+    business_purpose:
+      type: object
+      required: true
+      source: T3
+      description: "Structured purpose statement. First 30 chars of the combined text serve as a lookup key."
+      fields:
+        who:
+          type: string
+          required: true
+          infer_from: "Payee name and affiliation"
+        what:
+          type: string
+          required: true
+          infer_from: "Conference name from registration receipt; or meeting purpose from context"
+        when:
+          type: string
+          required: true
+          infer_from: "Trip dates from flight itinerary"
+        where:
+          type: string
+          required: true
+          infer_from: "Destination city/country from flight or hotel docs"
+        why:
+          type: string
+          required: true
+          infer_from: "Presenting at conference (if name appears in program), research collaboration, etc."
+        key_30char:
+          type: string
+          required: true
+          source: T2
+          description: "Auto-generated: <name_abbrev><advisor_initials><conference_abbrev>"
+          infer_from: "Computed from payee name, advisor, and event name"
+
+    event_name:
+      type: string
+      required: true
+      source: T3
+      description: "Format: <lab_name> + <Foreign Expenses | Domestic Expenses>"
+      infer_from: "Lab affiliation + category"
+
+    student_certification:
+      type: object
+      required: true
+      source: T3
+      description: "At least one reason must be selected. Determines required approvals."
+      depends_on: ["general_information.payee.affiliation"]
+      fields:
+        supports_faculty_research:
+          type: boolean
+          description: "Requires faculty approval"
+        presenting_at_conference:
+          type: boolean
+          description: "Requires faculty approval + conference program attachment"
+          infer_from: "Payee name appears in conference program/agenda"
+        integral_to_degree_work:
+          type: boolean
+          description: "Requires faculty approval. Not applicable to post-docs."
+          depends_on: ["general_information.payee.affiliation"]
+        related_to_employment:
+          type: boolean
+        other:
+          type: boolean
+        other_explanation:
+          type: string
+          required: "student_certification.other == true"
+
+    authorized_by:
+      type: string
+      required: true
+      source: T1
+      description: "Faculty member or approver name"
+
+  # ===========================================================================
+  # SECTION 2: Transaction Summary
+  # ===========================================================================
+  transaction_summary:
+    transaction_type:
+      type: enum
+      required: true
+      source: T3
+      allowed_values: [domestic, foreign]
+      infer_from: "Mirrors general_information.category"
+    transaction_number:
+      type: string
+      required: false
+      source: T2
+      description: "Format: ERxxxxxxx. Assigned by the system or existing system."
+    transaction_date:
+      type: date
+      required: true
+      source: T3
+      infer_from: "Date the report is filed, or earliest expense date"
+    status:
+      type: enum
+      required: false
+      source: T2
+      allowed_values: [draft, submitted, approved, returned, paid]
+    total_usd:
+      type: number
+      required: true
+      source: T2
+      description: "Sum of all transaction lines, converted to USD"
+
+  # ===========================================================================
+  # SECTION 3: Transaction Lines (receipt-based expenses)
+  # ===========================================================================
+  transaction_lines:
+    type: array
+    items:
+      type: object
+      description: "One entry per distinct expense"
+      fields:
+
+        # --- Common fields for every transaction line ---
+        common:
+          date:
+            type: date
+            required: true
+            source: T3
+            infer_from: "Date on the receipt"
+            validation: "Must fall within trip date window"
+          line_amount_usd:
+            type: number
+            required: true
+            source: T3
+            description: "Amount in USD. If original currency is foreign, this is the converted amount."
+            infer_from: "Receipt amount × exchange rate (if foreign)"
+          original_currency:
+            type: string
+            required: "general_information.category == expenses_foreign"
+            source: T3
+            infer_from: "Currency symbol/code on receipt"
+          original_amount:
+            type: number
+            required: "general_information.category == expenses_foreign"
+            source: T3
+            infer_from: "Amount as printed on receipt"
+          exchange_rate:
+            type: number
+            required: "general_information.category == expenses_foreign"
+            source: T2
+            infer_from: "Historical rate for common.date from exchange rate API"
+          expense_type:
+            type: enum
+            required: true
+            source: T3
+            allowed_values:
+              - adjusted_per_diem
+              - airfare_domestic
+              - airfare_foreign
+              - ancillary_airline_fee
+              - business_meal
+              - business_meal_with_alcohol
+              - car_rental
+              - conference_registration
+              - gift_card_employee_foreign
+              - gifts_foreign_activity
+              - ground_transportation_foreign
+              - ground_transportation_domestic
+              - group_travel_meal
+              - group_travel_meal_with_alcohol
+              - human_subject_incentive
+              - lodging_domestic
+              - lodging_foreign
+            infer_from: "LLM classifies from receipt content"
+          remarks:
+            type: string
+            required: true
+            source: T3
+            description: "Reiterate dates, foreign currency details, any context"
+            infer_from: "Generated from receipt details and trip context"
+          country_of_activity:
+            type: string
+            required: "general_information.category == expenses_foreign"
+            source: T3
+            infer_from: "Destination country from flight/hotel docs"
+          foreign_activity_type:
+            type: enum
+            required: "general_information.category == expenses_foreign"
+            source: T3
+            allowed_values:
+              - conference
+              - research_collaboration
+              - fieldwork
+              - other
+            infer_from: "Conference registration → 'conference'; otherwise from context"
+          source_documents:
+            type: array
+            required: true
+            source: T1
+            description: "References to uploaded documents supporting this line"
+            items:
+              type: object
+              fields:
+                filename:
+                  type: string
+                document_type:
+                  type: enum
+                  allowed_values:
+                    - receipt
+                    - booking_confirmation
+                    - price_comparison
+                    - currency_conversion
+                    - conference_program
+                    - missing_receipt_form
+                    - other
+
+        # --- Expense-type-specific detail blocks ---
+        # Only one of these is populated per line, based on expense_type.
+
+        airfare_details:
+          required: "expense_type in [airfare_domestic, airfare_foreign]"
+          fields:
+            travelers_name:
+              type: string
+              required: true
+              source: T3
+              infer_from: "Booking confirmation"
+            ticket_number:
+              type: string
+              required: true
+              source: T3
+              infer_from: "E-ticket receipt"
+            ticket_amount:
+              type: number
+              required: true
+              source: T3
+              infer_from: "Booking confirmation"
+            booking_method:
+              type: enum
+              required: true
+              source: T3
+              allowed_values:
+                - stanford_travel_egencia
+                - stanford_travel_key_travel
+                - stanford_travel_connect_ua
+                - stanford_travel_connect_dl
+                - stanford_travel_connect_aa
+                - stanford_travel_connect_as
+                - stanford_travel_connect_ha
+                - other
+              infer_from: "Booking confirmation format/header; default 'other' if unrecognized"
+            airline:
+              type: string
+              required: true
+              source: T3
+              infer_from: "Booking confirmation or ticket"
+            class_of_ticket:
+              type: enum
+              required: true
+              source: T3
+              allowed_values: [coach, premium_economy, business, first]
+              infer_from: "Booking confirmation"
+            departure_airport:
+              type: string
+              required: true
+              source: T3
+              description: "IATA code"
+              infer_from: "Itinerary"
+            destination_airport:
+              type: string
+              required: true
+              source: T3
+              description: "IATA code"
+              infer_from: "Itinerary"
+            round_trip:
+              type: boolean
+              required: true
+              source: T3
+              infer_from: "Itinerary shows return leg"
+            price_comparison:
+              type: object
+              required: true
+              source: T2
+              description: "System-generated if not provided by payee"
+              fields:
+                comparison_date:
+                  type: date
+                  description: "Date the comparison was generated"
+                comparable_fares:
+                  type: array
+                  items:
+                    type: object
+                    fields:
+                      airline:
+                        type: string
+                      amount:
+                        type: number
+                      class:
+                        type: string
+                source:
+                  type: enum
+                  allowed_values: [payee_provided, system_generated]
+
+        lodging_details:
+          required: "expense_type in [lodging_domestic, lodging_foreign]"
+          fields:
+            hotel_name:
+              type: string
+              required: true
+              source: T3
+              infer_from: "Hotel folio header"
+            location:
+              type: string
+              required: true
+              source: T3
+              description: "City, Country"
+              infer_from: "Hotel folio address"
+            check_in_date:
+              type: date
+              required: true
+              source: T3
+              infer_from: "Hotel folio"
+            check_out_date:
+              type: date
+              required: true
+              source: T3
+              infer_from: "Hotel folio"
+            number_of_nights:
+              type: number
+              required: true
+              source: T2
+              infer_from: "Computed: check_out_date - check_in_date"
+            daily_rate:
+              type: number
+              required: true
+              source: T3
+              description: "In original currency"
+              infer_from: "Hotel folio"
+            booking_method:
+              type: enum
+              required: true
+              source: T3
+              allowed_values:
+                - conference_hotel
+                - stanford_travel_egencia
+                - stanford_travel_key_travel
+                - other
+              infer_from: "If hotel matches conference venue → conference_hotel; else check booking source"
+            is_shared_lodging:
+              type: boolean
+              required: true
+              source: T3
+              infer_from: "Context from payee; default false"
+            shared_with_transaction_number:
+              type: string
+              required: "lodging_details.is_shared_lodging == true"
+              source: T1
+              description: "ERxxxxxxx of the other traveler's report"
+            personal_nights_excluded:
+              type: number
+              required: false
+              source: T2
+              description: "Number of nights flagged as personal (outside conference dates)"
+              infer_from: "Compare hotel dates against conference dates from registration"
+
+        ground_transport_details:
+          required: "expense_type in [ground_transportation_foreign, ground_transportation_domestic]"
+          fields:
+            origin:
+              type: string
+              required: true
+              source: T3
+              infer_from: "Uber/Lyft receipt"
+            destination:
+              type: string
+              required: true
+              source: T3
+              infer_from: "Uber/Lyft receipt"
+            service_provider:
+              type: string
+              required: true
+              source: T3
+              infer_from: "Receipt header (Uber, Lyft, taxi company, etc.)"
+            missing_receipt:
+              type: boolean
+              required: true
+              source: T1
+              description: "If true, missing receipt form is used instead"
+
+        conference_registration_details:
+          required: "expense_type == conference_registration"
+          fields:
+            conference_name:
+              type: string
+              required: true
+              source: T3
+              infer_from: "Registration receipt"
+            order_number:
+              type: string
+              required: true
+              source: T3
+              infer_from: "Registration receipt"
+            conference_start_date:
+              type: date
+              required: true
+              source: T3
+              infer_from: "Conference program or registration confirmation"
+            conference_end_date:
+              type: date
+              required: true
+              source: T3
+              infer_from: "Conference program or registration confirmation"
+            meals_included:
+              type: object
+              required: true
+              source: T3
+              description: "Which meals the conference provides, by day. Feeds into per diem deductions."
+              infer_from: "Conference program/schedule (e.g., 'lunch provided to all attendees')"
+              fields:
+                schedule:
+                  type: array
+                  items:
+                    type: object
+                    fields:
+                      date:
+                        type: date
+                      breakfast:
+                        type: boolean
+                      lunch:
+                        type: boolean
+                      dinner:
+                        type: boolean
+
+        meal_details:
+          required: "expense_type in [business_meal, business_meal_with_alcohol, group_travel_meal, group_travel_meal_with_alcohol]"
+          fields:
+            venue_name:
+              type: string
+              required: true
+              source: T3
+              infer_from: "Receipt header"
+            attendees:
+              type: array
+              required: true
+              source: T1
+              description: "Only the payee knows who attended"
+              items:
+                type: object
+                fields:
+                  name:
+                    type: string
+                  affiliation:
+                    type: string
+            meal_purpose:
+              type: string
+              required: true
+              source: T1
+            alcohol_amount:
+              type: number
+              required: "expense_type in [business_meal_with_alcohol, group_travel_meal_with_alcohol]"
+              source: T3
+              infer_from: "Itemized receipt — sum of alcohol line items"
+            tip_amount:
+              type: number
+              required: false
+              source: T3
+              infer_from: "Receipt"
+            has_alcohol_on_receipt:
+              type: boolean
+              required: true
+              source: T3
+              description: "Flag for validation: if true but expense_type is non-alcohol variant, raise irregularity"
+              infer_from: "Scan itemized receipt for alcohol items"
+
+        car_rental_details:
+          required: "expense_type == car_rental"
+          fields:
+            rental_company:
+              type: string
+              required: true
+              source: T3
+              infer_from: "Rental agreement"
+            pickup_location:
+              type: string
+              required: true
+              source: T3
+              infer_from: "Rental agreement"
+            return_location:
+              type: string
+              required: true
+              source: T3
+              infer_from: "Rental agreement"
+            rental_start_date:
+              type: date
+              required: true
+              source: T3
+              infer_from: "Rental agreement"
+            rental_end_date:
+              type: date
+              required: true
+              source: T3
+              infer_from: "Rental agreement"
+            vehicle_class:
+              type: string
+              required: true
+              source: T3
+              infer_from: "Rental agreement"
+            insurance_included:
+              type: boolean
+              required: true
+              source: T3
+              infer_from: "Rental receipt line items"
+
+        gift_details:
+          required: "expense_type in [gift_card_employee_foreign, gifts_foreign_activity]"
+          fields:
+            recipient_name:
+              type: string
+              required: true
+              source: T1
+            recipient_relationship:
+              type: string
+              required: true
+              source: T1
+            gift_purpose:
+              type: string
+              required: true
+              source: T1
+
+        human_subject_details:
+          required: "expense_type == human_subject_incentive"
+          fields:
+            irb_protocol_number:
+              type: string
+              required: true
+              source: T1
+            number_of_subjects:
+              type: number
+              required: true
+              source: T3
+              infer_from: "Distribution log"
+            per_subject_amount:
+              type: number
+              required: true
+              source: T3
+              infer_from: "Distribution log"
+
+  # ===========================================================================
+  # SECTION 4: Per Diem Expenses
+  # ===========================================================================
+  per_diem_expenses:
+    type: array
+    items:
+      type: object
+      fields:
+        expense_type:
+          type: enum
+          required: true
+          source: T3
+          allowed_values:
+            - alaska_hawaii_lodging
+            - alaska_hawaii_meals
+            - continental_us_lodging
+            - continental_us_meals
+            - international_lodging
+            - international_meals
+          infer_from: "Destination from flight/hotel docs determines domestic vs. international; location determines AK/HI vs. continental"
+        start_date:
+          type: date
+          required: true
+          source: T3
+          infer_from: "Trip start from flight itinerary"
+        end_date:
+          type: date
+          required: true
+          source: T3
+          infer_from: "Trip end from flight itinerary"
+        number_of_days:
+          type: number
+          required: true
+          source: T2
+          infer_from: "Computed: end_date - start_date + 1"
+        location:
+          type: string
+          required: true
+          source: T3
+          description: "City, State/Country"
+          infer_from: "Destination from flight or hotel docs"
+        country_of_activity:
+          type: string
+          required: true
+          source: T3
+          infer_from: "Derived from location"
+        foreign_activity_type:
+          type: enum
+          required: "expense_type in [international_lodging, international_meals]"
+          source: T3
+          allowed_values:
+            - conference
+            - research_collaboration
+            - fieldwork
+            - other
+          infer_from: "Inferred from conference registration or trip context"
+        per_diem_rate:
+          type: number
+          required: true
+          source: T2
+          description: "Daily rate in USD from GSA (domestic) or State Dept (foreign)"
+          infer_from: "API lookup by location + date"
+        remarks:
+          type: string
+          required: true
+          source: T3
+          infer_from: "Generated summary of dates and location"
+        meal_deductions:
+          type: array
+          required: true
+          source: T2
+          description: "One entry per day. Pre-filled from conference meal schedule."
+          infer_from: "Cross-reference conference_registration_details.meals_included with trip dates"
+          items:
+            type: object
+            fields:
+              date:
+                type: date
+              breakfast_provided:
+                type: boolean
+              lunch_provided:
+                type: boolean
+              dinner_provided:
+                type: boolean
+              deduction_amount:
+                type: number
+                source: T2
+                description: "Computed from per diem rate breakdown"
+        reimbursement_summary:
+          type: array
+          required: true
+          source: T2
+          description: "One entry per day. Auto-computed."
+          items:
+            type: object
+            fields:
+              date:
+                type: date
+              per_diem_amount:
+                type: number
+              meal_deduction:
+                type: number
+              net_amount:
+                type: number
+
+  # ===========================================================================
+  # SECTION 5: Mileage Expenses (TBD — awaiting FA input)
+  # ===========================================================================
+  mileage_expenses:
+    type: array
+    description: "Placeholder — details to be filled after FA consultation"
+    items:
+      type: object
+      fields: {}
+
+  # ===========================================================================
+  # SECTION 6: Allocation & Approvers
+  # ===========================================================================
+  allocation_and_approvers:
+    other_beneficiaries:
+      type: boolean
+      required: true
+      source: T1
+      description: "Are there any beneficiaries other than the payee?"
+    beneficiary_list:
+      type: array
+      required: "allocation_and_approvers.other_beneficiaries == true"
+      source: T1
+      items:
+        type: object
+        fields:
+          name:
+            type: string
+          relationship:
+            type: string
+
+  # ===========================================================================
+  # AGENT METADATA (populated alongside the schema, not part of the form)
+  # ===========================================================================
+  # When the agent fills in an instance of this schema, each field value
+  # should be accompanied by:
+  #
+  #   _meta:
+  #     confidence: high | medium | low
+  #     source_document: <filename or "system_generated">
+  #     needs_review: true | false
+  #     flags: []            # list of irregularity strings
+  #
+  # Example:
+  #   airfare_details:
+  #     class_of_ticket:
+  #       value: "business"
+  #       _meta:
+  #         confidence: high
+  #         source_document: "flight_confirmation.pdf"
+  #         needs_review: true
+  #         flags: ["class_above_coach_no_justification"]
