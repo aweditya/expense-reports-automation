@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use crate::draft::{ConfidenceLevel, DraftReport};
+use crate::draft::{ConfidenceLevel, DraftReport, EvidenceKind, EvidenceReference, FieldMetadata};
 use crate::validation_rules::{
     conditional_rules_for, field_rule, ConditionalRuleType, FieldRule, SchemaType,
 };
@@ -19,8 +19,10 @@ pub enum ValidationIssueKind {
     InvalidEnumValue,
     MissingDependency,
     MissingFieldMetadata,
+    MissingEvidenceReference,
     OrphanFieldMetadata,
     LowConfidenceWithoutReview,
+    InvalidEvidenceReference,
     UnsupportedExpression,
     UnresolvedExpressionReference,
     ManualReviewRequired,
@@ -92,6 +94,8 @@ pub fn validate_draft_report(draft: &DraftReport) -> ValidationReport {
                 message: "Low-confidence field should be marked as needing review".to_owned(),
             });
         }
+
+        validate_field_metadata(path, metadata, &mut report);
     }
 
     for metadata_path in draft.metadata.keys() {
@@ -107,6 +111,64 @@ pub fn validate_draft_report(draft: &DraftReport) -> ValidationReport {
     }
 
     report
+}
+
+fn validate_field_metadata(path: &str, metadata: &FieldMetadata, report: &mut ValidationReport) {
+    if metadata.evidence.is_empty() {
+        report.issues.push(ValidationIssue {
+            severity: ValidationSeverity::Error,
+            kind: ValidationIssueKind::MissingEvidenceReference,
+            path: path.to_owned(),
+            schema_path: path.to_owned(),
+            message: "Field metadata must include at least one evidence reference".to_owned(),
+        });
+        return;
+    }
+
+    for (index, evidence) in metadata.evidence.iter().enumerate() {
+        if let Some(message) = evidence_integrity_issue(evidence) {
+            report.issues.push(ValidationIssue {
+                severity: ValidationSeverity::Error,
+                kind: ValidationIssueKind::InvalidEvidenceReference,
+                path: format!("{path}._meta.evidence[{index}]"),
+                schema_path: path.to_owned(),
+                message,
+            });
+        }
+    }
+}
+
+fn evidence_integrity_issue(evidence: &EvidenceReference) -> Option<String> {
+    let has_document_handle = evidence.document_id.is_some() || evidence.filename.is_some();
+
+    match evidence.kind {
+        EvidenceKind::Document => {
+            if !has_document_handle {
+                Some("document evidence must include document_id or filename".to_owned())
+            } else {
+                None
+            }
+        }
+        EvidenceKind::DocumentSpan => {
+            if !has_document_handle || evidence.page.is_none() || evidence.quote.is_none() {
+                Some(
+                    "document_span evidence must include document_id or filename, page, and quote"
+                        .to_owned(),
+                )
+            } else {
+                None
+            }
+        }
+        EvidenceKind::SystemGenerated | EvidenceKind::UserInput => {
+            if evidence.origin.is_none() {
+                Some("system_generated/user_input evidence must include origin".to_owned())
+            } else if has_document_handle || evidence.page.is_some() || evidence.quote.is_some() {
+                Some("system_generated/user_input evidence must not include document/page/quote fields".to_owned())
+            } else {
+                None
+            }
+        }
+    }
 }
 
 struct Validator<'a> {
@@ -636,7 +698,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::*;
-    use crate::draft::{ConfidenceLevel, DraftReport, FieldMetadata};
+    use crate::draft::{ConfidenceLevel, DraftReport, EvidenceKind, EvidenceReference, FieldMetadata};
     use crate::value::ReportValue;
 
     fn text(value: &str) -> ReportValue {
@@ -697,10 +759,49 @@ mod tests {
         ])
     }
 
+    fn document_evidence(filename: &str) -> EvidenceReference {
+        EvidenceReference {
+            kind: EvidenceKind::Document,
+            document_id: None,
+            filename: Some(filename.to_owned()),
+            page: None,
+            quote: None,
+            origin: None,
+        }
+    }
+
+    fn generated_evidence(origin: &str) -> EvidenceReference {
+        EvidenceReference {
+            kind: EvidenceKind::SystemGenerated,
+            document_id: None,
+            filename: None,
+            page: None,
+            quote: None,
+            origin: Some(origin.to_owned()),
+        }
+    }
+
+    fn user_input_evidence(origin: &str) -> EvidenceReference {
+        EvidenceReference {
+            kind: EvidenceKind::UserInput,
+            document_id: None,
+            filename: None,
+            page: None,
+            quote: None,
+            origin: Some(origin.to_owned()),
+        }
+    }
+
     fn metadata(confidence: ConfidenceLevel, source_document: &str, needs_review: bool) -> FieldMetadata {
+        let evidence = match source_document {
+            "system_generated" => vec![generated_evidence(source_document)],
+            "fa_input" | "payee_form" | "user_input" => vec![user_input_evidence(source_document)],
+            _ => vec![document_evidence(source_document)],
+        };
+
         FieldMetadata {
             confidence,
-            source_document: source_document.to_owned(),
+            evidence,
             needs_review,
             flags: Vec::new(),
         }
@@ -960,7 +1061,7 @@ mod tests {
             "expense_report.general_information.event_name".to_owned(),
             FieldMetadata {
                 confidence: ConfidenceLevel::Low,
-                source_document: "system_generated".to_owned(),
+                evidence: vec![generated_evidence("system_generated")],
                 needs_review: false,
                 flags: Vec::new(),
             },
@@ -980,6 +1081,32 @@ mod tests {
             .issues
             .iter()
             .any(|issue| issue.kind == ValidationIssueKind::LowConfidenceWithoutReview
+                && issue.path == "expense_report.general_information.event_name"));
+    }
+
+    #[test]
+    fn draft_validation_flags_missing_evidence_references() {
+        let mut metadata = complete_base_report_metadata();
+        metadata.insert(
+            "expense_report.general_information.event_name".to_owned(),
+            FieldMetadata {
+                confidence: ConfidenceLevel::High,
+                evidence: Vec::new(),
+                needs_review: false,
+                flags: Vec::new(),
+            },
+        );
+
+        let draft = DraftReport {
+            report: base_report(),
+            metadata,
+        };
+
+        let validation = validate_draft_report(&draft);
+        assert!(validation
+            .issues
+            .iter()
+            .any(|issue| issue.kind == ValidationIssueKind::MissingEvidenceReference
                 && issue.path == "expense_report.general_information.event_name"));
     }
 }

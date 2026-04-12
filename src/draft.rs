@@ -12,10 +12,28 @@ pub enum ConfidenceLevel {
     Low,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EvidenceKind {
+    Document,
+    DocumentSpan,
+    SystemGenerated,
+    UserInput,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EvidenceReference {
+    pub kind: EvidenceKind,
+    pub document_id: Option<String>,
+    pub filename: Option<String>,
+    pub page: Option<u32>,
+    pub quote: Option<String>,
+    pub origin: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldMetadata {
     pub confidence: ConfidenceLevel,
-    pub source_document: String,
+    pub evidence: Vec<EvidenceReference>,
     pub needs_review: bool,
     pub flags: Vec<String>,
 }
@@ -147,13 +165,14 @@ fn parse_field_metadata(value: ReportValue, path: &str) -> Result<FieldMetadata,
         }
     };
 
-    let source_document = match object.remove("source_document") {
-        Some(ReportValue::String(value)) if !value.trim().is_empty() => value,
-        _ => {
-            return Err(ParseDraftReportError::InvalidMetadata(format!(
-                "_meta.source_document at {path} must be a non-empty string"
-            )))
-        }
+    let evidence = if let Some(evidence_value) = object.remove("evidence") {
+        parse_evidence_list(evidence_value, path)?
+    } else if let Some(source_document_value) = object.remove("source_document") {
+        vec![legacy_evidence_reference(source_document_value, path)?]
+    } else {
+        return Err(ParseDraftReportError::InvalidMetadata(format!(
+            "_meta at {path} must contain either evidence or source_document"
+        )));
     };
 
     let needs_review = match object.remove("needs_review") {
@@ -191,7 +210,7 @@ fn parse_field_metadata(value: ReportValue, path: &str) -> Result<FieldMetadata,
 
     Ok(FieldMetadata {
         confidence,
-        source_document,
+        evidence,
         needs_review,
         flags,
     })
@@ -206,6 +225,210 @@ fn parse_confidence(value: &str, path: &str) -> Result<ConfidenceLevel, ParseDra
             "_meta.confidence at {path} must be one of high|medium|low"
         ))),
     }
+}
+
+fn parse_evidence_list(
+    value: ReportValue,
+    path: &str,
+) -> Result<Vec<EvidenceReference>, ParseDraftReportError> {
+    let ReportValue::Array(values) = value else {
+        return Err(ParseDraftReportError::InvalidMetadata(format!(
+            "_meta.evidence at {path} must be an array"
+        )));
+    };
+
+    if values.is_empty() {
+        return Err(ParseDraftReportError::InvalidMetadata(format!(
+            "_meta.evidence at {path} must not be empty"
+        )));
+    }
+
+    values
+        .into_iter()
+        .enumerate()
+        .map(|(index, value)| parse_evidence_reference(value, &format!("{path}._meta.evidence[{index}]")))
+        .collect()
+}
+
+fn legacy_evidence_reference(
+    value: ReportValue,
+    path: &str,
+) -> Result<EvidenceReference, ParseDraftReportError> {
+    let ReportValue::String(source_document) = value else {
+        return Err(ParseDraftReportError::InvalidMetadata(format!(
+            "_meta.source_document at {path} must be a non-empty string"
+        )));
+    };
+    if source_document.trim().is_empty() {
+        return Err(ParseDraftReportError::InvalidMetadata(format!(
+            "_meta.source_document at {path} must be a non-empty string"
+        )));
+    }
+
+    let kind = match source_document.as_str() {
+        "system_generated" => EvidenceKind::SystemGenerated,
+        "fa_input" | "payee_form" | "user_input" => EvidenceKind::UserInput,
+        _ => EvidenceKind::Document,
+    };
+
+    Ok(match kind {
+        EvidenceKind::SystemGenerated => EvidenceReference {
+            kind,
+            document_id: None,
+            filename: None,
+            page: None,
+            quote: None,
+            origin: Some(source_document),
+        },
+        EvidenceKind::UserInput => EvidenceReference {
+            kind,
+            document_id: None,
+            filename: None,
+            page: None,
+            quote: None,
+            origin: Some(source_document),
+        },
+        EvidenceKind::Document => EvidenceReference {
+            kind,
+            document_id: None,
+            filename: Some(source_document),
+            page: None,
+            quote: None,
+            origin: None,
+        },
+        EvidenceKind::DocumentSpan => unreachable!(),
+    })
+}
+
+fn parse_evidence_reference(
+    value: ReportValue,
+    path: &str,
+) -> Result<EvidenceReference, ParseDraftReportError> {
+    let ReportValue::Object(mut object) = value else {
+        return Err(ParseDraftReportError::InvalidMetadata(format!(
+            "evidence reference at {path} must be an object"
+        )));
+    };
+
+    let kind = match object.remove("kind") {
+        Some(ReportValue::String(value)) => parse_evidence_kind(&value, path)?,
+        _ => {
+            return Err(ParseDraftReportError::InvalidMetadata(format!(
+                "evidence reference kind at {path} must be one of document|document_span|system_generated|user_input"
+            )))
+        }
+    };
+
+    let document_id = parse_optional_string(object.remove("document_id"), path, "document_id")?;
+    let filename = parse_optional_string(object.remove("filename"), path, "filename")?;
+    let page = parse_optional_u32(object.remove("page"), path, "page")?;
+    let quote = parse_optional_string(object.remove("quote"), path, "quote")?;
+    let origin = parse_optional_string(object.remove("origin"), path, "origin")?;
+
+    if !object.is_empty() {
+        return Err(ParseDraftReportError::InvalidMetadata(format!(
+            "evidence reference at {path} contains unexpected keys"
+        )));
+    }
+
+    validate_evidence_reference_shape(
+        EvidenceReference {
+            kind,
+            document_id,
+            filename,
+            page,
+            quote,
+            origin,
+        },
+        path,
+    )
+}
+
+fn parse_evidence_kind(value: &str, path: &str) -> Result<EvidenceKind, ParseDraftReportError> {
+    match value {
+        "document" => Ok(EvidenceKind::Document),
+        "document_span" => Ok(EvidenceKind::DocumentSpan),
+        "system_generated" => Ok(EvidenceKind::SystemGenerated),
+        "user_input" => Ok(EvidenceKind::UserInput),
+        _ => Err(ParseDraftReportError::InvalidMetadata(format!(
+            "evidence reference kind at {path} must be one of document|document_span|system_generated|user_input"
+        ))),
+    }
+}
+
+fn parse_optional_string(
+    value: Option<ReportValue>,
+    path: &str,
+    key: &str,
+) -> Result<Option<String>, ParseDraftReportError> {
+    match value {
+        None => Ok(None),
+        Some(ReportValue::String(value)) if !value.trim().is_empty() => Ok(Some(value)),
+        Some(_) => Err(ParseDraftReportError::InvalidMetadata(format!(
+            "{key} at {path} must be a non-empty string when present"
+        ))),
+    }
+}
+
+fn parse_optional_u32(
+    value: Option<ReportValue>,
+    path: &str,
+    key: &str,
+) -> Result<Option<u32>, ParseDraftReportError> {
+    match value {
+        None => Ok(None),
+        Some(ReportValue::Number(value)) | Some(ReportValue::String(value)) => value
+            .parse::<u32>()
+            .map(Some)
+            .map_err(|_| {
+                ParseDraftReportError::InvalidMetadata(format!(
+                    "{key} at {path} must be a positive integer when present"
+                ))
+            }),
+        Some(_) => Err(ParseDraftReportError::InvalidMetadata(format!(
+            "{key} at {path} must be a positive integer when present"
+        ))),
+    }
+}
+
+fn validate_evidence_reference_shape(
+    reference: EvidenceReference,
+    path: &str,
+) -> Result<EvidenceReference, ParseDraftReportError> {
+    let has_document_handle = reference.document_id.is_some() || reference.filename.is_some();
+
+    match reference.kind {
+        EvidenceKind::Document => {
+            if !has_document_handle {
+                return Err(ParseDraftReportError::InvalidMetadata(format!(
+                    "document evidence at {path} must include document_id or filename"
+                )));
+            }
+        }
+        EvidenceKind::DocumentSpan => {
+            if !has_document_handle || reference.page.is_none() || reference.quote.is_none() {
+                return Err(ParseDraftReportError::InvalidMetadata(format!(
+                    "document_span evidence at {path} must include document_id or filename, page, and quote"
+                )));
+            }
+        }
+        EvidenceKind::SystemGenerated | EvidenceKind::UserInput => {
+            if reference.origin.is_none() {
+                return Err(ParseDraftReportError::InvalidMetadata(format!(
+                    "{:?} evidence at {path} must include origin",
+                    reference.kind
+                )));
+            }
+            if has_document_handle || reference.page.is_some() || reference.quote.is_some() {
+                return Err(ParseDraftReportError::InvalidMetadata(format!(
+                    "{:?} evidence at {path} must not include document/page/quote fields",
+                    reference.kind
+                )));
+            }
+        }
+    }
+
+    Ok(reference)
 }
 
 #[cfg(test)]
@@ -223,7 +446,12 @@ expense_report:
       value: expenses_domestic
       _meta:
         confidence: high
-        source_document: booking.pdf
+        evidence:
+          - kind: document_span
+            document_id: doc_booking
+            filename: booking.pdf
+            page: 1
+            quote: Expenses (Domestic)
         needs_review: false
         flags: []
 "#,
@@ -250,5 +478,30 @@ expense_report:
         assert!(draft
             .metadata
             .contains_key("expense_report.general_information.category"));
+    }
+
+    #[test]
+    fn preserves_legacy_source_document_for_backward_compatibility() {
+        let root = parse_document_str(
+            r#"
+expense_report:
+  general_information:
+    category:
+      value: expenses_domestic
+      _meta:
+        confidence: high
+        source_document: booking.pdf
+        needs_review: false
+        flags: []
+"#,
+            ReportFormat::Yaml,
+        )
+        .expect("draft yaml should parse");
+
+        let draft = parse_draft_report_value(root).expect("draft should unwrap");
+        let evidence = &draft.metadata["expense_report.general_information.category"].evidence;
+        assert_eq!(evidence.len(), 1);
+        assert_eq!(evidence[0].filename.as_deref(), Some("booking.pdf"));
+        assert_eq!(evidence[0].kind, EvidenceKind::Document);
     }
 }

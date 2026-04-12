@@ -11,6 +11,8 @@ pub use draft::parse_draft_report_path;
 pub use draft::parse_draft_report_value;
 pub use draft::ConfidenceLevel;
 pub use draft::DraftReport;
+pub use draft::EvidenceKind;
+pub use draft::EvidenceReference;
 pub use draft::FieldMetadata;
 pub use draft::ParseDraftReportError;
 pub use expense_report_model::DecimalAmount;
