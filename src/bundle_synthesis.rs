@@ -869,6 +869,33 @@ fn synthesize_airfare_line(
 
     let first_segment = facts.segments.first();
     let last_segment = facts.segments.last();
+    let departure_airport = facts
+        .departure_location
+        .as_ref()
+        .and_then(|location| location.value.airport_code.as_ref().map(|value| {
+            system_observed(
+                value.clone(),
+                location.confidence,
+                location.evidence.clone(),
+                "bundle_synthesis.project_departure_airport_from_location",
+                location.flags.clone(),
+            )
+        }))
+        .or_else(|| first_segment.map(|segment| clone_string_observed(&segment.departure_airport)));
+    let destination_airport = facts
+        .arrival_location
+        .as_ref()
+        .and_then(|location| location.value.airport_code.as_ref().map(|value| {
+            system_observed(
+                value.clone(),
+                location.confidence,
+                location.evidence.clone(),
+                "bundle_synthesis.project_destination_airport_from_location",
+                location.flags.clone(),
+            )
+        }))
+        .or_else(|| first_segment.map(|segment| clone_string_observed(&segment.arrival_airport)))
+        .or_else(|| last_segment.map(|segment| clone_string_observed(&segment.arrival_airport)));
     let airfare_details = Some(CanonicalAirfareDetails {
         travelers_name: facts
             .traveler_names
@@ -898,8 +925,8 @@ fn synthesize_airfare_line(
                 )
             })
         }),
-        departure_airport: first_segment.map(|segment| clone_string_observed(&segment.departure_airport)),
-        destination_airport: last_segment.map(|segment| clone_string_observed(&segment.arrival_airport)),
+        departure_airport,
+        destination_airport,
         round_trip: first_segment.zip(last_segment).map(|(first, last)| {
             let is_round_trip = first.departure_airport.value == last.arrival_airport.value;
             let mut evidence = first.departure_airport.evidence.clone();
@@ -1787,13 +1814,19 @@ fn location_to_display(location: &Location) -> String {
 }
 
 fn same_location(lhs: &Location, rhs: &Location) -> bool {
-    normalize_optional_text(lhs.city.as_deref()) == normalize_optional_text(rhs.city.as_deref())
-        && normalize_optional_text(lhs.country.as_deref())
-            == normalize_optional_text(rhs.country.as_deref())
+    compatible_optional_text(lhs.city.as_deref(), rhs.city.as_deref())
+        && compatible_optional_text(lhs.country.as_deref(), rhs.country.as_deref())
 }
 
 fn normalize_optional_text(value: Option<&str>) -> Option<String> {
     value.map(normalize_text)
+}
+
+fn compatible_optional_text(lhs: Option<&str>, rhs: Option<&str>) -> bool {
+    match (normalize_optional_text(lhs), normalize_optional_text(rhs)) {
+        (Some(lhs), Some(rhs)) => lhs == rhs,
+        (Some(_), None) | (None, Some(_)) | (None, None) => true,
+    }
 }
 
 fn normalize_text(value: &str) -> String {
@@ -2012,6 +2045,28 @@ mod tests {
             get_path(&result.draft.report, "transaction_lines[1].lodging_details.hotel_name")
                 .and_then(ReportValue::as_text),
             Some("MARINA BAY GRAND HOTEL")
+        );
+        assert!(!result
+            .issues
+            .iter()
+            .any(|issue| issue.kind == BundleIssueKind::ConflictingDestination));
+    }
+
+    #[test]
+    fn curated_bundle_projects_itinerary_destination_airport() {
+        let documents = vec![
+            curated_sidecar("flight_itinerary/airline_itinerary_classic.md.expected.json"),
+            curated_sidecar("hotel_folio/hotel_folio_guest_bill.md.expected.json"),
+        ];
+
+        let result = synthesize_bundle_projection(&documents);
+        assert_eq!(
+            get_path(
+                &result.draft.report,
+                "transaction_lines[0].airfare_details.destination_airport"
+            )
+            .and_then(ReportValue::as_text),
+            Some("SIN")
         );
     }
 

@@ -216,6 +216,8 @@ This stage should also detect unresolved conflicts, such as:
 - receipt total not matching converted amount
 - conference program present but payee missing from agenda
 
+The first Rust implementation of this layer now lives in [src/bundle_synthesis.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/bundle_synthesis.rs:1), with usage notes in [bundle-synthesis.md](/Users/adityasriram/Labs/stanford/research/expense-reports/bundle-synthesis.md:1).
+
 ### 6. Schema projection
 
 Project the canonical graph into the expense report schema.
