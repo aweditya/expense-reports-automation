@@ -62,24 +62,34 @@ impl From<serde_yaml::Error> for ParseReportError {
 }
 
 pub fn parse_report_path(path: impl AsRef<Path>) -> Result<ReportValue, ParseReportError> {
+    let root = parse_document_path(path)?;
+    normalize_report_root(root)
+}
+
+pub fn parse_document_path(path: impl AsRef<Path>) -> Result<ReportValue, ParseReportError> {
     let path = path.as_ref();
     let contents = fs::read_to_string(path)?;
 
     match detect_format(path) {
-        Some(format) => parse_report_str(&contents, format),
+        Some(format) => parse_document_str(&contents, format),
         None => {
-            parse_report_str(&contents, ReportFormat::Json)
-                .or_else(|_| parse_report_str(&contents, ReportFormat::Yaml))
+            parse_document_str(&contents, ReportFormat::Json)
+                .or_else(|_| parse_document_str(&contents, ReportFormat::Yaml))
         }
     }
 }
 
 pub fn parse_report_str(input: &str, format: ReportFormat) -> Result<ReportValue, ParseReportError> {
+    let root = parse_document_str(input, format)?;
+    normalize_report_root(root)
+}
+
+pub fn parse_document_str(input: &str, format: ReportFormat) -> Result<ReportValue, ParseReportError> {
     let root = match format {
         ReportFormat::Json => from_json_value(serde_json::from_str::<JsonValue>(input)?),
         ReportFormat::Yaml => from_yaml_value(serde_yaml::from_str::<YamlValue>(input)?, "$")?,
     };
-    normalize_report_root(root)
+    Ok(root)
 }
 
 fn detect_format(path: &Path) -> Option<ReportFormat> {

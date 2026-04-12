@@ -2,10 +2,17 @@
 pub mod expense_report_model;
 #[path = "../generated/validation_rules.rs"]
 pub mod validation_rules;
+pub mod draft;
 pub mod parse;
 pub mod validator;
 pub mod value;
 
+pub use draft::parse_draft_report_path;
+pub use draft::parse_draft_report_value;
+pub use draft::ConfidenceLevel;
+pub use draft::DraftReport;
+pub use draft::FieldMetadata;
+pub use draft::ParseDraftReportError;
 pub use expense_report_model::DecimalAmount;
 pub use expense_report_model::ExpenseReport;
 pub use expense_report_model::ExpenseReportModel;
@@ -23,6 +30,7 @@ pub use parse::parse_report_str;
 pub use parse::ParseReportError;
 pub use parse::ReportFormat;
 pub use validator::validate_expense_report;
+pub use validator::validate_draft_report;
 pub use validator::ValidationIssue;
 pub use validator::ValidationIssueKind;
 pub use validator::ValidationReport;

@@ -1,3 +1,6 @@
+use std::collections::BTreeSet;
+
+use crate::draft::{ConfidenceLevel, DraftReport};
 use crate::validation_rules::{
     conditional_rules_for, field_rule, ConditionalRuleType, FieldRule, SchemaType,
 };
@@ -15,6 +18,9 @@ pub enum ValidationIssueKind {
     TypeMismatch,
     InvalidEnumValue,
     MissingDependency,
+    MissingFieldMetadata,
+    OrphanFieldMetadata,
+    LowConfidenceWithoutReview,
     UnsupportedExpression,
     UnresolvedExpressionReference,
     ManualReviewRequired,
@@ -58,6 +64,49 @@ pub fn validate_expense_report(report: &ReportValue) -> ValidationReport {
     ValidationReport {
         issues: validator.issues,
     }
+}
+
+pub fn validate_draft_report(draft: &DraftReport) -> ValidationReport {
+    let mut report = validate_expense_report(&draft.report);
+    let leaf_paths = collect_leaf_paths(&draft.report, "expense_report");
+    let leaf_set = leaf_paths.iter().cloned().collect::<BTreeSet<_>>();
+
+    for path in &leaf_paths {
+        let Some(metadata) = draft.metadata.get(path) else {
+            report.issues.push(ValidationIssue {
+                severity: ValidationSeverity::Error,
+                kind: ValidationIssueKind::MissingFieldMetadata,
+                path: path.clone(),
+                schema_path: path.clone(),
+                message: "Leaf field is missing required extraction metadata".to_owned(),
+            });
+            continue;
+        };
+
+        if metadata.confidence == ConfidenceLevel::Low && !metadata.needs_review {
+            report.issues.push(ValidationIssue {
+                severity: ValidationSeverity::Warning,
+                kind: ValidationIssueKind::LowConfidenceWithoutReview,
+                path: path.clone(),
+                schema_path: path.clone(),
+                message: "Low-confidence field should be marked as needing review".to_owned(),
+            });
+        }
+    }
+
+    for metadata_path in draft.metadata.keys() {
+        if !leaf_set.contains(metadata_path) {
+            report.issues.push(ValidationIssue {
+                severity: ValidationSeverity::Warning,
+                kind: ValidationIssueKind::OrphanFieldMetadata,
+                path: metadata_path.clone(),
+                schema_path: metadata_path.clone(),
+                message: "Metadata exists for a path that is not a present leaf field".to_owned(),
+            });
+        }
+    }
+
+    report
 }
 
 struct Validator<'a> {
@@ -563,9 +612,31 @@ fn lookup_actual_path<'a>(root: &'a ReportValue, path: &str) -> Option<&'a Repor
     Some(current)
 }
 
+fn collect_leaf_paths(value: &ReportValue, path: &str) -> Vec<String> {
+    match value {
+        ReportValue::Null => Vec::new(),
+        ReportValue::Object(object) => object
+            .iter()
+            .flat_map(|(key, value)| collect_leaf_paths(value, &format!("{path}.{key}")))
+            .collect(),
+        ReportValue::Array(values) => values
+            .iter()
+            .enumerate()
+            .flat_map(|(index, value)| collect_leaf_paths(value, &format!("{path}[{index}]")))
+            .collect(),
+        ReportValue::String(_)
+        | ReportValue::Bool(_)
+        | ReportValue::Number(_)
+        | ReportValue::Date(_) => vec![path.to_owned()],
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use super::*;
+    use crate::draft::{ConfidenceLevel, DraftReport, FieldMetadata};
     use crate::value::ReportValue;
 
     fn text(value: &str) -> ReportValue {
@@ -622,6 +693,88 @@ mod tests {
             (
                 "allocation_and_approvers",
                 ReportValue::object([("other_beneficiaries", ReportValue::Bool(false))]),
+            ),
+        ])
+    }
+
+    fn metadata(confidence: ConfidenceLevel, source_document: &str, needs_review: bool) -> FieldMetadata {
+        FieldMetadata {
+            confidence,
+            source_document: source_document.to_owned(),
+            needs_review,
+            flags: Vec::new(),
+        }
+    }
+
+    fn complete_base_report_metadata() -> BTreeMap<String, FieldMetadata> {
+        BTreeMap::from([
+            (
+                "expense_report.general_information.category".to_owned(),
+                metadata(ConfidenceLevel::High, "itinerary.pdf", false),
+            ),
+            (
+                "expense_report.general_information.payee.name".to_owned(),
+                metadata(ConfidenceLevel::High, "itinerary.pdf", false),
+            ),
+            (
+                "expense_report.general_information.payee.affiliation".to_owned(),
+                metadata(ConfidenceLevel::Medium, "fa_input", true),
+            ),
+            (
+                "expense_report.general_information.rush_processing".to_owned(),
+                metadata(ConfidenceLevel::High, "payee_form", false),
+            ),
+            (
+                "expense_report.general_information.payment_method".to_owned(),
+                metadata(ConfidenceLevel::High, "system_generated", false),
+            ),
+            (
+                "expense_report.general_information.business_purpose.who".to_owned(),
+                metadata(ConfidenceLevel::High, "itinerary.pdf", false),
+            ),
+            (
+                "expense_report.general_information.business_purpose.what".to_owned(),
+                metadata(ConfidenceLevel::High, "registration.pdf", false),
+            ),
+            (
+                "expense_report.general_information.business_purpose.when".to_owned(),
+                metadata(ConfidenceLevel::High, "itinerary.pdf", false),
+            ),
+            (
+                "expense_report.general_information.business_purpose.where".to_owned(),
+                metadata(ConfidenceLevel::High, "itinerary.pdf", false),
+            ),
+            (
+                "expense_report.general_information.business_purpose.why".to_owned(),
+                metadata(ConfidenceLevel::Medium, "program.pdf", true),
+            ),
+            (
+                "expense_report.general_information.business_purpose.key_30char".to_owned(),
+                metadata(ConfidenceLevel::High, "system_generated", false),
+            ),
+            (
+                "expense_report.general_information.event_name".to_owned(),
+                metadata(ConfidenceLevel::High, "system_generated", false),
+            ),
+            (
+                "expense_report.general_information.authorized_by".to_owned(),
+                metadata(ConfidenceLevel::High, "payee_form", false),
+            ),
+            (
+                "expense_report.transaction_summary.transaction_type".to_owned(),
+                metadata(ConfidenceLevel::High, "system_generated", false),
+            ),
+            (
+                "expense_report.transaction_summary.transaction_date".to_owned(),
+                metadata(ConfidenceLevel::High, "itinerary.pdf", false),
+            ),
+            (
+                "expense_report.transaction_summary.total_usd".to_owned(),
+                metadata(ConfidenceLevel::High, "system_generated", false),
+            ),
+            (
+                "expense_report.allocation_and_approvers.other_beneficiaries".to_owned(),
+                metadata(ConfidenceLevel::High, "payee_form", false),
             ),
         ])
     }
@@ -783,5 +936,50 @@ mod tests {
             .any(|issue| issue.kind == ValidationIssueKind::MissingRequiredField
                 && issue.path
                     == "expense_report.transaction_lines[0].common.exchange_rate"));
+    }
+
+    #[test]
+    fn draft_validation_requires_metadata_for_present_leaf_fields() {
+        let draft = DraftReport {
+            report: base_report(),
+            metadata: BTreeMap::new(),
+        };
+
+        let validation = validate_draft_report(&draft);
+        assert!(validation
+            .issues
+            .iter()
+            .any(|issue| issue.kind == ValidationIssueKind::MissingFieldMetadata
+                && issue.path == "expense_report.general_information.category"));
+    }
+
+    #[test]
+    fn draft_validation_accepts_complete_metadata_and_flags_low_confidence_review_gaps() {
+        let mut metadata = complete_base_report_metadata();
+        metadata.insert(
+            "expense_report.general_information.event_name".to_owned(),
+            FieldMetadata {
+                confidence: ConfidenceLevel::Low,
+                source_document: "system_generated".to_owned(),
+                needs_review: false,
+                flags: Vec::new(),
+            },
+        );
+
+        let draft = DraftReport {
+            report: base_report(),
+            metadata,
+        };
+
+        let validation = validate_draft_report(&draft);
+        assert!(!validation
+            .issues
+            .iter()
+            .any(|issue| issue.kind == ValidationIssueKind::MissingFieldMetadata));
+        assert!(validation
+            .issues
+            .iter()
+            .any(|issue| issue.kind == ValidationIssueKind::LowConfidenceWithoutReview
+                && issue.path == "expense_report.general_information.event_name"));
     }
 }
