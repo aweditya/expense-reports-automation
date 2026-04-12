@@ -11,6 +11,7 @@ It also generates a Rust-native validation artifact:
 - [`generated/validation_rules.rs`](./generated/validation_rules.rs)
 
 The Rust crate entrypoint is [`src/lib.rs`](./src/lib.rs).
+The runtime validator built on top of these artifacts is in [`src/validator.rs`](./src/validator.rs).
 
 Generation command:
 
@@ -86,6 +87,14 @@ Why this matters:
 - conditional requirements can be enforced consistently
 - the review UI can surface the exact reason a field is blocked or flagged
 - future schema changes regenerate the rule set instead of requiring hand-maintained validator code
+
+The current validator uses the generated Rust rule tables to check:
+
+- required fields
+- conditional requiredness
+- basic type compatibility
+- enum membership
+- dependency presence
 
 ## What the UI field map is for
 
