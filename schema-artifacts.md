@@ -122,10 +122,22 @@ class_of_ticket:
   value: coach
   _meta:
     confidence: high
-    source_document: flight_confirmation.pdf
+    evidence:
+      - kind: document_span
+        document_id: doc_flight_confirmation
+        filename: flight_confirmation.pdf
+        page: 1
+        quote: Coach
     needs_review: false
     flags: []
 ```
+
+Supported evidence kinds:
+
+- `document`
+- `document_span`
+- `system_generated`
+- `user_input`
 
 ## What the UI field map is for
 

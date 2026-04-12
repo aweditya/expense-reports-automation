@@ -758,7 +758,13 @@ expense_report:
   #
   #   _meta:
   #     confidence: high | medium | low
-  #     source_document: <filename or "system_generated">
+  #     evidence:
+  #       - kind: document | document_span | system_generated | user_input
+  #         document_id: <optional stable document id>
+  #         filename: <optional filename>
+  #         page: <optional page number>
+  #         quote: <optional supporting text span>
+  #         origin: <required for system_generated/user_input>
   #     needs_review: true | false
   #     flags: []            # list of irregularity strings
   #
@@ -768,6 +774,10 @@ expense_report:
   #       value: "business"
   #       _meta:
   #         confidence: high
-  #         source_document: "flight_confirmation.pdf"
+  #         evidence:
+  #           - kind: document_span
+  #             filename: "flight_confirmation.pdf"
+  #             page: 1
+  #             quote: "Business"
   #         needs_review: true
   #         flags: ["class_above_coach_no_justification"]

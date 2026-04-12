@@ -221,7 +221,7 @@ This avoids fragile parsing and makes validation much safer.
 The output at this stage should follow your schema shape and attach metadata like:
 
 - confidence
-- evidence source
+- evidence references with document/page/span provenance
 - needs review
 - flags
 
