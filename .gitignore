@@ -2,4 +2,7 @@
 .claude/
 __pycache__/
 *.pyc
+target/
+Cargo.lock
+*.pdf
 expense-reports-filing.mp4
