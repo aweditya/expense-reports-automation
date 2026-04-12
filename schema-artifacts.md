@@ -12,6 +12,7 @@ It also generates a Rust-native validation artifact:
 
 The Rust crate entrypoint is [`src/lib.rs`](./src/lib.rs).
 The runtime validator built on top of these artifacts is in [`src/validator.rs`](./src/validator.rs).
+The file loader is in [`src/parse.rs`](./src/parse.rs), and the CLI entrypoint is [`src/bin/validate_report.rs`](./src/bin/validate_report.rs).
 
 Generation command:
 
@@ -95,6 +96,17 @@ The current validator uses the generated Rust rule tables to check:
 - basic type compatibility
 - enum membership
 - dependency presence
+
+You can validate a draft file directly with:
+
+```bash
+cargo run --bin validate_report -- examples/minimal_report.yaml
+```
+
+The parser accepts both:
+
+- a top-level wrapped document with `expense_report: ...`
+- an unwrapped document whose root is the report object itself
 
 ## What the UI field map is for
 

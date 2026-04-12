@@ -270,7 +270,7 @@ impl<'a> Validator<'a> {
             let reference = left.trim();
             let rhs = right.trim();
             let Some(value) = self.resolve_reference(current_actual_path, reference) else {
-                return Err(ValidationIssueKind::UnresolvedExpressionReference);
+                return Ok(false);
             };
 
             if rhs == "true" || rhs == "false" {
@@ -294,7 +294,7 @@ impl<'a> Validator<'a> {
                 return Err(ValidationIssueKind::UnsupportedExpression);
             };
             let Some(value) = self.resolve_reference(current_actual_path, reference) else {
-                return Err(ValidationIssueKind::UnresolvedExpressionReference);
+                return Ok(false);
             };
             let Some(actual) = value.as_text() else {
                 return Err(ValidationIssueKind::UnsupportedExpression);
@@ -468,11 +468,25 @@ fn trim_quotes(value: &str) -> &str {
 
 fn reference_candidates(current_actual_path: &str, reference: &str) -> Vec<String> {
     let mut candidates = Vec::new();
+    let parent_path = parent_actual_path(current_actual_path);
+    let current_field_name = current_actual_path.rsplit('.').next();
 
     if reference.starts_with("expense_report.") {
         push_candidate(&mut candidates, reference.to_owned());
     } else {
         push_candidate(&mut candidates, format!("expense_report.{reference}"));
+        if let Some(parent_path) = parent_path {
+            push_candidate(&mut candidates, format!("{parent_path}.{reference}"));
+        }
+        if !reference.contains('.') {
+            push_candidate(&mut candidates, format!("{current_actual_path}.{reference}"));
+        }
+        if let (Some(parent_path), Some(current_field_name)) = (parent_path, current_field_name) {
+            if let Some(stripped_reference) = reference.strip_prefix(&format!("{current_field_name}.")) {
+                push_candidate(&mut candidates, format!("{current_actual_path}.{stripped_reference}"));
+                push_candidate(&mut candidates, format!("{parent_path}.{reference}"));
+            }
+        }
         for ancestor in ancestor_paths(current_actual_path) {
             push_candidate(&mut candidates, format!("{ancestor}.{reference}"));
             if !reference.contains('.') {
@@ -488,6 +502,10 @@ fn push_candidate(candidates: &mut Vec<String>, candidate: String) {
     if !candidates.iter().any(|existing| existing == &candidate) {
         candidates.push(candidate);
     }
+}
+
+fn parent_actual_path(path: &str) -> Option<&str> {
+    path.rsplit_once('.').map(|(parent, _)| parent)
 }
 
 fn ancestor_paths(path: &str) -> Vec<String> {
