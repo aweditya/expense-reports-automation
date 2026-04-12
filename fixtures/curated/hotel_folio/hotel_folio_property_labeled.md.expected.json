@@ -1,0 +1,370 @@
+{
+  "document_id": "hotel_folio_property_labeled",
+  "filename": "hotel_folio_property_labeled.md",
+  "classification": {
+    "kind": "hotel_folio",
+    "confidence": "high",
+    "evidence": [
+      {
+        "kind": "document_span",
+        "document_id": "hotel_folio_property_labeled",
+        "filename": "hotel_folio_property_labeled.md",
+        "page": 1,
+        "quote": "Hotel Folio",
+        "origin": null
+      }
+    ],
+    "flags": []
+  },
+  "extraction_status": "complete",
+  "facts": {
+    "hotel_folio": {
+      "guest_name": {
+        "value": "Olivia Park",
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "hotel_folio_property_labeled",
+            "filename": "hotel_folio_property_labeled.md",
+            "page": 1,
+            "quote": "Guest Name: Olivia Park",
+            "origin": null
+          }
+        ],
+        "flags": []
+      },
+      "property_name": {
+        "value": "Marina Bay Grand Hotel",
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "hotel_folio_property_labeled",
+            "filename": "hotel_folio_property_labeled.md",
+            "page": 1,
+            "quote": "Property Name: Marina Bay Grand Hotel",
+            "origin": null
+          }
+        ],
+        "flags": []
+      },
+      "folio_number": {
+        "value": "MBG-88421",
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "hotel_folio_property_labeled",
+            "filename": "hotel_folio_property_labeled.md",
+            "page": 1,
+            "quote": "Folio Number: MBG-88421",
+            "origin": null
+          }
+        ],
+        "flags": []
+      },
+      "stay_window": {
+        "value": {
+          "start_date": "2025-04-21",
+          "end_date": "2025-04-24"
+        },
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "hotel_folio_property_labeled",
+            "filename": "hotel_folio_property_labeled.md",
+            "page": 1,
+            "quote": "Stay Window: 2025-04-21 to 2025-04-24",
+            "origin": null
+          }
+        ],
+        "flags": []
+      },
+      "property_location": {
+        "value": {
+          "city": "Singapore",
+          "region": null,
+          "country": "Singapore",
+          "airport_code": null
+        },
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "hotel_folio_property_labeled",
+            "filename": "hotel_folio_property_labeled.md",
+            "page": 1,
+            "quote": "Property Location: Singapore, Singapore",
+            "origin": null
+          }
+        ],
+        "flags": []
+      },
+      "nightly_charges": [
+        {
+          "date": {
+            "value": "2025-04-21",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "hotel_folio_property_labeled",
+                "filename": "hotel_folio_property_labeled.md",
+                "page": 1,
+                "quote": "2025-04-21 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "room_rate": {
+            "value": {
+              "amount": "220.00",
+              "currency": "SGD"
+            },
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "hotel_folio_property_labeled",
+                "filename": "hotel_folio_property_labeled.md",
+                "page": 1,
+                "quote": "2025-04-21 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "taxes_and_fees": [
+            {
+              "value": {
+                "amount": "39.60",
+                "currency": "SGD"
+              },
+              "confidence": "high",
+              "evidence": [
+                {
+                  "kind": "document_span",
+                  "document_id": "hotel_folio_property_labeled",
+                  "filename": "hotel_folio_property_labeled.md",
+                  "page": 1,
+                  "quote": "2025-04-21 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+                  "origin": null
+                }
+              ],
+              "flags": []
+            }
+          ],
+          "description": {
+            "value": "Deluxe King Room",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "hotel_folio_property_labeled",
+                "filename": "hotel_folio_property_labeled.md",
+                "page": 1,
+                "quote": "2025-04-21 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+                "origin": null
+              }
+            ],
+            "flags": []
+          }
+        },
+        {
+          "date": {
+            "value": "2025-04-22",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "hotel_folio_property_labeled",
+                "filename": "hotel_folio_property_labeled.md",
+                "page": 1,
+                "quote": "2025-04-22 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "room_rate": {
+            "value": {
+              "amount": "220.00",
+              "currency": "SGD"
+            },
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "hotel_folio_property_labeled",
+                "filename": "hotel_folio_property_labeled.md",
+                "page": 1,
+                "quote": "2025-04-22 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "taxes_and_fees": [
+            {
+              "value": {
+                "amount": "39.60",
+                "currency": "SGD"
+              },
+              "confidence": "high",
+              "evidence": [
+                {
+                  "kind": "document_span",
+                  "document_id": "hotel_folio_property_labeled",
+                  "filename": "hotel_folio_property_labeled.md",
+                  "page": 1,
+                  "quote": "2025-04-22 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+                  "origin": null
+                }
+              ],
+              "flags": []
+            }
+          ],
+          "description": {
+            "value": "Deluxe King Room",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "hotel_folio_property_labeled",
+                "filename": "hotel_folio_property_labeled.md",
+                "page": 1,
+                "quote": "2025-04-22 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+                "origin": null
+              }
+            ],
+            "flags": []
+          }
+        },
+        {
+          "date": {
+            "value": "2025-04-23",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "hotel_folio_property_labeled",
+                "filename": "hotel_folio_property_labeled.md",
+                "page": 1,
+                "quote": "2025-04-23 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "room_rate": {
+            "value": {
+              "amount": "220.00",
+              "currency": "SGD"
+            },
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "hotel_folio_property_labeled",
+                "filename": "hotel_folio_property_labeled.md",
+                "page": 1,
+                "quote": "2025-04-23 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "taxes_and_fees": [
+            {
+              "value": {
+                "amount": "39.60",
+                "currency": "SGD"
+              },
+              "confidence": "high",
+              "evidence": [
+                {
+                  "kind": "document_span",
+                  "document_id": "hotel_folio_property_labeled",
+                  "filename": "hotel_folio_property_labeled.md",
+                  "page": 1,
+                  "quote": "2025-04-23 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+                  "origin": null
+                }
+              ],
+              "flags": []
+            }
+          ],
+          "description": {
+            "value": "Deluxe King Room",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "hotel_folio_property_labeled",
+                "filename": "hotel_folio_property_labeled.md",
+                "page": 1,
+                "quote": "2025-04-23 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+                "origin": null
+              }
+            ],
+            "flags": []
+          }
+        }
+      ],
+      "total_paid": {
+        "value": {
+          "amount": "778.80",
+          "currency": "SGD"
+        },
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "hotel_folio_property_labeled",
+            "filename": "hotel_folio_property_labeled.md",
+            "page": 1,
+            "quote": "Total Paid: SGD 778.80",
+            "origin": null
+          }
+        ],
+        "flags": []
+      },
+      "meals_included": [
+        {
+          "value": "Breakfast",
+          "confidence": "high",
+          "evidence": [
+            {
+              "kind": "document_span",
+              "document_id": "hotel_folio_property_labeled",
+              "filename": "hotel_folio_property_labeled.md",
+              "page": 1,
+              "quote": "Breakfast",
+              "origin": null
+            }
+          ],
+          "flags": []
+        },
+        {
+          "value": "Evening Reception",
+          "confidence": "high",
+          "evidence": [
+            {
+              "kind": "document_span",
+              "document_id": "hotel_folio_property_labeled",
+              "filename": "hotel_folio_property_labeled.md",
+              "page": 1,
+              "quote": "Evening Reception",
+              "origin": null
+            }
+          ],
+          "flags": []
+        }
+      ]
+    }
+  },
+  "issues": []
+}

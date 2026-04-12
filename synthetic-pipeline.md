@@ -30,6 +30,11 @@ This repo also includes a checked-in curated corpus of more realistic markdown t
 
 Those fixtures are paired with expected `ExtractedDocumentFacts` values in [src/curated_corpus.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/curated_corpus.rs:1), and they are meant to pin the interface against layouts that look closer to real OCR output than the generated smoke fixtures.
 
+For inspection outside Rust, the repo also contains JSON sidecars and a manifest:
+
+- `<fixture>.md.expected.json`
+- `fixtures/curated/manifest.json`
+
 ## Commands
 
 Run the full Rust test suite:
@@ -66,6 +71,12 @@ Verify the checked-in curated corpus:
 
 ```bash
 cargo run --bin verify_curated_corpus
+```
+
+Refresh the curated JSON sidecars from the typed expected corpus:
+
+```bash
+cargo run --bin export_curated_corpus_expectations
 ```
 
 Transcribe a markdown document through the same transcription layer:

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "airline_itinerary_classic",
+    "markdown_path": "fixtures/curated/flight_itinerary/airline_itinerary_classic.md",
+    "expected_path": "fixtures/curated/flight_itinerary/airline_itinerary_classic.md.expected.json"
+  },
+  {
+    "id": "airline_itinerary_trip_window",
+    "markdown_path": "fixtures/curated/flight_itinerary/airline_itinerary_trip_window.md",
+    "expected_path": "fixtures/curated/flight_itinerary/airline_itinerary_trip_window.md.expected.json"
+  },
+  {
+    "id": "hotel_folio_guest_bill",
+    "markdown_path": "fixtures/curated/hotel_folio/hotel_folio_guest_bill.md",
+    "expected_path": "fixtures/curated/hotel_folio/hotel_folio_guest_bill.md.expected.json"
+  },
+  {
+    "id": "hotel_folio_property_labeled",
+    "markdown_path": "fixtures/curated/hotel_folio/hotel_folio_property_labeled.md",
+    "expected_path": "fixtures/curated/hotel_folio/hotel_folio_property_labeled.md.expected.json"
+  },
+  {
+    "id": "receipt_card_dotted",
+    "markdown_path": "fixtures/curated/receipt/receipt_card_dotted.md",
+    "expected_path": "fixtures/curated/receipt/receipt_card_dotted.md.expected.json"
+  },
+  {
+    "id": "receipt_merchant_labeled",
+    "markdown_path": "fixtures/curated/receipt/receipt_merchant_labeled.md",
+    "expected_path": "fixtures/curated/receipt/receipt_merchant_labeled.md.expected.json"
+  }
+]

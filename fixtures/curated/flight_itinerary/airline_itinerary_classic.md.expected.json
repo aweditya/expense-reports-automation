@@ -1,0 +1,395 @@
+{
+  "document_id": "airline_itinerary_classic",
+  "filename": "airline_itinerary_classic.md",
+  "classification": {
+    "kind": "flight_itinerary",
+    "confidence": "high",
+    "evidence": [
+      {
+        "kind": "document_span",
+        "document_id": "airline_itinerary_classic",
+        "filename": "airline_itinerary_classic.md",
+        "page": 1,
+        "quote": "E-TICKET ITINERARY RECEIPT",
+        "origin": null
+      }
+    ],
+    "flags": []
+  },
+  "extraction_status": "complete",
+  "facts": {
+    "flight_itinerary": {
+      "traveler_names": [
+        {
+          "value": "Olivia Park",
+          "confidence": "high",
+          "evidence": [
+            {
+              "kind": "document_span",
+              "document_id": "airline_itinerary_classic",
+              "filename": "airline_itinerary_classic.md",
+              "page": 1,
+              "quote": "Passenger Olivia Park",
+              "origin": null
+            }
+          ],
+          "flags": []
+        }
+      ],
+      "confirmation_code": {
+        "value": "H7K9Q2",
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "airline_itinerary_classic",
+            "filename": "airline_itinerary_classic.md",
+            "page": 1,
+            "quote": "Record Locator H7K9Q2",
+            "origin": null
+          }
+        ],
+        "flags": []
+      },
+      "ticket_number": {
+        "value": "0162459135784",
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "airline_itinerary_classic",
+            "filename": "airline_itinerary_classic.md",
+            "page": 1,
+            "quote": "Ticket Number 0162459135784",
+            "origin": null
+          }
+        ],
+        "flags": []
+      },
+      "booking_date": {
+        "value": "2025-04-10",
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "airline_itinerary_classic",
+            "filename": "airline_itinerary_classic.md",
+            "page": 1,
+            "quote": "Issue Date 2025-04-10",
+            "origin": null
+          }
+        ],
+        "flags": []
+      },
+      "trip_window": {
+        "value": {
+          "start_date": "2025-04-21",
+          "end_date": "2025-04-29"
+        },
+        "confidence": "medium",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "airline_itinerary_classic",
+            "filename": "airline_itinerary_classic.md",
+            "page": 1,
+            "quote": "Departure 2025-04-21",
+            "origin": null
+          },
+          {
+            "kind": "document_span",
+            "document_id": "airline_itinerary_classic",
+            "filename": "airline_itinerary_classic.md",
+            "page": 1,
+            "quote": "Return 2025-04-29",
+            "origin": null
+          },
+          {
+            "kind": "system_generated",
+            "document_id": null,
+            "filename": null,
+            "page": null,
+            "quote": null,
+            "origin": "document_extract.infer_trip_window_from_departure_return"
+          }
+        ],
+        "flags": []
+      },
+      "departure_location": {
+        "value": {
+          "city": "San Francisco",
+          "region": "CA",
+          "country": "United States",
+          "airport_code": "SFO"
+        },
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "airline_itinerary_classic",
+            "filename": "airline_itinerary_classic.md",
+            "page": 1,
+            "quote": "From San Francisco, CA, United States (SFO)",
+            "origin": null
+          }
+        ],
+        "flags": []
+      },
+      "arrival_location": {
+        "value": {
+          "city": "Singapore",
+          "region": null,
+          "country": null,
+          "airport_code": "SIN"
+        },
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "airline_itinerary_classic",
+            "filename": "airline_itinerary_classic.md",
+            "page": 1,
+            "quote": "To Singapore (SIN)",
+            "origin": null
+          }
+        ],
+        "flags": []
+      },
+      "segments": [
+        {
+          "departure_airport": {
+            "value": "SFO",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "airline_itinerary_classic",
+                "filename": "airline_itinerary_classic.md",
+                "page": 1,
+                "quote": "1 | SFO -> NRT | 2025-04-21 -> 2025-04-22 | ANA NH107 | Economy",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "arrival_airport": {
+            "value": "NRT",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "airline_itinerary_classic",
+                "filename": "airline_itinerary_classic.md",
+                "page": 1,
+                "quote": "1 | SFO -> NRT | 2025-04-21 -> 2025-04-22 | ANA NH107 | Economy",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "departure_date": {
+            "value": "2025-04-21",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "airline_itinerary_classic",
+                "filename": "airline_itinerary_classic.md",
+                "page": 1,
+                "quote": "1 | SFO -> NRT | 2025-04-21 -> 2025-04-22 | ANA NH107 | Economy",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "arrival_date": {
+            "value": "2025-04-22",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "airline_itinerary_classic",
+                "filename": "airline_itinerary_classic.md",
+                "page": 1,
+                "quote": "1 | SFO -> NRT | 2025-04-21 -> 2025-04-22 | ANA NH107 | Economy",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "marketing_carrier": {
+            "value": "ANA",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "airline_itinerary_classic",
+                "filename": "airline_itinerary_classic.md",
+                "page": 1,
+                "quote": "1 | SFO -> NRT | 2025-04-21 -> 2025-04-22 | ANA NH107 | Economy",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "flight_number": {
+            "value": "NH107",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "airline_itinerary_classic",
+                "filename": "airline_itinerary_classic.md",
+                "page": 1,
+                "quote": "1 | SFO -> NRT | 2025-04-21 -> 2025-04-22 | ANA NH107 | Economy",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "cabin_class": {
+            "value": "Economy",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "airline_itinerary_classic",
+                "filename": "airline_itinerary_classic.md",
+                "page": 1,
+                "quote": "1 | SFO -> NRT | 2025-04-21 -> 2025-04-22 | ANA NH107 | Economy",
+                "origin": null
+              }
+            ],
+            "flags": []
+          }
+        },
+        {
+          "departure_airport": {
+            "value": "SIN",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "airline_itinerary_classic",
+                "filename": "airline_itinerary_classic.md",
+                "page": 1,
+                "quote": "2 | SIN -> SFO | 2025-04-29 -> 2025-04-29 | ANA NH108 | Economy",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "arrival_airport": {
+            "value": "SFO",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "airline_itinerary_classic",
+                "filename": "airline_itinerary_classic.md",
+                "page": 1,
+                "quote": "2 | SIN -> SFO | 2025-04-29 -> 2025-04-29 | ANA NH108 | Economy",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "departure_date": {
+            "value": "2025-04-29",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "airline_itinerary_classic",
+                "filename": "airline_itinerary_classic.md",
+                "page": 1,
+                "quote": "2 | SIN -> SFO | 2025-04-29 -> 2025-04-29 | ANA NH108 | Economy",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "arrival_date": {
+            "value": "2025-04-29",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "airline_itinerary_classic",
+                "filename": "airline_itinerary_classic.md",
+                "page": 1,
+                "quote": "2 | SIN -> SFO | 2025-04-29 -> 2025-04-29 | ANA NH108 | Economy",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "marketing_carrier": {
+            "value": "ANA",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "airline_itinerary_classic",
+                "filename": "airline_itinerary_classic.md",
+                "page": 1,
+                "quote": "2 | SIN -> SFO | 2025-04-29 -> 2025-04-29 | ANA NH108 | Economy",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "flight_number": {
+            "value": "NH108",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "airline_itinerary_classic",
+                "filename": "airline_itinerary_classic.md",
+                "page": 1,
+                "quote": "2 | SIN -> SFO | 2025-04-29 -> 2025-04-29 | ANA NH108 | Economy",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "cabin_class": {
+            "value": "Economy",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "airline_itinerary_classic",
+                "filename": "airline_itinerary_classic.md",
+                "page": 1,
+                "quote": "2 | SIN -> SFO | 2025-04-29 -> 2025-04-29 | ANA NH108 | Economy",
+                "origin": null
+              }
+            ],
+            "flags": []
+          }
+        }
+      ],
+      "total_paid": {
+        "value": {
+          "amount": "1287.44",
+          "currency": "USD"
+        },
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "airline_itinerary_classic",
+            "filename": "airline_itinerary_classic.md",
+            "page": 1,
+            "quote": "Total Fare Paid USD 1,287.44",
+            "origin": null
+          }
+        ],
+        "flags": []
+      }
+    }
+  },
+  "issues": []
+}
