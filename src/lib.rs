@@ -2,6 +2,7 @@
 pub mod expense_report_model;
 #[path = "../generated/validation_rules.rs"]
 pub mod validation_rules;
+pub mod parse;
 pub mod validator;
 pub mod value;
 
@@ -17,6 +18,10 @@ pub use validation_rules::SchemaType;
 pub use validation_rules::SourceTier;
 pub use validation_rules::CONDITIONAL_RULES;
 pub use validation_rules::FIELD_RULES;
+pub use parse::parse_report_path;
+pub use parse::parse_report_str;
+pub use parse::ParseReportError;
+pub use parse::ReportFormat;
 pub use validator::validate_expense_report;
 pub use validator::ValidationIssue;
 pub use validator::ValidationIssueKind;
