@@ -1,8 +1,11 @@
 use std::fmt;
 
+use serde::Serialize;
+
 use crate::draft::{ConfidenceLevel, EvidenceReference};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum DocumentKind {
     FlightItinerary,
     HotelFolio,
@@ -33,7 +36,8 @@ impl DocumentKind {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ExtractionStatus {
     Complete,
     Partial,
@@ -41,13 +45,14 @@ pub enum ExtractionStatus {
     Unsupported,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum IssueSeverity {
     Warning,
     Error,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Observed<T> {
     pub value: T,
     pub confidence: ConfidenceLevel,
@@ -70,7 +75,7 @@ impl<T> Observed<T> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct DocumentClassification {
     pub kind: DocumentKind,
     pub confidence: ConfidenceLevel,
@@ -84,7 +89,7 @@ impl DocumentClassification {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct DocumentExtractionIssue {
     pub severity: IssueSeverity,
     pub code: String,
@@ -92,19 +97,19 @@ pub struct DocumentExtractionIssue {
     pub evidence: Vec<EvidenceReference>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct MoneyAmount {
     pub amount: String,
     pub currency: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct DateRange {
     pub start_date: String,
     pub end_date: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Location {
     pub city: Option<String>,
     pub region: Option<String>,
@@ -112,7 +117,7 @@ pub struct Location {
     pub airport_code: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct FlightSegmentFacts {
     pub departure_airport: Observed<String>,
     pub arrival_airport: Observed<String>,
@@ -123,7 +128,7 @@ pub struct FlightSegmentFacts {
     pub cabin_class: Option<Observed<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct FlightItineraryFacts {
     pub traveler_names: Vec<Observed<String>>,
     pub confirmation_code: Option<Observed<String>>,
@@ -136,7 +141,7 @@ pub struct FlightItineraryFacts {
     pub total_paid: Option<Observed<MoneyAmount>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct HotelNightChargeFacts {
     pub date: Observed<String>,
     pub room_rate: Option<Observed<MoneyAmount>>,
@@ -144,7 +149,7 @@ pub struct HotelNightChargeFacts {
     pub description: Option<Observed<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct HotelFolioFacts {
     pub guest_name: Option<Observed<String>>,
     pub property_name: Option<Observed<String>>,
@@ -156,13 +161,13 @@ pub struct HotelFolioFacts {
     pub meals_included: Vec<Observed<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ReceiptLineItemFacts {
     pub description: Observed<String>,
     pub amount: Observed<MoneyAmount>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ReceiptFacts {
     pub merchant_name: Option<Observed<String>>,
     pub merchant_location: Option<Observed<Location>>,
@@ -174,7 +179,7 @@ pub struct ReceiptFacts {
     pub line_items: Vec<ReceiptLineItemFacts>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ConferenceRegistrationFacts {
     pub attendee_name: Option<Observed<String>>,
     pub event_name: Option<Observed<String>>,
@@ -185,14 +190,14 @@ pub struct ConferenceRegistrationFacts {
     pub included_meals: Vec<Observed<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PresentationFact {
     pub title: Observed<String>,
     pub presentation_date: Option<Observed<String>>,
     pub presenters: Vec<Observed<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ConferenceProgramFacts {
     pub attendee_name: Option<Observed<String>>,
     pub event_name: Option<Observed<String>>,
@@ -200,7 +205,7 @@ pub struct ConferenceProgramFacts {
     pub presentations: Vec<PresentationFact>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct CurrencyConversionFacts {
     pub conversion_date: Option<Observed<String>>,
     pub provider_name: Option<Observed<String>>,
@@ -209,7 +214,7 @@ pub struct CurrencyConversionFacts {
     pub exchange_rate: Option<Observed<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct AirfarePriceComparisonFacts {
     pub comparison_date: Option<Observed<String>>,
     pub selected_fare: Option<Observed<MoneyAmount>>,
@@ -217,7 +222,7 @@ pub struct AirfarePriceComparisonFacts {
     pub policy_outcome: Option<Observed<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct MissingReceiptDeclarationFacts {
     pub claimant_name: Option<Observed<String>>,
     pub merchant_name: Option<Observed<String>>,
@@ -226,7 +231,7 @@ pub struct MissingReceiptDeclarationFacts {
     pub explanation: Option<Observed<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct StanfordExpenseSummaryFacts {
     pub payee_name: Option<Observed<String>>,
     pub event_name: Option<Observed<String>>,
@@ -245,13 +250,14 @@ pub struct StanfordExpenseSummaryFacts {
     pub authorized_by: Option<Observed<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct UnknownDocumentFacts {
     pub title_hint: Option<Observed<String>>,
     pub text_summary: Option<Observed<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum DocumentFactsPayload {
     FlightItinerary(FlightItineraryFacts),
     HotelFolio(HotelFolioFacts),
@@ -282,7 +288,7 @@ impl DocumentFactsPayload {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ExtractedDocumentFacts {
     pub document_id: String,
     pub filename: String,
@@ -348,6 +354,12 @@ impl fmt::Display for DocumentFactContractError {
 }
 
 impl std::error::Error for DocumentFactContractError {}
+
+pub fn render_document_facts_json_pretty(
+    facts: &ExtractedDocumentFacts,
+) -> Result<String, serde_json::Error> {
+    serde_json::to_string_pretty(facts)
+}
 
 #[cfg(test)]
 mod tests {

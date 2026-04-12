@@ -43,7 +43,7 @@ impl fmt::Display for TranscriptionError {
             Self::Io(err) => write!(f, "I/O error: {err}"),
             Self::Json(err) => write!(f, "JSON render error: {err}"),
             Self::UnsupportedFormat(ext) => {
-                write!(f, "Unsupported document format {ext:?}; expected .pdf or .txt")
+                write!(f, "Unsupported document format {ext:?}; expected .pdf, .txt, .md, or .markdown")
             }
             Self::MissingTool(tool) => write!(f, "Required transcription tool is missing: {tool}"),
             Self::CommandFailed(message) => write!(f, "Transcription command failed: {message}"),
@@ -76,7 +76,7 @@ pub fn transcribe_document_path(path: impl AsRef<Path>) -> Result<TranscribedDoc
 
     match extension.as_str() {
         "pdf" => transcribe_pdf(path),
-        "txt" => transcribe_plain_text(path),
+        "txt" | "md" | "markdown" => transcribe_plain_text(path),
         _ => Err(TranscriptionError::UnsupportedFormat(extension)),
     }
 }
