@@ -9,7 +9,7 @@ from google.genai import types
 from google.oauth2 import service_account
 
 
-DEFAULT_MODEL = "gemini-3.1-flash-lite-preview"
+DEFAULT_MODEL = "gemini-3-flash-preview"
 CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
 
 
@@ -32,7 +32,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--model",
         default=DEFAULT_MODEL,
-        help="Gemini model id, for example gemini-3.1-flash-lite-preview or gemini-3.1-pro-preview",
+        help="Gemini model id, for example gemini-3-flash-preview or gemini-3-pro-preview",
     )
     parser.add_argument(
         "--output",
@@ -63,6 +63,7 @@ def build_prompt(filename: str, mime_type: str) -> str:
         "- Use markdown headings and bullet points.\n"
         "- Prefer `Label: Value` bullets for standalone facts.\n"
         "- For repeated rows, use one bullet per row or pipe-delimited lines.\n"
+        "- Keep each pipe-delimited row on a single logical line; do not split one row into multiple bullets or lines.\n"
         "- Keep one `pages[]` entry per source page when page boundaries are visible; otherwise use a single page.\n"
         "- Keep the top heading faithful to the source document.\n"
         "- If the source is clearly a flight itinerary, hotel folio, or merchant/card receipt, normalize the layout so headings and labels stay easy to parse downstream.\n"

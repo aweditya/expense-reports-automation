@@ -279,6 +279,7 @@ fn extract_hotel_folio(
         )
     });
     let nightly_lines = collect_section_rows(lines, &["nightly charges", "charges"]);
+    let nightly_lines = merge_wrapped_pipe_rows(&nightly_lines);
     let nightly_charges = nightly_lines
         .iter()
         .filter_map(|line| parse_hotel_night_charge(document, line))
@@ -967,6 +968,51 @@ fn collect_section_rows<'a>(lines: &'a [LineRef], headings: &[&str]) -> Vec<&'a 
     collected
 }
 
+fn merge_wrapped_pipe_rows(lines: &[&LineRef]) -> Vec<LineRef> {
+    let mut merged = Vec::new();
+    let mut index = 0usize;
+
+    while index < lines.len() {
+        let current = lines[index];
+        let mut combined = normalize_bullet_content(&current.raw);
+        let mut last_raw = current.raw.clone();
+        let mut next_index = index + 1;
+
+        while combined.ends_with('|') && next_index < lines.len() {
+            let continuation = lines[next_index];
+            let continuation_content = normalize_bullet_content(&continuation.raw);
+            if !is_pipe_row_continuation(&continuation_content) {
+                break;
+            }
+
+            combined.push(' ');
+            combined.push_str(&continuation_content);
+            last_raw.push(' ');
+            last_raw.push_str(continuation.raw.trim());
+            next_index += 1;
+        }
+
+        merged.push(LineRef {
+            page_number: current.page_number,
+            raw: last_raw,
+            normalized: normalize_line(&combined),
+            is_heading: false,
+            is_bullet: current.is_bullet,
+        });
+        index = next_index;
+    }
+
+    merged
+}
+
+fn is_pipe_row_continuation(value: &str) -> bool {
+    let normalized = normalize_key(value);
+    normalized.starts_with("taxes & fees")
+        || normalized.starts_with("taxes and fees")
+        || normalized.starts_with("taxes")
+        || normalized.starts_with("fees")
+}
+
 fn find_label_value<'a>(lines: &'a [LineRef], labels: &[&str]) -> Option<(&'a LineRef, String)> {
     for line in lines {
         if let Some(value) = strip_label_value(&line.raw, labels, !line.is_heading) {
@@ -1394,7 +1440,7 @@ mod tests {
             let actual = extract_document_facts_path(&path).expect("fixture should transcribe");
             assert_eq!(actual, fixture.expected_facts);
             assert!(actual.validate_contract().is_ok());
-            fs::remove_dir_all(path.parent().unwrap()).expect("fixture dir should be removable");
+            remove_fixture_dir(&path);
         }
     }
 
@@ -1405,7 +1451,7 @@ mod tests {
             let actual = extract_document_facts_path(&path).expect("fixture should transcribe");
             assert_eq!(actual, fixture.expected_facts);
             assert!(actual.validate_contract().is_ok());
-            fs::remove_dir_all(path.parent().unwrap()).expect("fixture dir should be removable");
+            remove_fixture_dir(&path);
         }
     }
 
@@ -1429,7 +1475,7 @@ mod tests {
             other => panic!("unexpected payload: {other:?}"),
         }
 
-        fs::remove_dir_all(path.parent().unwrap()).expect("fixture dir should be removable");
+        remove_fixture_dir(&path);
     }
 
     #[test]
@@ -1450,7 +1496,52 @@ mod tests {
             other => panic!("unexpected payload: {other:?}"),
         }
 
-        fs::remove_dir_all(path.parent().unwrap()).expect("fixture dir should be removable");
+        remove_fixture_dir(&path);
+    }
+
+    #[test]
+    fn hotel_extractor_merges_wrapped_pipe_row_continuations() {
+        let mut fixture =
+            generate_synthetic_document(DocumentKind::HotelFolio, SyntheticVariant::Baseline);
+        fixture.markdown = fixture.markdown.replace(
+            "- Date: 2025-04-21 | Description: Deluxe King Room | Room Rate: SGD 220.00 | Taxes & Fees: SGD 39.60",
+            "- Date: 2025-04-21 | Description: Deluxe King Room | Room Rate: SGD 220.00 |\n- Taxes & Fees: SGD 39.60",
+        );
+        fixture.markdown = fixture.markdown.replace(
+            "- Date: 2025-04-22 | Description: Deluxe King Room | Room Rate: SGD 220.00 | Taxes & Fees: SGD 39.60",
+            "- Date: 2025-04-22 | Description: Deluxe King Room | Room Rate: SGD 220.00 |\n- Taxes & Fees: SGD 39.60",
+        );
+        fixture.markdown = fixture.markdown.replace(
+            "- Date: 2025-04-23 | Description: Deluxe King Room | Room Rate: SGD 220.00 | Taxes & Fees: SGD 39.60",
+            "- Date: 2025-04-23 | Description: Deluxe King Room | Room Rate: SGD 220.00 |\n- Taxes & Fees: SGD 39.60",
+        );
+        let path = write_fixture(&fixture.markdown, &fixture.filename);
+        let actual = extract_document_facts_path(&path).expect("fixture should transcribe");
+
+        match actual.facts {
+            DocumentFactsPayload::HotelFolio(facts) => {
+                assert_eq!(facts.nightly_charges.len(), 3);
+                for night in facts.nightly_charges {
+                    assert_eq!(
+                        night
+                            .room_rate
+                            .as_ref()
+                            .map(|value| value.value.amount.as_str()),
+                        Some("220.00")
+                    );
+                    assert_eq!(
+                        night
+                            .taxes_and_fees
+                            .first()
+                            .map(|value| value.value.amount.as_str()),
+                        Some("39.60")
+                    );
+                }
+            }
+            other => panic!("unexpected payload: {other:?}"),
+        }
+
+        remove_fixture_dir(&path);
     }
 
     #[test]
@@ -1471,7 +1562,19 @@ mod tests {
             other => panic!("unexpected payload: {other:?}"),
         }
 
-        fs::remove_dir_all(path.parent().unwrap()).expect("fixture dir should be removable");
+        remove_fixture_dir(&path);
+    }
+
+    fn remove_fixture_dir(path: &Path) {
+        if let Some(parent) = path.parent() {
+            if let Err(err) = fs::remove_dir_all(parent) {
+                assert_eq!(
+                    err.kind(),
+                    std::io::ErrorKind::NotFound,
+                    "fixture dir should be removable: {err}"
+                );
+            }
+        }
     }
 
     #[test]
