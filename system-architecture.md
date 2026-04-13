@@ -359,6 +359,12 @@ Suggested correction taxonomy:
 
 This gives you both a training set and a policy gap backlog.
 
+The current Rust backend implementation of this layer now lives in:
+
+- [src/feedback.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/feedback.rs:1) for typed correction and submission feedback artifacts
+- [src/feedback_regression.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/feedback_regression.rs:1) for fixture-backed regression coverage
+- [feedback-capture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/feedback-capture.md:1) for usage notes and example commands
+
 ## Recommended internal data model
 
 At minimum:
