@@ -76,6 +76,12 @@ Today, that FX-enabled packet validates with only four remaining errors, all by 
 - `general_information.student_certification` dependency on affiliation
 - `transaction_lines[].meal_details.attendees`
 
+The bundle CLI now also emits a readiness summary that separates:
+
+- automation gaps
+- user-input gaps
+- manual-review items
+
 Render the same input as canonical bundle JSON instead of draft YAML:
 
 ```bash
