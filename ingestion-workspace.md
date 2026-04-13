@@ -105,3 +105,43 @@ It has also been exercised live with Gemini OCR on a rendered synthetic packet, 
 - raw uploads under `uploads/`
 - normalized page-level artifacts under `normalized/`
 - a persisted OCR/extraction/review run under `runs/<run_id>/artifacts/`
+
+## Corpus stress harness
+
+The repo now also has a managed-workspace corpus evaluator in [scripts/evaluate_workspace_pipeline.py](/Users/adityasriram/Labs/stanford/research/expense-reports/scripts/evaluate_workspace_pipeline.py:1).
+
+It can stress test:
+
+- the persistent workspace bundle layout
+- repeated `stage-and-run` execution over many synthetic packets
+- OCR markdown fidelity for live Gemini runs
+- final filing and ledger state consistency
+
+Large local builtin stress run:
+
+```bash
+python3 scripts/evaluate_workspace_pipeline.py \
+  --output-dir /tmp/workspace_builtin_stress \
+  --engine builtin \
+  --packets 128
+```
+
+Live Gemini workspace stress run:
+
+```bash
+python3 scripts/evaluate_workspace_pipeline.py \
+  --output-dir /tmp/workspace_gemini_stress \
+  --engine vertex-gemini-sdk \
+  --service-account-key /abs/path/to/service-account.json \
+  --location global \
+  --model gemini-3-flash-preview \
+  --packets 12
+```
+
+The evaluator writes:
+
+- `workspace_evaluation.json`
+- `workspace_evaluation.md`
+- `source_corpus/`
+- `rendered/` when OCR-style inputs are used
+- `workspace/` with the full persisted bundle tree

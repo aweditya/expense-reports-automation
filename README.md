@@ -171,6 +171,29 @@ If you only pass one `--model`, the script also writes:
 - `ocr_evaluation.json`
 - `ocr_evaluation.md`
 
+For managed-workspace stress testing, use [scripts/evaluate_workspace_pipeline.py](/Users/adityasriram/Labs/stanford/research/expense-reports/scripts/evaluate_workspace_pipeline.py:1). It exercises the persistent `bundle_id` workflow instead of the one-shot ingestion CLI.
+
+Large builtin workspace stress run:
+
+```bash
+python3 scripts/evaluate_workspace_pipeline.py \
+  --output-dir /tmp/workspace_builtin_stress \
+  --engine builtin \
+  --packets 128
+```
+
+Live Gemini workspace stress run:
+
+```bash
+python3 scripts/evaluate_workspace_pipeline.py \
+  --output-dir /tmp/workspace_gemini_stress \
+  --engine vertex-gemini-sdk \
+  --service-account-key /abs/path/to/service-account.json \
+  --location global \
+  --model gemini-3-flash-preview \
+  --packets 12
+```
+
 ## Testing Surface
 
 Current automated coverage includes:
