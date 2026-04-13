@@ -319,7 +319,12 @@ The review workbench should have four panes:
    - one-click copy for business purpose, event name, line remarks, totals, and line items
    - attachment checklist per line item
 
-The current Rust backend implementation of this handoff now lives in [src/review_packet.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/review_packet.rs:1), with usage notes in [review-packet.md](/Users/adityasriram/Labs/stanford/research/expense-reports/review-packet.md:1). It is not a UI yet, but it already produces the typed review artifact a UI should consume.
+The current Rust backend implementation of this handoff now has two layers:
+
+- the typed review artifact in [src/review_packet.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/review_packet.rs:1), documented in [review-packet.md](/Users/adityasriram/Labs/stanford/research/expense-reports/review-packet.md:1)
+- a deterministic static HTML renderer in [src/review_workbench.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/review_workbench.rs:1), documented in [review-workbench.md](/Users/adityasriram/Labs/stanford/research/expense-reports/review-workbench.md:1)
+
+It is not yet an interactive web app, but it already produces both the stable typed contract and a concrete FA-facing presentation.
 
 This UI should explicitly separate:
 

@@ -9,7 +9,9 @@ The relevant code lives in:
 - [src/bin/build_review_packet_from_facts.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/bin/build_review_packet_from_facts.rs:1)
 - [src/bin/verify_review_regressions.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/bin/verify_review_regressions.rs:1)
 
-The review packet is the current backend implementation of the `FA Review Workbench` handoff from [system-architecture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/system-architecture.md:297).
+The review packet is the typed backend artifact for the `FA Review Workbench` handoff from [system-architecture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/system-architecture.md:297).
+
+The deterministic HTML presentation built on top of it now lives in [review-workbench.md](/Users/adityasriram/Labs/stanford/research/expense-reports/review-workbench.md:1).
 
 ## What it contains
 
@@ -27,7 +29,7 @@ The validator answers "is this draft schema-complete?" The review packet answers
 - what is blocked on user input
 - what still needs manual review even if it is populated
 
-That is the operational boundary a future UI should consume.
+That is the operational boundary the HTML workbench and any future richer UI should consume.
 
 ## Commands
 
