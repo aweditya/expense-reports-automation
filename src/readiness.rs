@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use serde::{Deserialize, Serialize};
 
 use crate::validation_rules::{field_rule, SourceTier};
@@ -59,13 +61,28 @@ impl ReadinessReport {
 }
 
 pub fn summarize_validation_readiness(validation: &ValidationReport) -> ReadinessReport {
+    summarize_validation_readiness_with_confirmations(validation, &BTreeSet::new())
+}
+
+pub fn summarize_validation_readiness_with_confirmations(
+    validation: &ValidationReport,
+    confirmed_paths: &BTreeSet<String>,
+) -> ReadinessReport {
     ReadinessReport {
         issues: validation
             .issues
             .iter()
             .map(classify_validation_issue)
+            .filter(|issue| !issue_is_confirmed(issue, confirmed_paths))
             .collect(),
     }
+}
+
+fn issue_is_confirmed(issue: &ReadinessIssue, confirmed_paths: &BTreeSet<String>) -> bool {
+    matches!(
+        issue.kind,
+        ValidationIssueKind::ManualReviewRequired | ValidationIssueKind::LowConfidenceWithoutReview
+    ) && confirmed_paths.iter().any(|path| issue.path == *path || issue.schema_path == *path)
 }
 
 fn classify_validation_issue(issue: &ValidationIssue) -> ReadinessIssue {

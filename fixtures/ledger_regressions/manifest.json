@@ -1,0 +1,10 @@
+[
+  {
+    "id": "curated_ledger_accepted",
+    "ledger_path": "fixtures/ledger_regressions/curated_ledger_accepted.ledger.json"
+  },
+  {
+    "id": "curated_alt_ledger_returned",
+    "ledger_path": "fixtures/ledger_regressions/curated_alt_ledger_returned.ledger.json"
+  }
+]

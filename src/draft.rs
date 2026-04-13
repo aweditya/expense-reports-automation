@@ -34,7 +34,7 @@ pub struct EvidenceReference {
     pub origin: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FieldMetadata {
     pub confidence: ConfidenceLevel,
     pub evidence: Vec<EvidenceReference>,
@@ -42,7 +42,7 @@ pub struct FieldMetadata {
     pub flags: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DraftReport {
     pub report: ReportValue,
     pub metadata: BTreeMap<String, FieldMetadata>,

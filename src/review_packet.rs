@@ -157,11 +157,19 @@ pub fn build_review_packet(
     validation: &ValidationReport,
 ) -> Result<ReviewPacket, ReviewPacketError> {
     let readiness = summarize_validation_readiness(validation);
+    build_review_packet_with_readiness(bundle, draft, &readiness)
+}
+
+pub fn build_review_packet_with_readiness(
+    bundle: &CanonicalExpenseBundle,
+    draft: &DraftReport,
+    readiness: &ReadinessReport,
+) -> Result<ReviewPacket, ReviewPacketError> {
     let ui_map = load_ui_field_map().map_err(ReviewPacketError::UiFieldMapParse)?;
 
     Ok(ReviewPacket {
-        summary: build_packet_summary(bundle, draft, &readiness),
-        issues_queue: build_issue_queue(draft, &readiness, ui_map),
+        summary: build_packet_summary(bundle, draft, readiness),
+        issues_queue: build_issue_queue(draft, readiness, ui_map),
         copy_sections: build_copy_sections(draft, ui_map),
         attachment_checklist: build_attachment_checklist(bundle),
     })
