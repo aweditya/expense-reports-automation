@@ -19,6 +19,7 @@ The bundle layer currently synthesizes:
 - canonical trip window, destination, and domestic/foreign region
 - canonical expense lines for airfare and lodging
 - heuristic meal projection for restaurant-style receipts
+- review-marked scaffolds for business purpose text, event name, meal purpose, and beneficiary defaults
 - generic receipt coverage records for receipts that are still not schema-projectable
 - optional FX enrichment for foreign-currency lines through a pluggable rate provider
 - synthesis issues for conflicts and projection gaps
@@ -31,7 +32,7 @@ It does not yet:
 
 - fully classify all generic receipts into meal vs. transport vs. other schema expense types
 - connect to a live FX source or persist enrichment provenance beyond the current draft metadata
-- fill user-input-only fields like affiliation, authorization, or beneficiary lists
+- infer user-owned fields like affiliation, authorization, attendee lists, or other approver context
 - generate final-ready reports with zero validation errors
 
 That is expected for this stage. The purpose of the layer is to make cross-document synthesis explicit and testable before adding more inference.
@@ -67,6 +68,13 @@ cargo run --bin synthesize_bundle_from_facts -- --fx demo \
   fixtures/curated/hotel_folio/hotel_folio_guest_bill.md.expected.json \
   fixtures/curated/receipt/receipt_card_dotted.md.expected.json
 ```
+
+Today, that FX-enabled packet validates with only four remaining errors, all by design:
+
+- `general_information.payee.affiliation`
+- `general_information.authorized_by`
+- `general_information.student_certification` dependency on affiliation
+- `transaction_lines[].meal_details.attendees`
 
 Render the same input as canonical bundle JSON instead of draft YAML:
 
