@@ -1,0 +1,10 @@
+corrections:
+  - path: expense_report.general_information.payee.affiliation
+    reason: missing_required_field
+    note: FA confirmed the employee affiliation.
+  - path: expense_report.general_information.authorized_by
+    reason: missing_required_field
+    note: Approver name was added during filing.
+  - path: expense_report.general_information.event_name
+    reason: wrong_cross_document_merge
+    note: Default event title was too generic for the Stanford form.

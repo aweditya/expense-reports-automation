@@ -1,0 +1,248 @@
+{
+  "summary": {
+    "change_count": 7,
+    "added_count": 6,
+    "updated_count": 1,
+    "cleared_count": 0,
+    "change_with_preexisting_issue_count": 6,
+    "change_with_confirmed_reason_count": 2,
+    "submission_status": "returned",
+    "returned_field_count": 2
+  },
+  "field_changes": [
+    {
+      "path": "expense_report.general_information.authorized_by",
+      "schema_path": "expense_report.general_information.authorized_by",
+      "label": "Authorized By",
+      "operation": "added",
+      "original_value": null,
+      "corrected_value": "Jamie Lin",
+      "schema_source": "t1",
+      "original_confidence": null,
+      "original_needs_review": null,
+      "original_evidence": [],
+      "corrected_evidence": [
+        {
+          "kind": "user_input",
+          "document_id": null,
+          "filename": null,
+          "page": null,
+          "quote": null,
+          "origin": "feedback_regression.returned.authorized_by"
+        }
+      ],
+      "preexisting_issue": "user_input_required",
+      "preexisting_issue_message": "Required field is missing",
+      "site_feedback_messages": [
+        "Approver must be delegated for this PTA"
+      ],
+      "suggested_reason": "missing_required_field",
+      "confirmed_reason": "missing_required_field",
+      "note": "Approver was missing from the original draft"
+    },
+    {
+      "path": "expense_report.general_information.payee.affiliation",
+      "schema_path": "expense_report.general_information.payee.affiliation",
+      "label": "Affiliation",
+      "operation": "added",
+      "original_value": null,
+      "corrected_value": "stanford_student",
+      "schema_source": "t3",
+      "original_confidence": null,
+      "original_needs_review": null,
+      "original_evidence": [],
+      "corrected_evidence": [
+        {
+          "kind": "user_input",
+          "document_id": null,
+          "filename": null,
+          "page": null,
+          "quote": null,
+          "origin": "feedback_regression.returned.affiliation"
+        }
+      ],
+      "preexisting_issue": "user_input_required",
+      "preexisting_issue_message": "Required field is missing",
+      "site_feedback_messages": [],
+      "suggested_reason": "missing_required_field",
+      "confirmed_reason": null,
+      "note": null
+    },
+    {
+      "path": "expense_report.transaction_lines[2].common.expense_type",
+      "schema_path": "expense_report.transaction_lines[].common.expense_type",
+      "label": "Expense Type",
+      "operation": "updated",
+      "original_value": "business_meal",
+      "corrected_value": "group_travel_meal",
+      "schema_source": "t3",
+      "original_confidence": "medium",
+      "original_needs_review": true,
+      "original_evidence": [
+        {
+          "kind": "document_span",
+          "document_id": "receipt_merchant_labeled",
+          "filename": "receipt_merchant_labeled.md",
+          "page": 1,
+          "quote": "Amount Paid: SGD 35.02",
+          "origin": null
+        },
+        {
+          "kind": "system_generated",
+          "document_id": null,
+          "filename": null,
+          "page": null,
+          "quote": null,
+          "origin": "bundle_synthesis.heuristic_meal_classification"
+        }
+      ],
+      "corrected_evidence": [
+        {
+          "kind": "user_input",
+          "document_id": null,
+          "filename": null,
+          "page": null,
+          "quote": null,
+          "origin": "feedback_regression.returned.expense_type"
+        }
+      ],
+      "preexisting_issue": null,
+      "preexisting_issue_message": null,
+      "site_feedback_messages": [
+        "Meal should be filed as a group-travel meal"
+      ],
+      "suggested_reason": "wrong_expense_type_classification",
+      "confirmed_reason": "wrong_expense_type_classification",
+      "note": "Receipt should have been grouped as a team meal"
+    },
+    {
+      "path": "expense_report.transaction_lines[2].meal_details.attendees[0].affiliation",
+      "schema_path": "expense_report.transaction_lines[].meal_details.attendees[].affiliation",
+      "label": "Affiliation",
+      "operation": "added",
+      "original_value": null,
+      "corrected_value": "Stanford student",
+      "schema_source": "t1",
+      "original_confidence": null,
+      "original_needs_review": null,
+      "original_evidence": [],
+      "corrected_evidence": [
+        {
+          "kind": "user_input",
+          "document_id": null,
+          "filename": null,
+          "page": null,
+          "quote": null,
+          "origin": "feedback_regression.returned.attendees"
+        }
+      ],
+      "preexisting_issue": "user_input_required",
+      "preexisting_issue_message": "Required field is missing",
+      "site_feedback_messages": [],
+      "suggested_reason": "missing_required_field",
+      "confirmed_reason": null,
+      "note": null
+    },
+    {
+      "path": "expense_report.transaction_lines[2].meal_details.attendees[0].name",
+      "schema_path": "expense_report.transaction_lines[].meal_details.attendees[].name",
+      "label": "Name",
+      "operation": "added",
+      "original_value": null,
+      "corrected_value": "Olivia Park",
+      "schema_source": "t1",
+      "original_confidence": null,
+      "original_needs_review": null,
+      "original_evidence": [],
+      "corrected_evidence": [
+        {
+          "kind": "user_input",
+          "document_id": null,
+          "filename": null,
+          "page": null,
+          "quote": null,
+          "origin": "feedback_regression.returned.attendees"
+        }
+      ],
+      "preexisting_issue": "user_input_required",
+      "preexisting_issue_message": "Required field is missing",
+      "site_feedback_messages": [],
+      "suggested_reason": "missing_required_field",
+      "confirmed_reason": null,
+      "note": null
+    },
+    {
+      "path": "expense_report.transaction_lines[2].meal_details.attendees[1].affiliation",
+      "schema_path": "expense_report.transaction_lines[].meal_details.attendees[].affiliation",
+      "label": "Affiliation",
+      "operation": "added",
+      "original_value": null,
+      "corrected_value": "Stanford faculty",
+      "schema_source": "t1",
+      "original_confidence": null,
+      "original_needs_review": null,
+      "original_evidence": [],
+      "corrected_evidence": [
+        {
+          "kind": "user_input",
+          "document_id": null,
+          "filename": null,
+          "page": null,
+          "quote": null,
+          "origin": "feedback_regression.returned.attendees"
+        }
+      ],
+      "preexisting_issue": "user_input_required",
+      "preexisting_issue_message": "Required field is missing",
+      "site_feedback_messages": [],
+      "suggested_reason": "missing_required_field",
+      "confirmed_reason": null,
+      "note": null
+    },
+    {
+      "path": "expense_report.transaction_lines[2].meal_details.attendees[1].name",
+      "schema_path": "expense_report.transaction_lines[].meal_details.attendees[].name",
+      "label": "Name",
+      "operation": "added",
+      "original_value": null,
+      "corrected_value": "Jamie Lin",
+      "schema_source": "t1",
+      "original_confidence": null,
+      "original_needs_review": null,
+      "original_evidence": [],
+      "corrected_evidence": [
+        {
+          "kind": "user_input",
+          "document_id": null,
+          "filename": null,
+          "page": null,
+          "quote": null,
+          "origin": "feedback_regression.returned.attendees"
+        }
+      ],
+      "preexisting_issue": "user_input_required",
+      "preexisting_issue_message": "Required field is missing",
+      "site_feedback_messages": [],
+      "suggested_reason": "missing_required_field",
+      "confirmed_reason": null,
+      "note": null
+    }
+  ],
+  "submission_feedback": {
+    "status": "returned",
+    "message": "Oracle returned two fields",
+    "category": "stanford_policy_mismatch",
+    "returned_fields": [
+      {
+        "path": "expense_report.general_information.authorized_by",
+        "message": "Approver must be delegated for this PTA",
+        "category": "stanford_policy_mismatch"
+      },
+      {
+        "path": "expense_report.transaction_lines[2].common.expense_type",
+        "message": "Meal should be filed as a group-travel meal",
+        "category": "stanford_site_workflow_mismatch"
+      }
+    ]
+  }
+}

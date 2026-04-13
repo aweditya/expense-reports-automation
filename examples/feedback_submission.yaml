@@ -1,0 +1,7 @@
+status: returned
+message: Oracle returned one field for clarification.
+category: stanford_policy_mismatch
+returned_fields:
+  - path: expense_report.general_information.authorized_by
+    message: Approver must match the PTA delegation list.
+    category: stanford_policy_mismatch

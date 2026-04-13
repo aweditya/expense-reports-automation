@@ -1,0 +1,249 @@
+{
+  "summary": {
+    "change_count": 7,
+    "added_count": 6,
+    "updated_count": 1,
+    "cleared_count": 0,
+    "change_with_preexisting_issue_count": 7,
+    "change_with_confirmed_reason_count": 2,
+    "submission_status": "accepted",
+    "returned_field_count": 0
+  },
+  "field_changes": [
+    {
+      "path": "expense_report.general_information.authorized_by",
+      "schema_path": "expense_report.general_information.authorized_by",
+      "label": "Authorized By",
+      "operation": "added",
+      "original_value": null,
+      "corrected_value": "Dana Torres",
+      "schema_source": "t1",
+      "original_confidence": null,
+      "original_needs_review": null,
+      "original_evidence": [],
+      "corrected_evidence": [
+        {
+          "kind": "user_input",
+          "document_id": null,
+          "filename": null,
+          "page": null,
+          "quote": null,
+          "origin": "feedback_regression.acceptance.authorized_by"
+        }
+      ],
+      "preexisting_issue": "user_input_required",
+      "preexisting_issue_message": "Required field is missing",
+      "site_feedback_messages": [],
+      "suggested_reason": "missing_required_field",
+      "confirmed_reason": "missing_required_field",
+      "note": "Approver confirmed during review"
+    },
+    {
+      "path": "expense_report.general_information.event_name",
+      "schema_path": "expense_report.general_information.event_name",
+      "label": "Event Name",
+      "operation": "updated",
+      "original_value": "Foreign Expenses",
+      "corrected_value": "Singapore Research Travel",
+      "schema_source": "t3",
+      "original_confidence": "low",
+      "original_needs_review": true,
+      "original_evidence": [
+        {
+          "kind": "document_span",
+          "document_id": "hotel_folio_guest_bill",
+          "filename": "hotel_folio_guest_bill.md",
+          "page": 1,
+          "quote": "City/Country Singapore, Singapore",
+          "origin": null
+        },
+        {
+          "kind": "system_generated",
+          "document_id": null,
+          "filename": null,
+          "page": null,
+          "quote": null,
+          "origin": "bundle_synthesis.infer_region_from_destination_country"
+        },
+        {
+          "kind": "system_generated",
+          "document_id": null,
+          "filename": null,
+          "page": null,
+          "quote": null,
+          "origin": "bundle_synthesis.project_category_from_region"
+        },
+        {
+          "kind": "system_generated",
+          "document_id": null,
+          "filename": null,
+          "page": null,
+          "quote": null,
+          "origin": "bundle_synthesis.default_event_name_from_category"
+        }
+      ],
+      "corrected_evidence": [
+        {
+          "kind": "user_input",
+          "document_id": null,
+          "filename": null,
+          "page": null,
+          "quote": null,
+          "origin": "feedback_regression.acceptance.event_name"
+        }
+      ],
+      "preexisting_issue": "user_input_required",
+      "preexisting_issue_message": "Dependent field \"general_information.payee.affiliation\" is missing",
+      "site_feedback_messages": [],
+      "suggested_reason": "wrong_cross_document_merge",
+      "confirmed_reason": null,
+      "note": null
+    },
+    {
+      "path": "expense_report.general_information.payee.affiliation",
+      "schema_path": "expense_report.general_information.payee.affiliation",
+      "label": "Affiliation",
+      "operation": "added",
+      "original_value": null,
+      "corrected_value": "stanford_staff",
+      "schema_source": "t3",
+      "original_confidence": null,
+      "original_needs_review": null,
+      "original_evidence": [],
+      "corrected_evidence": [
+        {
+          "kind": "user_input",
+          "document_id": null,
+          "filename": null,
+          "page": null,
+          "quote": null,
+          "origin": "feedback_regression.acceptance.affiliation"
+        }
+      ],
+      "preexisting_issue": "user_input_required",
+      "preexisting_issue_message": "Required field is missing",
+      "site_feedback_messages": [],
+      "suggested_reason": "missing_required_field",
+      "confirmed_reason": "missing_required_field",
+      "note": "FA filled the missing affiliation"
+    },
+    {
+      "path": "expense_report.transaction_lines[2].meal_details.attendees[0].affiliation",
+      "schema_path": "expense_report.transaction_lines[].meal_details.attendees[].affiliation",
+      "label": "Affiliation",
+      "operation": "added",
+      "original_value": null,
+      "corrected_value": "Stanford staff",
+      "schema_source": "t1",
+      "original_confidence": null,
+      "original_needs_review": null,
+      "original_evidence": [],
+      "corrected_evidence": [
+        {
+          "kind": "user_input",
+          "document_id": null,
+          "filename": null,
+          "page": null,
+          "quote": null,
+          "origin": "feedback_regression.acceptance.attendees"
+        }
+      ],
+      "preexisting_issue": "user_input_required",
+      "preexisting_issue_message": "Required field is missing",
+      "site_feedback_messages": [],
+      "suggested_reason": "missing_required_field",
+      "confirmed_reason": null,
+      "note": null
+    },
+    {
+      "path": "expense_report.transaction_lines[2].meal_details.attendees[0].name",
+      "schema_path": "expense_report.transaction_lines[].meal_details.attendees[].name",
+      "label": "Name",
+      "operation": "added",
+      "original_value": null,
+      "corrected_value": "Olivia Park",
+      "schema_source": "t1",
+      "original_confidence": null,
+      "original_needs_review": null,
+      "original_evidence": [],
+      "corrected_evidence": [
+        {
+          "kind": "user_input",
+          "document_id": null,
+          "filename": null,
+          "page": null,
+          "quote": null,
+          "origin": "feedback_regression.acceptance.attendees"
+        }
+      ],
+      "preexisting_issue": "user_input_required",
+      "preexisting_issue_message": "Required field is missing",
+      "site_feedback_messages": [],
+      "suggested_reason": "missing_required_field",
+      "confirmed_reason": null,
+      "note": null
+    },
+    {
+      "path": "expense_report.transaction_lines[2].meal_details.attendees[1].affiliation",
+      "schema_path": "expense_report.transaction_lines[].meal_details.attendees[].affiliation",
+      "label": "Affiliation",
+      "operation": "added",
+      "original_value": null,
+      "corrected_value": "External collaborator",
+      "schema_source": "t1",
+      "original_confidence": null,
+      "original_needs_review": null,
+      "original_evidence": [],
+      "corrected_evidence": [
+        {
+          "kind": "user_input",
+          "document_id": null,
+          "filename": null,
+          "page": null,
+          "quote": null,
+          "origin": "feedback_regression.acceptance.attendees"
+        }
+      ],
+      "preexisting_issue": "user_input_required",
+      "preexisting_issue_message": "Required field is missing",
+      "site_feedback_messages": [],
+      "suggested_reason": "missing_required_field",
+      "confirmed_reason": null,
+      "note": null
+    },
+    {
+      "path": "expense_report.transaction_lines[2].meal_details.attendees[1].name",
+      "schema_path": "expense_report.transaction_lines[].meal_details.attendees[].name",
+      "label": "Name",
+      "operation": "added",
+      "original_value": null,
+      "corrected_value": "Collaborator A",
+      "schema_source": "t1",
+      "original_confidence": null,
+      "original_needs_review": null,
+      "original_evidence": [],
+      "corrected_evidence": [
+        {
+          "kind": "user_input",
+          "document_id": null,
+          "filename": null,
+          "page": null,
+          "quote": null,
+          "origin": "feedback_regression.acceptance.attendees"
+        }
+      ],
+      "preexisting_issue": "user_input_required",
+      "preexisting_issue_message": "Required field is missing",
+      "site_feedback_messages": [],
+      "suggested_reason": "missing_required_field",
+      "confirmed_reason": null,
+      "note": null
+    }
+  ],
+  "submission_feedback": {
+    "status": "accepted",
+    "message": "Submitted successfully",
+    "category": "other",
+    "returned_fields": []
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "issues": [
+    {
+      "severity": "error",
+      "kind": "missing_required_field",
+      "path": "expense_report.general_information.payee.affiliation",
+      "schema_path": "expense_report.general_information.payee.affiliation",
+      "message": "Required field is missing"
+    },
+    {
+      "severity": "error",
+      "kind": "missing_required_field",
+      "path": "expense_report.general_information.authorized_by",
+      "schema_path": "expense_report.general_information.authorized_by",
+      "message": "Required field is missing"
+    },
+    {
+      "severity": "warning",
+      "kind": "manual_review_required",
+      "path": "expense_report.general_information.event_name",
+      "schema_path": "expense_report.general_information.event_name",
+      "message": "Field has a schema validation note that still requires manual review"
+    }
+  ]
+}

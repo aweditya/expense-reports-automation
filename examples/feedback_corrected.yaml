@@ -1,0 +1,42 @@
+expense_report:
+  general_information:
+    payee:
+      name:
+        value: Olivia Park
+        _meta:
+          confidence: high
+          evidence:
+            - kind: document_span
+              document_id: flight_ticket_example
+              filename: flight_ticket_example.md
+              page: 1
+              quote: "Passenger: Olivia Park"
+          needs_review: false
+          flags: []
+      affiliation:
+        value: stanford_staff
+        _meta:
+          confidence: high
+          evidence:
+            - kind: user_input
+              origin: fa.example.affiliation
+          needs_review: false
+          flags: []
+    event_name:
+      value: Singapore Research Travel
+      _meta:
+        confidence: high
+        evidence:
+          - kind: user_input
+            origin: fa.example.event_name
+        needs_review: false
+        flags: []
+    authorized_by:
+      value: Dana Torres
+      _meta:
+        confidence: high
+        evidence:
+          - kind: user_input
+            origin: fa.example.authorized_by
+        needs_review: false
+        flags: []
