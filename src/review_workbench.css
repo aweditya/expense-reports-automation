@@ -1,0 +1,439 @@
+:root {
+  --paper: #f4efe4;
+  --paper-strong: #ebe2d3;
+  --ink: #1f1b18;
+  --muted: #6b6259;
+  --accent: #b2552e;
+  --accent-soft: #f2d3c6;
+  --forest: #4d6a5f;
+  --forest-soft: #d8e3dd;
+  --gold: #9a7430;
+  --gold-soft: #efe4c7;
+  --line: #d2c5b2;
+  --shadow: rgba(31, 27, 24, 0.08);
+  --radius: 18px;
+  --font-display: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  --font-body: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, rgba(178, 85, 46, 0.08), transparent 28%),
+    linear-gradient(180deg, #f8f3ea 0%, #f1e8db 100%);
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+
+.shell {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 28px 24px 40px;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 20px;
+  align-items: stretch;
+  margin-bottom: 22px;
+}
+
+.hero-copy,
+.hero-cards,
+.panel {
+  background: rgba(255, 252, 247, 0.92);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 14px 30px var(--shadow);
+}
+
+.hero-copy {
+  padding: 28px 30px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.hero h1,
+.panel h2,
+.copy-section h3,
+.copy-instance h4,
+.issue-card h3,
+.evidence-card h4,
+.attachment-card h3 {
+  font-family: var(--font-display);
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: 42px;
+  line-height: 1.04;
+}
+
+.hero-status {
+  margin: 16px 0 6px;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.hero-subtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: 16px;
+}
+
+.hero-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  overflow: hidden;
+}
+
+.summary-card {
+  padding: 22px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.summary-card:nth-child(2n) {
+  border-right: 0;
+}
+
+.summary-card:nth-child(n + 3) {
+  border-bottom: 0;
+}
+
+.summary-label {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.summary-value {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.workbench-grid {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1.2fr) 360px;
+  gap: 18px;
+  align-items: start;
+}
+
+.panel {
+  padding: 20px;
+}
+
+.panel-heading h2 {
+  margin: 0 0 18px;
+  font-size: 26px;
+}
+
+.issues-panel,
+.evidence-panel {
+  position: sticky;
+  top: 22px;
+}
+
+.issue-list,
+.attachment-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.issue-card,
+.copy-instance,
+.evidence-card,
+.attachment-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.issue-card {
+  padding: 14px;
+}
+
+.issue-card.automation-gap {
+  border-color: var(--accent);
+  background: #fbebe4;
+}
+
+.issue-card.user-input-required {
+  border-color: var(--gold);
+  background: #f8f0dd;
+}
+
+.issue-card.manual-review {
+  border-color: var(--forest);
+  background: #edf5f1;
+}
+
+.issue-topline {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.issue-class,
+.issue-source,
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: white;
+  border: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.issue-card h3,
+.copy-section h3,
+.attachment-card h3 {
+  margin: 0 0 6px;
+  font-size: 20px;
+}
+
+.issue-path,
+.field-path,
+.evidence-meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.issue-value,
+.issue-message,
+.evidence-usage,
+.attachment-remarks {
+  margin: 10px 0 0;
+  line-height: 1.45;
+}
+
+.issue-link,
+.evidence-link {
+  display: inline-block;
+  margin-top: 12px;
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.copy-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.copy-section {
+  background: linear-gradient(180deg, rgba(235, 226, 211, 0.45), transparent 60%);
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.copy-section:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.copy-instance {
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.copy-instance h4 {
+  margin: 0 0 12px;
+  font-size: 22px;
+}
+
+.field-list {
+  display: grid;
+  gap: 10px;
+}
+
+.field-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.field-card.needs-review {
+  border-color: var(--gold);
+  background: #f9f2df;
+}
+
+.field-card.missing {
+  border-style: dashed;
+}
+
+.field-head,
+.field-body {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+}
+
+.field-label {
+  margin: 0 0 4px;
+  font-weight: 800;
+  font-size: 15px;
+}
+
+.field-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: end;
+}
+
+.field-body {
+  margin-top: 10px;
+  align-items: center;
+}
+
+.field-value {
+  font-size: 16px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.field-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.copy-button {
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: white;
+  padding: 8px 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.evidence-group {
+  margin-bottom: 18px;
+}
+
+.evidence-group h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.evidence-card {
+  padding: 14px;
+  margin-bottom: 10px;
+}
+
+.evidence-card blockquote {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-left: 4px solid var(--accent);
+  background: var(--paper-strong);
+}
+
+.attachments-panel {
+  margin-top: 18px;
+}
+
+.attachment-list {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.attachment-card {
+  padding: 14px;
+}
+
+.attachment-card ul {
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+
+.empty-state {
+  color: var(--muted);
+  margin: 0;
+}
+
+@media (max-width: 1200px) {
+  .workbench-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .issues-panel,
+  .evidence-panel {
+    position: static;
+  }
+}
+
+@media (max-width: 900px) {
+  .hero {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-cards {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .shell {
+    padding: 18px 14px 28px;
+  }
+
+  .hero h1 {
+    font-size: 34px;
+  }
+
+  .hero-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-card {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .summary-card:last-child {
+    border-bottom: 0;
+  }
+
+  .field-head,
+  .field-body {
+    flex-direction: column;
+  }
+
+  .field-badges,
+  .field-actions {
+    justify-content: start;
+  }
+}

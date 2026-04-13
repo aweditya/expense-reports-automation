@@ -1,0 +1,1873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Expense Report Review Workbench</title>
+<style>
+:root {
+  --paper: #f4efe4;
+  --paper-strong: #ebe2d3;
+  --ink: #1f1b18;
+  --muted: #6b6259;
+  --accent: #b2552e;
+  --accent-soft: #f2d3c6;
+  --forest: #4d6a5f;
+  --forest-soft: #d8e3dd;
+  --gold: #9a7430;
+  --gold-soft: #efe4c7;
+  --line: #d2c5b2;
+  --shadow: rgba(31, 27, 24, 0.08);
+  --radius: 18px;
+  --font-display: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  --font-body: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, rgba(178, 85, 46, 0.08), transparent 28%),
+    linear-gradient(180deg, #f8f3ea 0%, #f1e8db 100%);
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+
+.shell {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 28px 24px 40px;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 20px;
+  align-items: stretch;
+  margin-bottom: 22px;
+}
+
+.hero-copy,
+.hero-cards,
+.panel {
+  background: rgba(255, 252, 247, 0.92);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 14px 30px var(--shadow);
+}
+
+.hero-copy {
+  padding: 28px 30px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.hero h1,
+.panel h2,
+.copy-section h3,
+.copy-instance h4,
+.issue-card h3,
+.evidence-card h4,
+.attachment-card h3 {
+  font-family: var(--font-display);
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: 42px;
+  line-height: 1.04;
+}
+
+.hero-status {
+  margin: 16px 0 6px;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.hero-subtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: 16px;
+}
+
+.hero-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  overflow: hidden;
+}
+
+.summary-card {
+  padding: 22px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.summary-card:nth-child(2n) {
+  border-right: 0;
+}
+
+.summary-card:nth-child(n + 3) {
+  border-bottom: 0;
+}
+
+.summary-label {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.summary-value {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.workbench-grid {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1.2fr) 360px;
+  gap: 18px;
+  align-items: start;
+}
+
+.panel {
+  padding: 20px;
+}
+
+.panel-heading h2 {
+  margin: 0 0 18px;
+  font-size: 26px;
+}
+
+.issues-panel,
+.evidence-panel {
+  position: sticky;
+  top: 22px;
+}
+
+.issue-list,
+.attachment-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.issue-card,
+.copy-instance,
+.evidence-card,
+.attachment-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.issue-card {
+  padding: 14px;
+}
+
+.issue-card.automation-gap {
+  border-color: var(--accent);
+  background: #fbebe4;
+}
+
+.issue-card.user-input-required {
+  border-color: var(--gold);
+  background: #f8f0dd;
+}
+
+.issue-card.manual-review {
+  border-color: var(--forest);
+  background: #edf5f1;
+}
+
+.issue-topline {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.issue-class,
+.issue-source,
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: white;
+  border: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.issue-card h3,
+.copy-section h3,
+.attachment-card h3 {
+  margin: 0 0 6px;
+  font-size: 20px;
+}
+
+.issue-path,
+.field-path,
+.evidence-meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.issue-value,
+.issue-message,
+.evidence-usage,
+.attachment-remarks {
+  margin: 10px 0 0;
+  line-height: 1.45;
+}
+
+.issue-link,
+.evidence-link {
+  display: inline-block;
+  margin-top: 12px;
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.copy-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.copy-section {
+  background: linear-gradient(180deg, rgba(235, 226, 211, 0.45), transparent 60%);
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.copy-section:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.copy-instance {
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.copy-instance h4 {
+  margin: 0 0 12px;
+  font-size: 22px;
+}
+
+.field-list {
+  display: grid;
+  gap: 10px;
+}
+
+.field-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.field-card.needs-review {
+  border-color: var(--gold);
+  background: #f9f2df;
+}
+
+.field-card.missing {
+  border-style: dashed;
+}
+
+.field-head,
+.field-body {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+}
+
+.field-label {
+  margin: 0 0 4px;
+  font-weight: 800;
+  font-size: 15px;
+}
+
+.field-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: end;
+}
+
+.field-body {
+  margin-top: 10px;
+  align-items: center;
+}
+
+.field-value {
+  font-size: 16px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.field-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.copy-button {
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: white;
+  padding: 8px 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.evidence-group {
+  margin-bottom: 18px;
+}
+
+.evidence-group h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.evidence-card {
+  padding: 14px;
+  margin-bottom: 10px;
+}
+
+.evidence-card blockquote {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-left: 4px solid var(--accent);
+  background: var(--paper-strong);
+}
+
+.attachments-panel {
+  margin-top: 18px;
+}
+
+.attachment-list {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.attachment-card {
+  padding: 14px;
+}
+
+.attachment-card ul {
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+
+.empty-state {
+  color: var(--muted);
+  margin: 0;
+}
+
+@media (max-width: 1200px) {
+  .workbench-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .issues-panel,
+  .evidence-panel {
+    position: static;
+  }
+}
+
+@media (max-width: 900px) {
+  .hero {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-cards {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .shell {
+    padding: 18px 14px 28px;
+  }
+
+  .hero h1 {
+    font-size: 34px;
+  }
+
+  .hero-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-card {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .summary-card:last-child {
+    border-bottom: 0;
+  }
+
+  .field-head,
+  .field-body {
+    flex-direction: column;
+  }
+
+  .field-badges,
+  .field-actions {
+    justify-content: start;
+  }
+}
+
+</style>
+<script>
+function copyFieldValue(button){const value=button.getAttribute('data-copy');if(!value){return;}navigator.clipboard.writeText(value);button.textContent='Copied';setTimeout(()=>{button.textContent='Copy';},900);}
+</script>
+</head>
+<body>
+<div class="shell">
+<header class="hero">
+<div class="hero-copy">
+<p class="eyebrow">Expense Report Review</p>
+<h1>FA Workbench</h1>
+<p class="hero-status">user input required</p>
+<p class="hero-subtitle">Olivia Park · Foreign Expenses</p>
+</div>
+<div class="hero-cards">
+<article class="summary-card"><p class="summary-label">Trip Window</p><p class="summary-value">2025-04-21 to 2025-04-29</p></article>
+<article class="summary-card"><p class="summary-label">Report Total USD</p><p class="summary-value">1889.66</p></article>
+<article class="summary-card"><p class="summary-label">Readiness</p><p class="summary-value">0 automation · 4 user input · 3 review</p></article>
+<article class="summary-card"><p class="summary-label">Confidence</p><p class="summary-value">46 high · 14 medium · 9 low</p></article>
+</div>
+</header>
+<main class="workbench-grid">
+<section class="panel issues-panel">
+<div class="panel-heading"><p class="eyebrow">Queue</p><h2>Issues</h2></div>
+<ul class="issue-list">
+<li class="issue-card user-input-required">
+<div class="issue-topline"><span class="issue-class">user-input-required</span><span class="issue-source">t3</span></div>
+<h3>Affiliation</h3>
+<p class="issue-path">expense_report.general_information.payee.affiliation</p>
+<p class="issue-message">Required field is missing</p>
+<a class="issue-link" href="#field-expense-report-general-information-payee-affiliation">Jump to field</a>
+</li>
+<li class="issue-card user-input-required">
+<div class="issue-topline"><span class="issue-class">user-input-required</span><span class="issue-source">t1</span></div>
+<h3>Authorized By</h3>
+<p class="issue-path">expense_report.general_information.authorized_by</p>
+<p class="issue-message">Required field is missing</p>
+<a class="issue-link" href="#field-expense-report-general-information-authorized-by">Jump to field</a>
+</li>
+<li class="issue-card user-input-required">
+<div class="issue-topline"><span class="issue-class">user-input-required</span><span class="issue-source">t1</span></div>
+<h3>attendees</h3>
+<p class="issue-path">expense_report.transaction_lines[2].meal_details.attendees</p>
+<p class="issue-message">Required field is missing</p>
+<a class="issue-link" href="#section-transaction-lines">Jump to field</a>
+</li>
+<li class="issue-card user-input-required">
+<div class="issue-topline"><span class="issue-class">user-input-required</span><span class="issue-source">t3</span></div>
+<h3>student certification</h3>
+<p class="issue-path">expense_report.general_information</p>
+<p class="issue-message">Dependent field &quot;general_information.payee.affiliation&quot; is missing</p>
+<a class="issue-link" href="#section-general-information">Jump to field</a>
+</li>
+<li class="issue-card manual-review">
+<div class="issue-topline"><span class="issue-class">manual-review</span><span class="issue-source">t3</span></div>
+<h3>Date</h3>
+<p class="issue-path">expense_report.transaction_lines[0].common.date</p>
+<p class="issue-value">Current value: 2025-04-10</p>
+<p class="issue-message">Field has a schema validation note that still requires manual or custom validation logic</p>
+<a class="issue-link" href="#field-expense-report-transaction-lines-0-common-date">Jump to field</a>
+</li>
+<li class="issue-card manual-review">
+<div class="issue-topline"><span class="issue-class">manual-review</span><span class="issue-source">t3</span></div>
+<h3>Date</h3>
+<p class="issue-path">expense_report.transaction_lines[1].common.date</p>
+<p class="issue-value">Current value: 2025-04-24</p>
+<p class="issue-message">Field has a schema validation note that still requires manual or custom validation logic</p>
+<a class="issue-link" href="#field-expense-report-transaction-lines-1-common-date">Jump to field</a>
+</li>
+<li class="issue-card manual-review">
+<div class="issue-topline"><span class="issue-class">manual-review</span><span class="issue-source">t3</span></div>
+<h3>Date</h3>
+<p class="issue-path">expense_report.transaction_lines[2].common.date</p>
+<p class="issue-value">Current value: 2025-04-24</p>
+<p class="issue-message">Field has a schema validation note that still requires manual or custom validation logic</p>
+<a class="issue-link" href="#field-expense-report-transaction-lines-2-common-date">Jump to field</a>
+</li>
+</ul>
+</section>
+<section class="panel copy-panel">
+<div class="panel-heading"><p class="eyebrow">Oracle Copy View</p><h2>Ready-To-Copy Fields</h2></div>
+<section class="copy-section" id="section-general-information">
+<h3>General Information</h3>
+<article class="copy-instance" id="instance-expense-report-general-information">
+<div class="field-list">
+<article class="field-card" id="field-expense-report-general-information-category">
+<div class="field-head">
+<div><p class="field-label">Category</p><p class="field-path">expense_report.general_information.category</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">expenses_foreign</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="expenses_foreign">Copy</button><a class="evidence-link" href="#evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-city-country-singapore-singapore">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-general-information-payee-name">
+<div class="field-head">
+<div><p class="field-label">Name</p><p class="field-path">expense_report.general_information.payee.name</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">Olivia Park</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="Olivia Park">Copy</button><a class="evidence-link" href="#evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-passenger-olivia-park">Evidence</a></div>
+</div>
+</article>
+<article class="field-card missing" id="field-expense-report-general-information-payee-affiliation">
+<div class="field-head">
+<div><p class="field-label">Affiliation</p><p class="field-path">expense_report.general_information.payee.affiliation</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">[missing]</div>
+<div class="field-actions"></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-general-information-rush-processing">
+<div class="field-head">
+<div><p class="field-label">Rush Processing</p><p class="field-path">expense_report.general_information.rush_processing</p></div>
+<div class="field-badges"><span class="badge">T1</span><span class="badge">user_confirmed_input</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">no</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="no">Copy</button><a class="evidence-link" href="#evidence-system-generated-bundle-synthesis-default-rush-processing">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-general-information-payment-method">
+<div class="field-head">
+<div><p class="field-label">Payment Method</p><p class="field-path">expense_report.general_information.payment_method</p></div>
+<div class="field-badges"><span class="badge">T2</span><span class="badge">computed_readonly</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">electronic</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="electronic">Copy</button><a class="evidence-link" href="#evidence-system-generated-bundle-synthesis-default-payment-method">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-general-information-business-purpose-who">
+<div class="field-head">
+<div><p class="field-label">Who</p><p class="field-path">expense_report.general_information.business_purpose.who</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">Olivia Park</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="Olivia Park">Copy</button><a class="evidence-link" href="#evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-passenger-olivia-park">Evidence</a></div>
+</div>
+</article>
+<article class="field-card needs-review" id="field-expense-report-general-information-business-purpose-what">
+<div class="field-head">
+<div><p class="field-label">What</p><p class="field-path">expense_report.general_information.business_purpose.what</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span><span class="badge">review</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">Business travel to Singapore</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="Business travel to Singapore">Copy</button><a class="evidence-link" href="#evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-city-country-singapore-singapore">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-general-information-business-purpose-when">
+<div class="field-head">
+<div><p class="field-label">When</p><p class="field-path">expense_report.general_information.business_purpose.when</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">2025-04-21 to 2025-04-29</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="2025-04-21 to 2025-04-29">Copy</button><a class="evidence-link" href="#evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-departure-2025-04-21">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-general-information-business-purpose-where">
+<div class="field-head">
+<div><p class="field-label">Where</p><p class="field-path">expense_report.general_information.business_purpose.where</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">Singapore</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="Singapore">Copy</button><a class="evidence-link" href="#evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-city-country-singapore-singapore">Evidence</a></div>
+</div>
+</article>
+<article class="field-card needs-review" id="field-expense-report-general-information-business-purpose-why">
+<div class="field-head">
+<div><p class="field-label">Why</p><p class="field-path">expense_report.general_information.business_purpose.why</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span><span class="badge">review</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">Travel and related business expenses for work in Singapore</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="Travel and related business expenses for work in Singapore">Copy</button><a class="evidence-link" href="#evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-city-country-singapore-singapore">Evidence</a></div>
+</div>
+</article>
+<article class="field-card needs-review" id="field-expense-report-general-information-business-purpose-key-30char">
+<div class="field-head">
+<div><p class="field-label">Key 30char</p><p class="field-path">expense_report.general_information.business_purpose.key_30char</p></div>
+<div class="field-badges"><span class="badge">T2</span><span class="badge">computed_readonly</span><span class="badge">required</span><span class="badge">review</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">OLIVIAPARKBUSINESSTRAVEXPENSES</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="OLIVIAPARKBUSINESSTRAVEXPENSES">Copy</button><a class="evidence-link" href="#evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-passenger-olivia-park">Evidence</a></div>
+</div>
+</article>
+<article class="field-card needs-review" id="field-expense-report-general-information-event-name">
+<div class="field-head">
+<div><p class="field-label">Event Name</p><p class="field-path">expense_report.general_information.event_name</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span><span class="badge">review</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">Foreign Expenses</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="Foreign Expenses">Copy</button><a class="evidence-link" href="#evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-city-country-singapore-singapore">Evidence</a></div>
+</div>
+</article>
+<article class="field-card missing" id="field-expense-report-general-information-authorized-by">
+<div class="field-head">
+<div><p class="field-label">Authorized By</p><p class="field-path">expense_report.general_information.authorized_by</p></div>
+<div class="field-badges"><span class="badge">T1</span><span class="badge">user_confirmed_input</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">[missing]</div>
+<div class="field-actions"></div>
+</div>
+</article>
+</div>
+</article>
+</section>
+<section class="copy-section" id="section-transaction-summary">
+<h3>Transaction Summary</h3>
+<article class="copy-instance" id="instance-expense-report-transaction-summary">
+<div class="field-list">
+<article class="field-card" id="field-expense-report-transaction-summary-transaction-type">
+<div class="field-head">
+<div><p class="field-label">Transaction Type</p><p class="field-path">expense_report.transaction_summary.transaction_type</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">foreign</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="foreign">Copy</button><a class="evidence-link" href="#evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-city-country-singapore-singapore">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-summary-transaction-date">
+<div class="field-head">
+<div><p class="field-label">Transaction Date</p><p class="field-path">expense_report.transaction_summary.transaction_date</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">2025-04-29</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="2025-04-29">Copy</button><a class="evidence-link" href="#evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-departure-2025-04-21">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-summary-total-usd">
+<div class="field-head">
+<div><p class="field-label">Total Usd</p><p class="field-path">expense_report.transaction_summary.total_usd</p></div>
+<div class="field-badges"><span class="badge">T2</span><span class="badge">computed_readonly</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">1889.66</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="1889.66">Copy</button><a class="evidence-link" href="#evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-total-fare-paid-usd-1-287-44">Evidence</a></div>
+</div>
+</article>
+</div>
+</article>
+</section>
+<section class="copy-section" id="section-transaction-lines">
+<h3>Transaction Lines</h3>
+<article class="copy-instance" id="instance-expense-report-transaction-lines">
+<h4>Transaction Lines 1</h4>
+<div class="field-list">
+<article class="field-card" id="field-expense-report-transaction-lines-0-common-date">
+<div class="field-head">
+<div><p class="field-label">Date</p><p class="field-path">expense_report.transaction_lines[0].common.date</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">2025-04-10</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="2025-04-10">Copy</button><a class="evidence-link" href="#evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-issue-date-2025-04-10">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-0-common-line-amount-usd">
+<div class="field-head">
+<div><p class="field-label">Line Amount Usd</p><p class="field-path">expense_report.transaction_lines[0].common.line_amount_usd</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">1287.44</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="1287.44">Copy</button><a class="evidence-link" href="#evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-total-fare-paid-usd-1-287-44">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-0-common-original-currency">
+<div class="field-head">
+<div><p class="field-label">Original Currency</p><p class="field-path">expense_report.transaction_lines[0].common.original_currency</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">USD</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="USD">Copy</button><a class="evidence-link" href="#evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-total-fare-paid-usd-1-287-44">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-0-common-original-amount">
+<div class="field-head">
+<div><p class="field-label">Original Amount</p><p class="field-path">expense_report.transaction_lines[0].common.original_amount</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">1287.44</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="1287.44">Copy</button><a class="evidence-link" href="#evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-total-fare-paid-usd-1-287-44">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-0-common-exchange-rate">
+<div class="field-head">
+<div><p class="field-label">Exchange Rate</p><p class="field-path">expense_report.transaction_lines[0].common.exchange_rate</p></div>
+<div class="field-badges"><span class="badge">T2</span><span class="badge">computed_readonly</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">1.00</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="1.00">Copy</button><a class="evidence-link" href="#evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-total-fare-paid-usd-1-287-44">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-0-common-expense-type">
+<div class="field-head">
+<div><p class="field-label">Expense Type</p><p class="field-path">expense_report.transaction_lines[0].common.expense_type</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">airfare_foreign</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="airfare_foreign">Copy</button><a class="evidence-link" href="#evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-city-country-singapore-singapore">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-0-common-remarks">
+<div class="field-head">
+<div><p class="field-label">Remarks</p><p class="field-path">expense_report.transaction_lines[0].common.remarks</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">Airfare SFO to SFO</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="Airfare SFO to SFO">Copy</button><a class="evidence-link" href="#evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-total-fare-paid-usd-1-287-44">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-0-common-country-of-activity">
+<div class="field-head">
+<div><p class="field-label">Country Of Activity</p><p class="field-path">expense_report.transaction_lines[0].common.country_of_activity</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">Singapore</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="Singapore">Copy</button><a class="evidence-link" href="#evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-city-country-singapore-singapore">Evidence</a></div>
+</div>
+</article>
+<article class="field-card needs-review" id="field-expense-report-transaction-lines-0-common-foreign-activity-type">
+<div class="field-head">
+<div><p class="field-label">Foreign Activity Type</p><p class="field-path">expense_report.transaction_lines[0].common.foreign_activity_type</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">review</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">other</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="other">Copy</button><a class="evidence-link" href="#evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-city-country-singapore-singapore">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-0-common-source-documents-0-filename">
+<div class="field-head">
+<div><p class="field-label">Filename</p><p class="field-path">expense_report.transaction_lines[0].common.source_documents[0].filename</p></div>
+<div class="field-badges"><span class="badge">T1</span><span class="badge">user_confirmed_input</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">airline_itinerary_classic.md</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="airline_itinerary_classic.md">Copy</button><a class="evidence-link" href="#evidence-document-airline-itinerary-classic-airline-itinerary-classic-md">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-0-common-source-documents-0-document-type">
+<div class="field-head">
+<div><p class="field-label">Document Type</p><p class="field-path">expense_report.transaction_lines[0].common.source_documents[0].document_type</p></div>
+<div class="field-badges"><span class="badge">T1</span><span class="badge">user_confirmed_input</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">booking_confirmation</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="booking_confirmation">Copy</button><a class="evidence-link" href="#evidence-document-airline-itinerary-classic-airline-itinerary-classic-md">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-0-airfare-details-travelers-name">
+<div class="field-head">
+<div><p class="field-label">Travelers Name</p><p class="field-path">expense_report.transaction_lines[0].airfare_details.travelers_name</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">Olivia Park</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="Olivia Park">Copy</button><a class="evidence-link" href="#evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-passenger-olivia-park">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-0-airfare-details-ticket-number">
+<div class="field-head">
+<div><p class="field-label">Ticket Number</p><p class="field-path">expense_report.transaction_lines[0].airfare_details.ticket_number</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">0162459135784</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="0162459135784">Copy</button><a class="evidence-link" href="#evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-ticket-number-0162459135784">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-0-airfare-details-ticket-amount">
+<div class="field-head">
+<div><p class="field-label">Ticket Amount</p><p class="field-path">expense_report.transaction_lines[0].airfare_details.ticket_amount</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">1287.44</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="1287.44">Copy</button><a class="evidence-link" href="#evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-total-fare-paid-usd-1-287-44">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-0-airfare-details-booking-method">
+<div class="field-head">
+<div><p class="field-label">Booking Method</p><p class="field-path">expense_report.transaction_lines[0].airfare_details.booking_method</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">other</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="other">Copy</button><a class="evidence-link" href="#evidence-system-generated-bundle-synthesis-default-airfare-booking-method">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-0-airfare-details-airline">
+<div class="field-head">
+<div><p class="field-label">Airline</p><p class="field-path">expense_report.transaction_lines[0].airfare_details.airline</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">ANA</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="ANA">Copy</button><a class="evidence-link" href="#evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-1-sfo-nrt-2025-04-21-2025-04-22-ana-nh107-economy">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-0-airfare-details-class-of-ticket">
+<div class="field-head">
+<div><p class="field-label">Class Of Ticket</p><p class="field-path">expense_report.transaction_lines[0].airfare_details.class_of_ticket</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">coach</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="coach">Copy</button><a class="evidence-link" href="#evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-1-sfo-nrt-2025-04-21-2025-04-22-ana-nh107-economy">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-0-airfare-details-departure-airport">
+<div class="field-head">
+<div><p class="field-label">Departure Airport</p><p class="field-path">expense_report.transaction_lines[0].airfare_details.departure_airport</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">SFO</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="SFO">Copy</button><a class="evidence-link" href="#evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-from-san-francisco-ca-united-states-sfo">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-0-airfare-details-destination-airport">
+<div class="field-head">
+<div><p class="field-label">Destination Airport</p><p class="field-path">expense_report.transaction_lines[0].airfare_details.destination_airport</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">SIN</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="SIN">Copy</button><a class="evidence-link" href="#evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-to-singapore-sin">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-0-airfare-details-round-trip">
+<div class="field-head">
+<div><p class="field-label">Round Trip</p><p class="field-path">expense_report.transaction_lines[0].airfare_details.round_trip</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">true</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="true">Copy</button><a class="evidence-link" href="#evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-1-sfo-nrt-2025-04-21-2025-04-22-ana-nh107-economy">Evidence</a></div>
+</div>
+</article>
+</div>
+</article>
+<article class="copy-instance" id="instance-expense-report-transaction-lines">
+<h4>Transaction Lines 2</h4>
+<div class="field-list">
+<article class="field-card" id="field-expense-report-transaction-lines-1-common-date">
+<div class="field-head">
+<div><p class="field-label">Date</p><p class="field-path">expense_report.transaction_lines[1].common.date</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">2025-04-24</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="2025-04-24">Copy</button><a class="evidence-link" href="#evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-check-in-2025-04-21">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-1-common-line-amount-usd">
+<div class="field-head">
+<div><p class="field-label">Line Amount Usd</p><p class="field-path">expense_report.transaction_lines[1].common.line_amount_usd</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">576.31</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="576.31">Copy</button><a class="evidence-link" href="#evidence-system-generated-bundle-synthesis-demo-fx-rate-provider">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-1-common-original-currency">
+<div class="field-head">
+<div><p class="field-label">Original Currency</p><p class="field-path">expense_report.transaction_lines[1].common.original_currency</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">SGD</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="SGD">Copy</button><a class="evidence-link" href="#evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-balance-due-sgd-778-80">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-1-common-original-amount">
+<div class="field-head">
+<div><p class="field-label">Original Amount</p><p class="field-path">expense_report.transaction_lines[1].common.original_amount</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">778.80</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="778.80">Copy</button><a class="evidence-link" href="#evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-balance-due-sgd-778-80">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-1-common-exchange-rate">
+<div class="field-head">
+<div><p class="field-label">Exchange Rate</p><p class="field-path">expense_report.transaction_lines[1].common.exchange_rate</p></div>
+<div class="field-badges"><span class="badge">T2</span><span class="badge">computed_readonly</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">0.74</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="0.74">Copy</button><a class="evidence-link" href="#evidence-system-generated-bundle-synthesis-demo-fx-rate-provider">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-1-common-expense-type">
+<div class="field-head">
+<div><p class="field-label">Expense Type</p><p class="field-path">expense_report.transaction_lines[1].common.expense_type</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">lodging_foreign</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="lodging_foreign">Copy</button><a class="evidence-link" href="#evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-city-country-singapore-singapore">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-1-common-remarks">
+<div class="field-head">
+<div><p class="field-label">Remarks</p><p class="field-path">expense_report.transaction_lines[1].common.remarks</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">Lodging at MARINA BAY GRAND HOTEL</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="Lodging at MARINA BAY GRAND HOTEL">Copy</button><a class="evidence-link" href="#evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-balance-due-sgd-778-80">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-1-common-country-of-activity">
+<div class="field-head">
+<div><p class="field-label">Country Of Activity</p><p class="field-path">expense_report.transaction_lines[1].common.country_of_activity</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">Singapore</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="Singapore">Copy</button><a class="evidence-link" href="#evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-city-country-singapore-singapore">Evidence</a></div>
+</div>
+</article>
+<article class="field-card needs-review" id="field-expense-report-transaction-lines-1-common-foreign-activity-type">
+<div class="field-head">
+<div><p class="field-label">Foreign Activity Type</p><p class="field-path">expense_report.transaction_lines[1].common.foreign_activity_type</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">review</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">other</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="other">Copy</button><a class="evidence-link" href="#evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-city-country-singapore-singapore">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-1-common-source-documents-0-filename">
+<div class="field-head">
+<div><p class="field-label">Filename</p><p class="field-path">expense_report.transaction_lines[1].common.source_documents[0].filename</p></div>
+<div class="field-badges"><span class="badge">T1</span><span class="badge">user_confirmed_input</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">hotel_folio_guest_bill.md</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="hotel_folio_guest_bill.md">Copy</button><a class="evidence-link" href="#evidence-document-hotel-folio-guest-bill-hotel-folio-guest-bill-md">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-1-common-source-documents-0-document-type">
+<div class="field-head">
+<div><p class="field-label">Document Type</p><p class="field-path">expense_report.transaction_lines[1].common.source_documents[0].document_type</p></div>
+<div class="field-badges"><span class="badge">T1</span><span class="badge">user_confirmed_input</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">receipt</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="receipt">Copy</button><a class="evidence-link" href="#evidence-document-hotel-folio-guest-bill-hotel-folio-guest-bill-md">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-1-lodging-details-hotel-name">
+<div class="field-head">
+<div><p class="field-label">Hotel Name</p><p class="field-path">expense_report.transaction_lines[1].lodging_details.hotel_name</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">MARINA BAY GRAND HOTEL</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="MARINA BAY GRAND HOTEL">Copy</button><a class="evidence-link" href="#evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-marina-bay-grand-hotel">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-1-lodging-details-location">
+<div class="field-head">
+<div><p class="field-label">Location</p><p class="field-path">expense_report.transaction_lines[1].lodging_details.location</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">Singapore</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="Singapore">Copy</button><a class="evidence-link" href="#evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-city-country-singapore-singapore">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-1-lodging-details-check-in-date">
+<div class="field-head">
+<div><p class="field-label">Check In Date</p><p class="field-path">expense_report.transaction_lines[1].lodging_details.check_in_date</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">2025-04-21</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="2025-04-21">Copy</button><a class="evidence-link" href="#evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-check-in-2025-04-21">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-1-lodging-details-check-out-date">
+<div class="field-head">
+<div><p class="field-label">Check Out Date</p><p class="field-path">expense_report.transaction_lines[1].lodging_details.check_out_date</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">2025-04-24</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="2025-04-24">Copy</button><a class="evidence-link" href="#evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-check-in-2025-04-21">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-1-lodging-details-number-of-nights">
+<div class="field-head">
+<div><p class="field-label">Number Of Nights</p><p class="field-path">expense_report.transaction_lines[1].lodging_details.number_of_nights</p></div>
+<div class="field-badges"><span class="badge">T2</span><span class="badge">computed_readonly</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">3</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="3">Copy</button><a class="evidence-link" href="#evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-2025-04-21-deluxe-king-room-sgd-220-00-sgd-39-60">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-1-lodging-details-daily-rate">
+<div class="field-head">
+<div><p class="field-label">Daily Rate</p><p class="field-path">expense_report.transaction_lines[1].lodging_details.daily_rate</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">220.00</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="220.00">Copy</button><a class="evidence-link" href="#evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-2025-04-21-deluxe-king-room-sgd-220-00-sgd-39-60">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-1-lodging-details-booking-method">
+<div class="field-head">
+<div><p class="field-label">Booking Method</p><p class="field-path">expense_report.transaction_lines[1].lodging_details.booking_method</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">other</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="other">Copy</button><a class="evidence-link" href="#evidence-system-generated-bundle-synthesis-default-lodging-booking-method">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-1-lodging-details-is-shared-lodging">
+<div class="field-head">
+<div><p class="field-label">Is Shared Lodging</p><p class="field-path">expense_report.transaction_lines[1].lodging_details.is_shared_lodging</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">false</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="false">Copy</button><a class="evidence-link" href="#evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-marina-bay-grand-hotel">Evidence</a></div>
+</div>
+</article>
+</div>
+</article>
+<article class="copy-instance" id="instance-expense-report-transaction-lines">
+<h4>Transaction Lines 3</h4>
+<div class="field-list">
+<article class="field-card" id="field-expense-report-transaction-lines-2-common-date">
+<div class="field-head">
+<div><p class="field-label">Date</p><p class="field-path">expense_report.transaction_lines[2].common.date</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">2025-04-24</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="2025-04-24">Copy</button><a class="evidence-link" href="#evidence-document-span-receipt-card-dotted-receipt-card-dotted-md-1-date-2025-04-24">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-2-common-line-amount-usd">
+<div class="field-head">
+<div><p class="field-label">Line Amount Usd</p><p class="field-path">expense_report.transaction_lines[2].common.line_amount_usd</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">25.91</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="25.91">Copy</button><a class="evidence-link" href="#evidence-system-generated-bundle-synthesis-demo-fx-rate-provider">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-2-common-original-currency">
+<div class="field-head">
+<div><p class="field-label">Original Currency</p><p class="field-path">expense_report.transaction_lines[2].common.original_currency</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">SGD</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="SGD">Copy</button><a class="evidence-link" href="#evidence-document-span-receipt-card-dotted-receipt-card-dotted-md-1-total-sgd-35-02">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-2-common-original-amount">
+<div class="field-head">
+<div><p class="field-label">Original Amount</p><p class="field-path">expense_report.transaction_lines[2].common.original_amount</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">35.02</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="35.02">Copy</button><a class="evidence-link" href="#evidence-document-span-receipt-card-dotted-receipt-card-dotted-md-1-total-sgd-35-02">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-2-common-exchange-rate">
+<div class="field-head">
+<div><p class="field-label">Exchange Rate</p><p class="field-path">expense_report.transaction_lines[2].common.exchange_rate</p></div>
+<div class="field-badges"><span class="badge">T2</span><span class="badge">computed_readonly</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">0.74</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="0.74">Copy</button><a class="evidence-link" href="#evidence-system-generated-bundle-synthesis-demo-fx-rate-provider">Evidence</a></div>
+</div>
+</article>
+<article class="field-card needs-review" id="field-expense-report-transaction-lines-2-common-expense-type">
+<div class="field-head">
+<div><p class="field-label">Expense Type</p><p class="field-path">expense_report.transaction_lines[2].common.expense_type</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span><span class="badge">review</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">business_meal</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="business_meal">Copy</button><a class="evidence-link" href="#evidence-document-span-receipt-card-dotted-receipt-card-dotted-md-1-total-sgd-35-02">Evidence</a></div>
+</div>
+</article>
+<article class="field-card needs-review" id="field-expense-report-transaction-lines-2-common-remarks">
+<div class="field-head">
+<div><p class="field-label">Remarks</p><p class="field-path">expense_report.transaction_lines[2].common.remarks</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span><span class="badge">review</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">Meal at EAST BAY BISTRO</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="Meal at EAST BAY BISTRO">Copy</button><a class="evidence-link" href="#evidence-document-span-receipt-card-dotted-receipt-card-dotted-md-1-east-bay-bistro">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-2-common-country-of-activity">
+<div class="field-head">
+<div><p class="field-label">Country Of Activity</p><p class="field-path">expense_report.transaction_lines[2].common.country_of_activity</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">Singapore</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="Singapore">Copy</button><a class="evidence-link" href="#evidence-document-span-receipt-card-dotted-receipt-card-dotted-md-1-location-singapore-singapore">Evidence</a></div>
+</div>
+</article>
+<article class="field-card needs-review" id="field-expense-report-transaction-lines-2-common-foreign-activity-type">
+<div class="field-head">
+<div><p class="field-label">Foreign Activity Type</p><p class="field-path">expense_report.transaction_lines[2].common.foreign_activity_type</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">review</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">other</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="other">Copy</button><a class="evidence-link" href="#evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-city-country-singapore-singapore">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-2-common-source-documents-0-filename">
+<div class="field-head">
+<div><p class="field-label">Filename</p><p class="field-path">expense_report.transaction_lines[2].common.source_documents[0].filename</p></div>
+<div class="field-badges"><span class="badge">T1</span><span class="badge">user_confirmed_input</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">receipt_card_dotted.md</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="receipt_card_dotted.md">Copy</button><a class="evidence-link" href="#evidence-document-receipt-card-dotted-receipt-card-dotted-md">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-2-common-source-documents-0-document-type">
+<div class="field-head">
+<div><p class="field-label">Document Type</p><p class="field-path">expense_report.transaction_lines[2].common.source_documents[0].document_type</p></div>
+<div class="field-badges"><span class="badge">T1</span><span class="badge">user_confirmed_input</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">receipt</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="receipt">Copy</button><a class="evidence-link" href="#evidence-document-receipt-card-dotted-receipt-card-dotted-md">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-2-meal-details-venue-name">
+<div class="field-head">
+<div><p class="field-label">Venue Name</p><p class="field-path">expense_report.transaction_lines[2].meal_details.venue_name</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">EAST BAY BISTRO</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="EAST BAY BISTRO">Copy</button><a class="evidence-link" href="#evidence-document-span-receipt-card-dotted-receipt-card-dotted-md-1-east-bay-bistro">Evidence</a></div>
+</div>
+</article>
+<article class="field-card needs-review" id="field-expense-report-transaction-lines-2-meal-details-meal-purpose">
+<div class="field-head">
+<div><p class="field-label">Meal Purpose</p><p class="field-path">expense_report.transaction_lines[2].meal_details.meal_purpose</p></div>
+<div class="field-badges"><span class="badge">T1</span><span class="badge">user_confirmed_input</span><span class="badge">required</span><span class="badge">review</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">Business meal during travel in Singapore</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="Business meal during travel in Singapore">Copy</button><a class="evidence-link" href="#evidence-document-span-receipt-card-dotted-receipt-card-dotted-md-1-location-singapore-singapore">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-2-meal-details-tip-amount">
+<div class="field-head">
+<div><p class="field-label">Tip Amount</p><p class="field-path">expense_report.transaction_lines[2].meal_details.tip_amount</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">4.50</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="4.50">Copy</button><a class="evidence-link" href="#evidence-document-span-receipt-card-dotted-receipt-card-dotted-md-1-tip-sgd-4-50">Evidence</a></div>
+</div>
+</article>
+<article class="field-card" id="field-expense-report-transaction-lines-2-meal-details-has-alcohol-on-receipt">
+<div class="field-head">
+<div><p class="field-label">Has Alcohol On Receipt</p><p class="field-path">expense_report.transaction_lines[2].meal_details.has_alcohol_on_receipt</p></div>
+<div class="field-badges"><span class="badge">T3</span><span class="badge">model_prefill_review</span><span class="badge">required</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">false</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="false">Copy</button><a class="evidence-link" href="#evidence-document-span-receipt-card-dotted-receipt-card-dotted-md-1-laksa-lunch-sgd-18-00">Evidence</a></div>
+</div>
+</article>
+</div>
+</article>
+</section>
+<section class="copy-section" id="section-allocation-and-approvers">
+<h3>Allocation And Approvers</h3>
+<article class="copy-instance" id="instance-expense-report-allocation-and-approvers">
+<div class="field-list">
+<article class="field-card needs-review" id="field-expense-report-allocation-and-approvers-other-beneficiaries">
+<div class="field-head">
+<div><p class="field-label">Other Beneficiaries</p><p class="field-path">expense_report.allocation_and_approvers.other_beneficiaries</p></div>
+<div class="field-badges"><span class="badge">T1</span><span class="badge">user_confirmed_input</span><span class="badge">required</span><span class="badge">review</span></div>
+</div>
+<div class="field-body">
+<div class="field-value">false</div>
+<div class="field-actions"><button class="copy-button" type="button" onclick="copyFieldValue(this)" data-copy="false">Copy</button><a class="evidence-link" href="#evidence-system-generated-bundle-synthesis-default-other-beneficiaries-false">Evidence</a></div>
+</div>
+</article>
+</div>
+</article>
+</section>
+</section>
+<aside class="panel evidence-panel">
+<div class="panel-heading"><p class="eyebrow">Evidence</p><h2>Reference Index</h2></div>
+<div class="evidence-group">
+<h3>airline_itinerary_classic.md</h3>
+<article class="evidence-card" id="evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-1-sfo-nrt-2025-04-21-2025-04-22-ana-nh107-economy">
+<h4>airline_itinerary_classic.md</h4>
+<p class="evidence-meta">document_span · page 1</p>
+<blockquote>1 | SFO -&gt; NRT | 2025-04-21 -&gt; 2025-04-22 | ANA NH107 | Economy</blockquote>
+<p class="evidence-usage">Used by: Transaction Lines 1 · Airline, Transaction Lines 1 · Class Of Ticket, Transaction Lines 1 · Round Trip</p>
+</article>
+<article class="evidence-card" id="evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-2-sin-sfo-2025-04-29-2025-04-29-ana-nh108-economy">
+<h4>airline_itinerary_classic.md</h4>
+<p class="evidence-meta">document_span · page 1</p>
+<blockquote>2 | SIN -&gt; SFO | 2025-04-29 -&gt; 2025-04-29 | ANA NH108 | Economy</blockquote>
+<p class="evidence-usage">Used by: Transaction Lines 1 · Round Trip</p>
+</article>
+<article class="evidence-card" id="evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-departure-2025-04-21">
+<h4>airline_itinerary_classic.md</h4>
+<p class="evidence-meta">document_span · page 1</p>
+<blockquote>Departure 2025-04-21</blockquote>
+<p class="evidence-usage">Used by: General Information · When, Transaction Summary · Transaction Date</p>
+</article>
+<article class="evidence-card" id="evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-from-san-francisco-ca-united-states-sfo">
+<h4>airline_itinerary_classic.md</h4>
+<p class="evidence-meta">document_span · page 1</p>
+<blockquote>From San Francisco, CA, United States (SFO)</blockquote>
+<p class="evidence-usage">Used by: Transaction Lines 1 · Departure Airport</p>
+</article>
+<article class="evidence-card" id="evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-issue-date-2025-04-10">
+<h4>airline_itinerary_classic.md</h4>
+<p class="evidence-meta">document_span · page 1</p>
+<blockquote>Issue Date 2025-04-10</blockquote>
+<p class="evidence-usage">Used by: Transaction Lines 1 · Date</p>
+</article>
+<article class="evidence-card" id="evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-passenger-olivia-park">
+<h4>airline_itinerary_classic.md</h4>
+<p class="evidence-meta">document_span · page 1</p>
+<blockquote>Passenger Olivia Park</blockquote>
+<p class="evidence-usage">Used by: General Information · Name, General Information · Who, General Information · Key 30char, Transaction Lines 1 · Travelers Name</p>
+</article>
+<article class="evidence-card" id="evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-return-2025-04-29">
+<h4>airline_itinerary_classic.md</h4>
+<p class="evidence-meta">document_span · page 1</p>
+<blockquote>Return 2025-04-29</blockquote>
+<p class="evidence-usage">Used by: General Information · When, Transaction Summary · Transaction Date</p>
+</article>
+<article class="evidence-card" id="evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-ticket-number-0162459135784">
+<h4>airline_itinerary_classic.md</h4>
+<p class="evidence-meta">document_span · page 1</p>
+<blockquote>Ticket Number 0162459135784</blockquote>
+<p class="evidence-usage">Used by: Transaction Lines 1 · Ticket Number</p>
+</article>
+<article class="evidence-card" id="evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-to-singapore-sin">
+<h4>airline_itinerary_classic.md</h4>
+<p class="evidence-meta">document_span · page 1</p>
+<blockquote>To Singapore (SIN)</blockquote>
+<p class="evidence-usage">Used by: Transaction Lines 1 · Destination Airport</p>
+</article>
+<article class="evidence-card" id="evidence-document-span-airline-itinerary-classic-airline-itinerary-classic-md-1-total-fare-paid-usd-1-287-44">
+<h4>airline_itinerary_classic.md</h4>
+<p class="evidence-meta">document_span · page 1</p>
+<blockquote>Total Fare Paid USD 1,287.44</blockquote>
+<p class="evidence-usage">Used by: Transaction Summary · Total Usd, Transaction Lines 1 · Line Amount Usd, Transaction Lines 1 · Original Currency, Transaction Lines 1 · Original Amount, Transaction Lines 1 · Exchange Rate, Transaction Lines 1 · Remarks, Transaction Lines 1 · Ticket Amount</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>hotel_folio_guest_bill.md</h3>
+<article class="evidence-card" id="evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-2025-04-21-deluxe-king-room-sgd-220-00-sgd-39-60">
+<h4>hotel_folio_guest_bill.md</h4>
+<p class="evidence-meta">document_span · page 1</p>
+<blockquote>2025-04-21  Deluxe King Room  SGD 220.00  SGD 39.60</blockquote>
+<p class="evidence-usage">Used by: Transaction Lines 2 · Number Of Nights, Transaction Lines 2 · Daily Rate</p>
+</article>
+<article class="evidence-card" id="evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-2025-04-22-deluxe-king-room-sgd-220-00-sgd-39-60">
+<h4>hotel_folio_guest_bill.md</h4>
+<p class="evidence-meta">document_span · page 1</p>
+<blockquote>2025-04-22  Deluxe King Room  SGD 220.00  SGD 39.60</blockquote>
+<p class="evidence-usage">Used by: Transaction Lines 2 · Number Of Nights, Transaction Lines 2 · Daily Rate</p>
+</article>
+<article class="evidence-card" id="evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-2025-04-23-deluxe-king-room-sgd-220-00-sgd-39-60">
+<h4>hotel_folio_guest_bill.md</h4>
+<p class="evidence-meta">document_span · page 1</p>
+<blockquote>2025-04-23  Deluxe King Room  SGD 220.00  SGD 39.60</blockquote>
+<p class="evidence-usage">Used by: Transaction Lines 2 · Number Of Nights, Transaction Lines 2 · Daily Rate</p>
+</article>
+<article class="evidence-card" id="evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-balance-due-sgd-778-80">
+<h4>hotel_folio_guest_bill.md</h4>
+<p class="evidence-meta">document_span · page 1</p>
+<blockquote>Balance Due SGD 778.80</blockquote>
+<p class="evidence-usage">Used by: Transaction Summary · Total Usd, Transaction Lines 2 · Line Amount Usd, Transaction Lines 2 · Original Currency, Transaction Lines 2 · Original Amount, Transaction Lines 2 · Exchange Rate, Transaction Lines 2 · Remarks</p>
+</article>
+<article class="evidence-card" id="evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-check-in-2025-04-21">
+<h4>hotel_folio_guest_bill.md</h4>
+<p class="evidence-meta">document_span · page 1</p>
+<blockquote>Check-in 2025-04-21</blockquote>
+<p class="evidence-usage">Used by: Transaction Lines 2 · Date, Transaction Lines 2 · Check In Date, Transaction Lines 2 · Check Out Date</p>
+</article>
+<article class="evidence-card" id="evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-check-out-2025-04-24">
+<h4>hotel_folio_guest_bill.md</h4>
+<p class="evidence-meta">document_span · page 1</p>
+<blockquote>Check-out 2025-04-24</blockquote>
+<p class="evidence-usage">Used by: Transaction Lines 2 · Date, Transaction Lines 2 · Check In Date, Transaction Lines 2 · Check Out Date</p>
+</article>
+<article class="evidence-card" id="evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-city-country-singapore-singapore">
+<h4>hotel_folio_guest_bill.md</h4>
+<p class="evidence-meta">document_span · page 1</p>
+<blockquote>City/Country Singapore, Singapore</blockquote>
+<p class="evidence-usage">Used by: General Information · Category, General Information · What, General Information · Where, General Information · Why, General Information · Key 30char, General Information · Event Name, Transaction Summary · Transaction Type, Transaction Lines 1 · Expense Type, Transaction Lines 1 · Country Of Activity, Transaction Lines 1 · Foreign Activity Type, Transaction Lines 2 · Expense Type, Transaction Lines 2 · Country Of Activity, Transaction Lines 2 · Foreign Activity Type, Transaction Lines 2 · Location, Transaction Lines 3 · Foreign Activity Type</p>
+</article>
+<article class="evidence-card" id="evidence-document-span-hotel-folio-guest-bill-hotel-folio-guest-bill-md-1-marina-bay-grand-hotel">
+<h4>hotel_folio_guest_bill.md</h4>
+<p class="evidence-meta">document_span · page 1</p>
+<blockquote>MARINA BAY GRAND HOTEL</blockquote>
+<p class="evidence-usage">Used by: Transaction Lines 2 · Hotel Name, Transaction Lines 2 · Is Shared Lodging</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>receipt_card_dotted.md</h3>
+<article class="evidence-card" id="evidence-document-span-receipt-card-dotted-receipt-card-dotted-md-1-date-2025-04-24">
+<h4>receipt_card_dotted.md</h4>
+<p class="evidence-meta">document_span · page 1</p>
+<blockquote>Date 2025-04-24</blockquote>
+<p class="evidence-usage">Used by: Transaction Lines 3 · Date</p>
+</article>
+<article class="evidence-card" id="evidence-document-span-receipt-card-dotted-receipt-card-dotted-md-1-east-bay-bistro">
+<h4>receipt_card_dotted.md</h4>
+<p class="evidence-meta">document_span · page 1</p>
+<blockquote>EAST BAY BISTRO</blockquote>
+<p class="evidence-usage">Used by: Transaction Lines 3 · Remarks, Transaction Lines 3 · Venue Name</p>
+</article>
+<article class="evidence-card" id="evidence-document-span-receipt-card-dotted-receipt-card-dotted-md-1-iced-tea-sgd-6-00">
+<h4>receipt_card_dotted.md</h4>
+<p class="evidence-meta">document_span · page 1</p>
+<blockquote>Iced Tea ........... SGD 6.00</blockquote>
+<p class="evidence-usage">Used by: Transaction Lines 3 · Has Alcohol On Receipt</p>
+</article>
+<article class="evidence-card" id="evidence-document-span-receipt-card-dotted-receipt-card-dotted-md-1-laksa-lunch-sgd-18-00">
+<h4>receipt_card_dotted.md</h4>
+<p class="evidence-meta">document_span · page 1</p>
+<blockquote>Laksa Lunch ........ SGD 18.00</blockquote>
+<p class="evidence-usage">Used by: Transaction Lines 3 · Has Alcohol On Receipt</p>
+</article>
+<article class="evidence-card" id="evidence-document-span-receipt-card-dotted-receipt-card-dotted-md-1-location-singapore-singapore">
+<h4>receipt_card_dotted.md</h4>
+<p class="evidence-meta">document_span · page 1</p>
+<blockquote>Location Singapore, Singapore</blockquote>
+<p class="evidence-usage">Used by: Transaction Lines 3 · Country Of Activity, Transaction Lines 3 · Meal Purpose</p>
+</article>
+<article class="evidence-card" id="evidence-document-span-receipt-card-dotted-receipt-card-dotted-md-1-service-charge-sgd-4-00">
+<h4>receipt_card_dotted.md</h4>
+<p class="evidence-meta">document_span · page 1</p>
+<blockquote>Service Charge ..... SGD 4.00</blockquote>
+<p class="evidence-usage">Used by: Transaction Lines 3 · Has Alcohol On Receipt</p>
+</article>
+<article class="evidence-card" id="evidence-document-span-receipt-card-dotted-receipt-card-dotted-md-1-tip-sgd-4-50">
+<h4>receipt_card_dotted.md</h4>
+<p class="evidence-meta">document_span · page 1</p>
+<blockquote>Tip SGD 4.50</blockquote>
+<p class="evidence-usage">Used by: Transaction Lines 3 · Tip Amount</p>
+</article>
+<article class="evidence-card" id="evidence-document-span-receipt-card-dotted-receipt-card-dotted-md-1-total-sgd-35-02">
+<h4>receipt_card_dotted.md</h4>
+<p class="evidence-meta">document_span · page 1</p>
+<blockquote>Total SGD 35.02</blockquote>
+<p class="evidence-usage">Used by: Transaction Summary · Total Usd, Transaction Lines 3 · Line Amount Usd, Transaction Lines 3 · Original Currency, Transaction Lines 3 · Original Amount, Transaction Lines 3 · Exchange Rate, Transaction Lines 3 · Expense Type</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>airline_itinerary_classic.md</h3>
+<article class="evidence-card" id="evidence-document-airline-itinerary-classic-airline-itinerary-classic-md">
+<h4>airline_itinerary_classic.md</h4>
+<p class="evidence-meta">document</p>
+<p class="evidence-usage">Used by: Transaction Lines 1 · Filename, Transaction Lines 1 · Document Type</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>hotel_folio_guest_bill.md</h3>
+<article class="evidence-card" id="evidence-document-hotel-folio-guest-bill-hotel-folio-guest-bill-md">
+<h4>hotel_folio_guest_bill.md</h4>
+<p class="evidence-meta">document</p>
+<p class="evidence-usage">Used by: Transaction Lines 2 · Filename, Transaction Lines 2 · Document Type</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>receipt_card_dotted.md</h3>
+<article class="evidence-card" id="evidence-document-receipt-card-dotted-receipt-card-dotted-md">
+<h4>receipt_card_dotted.md</h4>
+<p class="evidence-meta">document</p>
+<p class="evidence-usage">Used by: Transaction Lines 3 · Filename, Transaction Lines 3 · Document Type</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.apply_fx_rate</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-apply-fx-rate">
+<h4>bundle_synthesis.apply_fx_rate</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.apply_fx_rate</p>
+<p class="evidence-usage">Used by: Transaction Lines 2 · Exchange Rate, Transaction Lines 3 · Exchange Rate</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.build_airfare_remarks</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-build-airfare-remarks">
+<h4>bundle_synthesis.build_airfare_remarks</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.build_airfare_remarks</p>
+<p class="evidence-usage">Used by: Transaction Lines 1 · Remarks</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.build_lodging_remarks</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-build-lodging-remarks">
+<h4>bundle_synthesis.build_lodging_remarks</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.build_lodging_remarks</p>
+<p class="evidence-usage">Used by: Transaction Lines 2 · Remarks</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.build_meal_remarks</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-build-meal-remarks">
+<h4>bundle_synthesis.build_meal_remarks</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.build_meal_remarks</p>
+<p class="evidence-usage">Used by: Transaction Lines 3 · Remarks</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.classify_airfare_expense_type</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-classify-airfare-expense-type">
+<h4>bundle_synthesis.classify_airfare_expense_type</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.classify_airfare_expense_type</p>
+<p class="evidence-usage">Used by: Transaction Lines 1 · Expense Type</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.classify_lodging_expense_type</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-classify-lodging-expense-type">
+<h4>bundle_synthesis.classify_lodging_expense_type</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.classify_lodging_expense_type</p>
+<p class="evidence-usage">Used by: Transaction Lines 2 · Expense Type</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.compute_business_purpose_key</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-compute-business-purpose-key">
+<h4>bundle_synthesis.compute_business_purpose_key</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.compute_business_purpose_key</p>
+<p class="evidence-usage">Used by: General Information · Key 30char</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.compute_lodging_daily_rate</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-compute-lodging-daily-rate">
+<h4>bundle_synthesis.compute_lodging_daily_rate</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.compute_lodging_daily_rate</p>
+<p class="evidence-usage">Used by: Transaction Lines 2 · Daily Rate</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.compute_number_of_nights</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-compute-number-of-nights">
+<h4>bundle_synthesis.compute_number_of_nights</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.compute_number_of_nights</p>
+<p class="evidence-usage">Used by: Transaction Lines 2 · Number Of Nights</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.compute_total_usd</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-compute-total-usd">
+<h4>bundle_synthesis.compute_total_usd</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.compute_total_usd</p>
+<p class="evidence-usage">Used by: Transaction Summary · Total Usd</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.convert_original_amount_to_usd</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-convert-original-amount-to-usd">
+<h4>bundle_synthesis.convert_original_amount_to_usd</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.convert_original_amount_to_usd</p>
+<p class="evidence-usage">Used by: Transaction Summary · Total Usd, Transaction Lines 2 · Line Amount Usd, Transaction Lines 3 · Line Amount Usd</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.default_airfare_booking_method</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-default-airfare-booking-method">
+<h4>bundle_synthesis.default_airfare_booking_method</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.default_airfare_booking_method</p>
+<p class="evidence-usage">Used by: Transaction Lines 1 · Booking Method</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.default_business_purpose_what</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-default-business-purpose-what">
+<h4>bundle_synthesis.default_business_purpose_what</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.default_business_purpose_what</p>
+<p class="evidence-usage">Used by: General Information · What, General Information · Key 30char</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.default_business_purpose_why</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-default-business-purpose-why">
+<h4>bundle_synthesis.default_business_purpose_why</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.default_business_purpose_why</p>
+<p class="evidence-usage">Used by: General Information · Why</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.default_event_name_from_category</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-default-event-name-from-category">
+<h4>bundle_synthesis.default_event_name_from_category</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.default_event_name_from_category</p>
+<p class="evidence-usage">Used by: General Information · Event Name</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.default_foreign_activity_type</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-default-foreign-activity-type">
+<h4>bundle_synthesis.default_foreign_activity_type</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.default_foreign_activity_type</p>
+<p class="evidence-usage">Used by: Transaction Lines 1 · Foreign Activity Type, Transaction Lines 2 · Foreign Activity Type, Transaction Lines 3 · Foreign Activity Type</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.default_lodging_booking_method</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-default-lodging-booking-method">
+<h4>bundle_synthesis.default_lodging_booking_method</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.default_lodging_booking_method</p>
+<p class="evidence-usage">Used by: Transaction Lines 2 · Booking Method</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.default_meal_purpose_from_activity_country</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-default-meal-purpose-from-activity-country">
+<h4>bundle_synthesis.default_meal_purpose_from_activity_country</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.default_meal_purpose_from_activity_country</p>
+<p class="evidence-usage">Used by: Transaction Lines 3 · Meal Purpose</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.default_other_beneficiaries_false</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-default-other-beneficiaries-false">
+<h4>bundle_synthesis.default_other_beneficiaries_false</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.default_other_beneficiaries_false</p>
+<p class="evidence-usage">Used by: Allocation And Approvers · Other Beneficiaries</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.default_payment_method</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-default-payment-method">
+<h4>bundle_synthesis.default_payment_method</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.default_payment_method</p>
+<p class="evidence-usage">Used by: General Information · Payment Method</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.default_rush_processing</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-default-rush-processing">
+<h4>bundle_synthesis.default_rush_processing</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.default_rush_processing</p>
+<p class="evidence-usage">Used by: General Information · Rush Processing</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.default_shared_lodging_false</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-default-shared-lodging-false">
+<h4>bundle_synthesis.default_shared_lodging_false</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.default_shared_lodging_false</p>
+<p class="evidence-usage">Used by: Transaction Lines 2 · Is Shared Lodging</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.demo_fx_rate_provider</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-demo-fx-rate-provider">
+<h4>bundle_synthesis.demo_fx_rate_provider</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.demo_fx_rate_provider</p>
+<p class="evidence-usage">Used by: Transaction Summary · Total Usd, Transaction Lines 2 · Line Amount Usd, Transaction Lines 2 · Exchange Rate, Transaction Lines 3 · Line Amount Usd, Transaction Lines 3 · Exchange Rate</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.detect_receipt_alcohol</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-detect-receipt-alcohol">
+<h4>bundle_synthesis.detect_receipt_alcohol</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.detect_receipt_alcohol</p>
+<p class="evidence-usage">Used by: Transaction Lines 3 · Has Alcohol On Receipt</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.detect_round_trip</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-detect-round-trip">
+<h4>bundle_synthesis.detect_round_trip</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.detect_round_trip</p>
+<p class="evidence-usage">Used by: Transaction Lines 1 · Round Trip</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.heuristic_meal_classification</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-heuristic-meal-classification">
+<h4>bundle_synthesis.heuristic_meal_classification</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.heuristic_meal_classification</p>
+<p class="evidence-usage">Used by: Transaction Lines 3 · Expense Type</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.identity_exchange_rate_for_usd</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-identity-exchange-rate-for-usd">
+<h4>bundle_synthesis.identity_exchange_rate_for_usd</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.identity_exchange_rate_for_usd</p>
+<p class="evidence-usage">Used by: Transaction Lines 1 · Exchange Rate</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.infer_region_from_destination_country</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-infer-region-from-destination-country">
+<h4>bundle_synthesis.infer_region_from_destination_country</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.infer_region_from_destination_country</p>
+<p class="evidence-usage">Used by: General Information · Category, General Information · Key 30char, General Information · Event Name, Transaction Summary · Transaction Type, Transaction Lines 1 · Expense Type, Transaction Lines 1 · Foreign Activity Type, Transaction Lines 2 · Expense Type, Transaction Lines 2 · Foreign Activity Type, Transaction Lines 3 · Foreign Activity Type</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.map_source_document_type</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-map-source-document-type">
+<h4>bundle_synthesis.map_source_document_type</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.map_source_document_type</p>
+<p class="evidence-usage">Used by: Transaction Lines 1 · Document Type, Transaction Lines 2 · Document Type, Transaction Lines 3 · Document Type</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.normalize_airfare_class</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-normalize-airfare-class">
+<h4>bundle_synthesis.normalize_airfare_class</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.normalize_airfare_class</p>
+<p class="evidence-usage">Used by: Transaction Lines 1 · Class Of Ticket</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.project_amount_number</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-project-amount-number">
+<h4>bundle_synthesis.project_amount_number</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.project_amount_number</p>
+<p class="evidence-usage">Used by: Transaction Summary · Total Usd, Transaction Lines 1 · Original Amount, Transaction Lines 1 · Ticket Amount, Transaction Lines 2 · Line Amount Usd, Transaction Lines 2 · Original Amount, Transaction Lines 3 · Line Amount Usd, Transaction Lines 3 · Original Amount, Transaction Lines 3 · Tip Amount</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.project_business_purpose_when</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-project-business-purpose-when">
+<h4>bundle_synthesis.project_business_purpose_when</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.project_business_purpose_when</p>
+<p class="evidence-usage">Used by: General Information · When</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.project_business_purpose_where</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-project-business-purpose-where">
+<h4>bundle_synthesis.project_business_purpose_where</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.project_business_purpose_where</p>
+<p class="evidence-usage">Used by: General Information · Where</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.project_category_from_region</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-project-category-from-region">
+<h4>bundle_synthesis.project_category_from_region</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.project_category_from_region</p>
+<p class="evidence-usage">Used by: General Information · Category, General Information · Key 30char, General Information · Event Name, Transaction Summary · Transaction Type</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.project_country_of_activity</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-project-country-of-activity">
+<h4>bundle_synthesis.project_country_of_activity</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.project_country_of_activity</p>
+<p class="evidence-usage">Used by: Transaction Lines 1 · Country Of Activity, Transaction Lines 2 · Country Of Activity, Transaction Lines 3 · Country Of Activity, Transaction Lines 3 · Meal Purpose</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.project_departure_airport_from_location</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-project-departure-airport-from-location">
+<h4>bundle_synthesis.project_departure_airport_from_location</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.project_departure_airport_from_location</p>
+<p class="evidence-usage">Used by: Transaction Lines 1 · Departure Airport</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.project_destination_airport_from_location</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-project-destination-airport-from-location">
+<h4>bundle_synthesis.project_destination_airport_from_location</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.project_destination_airport_from_location</p>
+<p class="evidence-usage">Used by: Transaction Lines 1 · Destination Airport</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.project_lodging_check_in</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-project-lodging-check-in">
+<h4>bundle_synthesis.project_lodging_check_in</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.project_lodging_check_in</p>
+<p class="evidence-usage">Used by: Transaction Lines 2 · Check In Date</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.project_lodging_check_out</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-project-lodging-check-out">
+<h4>bundle_synthesis.project_lodging_check_out</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.project_lodging_check_out</p>
+<p class="evidence-usage">Used by: Transaction Lines 2 · Check Out Date</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.project_lodging_line_date_from_checkout</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-project-lodging-line-date-from-checkout">
+<h4>bundle_synthesis.project_lodging_line_date_from_checkout</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.project_lodging_line_date_from_checkout</p>
+<p class="evidence-usage">Used by: Transaction Lines 2 · Date</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.project_lodging_location</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-project-lodging-location">
+<h4>bundle_synthesis.project_lodging_location</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.project_lodging_location</p>
+<p class="evidence-usage">Used by: Transaction Lines 2 · Location</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.project_original_currency</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-project-original-currency">
+<h4>bundle_synthesis.project_original_currency</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.project_original_currency</p>
+<p class="evidence-usage">Used by: Transaction Lines 1 · Original Currency, Transaction Lines 2 · Original Currency, Transaction Lines 2 · Exchange Rate, Transaction Lines 3 · Original Currency, Transaction Lines 3 · Exchange Rate</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.project_transaction_date_from_trip_end</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-project-transaction-date-from-trip-end">
+<h4>bundle_synthesis.project_transaction_date_from_trip_end</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.project_transaction_date_from_trip_end</p>
+<p class="evidence-usage">Used by: Transaction Summary · Transaction Date</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.project_transaction_type</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-project-transaction-type">
+<h4>bundle_synthesis.project_transaction_type</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.project_transaction_type</p>
+<p class="evidence-usage">Used by: Transaction Summary · Transaction Type</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>bundle_synthesis.project_usd_amount</h3>
+<article class="evidence-card" id="evidence-system-generated-bundle-synthesis-project-usd-amount">
+<h4>bundle_synthesis.project_usd_amount</h4>
+<p class="evidence-meta">system_generated · bundle_synthesis.project_usd_amount</p>
+<p class="evidence-usage">Used by: Transaction Summary · Total Usd, Transaction Lines 1 · Line Amount Usd</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>document_extract.infer_stay_window_from_checkin_checkout</h3>
+<article class="evidence-card" id="evidence-system-generated-document-extract-infer-stay-window-from-checkin-checkout">
+<h4>document_extract.infer_stay_window_from_checkin_checkout</h4>
+<p class="evidence-meta">system_generated · document_extract.infer_stay_window_from_checkin_checkout</p>
+<p class="evidence-usage">Used by: Transaction Lines 2 · Date, Transaction Lines 2 · Check In Date, Transaction Lines 2 · Check Out Date</p>
+</article>
+</div>
+<div class="evidence-group">
+<h3>document_extract.infer_trip_window_from_departure_return</h3>
+<article class="evidence-card" id="evidence-system-generated-document-extract-infer-trip-window-from-departure-return">
+<h4>document_extract.infer_trip_window_from_departure_return</h4>
+<p class="evidence-meta">system_generated · document_extract.infer_trip_window_from_departure_return</p>
+<p class="evidence-usage">Used by: General Information · When, Transaction Summary · Transaction Date</p>
+</article>
+</div>
+</aside>
+</main>
+<section class="panel attachments-panel">
+<div class="panel-heading"><p class="eyebrow">Attachments</p><h2>Checklist</h2></div>
+<div class="attachment-list">
+<article class="attachment-card">
+<h3>Line 1</h3>
+<p>airfare_foreign</p>
+<p class="attachment-remarks">Airfare SFO to SFO</p>
+<ul><li>airline_itinerary_classic.md</li></ul>
+</article>
+<article class="attachment-card">
+<h3>Line 2</h3>
+<p>lodging_foreign</p>
+<p class="attachment-remarks">Lodging at MARINA BAY GRAND HOTEL</p>
+<ul><li>hotel_folio_guest_bill.md</li></ul>
+</article>
+<article class="attachment-card">
+<h3>Line 3</h3>
+<p>business_meal</p>
+<p class="attachment-remarks">Meal at EAST BAY BISTRO</p>
+<ul><li>receipt_card_dotted.md</li></ul>
+</article>
+</div>
+</section>
+</div>
+</body>
+</html>

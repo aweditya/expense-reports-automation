@@ -1,0 +1,18 @@
+[
+  {
+    "id": "curated_packet_no_fx",
+    "workbench_path": "fixtures/workbench_regressions/curated_packet_no_fx.workbench.html"
+  },
+  {
+    "id": "curated_packet_demo_fx",
+    "workbench_path": "fixtures/workbench_regressions/curated_packet_demo_fx.workbench.html"
+  },
+  {
+    "id": "curated_alt_packet_no_fx",
+    "workbench_path": "fixtures/workbench_regressions/curated_alt_packet_no_fx.workbench.html"
+  },
+  {
+    "id": "curated_alt_packet_demo_fx",
+    "workbench_path": "fixtures/workbench_regressions/curated_alt_packet_demo_fx.workbench.html"
+  }
+]
