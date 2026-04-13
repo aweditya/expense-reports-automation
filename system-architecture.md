@@ -147,6 +147,13 @@ The markdown should be optimized for LLM consumption:
 
 But the layout JSON is equally important because markdown alone loses evidence anchors.
 
+The current upstream implementation in this repo now lives in:
+
+- [src/vertex_gemini.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/vertex_gemini.rs:1) for Gemini-on-Vertex transcription over PDFs and images
+- [src/transcribe.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/transcribe.rs:1) for the builtin `pdftotext` and plain-text path
+- [src/ingest.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/ingest.rs:1) for end-to-end document ingestion into the existing downstream spine
+- [real-document-ingestion.md](/Users/adityasriram/Labs/stanford/research/expense-reports/real-document-ingestion.md:1) for CLI usage and environment setup
+
 ### 4. Document classification and fact extraction
 
 Before synthesizing the whole report, extract facts from each document independently.
