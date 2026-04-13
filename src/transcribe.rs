@@ -10,6 +10,7 @@ use serde_json::Value as JsonValue;
 pub enum TranscriptionEngine {
     PdfToText,
     PlainText,
+    VertexGemini,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -222,6 +223,7 @@ fn transcription_engine_name(value: TranscriptionEngine) -> &'static str {
     match value {
         TranscriptionEngine::PdfToText => "pdftotext",
         TranscriptionEngine::PlainText => "plain_text",
+        TranscriptionEngine::VertexGemini => "vertex_gemini",
     }
 }
 
@@ -289,7 +291,7 @@ mod tests {
             document_id: "sample".to_owned(),
             filename: "sample.pdf".to_owned(),
             source_path: PathBuf::from("/tmp/sample.pdf"),
-            engine: TranscriptionEngine::PdfToText,
+            engine: TranscriptionEngine::VertexGemini,
             pages: vec![
                 TranscribedPage {
                     page_number: 1,
