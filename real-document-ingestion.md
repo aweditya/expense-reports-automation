@@ -7,6 +7,8 @@ The relevant code lives in:
 - [src/vertex_gemini.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/vertex_gemini.rs:1)
 - [src/ingest.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/ingest.rs:1)
 - [src/bin/ingest_expense_documents.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/bin/ingest_expense_documents.rs:1)
+- [src/workspace.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/workspace.rs:1)
+- [src/bin/ingest_bundle_workspace.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/bin/ingest_bundle_workspace.rs:1)
 - [src/bin/transcribe_document.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/bin/transcribe_document.rs:1)
 
 It supports three transcription modes:
@@ -40,6 +42,13 @@ The output artifact set is:
 - `review_workbench.html`
 - `ledger.json`
 - `manifest.json`
+
+For a persistent upload-oriented flow, the managed workspace adds:
+
+- `bundle_manifest.json`
+- `uploads/...`
+- `normalized/...`
+- `runs/<run_id>/artifacts/...`
 
 ## Vertex Gemini configuration
 
@@ -122,6 +131,32 @@ cargo run --bin ingest_expense_documents -- \
 
 If the JSON key contains `project_id`, `--project` is optional.
 
+Run the managed bundle-workspace flow so uploads and processing runs stay grouped under one `bundle_id`:
+
+```bash
+cargo run --bin ingest_bundle_workspace -- \
+  stage-and-run \
+  --workspace-root /tmp/expense_workspace \
+  --bundle-id live_demo \
+  --user-id aditya \
+  --run-id gemini_flash \
+  --fx demo \
+  --engine vertex-gemini-sdk \
+  --service-account-key /abs/path/to/service-account.json \
+  --location global \
+  itinerary.png hotel_folio.pdf receipt.png
+```
+
+Inspect the persisted bundle manifest:
+
+```bash
+cargo run --bin ingest_bundle_workspace -- \
+  status \
+  --workspace-root /tmp/expense_workspace \
+  --bundle-id live_demo \
+  --format json
+```
+
 Transcribe a single document directly through Vertex Gemini:
 
 ```bash
@@ -192,6 +227,9 @@ The new ingestion coverage includes:
 - mocked Vertex end-to-end ingestion into document facts, review packet, workbench, and ledger
 - mocked bundle ingestion with service-account auth and single token exchange per bundle
 - artifact writing checks for the ingestion output bundle
+- workspace staging of markdown/text uploads into persisted bundle directories
+- bundle-local deduplication by SHA-256 content hash
+- staged bundle reruns that accumulate run history without restaging documents
 
 ## Current limitation
 
@@ -200,6 +238,8 @@ The real ingestion stack is now complete up to the current document-fact extract
 - flight itineraries
 - hotel folios
 - restaurant-style receipts
+
+The managed workspace is filesystem-backed, which is enough for local end-to-end development and evaluation. It is the local stand-in for the object-store + metadata-store layer described in the architecture, not a distributed service deployment.
 
 Real Stanford summary PDFs can now flow through the ingestion CLI and produce artifacts, but they still end up `automation_blocked` unless they match one of the currently implemented extractor families.
 
@@ -210,3 +250,5 @@ The validated Gemini 3 live OCR path in this repo is the official Google Gen AI 
 That helper now also applies a deterministic markdown cleanup pass after OCR generation to normalize section-heading spacing and merge wrapped pipe-delimited rows such as hotel nightly charge lines.
 
 The older Rust `vertex-gemini` REST path is still useful for mocked tests and lower-level contract work, but it returned `404` for the tested Gemini 3 preview model ids in this project, so `vertex-gemini-sdk` is the validated path for current Gemini 3 live OCR work.
+
+The managed workspace flow has also now been exercised live end to end with `vertex-gemini-sdk` on a rendered synthetic packet, producing persisted raw uploads, normalized page artifacts, and a stored processing run under a single `bundle_id`.

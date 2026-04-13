@@ -17,6 +17,7 @@ That OCR path now applies a small deterministic markdown normalization pass afte
 
 - [system-architecture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/system-architecture.md:1): full system design
 - [real-document-ingestion.md](/Users/adityasriram/Labs/stanford/research/expense-reports/real-document-ingestion.md:1): OCR and ingestion CLI details
+- [ingestion-workspace.md](/Users/adityasriram/Labs/stanford/research/expense-reports/ingestion-workspace.md:1): managed bundle workspace and rerunnable upload flow
 - [document-facts.md](/Users/adityasriram/Labs/stanford/research/expense-reports/document-facts.md:1): typed per-document extraction contract
 - [bundle-synthesis.md](/Users/adityasriram/Labs/stanford/research/expense-reports/bundle-synthesis.md:1): cross-document synthesis and draft projection
 - [review-workbench.md](/Users/adityasriram/Labs/stanford/research/expense-reports/review-workbench.md:1): FA-facing output surface
@@ -106,6 +107,29 @@ This writes:
 - `ledger.json`
 - `manifest.json`
 
+Run the managed bundle-workspace flow so raw uploads, normalized artifacts, and processing runs are stored together:
+
+```bash
+cargo run --bin ingest_bundle_workspace -- \
+  stage-and-run \
+  --workspace-root /tmp/expense_workspace \
+  --bundle-id live_demo \
+  --user-id aditya \
+  --run-id gemini_flash \
+  --fx demo \
+  --engine vertex-gemini-sdk \
+  --service-account-key /abs/path/to/service-account.json \
+  --location global \
+  itinerary.png hotel_folio.pdf receipt.png
+```
+
+That creates a stable bundle directory with:
+
+- `uploads/`
+- `normalized/`
+- `runs/<run_id>/artifacts/`
+- `bundle_manifest.json`
+
 ## Synthetic OCR Evaluation
 
 The main regression harness for live OCR is [scripts/evaluate_synthetic_ocr_corpus.py](/Users/adityasriram/Labs/stanford/research/expense-reports/scripts/evaluate_synthetic_ocr_corpus.py:1). It:
@@ -159,7 +183,7 @@ Current automated coverage includes:
 
 ## Current Limits
 
-- Live OCR markdown is not always byte-for-byte stable. The current known residual issue is occasional extra blank lines after headings.
+- The current synthetic live OCR evaluation is clean at larger scale: Gemini 3 Flash matched `96/96` documents exactly on a 32-packet synthetic stress test.
 - Document extraction coverage is strongest for:
   - flight itineraries
   - hotel folios

@@ -98,6 +98,12 @@ Each upload creates a `bundle_id`. The bundle is the immutable container for:
 
 Store raw files in object storage and metadata in Postgres.
 
+The local implementation in this repo now has a filesystem-backed analogue of that layer in:
+
+- [src/workspace.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/workspace.rs:1)
+- [src/bin/ingest_bundle_workspace.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/bin/ingest_bundle_workspace.rs:1)
+- [ingestion-workspace.md](/Users/adityasriram/Labs/stanford/research/expense-reports/ingestion-workspace.md:1)
+
 Key robustness features:
 
 - deduplicate identical files by hash
