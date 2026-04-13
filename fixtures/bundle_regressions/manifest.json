@@ -1,0 +1,50 @@
+[
+  {
+    "id": "curated_packet_no_fx",
+    "fx_mode": "none",
+    "fact_paths": [
+      "fixtures/curated/flight_itinerary/airline_itinerary_classic.md.expected.json",
+      "fixtures/curated/hotel_folio/hotel_folio_guest_bill.md.expected.json",
+      "fixtures/curated/receipt/receipt_card_dotted.md.expected.json"
+    ],
+    "expected_bundle_path": "fixtures/bundle_regressions/curated_packet_no_fx.bundle.json",
+    "expected_draft_path": "fixtures/bundle_regressions/curated_packet_no_fx.draft.json",
+    "expected_validation_path": "fixtures/bundle_regressions/curated_packet_no_fx.validation.json"
+  },
+  {
+    "id": "curated_packet_demo_fx",
+    "fx_mode": "demo",
+    "fact_paths": [
+      "fixtures/curated/flight_itinerary/airline_itinerary_classic.md.expected.json",
+      "fixtures/curated/hotel_folio/hotel_folio_guest_bill.md.expected.json",
+      "fixtures/curated/receipt/receipt_card_dotted.md.expected.json"
+    ],
+    "expected_bundle_path": "fixtures/bundle_regressions/curated_packet_demo_fx.bundle.json",
+    "expected_draft_path": "fixtures/bundle_regressions/curated_packet_demo_fx.draft.json",
+    "expected_validation_path": "fixtures/bundle_regressions/curated_packet_demo_fx.validation.json"
+  },
+  {
+    "id": "curated_alt_packet_no_fx",
+    "fx_mode": "none",
+    "fact_paths": [
+      "fixtures/curated/flight_itinerary/airline_itinerary_trip_window.md.expected.json",
+      "fixtures/curated/hotel_folio/hotel_folio_property_labeled.md.expected.json",
+      "fixtures/curated/receipt/receipt_merchant_labeled.md.expected.json"
+    ],
+    "expected_bundle_path": "fixtures/bundle_regressions/curated_alt_packet_no_fx.bundle.json",
+    "expected_draft_path": "fixtures/bundle_regressions/curated_alt_packet_no_fx.draft.json",
+    "expected_validation_path": "fixtures/bundle_regressions/curated_alt_packet_no_fx.validation.json"
+  },
+  {
+    "id": "curated_alt_packet_demo_fx",
+    "fx_mode": "demo",
+    "fact_paths": [
+      "fixtures/curated/flight_itinerary/airline_itinerary_trip_window.md.expected.json",
+      "fixtures/curated/hotel_folio/hotel_folio_property_labeled.md.expected.json",
+      "fixtures/curated/receipt/receipt_merchant_labeled.md.expected.json"
+    ],
+    "expected_bundle_path": "fixtures/bundle_regressions/curated_alt_packet_demo_fx.bundle.json",
+    "expected_draft_path": "fixtures/bundle_regressions/curated_alt_packet_demo_fx.draft.json",
+    "expected_validation_path": "fixtures/bundle_regressions/curated_alt_packet_demo_fx.validation.json"
+  }
+]

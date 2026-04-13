@@ -66,6 +66,7 @@ pub struct CanonicalTrip {
 pub enum CanonicalExpenseKind {
     Airfare,
     Lodging,
+    Meal,
     GenericReceipt,
 }
 
@@ -102,12 +103,21 @@ pub struct CanonicalLodgingDetails {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CanonicalMealDetails {
+    pub venue_name: Option<Observed<String>>,
+    pub tip_amount: Option<Observed<String>>,
+    pub alcohol_amount: Option<Observed<String>>,
+    pub has_alcohol_on_receipt: Option<Observed<bool>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CanonicalExpenseLine {
     pub line_id: String,
     pub kind: CanonicalExpenseKind,
     pub document_id: String,
     pub date: Option<Observed<String>>,
     pub line_amount_usd: Option<Observed<String>>,
+    pub exchange_rate: Option<Observed<String>>,
     pub original_currency: Option<Observed<String>>,
     pub original_amount: Option<Observed<String>>,
     pub expense_type: Option<Observed<String>>,
@@ -117,6 +127,7 @@ pub struct CanonicalExpenseLine {
     pub source_documents: Vec<BundleSourceDocument>,
     pub airfare_details: Option<CanonicalAirfareDetails>,
     pub lodging_details: Option<CanonicalLodgingDetails>,
+    pub meal_details: Option<CanonicalMealDetails>,
     pub projection_supported: bool,
 }
 
@@ -135,6 +146,77 @@ pub struct BundleProjectionResult {
     pub draft: DraftReport,
     pub issues: Vec<BundleIssue>,
     pub validation: ValidationReport,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FxRateQuote {
+    pub currency: String,
+    pub date: String,
+    pub usd_per_unit: String,
+    pub evidence: Vec<EvidenceReference>,
+}
+
+pub trait FxRateProvider {
+    fn usd_rate_for(&self, currency: &str, date: &str) -> Option<FxRateQuote>;
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct StaticFxRateProvider {
+    rates: BTreeMap<(String, String), FxRateQuote>,
+}
+
+impl StaticFxRateProvider {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn insert_rate(
+        &mut self,
+        currency: impl Into<String>,
+        date: impl Into<String>,
+        usd_per_unit: impl Into<String>,
+        evidence: Vec<EvidenceReference>,
+    ) {
+        let currency = currency.into().to_ascii_uppercase();
+        let date = date.into();
+        self.rates.insert(
+            (currency.clone(), date.clone()),
+            FxRateQuote {
+                currency,
+                date,
+                usd_per_unit: usd_per_unit.into(),
+                evidence,
+            },
+        );
+    }
+
+    pub fn demo() -> Self {
+        let mut provider = Self::new();
+        for date in ["2025-04-21", "2025-04-22", "2025-04-23", "2025-04-24", "2025-04-29"] {
+            provider.insert_rate(
+                "SGD",
+                date,
+                "0.74",
+                vec![EvidenceReference {
+                    kind: EvidenceKind::SystemGenerated,
+                    document_id: None,
+                    filename: None,
+                    page: None,
+                    quote: None,
+                    origin: Some("bundle_synthesis.demo_fx_rate_provider".to_owned()),
+                }],
+            );
+        }
+        provider
+    }
+}
+
+impl FxRateProvider for StaticFxRateProvider {
+    fn usd_rate_for(&self, currency: &str, date: &str) -> Option<FxRateQuote> {
+        self.rates
+            .get(&(currency.to_ascii_uppercase(), date.to_owned()))
+            .cloned()
+    }
 }
 
 #[derive(Debug)]
@@ -171,7 +253,8 @@ pub fn synthesize_bundle(documents: &[ExtractedDocumentFacts]) -> CanonicalExpen
         destination,
         region,
     };
-    let expense_lines = synthesize_expense_lines(documents, &trip, &mut issues);
+    let expense_lines = synthesize_expense_lines(documents, &trip);
+    issues.extend(collect_line_level_issues(&expense_lines));
 
     CanonicalExpenseBundle {
         documents: documents.to_vec(),
@@ -180,6 +263,31 @@ pub fn synthesize_bundle(documents: &[ExtractedDocumentFacts]) -> CanonicalExpen
         expense_lines,
         issues,
     }
+}
+
+pub fn enrich_bundle_with_fx(
+    bundle: &mut CanonicalExpenseBundle,
+    fx_rate_provider: &dyn FxRateProvider,
+) {
+    for line in &mut bundle.expense_lines {
+        enrich_line_with_fx(line, fx_rate_provider);
+    }
+
+    bundle
+        .issues
+        .retain(|issue| match issue.kind {
+            BundleIssueKind::MissingUsdConversion => issue
+                .document_ids
+                .iter()
+                .any(|document_id| {
+                    bundle
+                        .expense_lines
+                        .iter()
+                        .find(|line| &line.document_id == document_id)
+                        .is_some_and(|line| line.line_amount_usd.is_none())
+                }),
+            _ => true,
+        });
 }
 
 pub fn project_bundle_to_draft(bundle: &CanonicalExpenseBundle) -> (DraftReport, Vec<BundleIssue>) {
@@ -412,6 +520,24 @@ pub fn project_bundle_to_draft(bundle: &CanonicalExpenseBundle) -> (DraftReport,
 
 pub fn synthesize_bundle_projection(documents: &[ExtractedDocumentFacts]) -> BundleProjectionResult {
     let bundle = synthesize_bundle(documents);
+    let (draft, projection_issues) = project_bundle_to_draft(&bundle);
+    let mut issues = bundle.issues.clone();
+    issues.extend(projection_issues);
+    let validation = validate_draft_report(&draft);
+    BundleProjectionResult {
+        bundle,
+        draft,
+        issues,
+        validation,
+    }
+}
+
+pub fn synthesize_bundle_projection_with_fx(
+    documents: &[ExtractedDocumentFacts],
+    fx_rate_provider: &dyn FxRateProvider,
+) -> BundleProjectionResult {
+    let mut bundle = synthesize_bundle(documents);
+    enrich_bundle_with_fx(&mut bundle, fx_rate_provider);
     let (draft, projection_issues) = project_bundle_to_draft(&bundle);
     let mut issues = bundle.issues.clone();
     issues.extend(projection_issues);
@@ -703,7 +829,6 @@ fn synthesize_region(
 fn synthesize_expense_lines(
     documents: &[ExtractedDocumentFacts],
     trip: &CanonicalTrip,
-    issues: &mut Vec<BundleIssue>,
 ) -> Vec<CanonicalExpenseLine> {
     let mut lines = Vec::new();
 
@@ -713,60 +838,12 @@ fn synthesize_expense_lines(
                 lines.push(synthesize_airfare_line(document, facts, trip));
             }
             DocumentFactsPayload::HotelFolio(facts) => {
-                let line = synthesize_lodging_line(document, facts, trip);
-                if line.line_amount_usd.is_none()
-                    && matches!(
-                        trip.region.as_ref().map(|region| region.value),
-                        Some(TravelRegion::Foreign)
-                    )
-                {
-                    issues.push(bundle_issue(
-                        BundleIssueSeverity::Warning,
-                        BundleIssueKind::MissingUsdConversion,
-                        format!(
-                            "Document {} needs FX enrichment before it can produce a complete lodging line",
-                            document.filename
-                        ),
-                        vec![document.document_id.clone()],
-                        line
-                            .original_amount
-                            .as_ref()
-                            .map(|amount| amount.evidence.clone())
-                            .unwrap_or_default(),
-                    ));
-                }
-                lines.push(line);
+                lines.push(synthesize_lodging_line(document, facts, trip));
             }
             DocumentFactsPayload::Receipt(facts) => {
-                let line = synthesize_generic_receipt_line(document, facts);
-                issues.push(bundle_issue(
-                    BundleIssueSeverity::Warning,
-                    BundleIssueKind::UnprojectedDocument,
-                    format!(
-                        "Document {} remains a generic receipt and is not yet projected into schema transaction lines",
-                        document.filename
-                    ),
-                    vec![document.document_id.clone()],
-                    line
-                        .original_amount
-                        .as_ref()
-                        .map(|amount| amount.evidence.clone())
-                        .unwrap_or_default(),
-                ));
-                lines.push(line);
+                lines.push(synthesize_receipt_line(document, facts, trip));
             }
-            payload => {
-                issues.push(bundle_issue(
-                    BundleIssueSeverity::Warning,
-                    BundleIssueKind::UnprojectedDocument,
-                    format!(
-                        "Document kind {} is not yet supported by bundle projection",
-                        payload.kind().as_str()
-                    ),
-                    vec![document.document_id.clone()],
-                    document.classification.evidence.clone(),
-                ));
-            }
+            _ => {}
         }
     }
 
@@ -947,6 +1024,7 @@ fn synthesize_airfare_line(
         document_id: document.document_id.clone(),
         date,
         line_amount_usd,
+        exchange_rate: identity_exchange_rate_if_usd(amount, trip),
         original_currency,
         original_amount,
         expense_type,
@@ -960,6 +1038,7 @@ fn synthesize_airfare_line(
         }],
         airfare_details,
         lodging_details: None,
+        meal_details: None,
         projection_supported: true,
     }
 }
@@ -1119,6 +1198,7 @@ fn synthesize_lodging_line(
         document_id: document.document_id.clone(),
         date,
         line_amount_usd,
+        exchange_rate: identity_exchange_rate_if_usd(amount, trip),
         original_currency,
         original_amount,
         expense_type,
@@ -1132,20 +1212,27 @@ fn synthesize_lodging_line(
         }],
         airfare_details: None,
         lodging_details,
+        meal_details: None,
         projection_supported: true,
     }
 }
 
-fn synthesize_generic_receipt_line(
+fn synthesize_receipt_line(
     document: &ExtractedDocumentFacts,
     facts: &ReceiptFacts,
+    trip: &CanonicalTrip,
 ) -> CanonicalExpenseLine {
+    if looks_like_meal_receipt(facts) {
+        return synthesize_meal_line(document, facts, trip);
+    }
+
     CanonicalExpenseLine {
         line_id: format!("{}::receipt", document.document_id),
         kind: CanonicalExpenseKind::GenericReceipt,
         document_id: document.document_id.clone(),
         date: facts.transaction_date.as_ref().map(clone_string_observed),
         line_amount_usd: facts.total_paid.as_ref().and_then(usd_amount_from_money),
+        exchange_rate: identity_exchange_rate_if_usd(facts.total_paid.as_ref(), trip),
         original_currency: facts.total_paid.as_ref().and_then(currency_observed_from_money),
         original_amount: facts.total_paid.as_ref().map(number_observed_from_money),
         expense_type: None,
@@ -1177,7 +1264,124 @@ fn synthesize_generic_receipt_line(
         }],
         airfare_details: None,
         lodging_details: None,
+        meal_details: None,
         projection_supported: false,
+    }
+}
+
+fn synthesize_meal_line(
+    document: &ExtractedDocumentFacts,
+    facts: &ReceiptFacts,
+    trip: &CanonicalTrip,
+) -> CanonicalExpenseLine {
+    let amount = facts.total_paid.as_ref();
+    let has_alcohol = receipt_has_alcohol(facts);
+    let alcohol_amount = sum_receipt_items_by_keywords(
+        facts,
+        &["beer", "wine", "cocktail", "whiskey", "vodka", "gin", "ale", "lager", "champagne"],
+    );
+    let expense_type = trip.region.as_ref().map_or_else(
+        || {
+            Some(system_observed(
+                if has_alcohol {
+                    "business_meal_with_alcohol".to_owned()
+                } else {
+                    "business_meal".to_owned()
+                },
+                ConfidenceLevel::Medium,
+                amount.map(|value| value.evidence.clone()).unwrap_or_default(),
+                "bundle_synthesis.heuristic_meal_classification",
+                vec!["heuristic_receipt_classification".to_owned()],
+            ))
+        },
+        |_| {
+            Some(system_observed(
+                if has_alcohol {
+                    "business_meal_with_alcohol".to_owned()
+                } else {
+                    "business_meal".to_owned()
+                },
+                ConfidenceLevel::Medium,
+                amount.map(|value| value.evidence.clone()).unwrap_or_default(),
+                "bundle_synthesis.heuristic_meal_classification",
+                vec!["heuristic_receipt_classification".to_owned()],
+            ))
+        },
+    );
+    let remarks = facts.merchant_name.as_ref().map(|merchant| {
+        system_observed(
+            format!("Meal at {}", merchant.value),
+            ConfidenceLevel::Medium,
+            merchant.evidence.clone(),
+            "bundle_synthesis.build_meal_remarks",
+            vec!["heuristic_receipt_classification".to_owned()],
+        )
+    });
+    let foreign_activity_type = trip
+        .region
+        .as_ref()
+        .filter(|region| region.value == TravelRegion::Foreign)
+        .map(|region| {
+            system_observed(
+                "other".to_owned(),
+                ConfidenceLevel::Low,
+                region.evidence.clone(),
+                "bundle_synthesis.default_foreign_activity_type",
+                vec!["requires_activity_review".to_owned()],
+            )
+        });
+
+    CanonicalExpenseLine {
+        line_id: format!("{}::meal", document.document_id),
+        kind: CanonicalExpenseKind::Meal,
+        document_id: document.document_id.clone(),
+        date: facts.transaction_date.as_ref().map(clone_string_observed),
+        line_amount_usd: amount.and_then(usd_amount_from_money),
+        exchange_rate: identity_exchange_rate_if_usd(amount, trip),
+        original_currency: amount.and_then(currency_observed_from_money),
+        original_amount: amount.map(number_observed_from_money),
+        expense_type,
+        remarks,
+        country_of_activity: facts.merchant_location.as_ref().and_then(|location| {
+            location.value.country.as_ref().map(|country| {
+                system_observed(
+                    country.clone(),
+                    location.confidence,
+                    location.evidence.clone(),
+                    "bundle_synthesis.project_country_of_activity",
+                    location.flags.clone(),
+                )
+            })
+        }),
+        foreign_activity_type,
+        source_documents: vec![BundleSourceDocument {
+            document_id: document.document_id.clone(),
+            filename: document.filename.clone(),
+            document_type: "receipt".to_owned(),
+        }],
+        airfare_details: None,
+        lodging_details: None,
+        meal_details: Some(CanonicalMealDetails {
+            venue_name: facts.merchant_name.as_ref().map(clone_string_observed),
+            tip_amount: facts.tip_amount.as_ref().map(number_observed_from_money),
+            alcohol_amount,
+            has_alcohol_on_receipt: Some(system_observed(
+                has_alcohol,
+                ConfidenceLevel::Medium,
+                facts
+                    .line_items
+                    .iter()
+                    .flat_map(|item| item.description.evidence.clone())
+                    .collect(),
+                "bundle_synthesis.detect_receipt_alcohol",
+                if has_alcohol {
+                    vec!["heuristic_receipt_classification".to_owned()]
+                } else {
+                    Vec::new()
+                },
+            )),
+        }),
+        projection_supported: true,
     }
 }
 
@@ -1212,6 +1416,16 @@ fn project_transaction_lines(
                 &format!("{base_path}.common.line_amount_usd"),
                 "line_amount_usd",
                 line_amount_usd,
+                |value| ReportValue::Number(value.clone()),
+            );
+        }
+        if let Some(exchange_rate) = line.exchange_rate.as_ref() {
+            insert_observed_leaf(
+                &mut common,
+                metadata,
+                &format!("{base_path}.common.exchange_rate"),
+                "exchange_rate",
+                exchange_rate,
                 |value| ReportValue::Number(value.clone()),
             );
         }
@@ -1524,6 +1738,55 @@ fn project_transaction_lines(
                     ReportValue::Object(lodging_details),
                 );
             }
+            CanonicalExpenseKind::Meal => {
+                let mut meal_details = BTreeMap::new();
+                if let Some(details) = line.meal_details.as_ref() {
+                    if let Some(venue_name) = details.venue_name.as_ref() {
+                        insert_observed_leaf(
+                            &mut meal_details,
+                            metadata,
+                            &format!("{base_path}.meal_details.venue_name"),
+                            "venue_name",
+                            venue_name,
+                            |value| ReportValue::String(value.clone()),
+                        );
+                    }
+                    if let Some(tip_amount) = details.tip_amount.as_ref() {
+                        insert_observed_leaf(
+                            &mut meal_details,
+                            metadata,
+                            &format!("{base_path}.meal_details.tip_amount"),
+                            "tip_amount",
+                            tip_amount,
+                            |value| ReportValue::Number(value.clone()),
+                        );
+                    }
+                    if let Some(alcohol_amount) = details.alcohol_amount.as_ref() {
+                        insert_observed_leaf(
+                            &mut meal_details,
+                            metadata,
+                            &format!("{base_path}.meal_details.alcohol_amount"),
+                            "alcohol_amount",
+                            alcohol_amount,
+                            |value| ReportValue::Number(value.clone()),
+                        );
+                    }
+                    if let Some(has_alcohol_on_receipt) = details.has_alcohol_on_receipt.as_ref() {
+                        insert_observed_leaf(
+                            &mut meal_details,
+                            metadata,
+                            &format!("{base_path}.meal_details.has_alcohol_on_receipt"),
+                            "has_alcohol_on_receipt",
+                            has_alcohol_on_receipt,
+                            |value| ReportValue::Bool(*value),
+                        );
+                    }
+                }
+                line_object.insert(
+                    "meal_details".to_owned(),
+                    ReportValue::Object(meal_details),
+                );
+            }
             CanonicalExpenseKind::GenericReceipt => {
                 issues.push(bundle_issue(
                     BundleIssueSeverity::Warning,
@@ -1640,6 +1903,48 @@ fn category_from_region(region: &Observed<TravelRegion>) -> Observed<String> {
     )
 }
 
+fn collect_line_level_issues(lines: &[CanonicalExpenseLine]) -> Vec<BundleIssue> {
+    let mut issues = Vec::new();
+
+    for line in lines {
+        if line.projection_supported && line.line_amount_usd.is_none() {
+            issues.push(bundle_issue(
+                BundleIssueSeverity::Warning,
+                BundleIssueKind::MissingUsdConversion,
+                format!(
+                    "Document {} needs FX enrichment before it can produce a complete projected line",
+                    line.document_id
+                ),
+                vec![line.document_id.clone()],
+                line
+                    .original_amount
+                    .as_ref()
+                    .map(|amount| amount.evidence.clone())
+                    .unwrap_or_default(),
+            ));
+        }
+
+        if !line.projection_supported {
+            issues.push(bundle_issue(
+                BundleIssueSeverity::Warning,
+                BundleIssueKind::UnprojectedDocument,
+                format!(
+                    "Document {} remains in the bundle but is not yet projected into schema transaction lines",
+                    line.document_id
+                ),
+                vec![line.document_id.clone()],
+                line
+                    .original_amount
+                    .as_ref()
+                    .map(|amount| amount.evidence.clone())
+                    .unwrap_or_default(),
+            ));
+        }
+    }
+
+    issues
+}
+
 fn usd_amount_from_money(value: &Observed<MoneyAmount>) -> Option<Observed<String>> {
     let currency = value.value.currency.as_deref();
     if currency.is_none() || currency == Some("USD") {
@@ -1674,6 +1979,204 @@ fn number_observed_from_money(value: &Observed<MoneyAmount>) -> Observed<String>
         "bundle_synthesis.project_amount_number",
         value.flags.clone(),
     )
+}
+
+fn identity_exchange_rate_if_usd(
+    amount: Option<&Observed<MoneyAmount>>,
+    trip: &CanonicalTrip,
+) -> Option<Observed<String>> {
+    trip.region
+        .as_ref()
+        .filter(|region| region.value == TravelRegion::Foreign)
+        .and_then(|_| amount)
+        .and_then(|amount| {
+            amount
+                .value
+                .currency
+                .as_deref()
+                .filter(|currency| currency.eq_ignore_ascii_case("USD"))
+                .map(|_| {
+                    system_observed(
+                        "1.00".to_owned(),
+                        amount.confidence,
+                        amount.evidence.clone(),
+                        "bundle_synthesis.identity_exchange_rate_for_usd",
+                        amount.flags.clone(),
+                    )
+                })
+        })
+}
+
+fn looks_like_meal_receipt(facts: &ReceiptFacts) -> bool {
+    facts
+        .merchant_name
+        .as_ref()
+        .is_some_and(|merchant| contains_any(&merchant.value, &[
+            "restaurant",
+            "bistro",
+            "cafe",
+            "coffee",
+            "bar",
+            "grill",
+            "kitchen",
+            "diner",
+            "noodle",
+            "pizza",
+            "burger",
+            "steak",
+        ]))
+        || facts.line_items.iter().any(|item| {
+            contains_any(&item.description.value, &[
+                "breakfast",
+                "lunch",
+                "dinner",
+                "coffee",
+                "tea",
+                "meal",
+                "laksa",
+                "sandwich",
+                "salad",
+                "soup",
+                "service charge",
+            ])
+        })
+}
+
+fn receipt_has_alcohol(facts: &ReceiptFacts) -> bool {
+    facts.line_items.iter().any(|item| {
+        contains_any(&item.description.value, &[
+            "beer",
+            "wine",
+            "cocktail",
+            "whiskey",
+            "vodka",
+            "gin",
+            "ale",
+            "lager",
+            "champagne",
+        ])
+    })
+}
+
+fn sum_receipt_items_by_keywords(
+    facts: &ReceiptFacts,
+    keywords: &[&str],
+) -> Option<Observed<String>> {
+    let matching_items = facts
+        .line_items
+        .iter()
+        .filter(|item| contains_any(&item.description.value, keywords))
+        .collect::<Vec<_>>();
+    if matching_items.is_empty() {
+        return None;
+    }
+
+    let mut total_cents = 0i64;
+    let mut evidence = Vec::new();
+    for item in matching_items {
+        total_cents += amount_to_cents(&item.amount.value.amount)?;
+        evidence.extend(item.amount.evidence.clone());
+    }
+
+    Some(system_observed(
+        cents_to_amount(total_cents),
+        ConfidenceLevel::High,
+        evidence,
+        "bundle_synthesis.sum_receipt_item_subset",
+        Vec::new(),
+    ))
+}
+
+fn enrich_line_with_fx(line: &mut CanonicalExpenseLine, fx_rate_provider: &dyn FxRateProvider) {
+    if line.line_amount_usd.is_some() && line.exchange_rate.is_some() {
+        return;
+    }
+
+    let Some(date) = line.date.as_ref() else {
+        return;
+    };
+    let Some(original_currency) = line.original_currency.as_ref() else {
+        return;
+    };
+    let Some(original_amount) = line.original_amount.as_ref() else {
+        return;
+    };
+
+    if original_currency.value.eq_ignore_ascii_case("USD") {
+        if line.exchange_rate.is_none() {
+            line.exchange_rate = Some(system_observed(
+                "1.00".to_owned(),
+                original_currency.confidence,
+                original_currency.evidence.clone(),
+                "bundle_synthesis.identity_exchange_rate_for_usd",
+                original_currency.flags.clone(),
+            ));
+        }
+        if line.line_amount_usd.is_none() {
+            line.line_amount_usd = Some(system_observed(
+                original_amount.value.clone(),
+                original_amount.confidence,
+                original_amount.evidence.clone(),
+                "bundle_synthesis.project_usd_amount_from_original",
+                original_amount.flags.clone(),
+            ));
+        }
+        return;
+    }
+
+    let Some(quote) = fx_rate_provider.usd_rate_for(&original_currency.value, &date.value) else {
+        return;
+    };
+
+    let Some(converted_amount) = multiply_amounts(&original_amount.value, &quote.usd_per_unit) else {
+        return;
+    };
+
+    let mut exchange_evidence = quote.evidence.clone();
+    exchange_evidence.extend(original_currency.evidence.clone());
+    let exchange_rate = system_observed(
+        quote.usd_per_unit.clone(),
+        ConfidenceLevel::High,
+        exchange_evidence,
+        "bundle_synthesis.apply_fx_rate",
+        Vec::new(),
+    );
+
+    let mut amount_evidence = quote.evidence.clone();
+    amount_evidence.extend(original_amount.evidence.clone());
+    let line_amount_usd = system_observed(
+        converted_amount,
+        ConfidenceLevel::High,
+        amount_evidence,
+        "bundle_synthesis.convert_original_amount_to_usd",
+        Vec::new(),
+    );
+
+    line.exchange_rate = Some(exchange_rate);
+    line.line_amount_usd = Some(line_amount_usd);
+}
+
+fn contains_any(value: &str, needles: &[&str]) -> bool {
+    let normalized = normalize_text(value);
+    needles
+        .iter()
+        .any(|needle| normalized.contains(&normalize_text(needle)))
+}
+
+fn multiply_amounts(lhs: &str, rhs: &str) -> Option<String> {
+    let lhs_cents = amount_to_cents(lhs)?;
+    let rhs_basis_points = amount_to_basis_points(rhs)?;
+    let scaled = lhs_cents.checked_mul(rhs_basis_points)?;
+    let usd_cents = (scaled + 5_000) / 10_000;
+    Some(cents_to_amount(usd_cents))
+}
+
+fn amount_to_basis_points(amount: &str) -> Option<i64> {
+    let (whole, fraction) = amount.split_once('.')?;
+    let whole = whole.parse::<i64>().ok()?;
+    let fraction = format!("{:0<4}", fraction);
+    let fraction = fraction.get(0..4)?.parse::<i64>().ok()?;
+    Some(whole * 10_000 + fraction)
 }
 
 fn clone_string_observed(value: &Observed<String>) -> Observed<String> {
@@ -1929,6 +2432,10 @@ mod tests {
         );
         assert_eq!(bundle.expense_lines.len(), 3);
         assert!(bundle
+            .expense_lines
+            .iter()
+            .any(|line| line.kind == CanonicalExpenseKind::Meal));
+        assert!(!bundle
             .issues
             .iter()
             .any(|issue| issue.kind == BundleIssueKind::UnprojectedDocument));
@@ -1975,6 +2482,11 @@ mod tests {
                 .and_then(ReportValue::as_text),
             Some("lodging_foreign")
         );
+        assert_eq!(
+            get_path(&result.draft.report, "transaction_lines[2].common.expense_type")
+                .and_then(ReportValue::as_text),
+            Some("business_meal")
+        );
         assert!(result
             .draft
             .metadata
@@ -2004,6 +2516,12 @@ mod tests {
             .iter()
             .any(|issue| issue.kind == ValidationIssueKind::MissingRequiredField
                 && issue.path == "expense_report.transaction_lines[1].common.line_amount_usd"));
+        assert!(result
+            .validation
+            .issues
+            .iter()
+            .any(|issue| issue.kind == ValidationIssueKind::MissingRequiredField
+                && issue.path == "expense_report.transaction_lines[2].meal_details.attendees"));
     }
 
     #[test]
@@ -2075,7 +2593,7 @@ mod tests {
         let bundle = synthesize_bundle(&synthetic_docs());
         let rendered = render_canonical_bundle_json_pretty(&bundle).expect("bundle should render");
         assert!(rendered.contains("\"expense_lines\""));
-        assert!(rendered.contains("\"generic_receipt\""));
+        assert!(rendered.contains("\"meal\""));
     }
 
     #[test]
@@ -2110,5 +2628,93 @@ mod tests {
                     == "expense_report.transaction_lines[0].common.foreign_activity_type"
                     || issue.path
                         == "expense_report.transaction_lines[1].common.foreign_activity_type")));
+    }
+
+    #[test]
+    fn classifies_restaurant_receipt_into_meal_projection() {
+        let result = synthesize_bundle_projection(&synthetic_docs());
+        assert_eq!(
+            get_path(&result.draft.report, "transaction_lines[2].meal_details.venue_name")
+                .and_then(ReportValue::as_text),
+            Some("East Bay Bistro")
+        );
+        assert_eq!(
+            get_path(&result.draft.report, "transaction_lines[2].meal_details.tip_amount")
+                .and_then(ReportValue::as_text),
+            Some("4.50")
+        );
+        assert_eq!(
+            get_path(
+                &result.draft.report,
+                "transaction_lines[2].meal_details.has_alcohol_on_receipt"
+            ),
+            Some(&ReportValue::Bool(false))
+        );
+        assert!(result
+            .draft
+            .metadata
+            .get("expense_report.transaction_lines[2].common.expense_type")
+            .is_some_and(|metadata| metadata.needs_review));
+    }
+
+    #[test]
+    fn unknown_receipt_remains_unprojected() {
+        let mut documents = synthetic_docs();
+        let DocumentFactsPayload::Receipt(facts) = &mut documents[2].facts else {
+            panic!("expected receipt facts");
+        };
+        facts.merchant_name.as_mut().unwrap().value = "Global Services Pte Ltd".to_owned();
+        facts.line_items.clear();
+
+        let bundle = synthesize_bundle(&documents);
+        assert!(bundle
+            .issues
+            .iter()
+            .any(|issue| issue.kind == BundleIssueKind::UnprojectedDocument));
+        assert!(bundle
+            .expense_lines
+            .iter()
+            .any(|line| line.kind == CanonicalExpenseKind::GenericReceipt));
+    }
+
+    #[test]
+    fn fx_enrichment_converts_foreign_lines_and_reduces_validation_gaps() {
+        let provider = StaticFxRateProvider::demo();
+        let result = synthesize_bundle_projection_with_fx(&synthetic_docs(), &provider);
+
+        assert_eq!(
+            get_path(&result.draft.report, "transaction_lines[1].common.exchange_rate")
+                .and_then(ReportValue::as_text),
+            Some("0.74")
+        );
+        assert_eq!(
+            get_path(&result.draft.report, "transaction_lines[1].common.line_amount_usd")
+                .and_then(ReportValue::as_text),
+            Some("576.31")
+        );
+        assert_eq!(
+            get_path(&result.draft.report, "transaction_lines[2].common.line_amount_usd")
+                .and_then(ReportValue::as_text),
+            Some("25.91")
+        );
+        assert_eq!(
+            get_path(&result.draft.report, "transaction_summary.total_usd")
+                .and_then(ReportValue::as_text),
+            Some("1889.66")
+        );
+        assert!(!result
+            .issues
+            .iter()
+            .any(|issue| issue.kind == BundleIssueKind::MissingUsdConversion));
+        assert!(!result
+            .validation
+            .issues
+            .iter()
+            .any(|issue| issue.kind == ValidationIssueKind::MissingRequiredField
+                && (issue.path == "expense_report.transaction_lines[1].common.line_amount_usd"
+                    || issue.path == "expense_report.transaction_lines[1].common.exchange_rate"
+                    || issue.path == "expense_report.transaction_lines[2].common.line_amount_usd"
+                    || issue.path == "expense_report.transaction_lines[2].common.exchange_rate"
+                    || issue.path == "expense_report.transaction_summary.total_usd")));
     }
 }

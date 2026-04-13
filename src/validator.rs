@@ -1,18 +1,22 @@
 use std::collections::BTreeSet;
 
+use serde::{Deserialize, Serialize};
+
 use crate::draft::{ConfidenceLevel, DraftReport, EvidenceKind, EvidenceReference, FieldMetadata};
 use crate::validation_rules::{
     conditional_rules_for, field_rule, ConditionalRuleType, FieldRule, SchemaType,
 };
 use crate::value::{ReportValue, ValueKind};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ValidationSeverity {
     Error,
     Warning,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ValidationIssueKind {
     MissingRequiredField,
     TypeMismatch,
@@ -29,7 +33,7 @@ pub enum ValidationIssueKind {
     InternalSchemaError,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ValidationIssue {
     pub severity: ValidationSeverity,
     pub kind: ValidationIssueKind,
@@ -38,7 +42,7 @@ pub struct ValidationIssue {
     pub message: String,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ValidationReport {
     pub issues: Vec<ValidationIssue>,
 }
@@ -55,6 +59,12 @@ impl ValidationReport {
             .iter()
             .any(|issue| issue.severity == ValidationSeverity::Warning)
     }
+}
+
+pub fn render_validation_report_json_pretty(
+    report: &ValidationReport,
+) -> Result<String, serde_json::Error> {
+    serde_json::to_string_pretty(report)
 }
 
 pub fn validate_expense_report(report: &ReportValue) -> ValidationReport {

@@ -1,0 +1,2242 @@
+{
+  "documents": [
+    {
+      "document_id": "airline_itinerary_trip_window",
+      "filename": "airline_itinerary_trip_window.md",
+      "classification": {
+        "kind": "flight_itinerary",
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "airline_itinerary_trip_window",
+            "filename": "airline_itinerary_trip_window.md",
+            "page": 1,
+            "quote": "Air Travel Itinerary Receipt",
+            "origin": null
+          }
+        ],
+        "flags": []
+      },
+      "extraction_status": "complete",
+      "facts": {
+        "flight_itinerary": {
+          "traveler_names": [
+            {
+              "value": "Olivia Park",
+              "confidence": "high",
+              "evidence": [
+                {
+                  "kind": "document_span",
+                  "document_id": "airline_itinerary_trip_window",
+                  "filename": "airline_itinerary_trip_window.md",
+                  "page": 1,
+                  "quote": "Passenger Name: Olivia Park",
+                  "origin": null
+                }
+              ],
+              "flags": []
+            }
+          ],
+          "confirmation_code": {
+            "value": "H7K9Q2",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "airline_itinerary_trip_window",
+                "filename": "airline_itinerary_trip_window.md",
+                "page": 1,
+                "quote": "Confirmation Code: H7K9Q2",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "ticket_number": {
+            "value": "0162459135784",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "airline_itinerary_trip_window",
+                "filename": "airline_itinerary_trip_window.md",
+                "page": 1,
+                "quote": "Ticket No: 0162459135784",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "booking_date": {
+            "value": "2025-04-10",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "airline_itinerary_trip_window",
+                "filename": "airline_itinerary_trip_window.md",
+                "page": 1,
+                "quote": "Booking Date: 2025-04-10",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "trip_window": {
+            "value": {
+              "start_date": "2025-04-21",
+              "end_date": "2025-04-29"
+            },
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "airline_itinerary_trip_window",
+                "filename": "airline_itinerary_trip_window.md",
+                "page": 1,
+                "quote": "Trip Window: 2025-04-21 to 2025-04-29",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "departure_location": {
+            "value": {
+              "city": "San Francisco",
+              "region": "CA",
+              "country": "United States",
+              "airport_code": "SFO"
+            },
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "airline_itinerary_trip_window",
+                "filename": "airline_itinerary_trip_window.md",
+                "page": 1,
+                "quote": "Origin: San Francisco, CA, United States (SFO)",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "arrival_location": {
+            "value": {
+              "city": "Singapore",
+              "region": null,
+              "country": null,
+              "airport_code": "SIN"
+            },
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "airline_itinerary_trip_window",
+                "filename": "airline_itinerary_trip_window.md",
+                "page": 1,
+                "quote": "Destination: Singapore (SIN)",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "segments": [
+            {
+              "departure_airport": {
+                "value": "SFO",
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "airline_itinerary_trip_window",
+                    "filename": "airline_itinerary_trip_window.md",
+                    "page": 1,
+                    "quote": "Segment 1 | Departure Airport: SFO | Arrival Airport: NRT | Departure Date: 2025-04-21 | Arrival Date: 2025-04-22 | Marketing Carrier: ANA | Flight Number: NH107 | Cabin Class: Economy",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              },
+              "arrival_airport": {
+                "value": "NRT",
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "airline_itinerary_trip_window",
+                    "filename": "airline_itinerary_trip_window.md",
+                    "page": 1,
+                    "quote": "Segment 1 | Departure Airport: SFO | Arrival Airport: NRT | Departure Date: 2025-04-21 | Arrival Date: 2025-04-22 | Marketing Carrier: ANA | Flight Number: NH107 | Cabin Class: Economy",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              },
+              "departure_date": {
+                "value": "2025-04-21",
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "airline_itinerary_trip_window",
+                    "filename": "airline_itinerary_trip_window.md",
+                    "page": 1,
+                    "quote": "Segment 1 | Departure Airport: SFO | Arrival Airport: NRT | Departure Date: 2025-04-21 | Arrival Date: 2025-04-22 | Marketing Carrier: ANA | Flight Number: NH107 | Cabin Class: Economy",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              },
+              "arrival_date": {
+                "value": "2025-04-22",
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "airline_itinerary_trip_window",
+                    "filename": "airline_itinerary_trip_window.md",
+                    "page": 1,
+                    "quote": "Segment 1 | Departure Airport: SFO | Arrival Airport: NRT | Departure Date: 2025-04-21 | Arrival Date: 2025-04-22 | Marketing Carrier: ANA | Flight Number: NH107 | Cabin Class: Economy",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              },
+              "marketing_carrier": {
+                "value": "ANA",
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "airline_itinerary_trip_window",
+                    "filename": "airline_itinerary_trip_window.md",
+                    "page": 1,
+                    "quote": "Segment 1 | Departure Airport: SFO | Arrival Airport: NRT | Departure Date: 2025-04-21 | Arrival Date: 2025-04-22 | Marketing Carrier: ANA | Flight Number: NH107 | Cabin Class: Economy",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              },
+              "flight_number": {
+                "value": "NH107",
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "airline_itinerary_trip_window",
+                    "filename": "airline_itinerary_trip_window.md",
+                    "page": 1,
+                    "quote": "Segment 1 | Departure Airport: SFO | Arrival Airport: NRT | Departure Date: 2025-04-21 | Arrival Date: 2025-04-22 | Marketing Carrier: ANA | Flight Number: NH107 | Cabin Class: Economy",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              },
+              "cabin_class": {
+                "value": "Economy",
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "airline_itinerary_trip_window",
+                    "filename": "airline_itinerary_trip_window.md",
+                    "page": 1,
+                    "quote": "Segment 1 | Departure Airport: SFO | Arrival Airport: NRT | Departure Date: 2025-04-21 | Arrival Date: 2025-04-22 | Marketing Carrier: ANA | Flight Number: NH107 | Cabin Class: Economy",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              }
+            },
+            {
+              "departure_airport": {
+                "value": "SIN",
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "airline_itinerary_trip_window",
+                    "filename": "airline_itinerary_trip_window.md",
+                    "page": 1,
+                    "quote": "Segment 2 | Departure Airport: SIN | Arrival Airport: SFO | Departure Date: 2025-04-29 | Arrival Date: 2025-04-29 | Marketing Carrier: ANA | Flight Number: NH108 | Cabin Class: Economy",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              },
+              "arrival_airport": {
+                "value": "SFO",
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "airline_itinerary_trip_window",
+                    "filename": "airline_itinerary_trip_window.md",
+                    "page": 1,
+                    "quote": "Segment 2 | Departure Airport: SIN | Arrival Airport: SFO | Departure Date: 2025-04-29 | Arrival Date: 2025-04-29 | Marketing Carrier: ANA | Flight Number: NH108 | Cabin Class: Economy",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              },
+              "departure_date": {
+                "value": "2025-04-29",
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "airline_itinerary_trip_window",
+                    "filename": "airline_itinerary_trip_window.md",
+                    "page": 1,
+                    "quote": "Segment 2 | Departure Airport: SIN | Arrival Airport: SFO | Departure Date: 2025-04-29 | Arrival Date: 2025-04-29 | Marketing Carrier: ANA | Flight Number: NH108 | Cabin Class: Economy",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              },
+              "arrival_date": {
+                "value": "2025-04-29",
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "airline_itinerary_trip_window",
+                    "filename": "airline_itinerary_trip_window.md",
+                    "page": 1,
+                    "quote": "Segment 2 | Departure Airport: SIN | Arrival Airport: SFO | Departure Date: 2025-04-29 | Arrival Date: 2025-04-29 | Marketing Carrier: ANA | Flight Number: NH108 | Cabin Class: Economy",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              },
+              "marketing_carrier": {
+                "value": "ANA",
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "airline_itinerary_trip_window",
+                    "filename": "airline_itinerary_trip_window.md",
+                    "page": 1,
+                    "quote": "Segment 2 | Departure Airport: SIN | Arrival Airport: SFO | Departure Date: 2025-04-29 | Arrival Date: 2025-04-29 | Marketing Carrier: ANA | Flight Number: NH108 | Cabin Class: Economy",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              },
+              "flight_number": {
+                "value": "NH108",
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "airline_itinerary_trip_window",
+                    "filename": "airline_itinerary_trip_window.md",
+                    "page": 1,
+                    "quote": "Segment 2 | Departure Airport: SIN | Arrival Airport: SFO | Departure Date: 2025-04-29 | Arrival Date: 2025-04-29 | Marketing Carrier: ANA | Flight Number: NH108 | Cabin Class: Economy",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              },
+              "cabin_class": {
+                "value": "Economy",
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "airline_itinerary_trip_window",
+                    "filename": "airline_itinerary_trip_window.md",
+                    "page": 1,
+                    "quote": "Segment 2 | Departure Airport: SIN | Arrival Airport: SFO | Departure Date: 2025-04-29 | Arrival Date: 2025-04-29 | Marketing Carrier: ANA | Flight Number: NH108 | Cabin Class: Economy",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              }
+            }
+          ],
+          "total_paid": {
+            "value": {
+              "amount": "1287.44",
+              "currency": "USD"
+            },
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "airline_itinerary_trip_window",
+                "filename": "airline_itinerary_trip_window.md",
+                "page": 1,
+                "quote": "Fare Total: USD 1287.44",
+                "origin": null
+              }
+            ],
+            "flags": []
+          }
+        }
+      },
+      "issues": []
+    },
+    {
+      "document_id": "hotel_folio_property_labeled",
+      "filename": "hotel_folio_property_labeled.md",
+      "classification": {
+        "kind": "hotel_folio",
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "hotel_folio_property_labeled",
+            "filename": "hotel_folio_property_labeled.md",
+            "page": 1,
+            "quote": "Hotel Folio",
+            "origin": null
+          }
+        ],
+        "flags": []
+      },
+      "extraction_status": "complete",
+      "facts": {
+        "hotel_folio": {
+          "guest_name": {
+            "value": "Olivia Park",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "hotel_folio_property_labeled",
+                "filename": "hotel_folio_property_labeled.md",
+                "page": 1,
+                "quote": "Guest Name: Olivia Park",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "property_name": {
+            "value": "Marina Bay Grand Hotel",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "hotel_folio_property_labeled",
+                "filename": "hotel_folio_property_labeled.md",
+                "page": 1,
+                "quote": "Property Name: Marina Bay Grand Hotel",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "folio_number": {
+            "value": "MBG-88421",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "hotel_folio_property_labeled",
+                "filename": "hotel_folio_property_labeled.md",
+                "page": 1,
+                "quote": "Folio Number: MBG-88421",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "stay_window": {
+            "value": {
+              "start_date": "2025-04-21",
+              "end_date": "2025-04-24"
+            },
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "hotel_folio_property_labeled",
+                "filename": "hotel_folio_property_labeled.md",
+                "page": 1,
+                "quote": "Stay Window: 2025-04-21 to 2025-04-24",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "property_location": {
+            "value": {
+              "city": "Singapore",
+              "region": null,
+              "country": "Singapore",
+              "airport_code": null
+            },
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "hotel_folio_property_labeled",
+                "filename": "hotel_folio_property_labeled.md",
+                "page": 1,
+                "quote": "Property Location: Singapore, Singapore",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "nightly_charges": [
+            {
+              "date": {
+                "value": "2025-04-21",
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "hotel_folio_property_labeled",
+                    "filename": "hotel_folio_property_labeled.md",
+                    "page": 1,
+                    "quote": "2025-04-21 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              },
+              "room_rate": {
+                "value": {
+                  "amount": "220.00",
+                  "currency": "SGD"
+                },
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "hotel_folio_property_labeled",
+                    "filename": "hotel_folio_property_labeled.md",
+                    "page": 1,
+                    "quote": "2025-04-21 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              },
+              "taxes_and_fees": [
+                {
+                  "value": {
+                    "amount": "39.60",
+                    "currency": "SGD"
+                  },
+                  "confidence": "high",
+                  "evidence": [
+                    {
+                      "kind": "document_span",
+                      "document_id": "hotel_folio_property_labeled",
+                      "filename": "hotel_folio_property_labeled.md",
+                      "page": 1,
+                      "quote": "2025-04-21 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+                      "origin": null
+                    }
+                  ],
+                  "flags": []
+                }
+              ],
+              "description": {
+                "value": "Deluxe King Room",
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "hotel_folio_property_labeled",
+                    "filename": "hotel_folio_property_labeled.md",
+                    "page": 1,
+                    "quote": "2025-04-21 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              }
+            },
+            {
+              "date": {
+                "value": "2025-04-22",
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "hotel_folio_property_labeled",
+                    "filename": "hotel_folio_property_labeled.md",
+                    "page": 1,
+                    "quote": "2025-04-22 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              },
+              "room_rate": {
+                "value": {
+                  "amount": "220.00",
+                  "currency": "SGD"
+                },
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "hotel_folio_property_labeled",
+                    "filename": "hotel_folio_property_labeled.md",
+                    "page": 1,
+                    "quote": "2025-04-22 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              },
+              "taxes_and_fees": [
+                {
+                  "value": {
+                    "amount": "39.60",
+                    "currency": "SGD"
+                  },
+                  "confidence": "high",
+                  "evidence": [
+                    {
+                      "kind": "document_span",
+                      "document_id": "hotel_folio_property_labeled",
+                      "filename": "hotel_folio_property_labeled.md",
+                      "page": 1,
+                      "quote": "2025-04-22 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+                      "origin": null
+                    }
+                  ],
+                  "flags": []
+                }
+              ],
+              "description": {
+                "value": "Deluxe King Room",
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "hotel_folio_property_labeled",
+                    "filename": "hotel_folio_property_labeled.md",
+                    "page": 1,
+                    "quote": "2025-04-22 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              }
+            },
+            {
+              "date": {
+                "value": "2025-04-23",
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "hotel_folio_property_labeled",
+                    "filename": "hotel_folio_property_labeled.md",
+                    "page": 1,
+                    "quote": "2025-04-23 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              },
+              "room_rate": {
+                "value": {
+                  "amount": "220.00",
+                  "currency": "SGD"
+                },
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "hotel_folio_property_labeled",
+                    "filename": "hotel_folio_property_labeled.md",
+                    "page": 1,
+                    "quote": "2025-04-23 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              },
+              "taxes_and_fees": [
+                {
+                  "value": {
+                    "amount": "39.60",
+                    "currency": "SGD"
+                  },
+                  "confidence": "high",
+                  "evidence": [
+                    {
+                      "kind": "document_span",
+                      "document_id": "hotel_folio_property_labeled",
+                      "filename": "hotel_folio_property_labeled.md",
+                      "page": 1,
+                      "quote": "2025-04-23 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+                      "origin": null
+                    }
+                  ],
+                  "flags": []
+                }
+              ],
+              "description": {
+                "value": "Deluxe King Room",
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "hotel_folio_property_labeled",
+                    "filename": "hotel_folio_property_labeled.md",
+                    "page": 1,
+                    "quote": "2025-04-23 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              }
+            }
+          ],
+          "total_paid": {
+            "value": {
+              "amount": "778.80",
+              "currency": "SGD"
+            },
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "hotel_folio_property_labeled",
+                "filename": "hotel_folio_property_labeled.md",
+                "page": 1,
+                "quote": "Total Paid: SGD 778.80",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "meals_included": [
+            {
+              "value": "Breakfast",
+              "confidence": "high",
+              "evidence": [
+                {
+                  "kind": "document_span",
+                  "document_id": "hotel_folio_property_labeled",
+                  "filename": "hotel_folio_property_labeled.md",
+                  "page": 1,
+                  "quote": "Breakfast",
+                  "origin": null
+                }
+              ],
+              "flags": []
+            },
+            {
+              "value": "Evening Reception",
+              "confidence": "high",
+              "evidence": [
+                {
+                  "kind": "document_span",
+                  "document_id": "hotel_folio_property_labeled",
+                  "filename": "hotel_folio_property_labeled.md",
+                  "page": 1,
+                  "quote": "Evening Reception",
+                  "origin": null
+                }
+              ],
+              "flags": []
+            }
+          ]
+        }
+      },
+      "issues": []
+    },
+    {
+      "document_id": "receipt_merchant_labeled",
+      "filename": "receipt_merchant_labeled.md",
+      "classification": {
+        "kind": "receipt",
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "receipt_merchant_labeled",
+            "filename": "receipt_merchant_labeled.md",
+            "page": 1,
+            "quote": "Merchant Receipt",
+            "origin": null
+          }
+        ],
+        "flags": []
+      },
+      "extraction_status": "complete",
+      "facts": {
+        "receipt": {
+          "merchant_name": {
+            "value": "East Bay Bistro",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "receipt_merchant_labeled",
+                "filename": "receipt_merchant_labeled.md",
+                "page": 1,
+                "quote": "Merchant: East Bay Bistro",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "merchant_location": {
+            "value": {
+              "city": "Singapore",
+              "region": null,
+              "country": "Singapore",
+              "airport_code": null
+            },
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "receipt_merchant_labeled",
+                "filename": "receipt_merchant_labeled.md",
+                "page": 1,
+                "quote": "Merchant Location: Singapore, Singapore",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "transaction_date": {
+            "value": "2025-04-24",
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "receipt_merchant_labeled",
+                "filename": "receipt_merchant_labeled.md",
+                "page": 1,
+                "quote": "Transaction Date: 2025-04-24",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "total_paid": {
+            "value": {
+              "amount": "35.02",
+              "currency": "SGD"
+            },
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "receipt_merchant_labeled",
+                "filename": "receipt_merchant_labeled.md",
+                "page": 1,
+                "quote": "Amount Paid: SGD 35.02",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "subtotal": {
+            "value": {
+              "amount": "28.00",
+              "currency": "SGD"
+            },
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "receipt_merchant_labeled",
+                "filename": "receipt_merchant_labeled.md",
+                "page": 1,
+                "quote": "Subtotal: SGD 28.00",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "tax_amount": {
+            "value": {
+              "amount": "2.52",
+              "currency": "SGD"
+            },
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "receipt_merchant_labeled",
+                "filename": "receipt_merchant_labeled.md",
+                "page": 1,
+                "quote": "Tax: SGD 2.52",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "tip_amount": {
+            "value": {
+              "amount": "4.50",
+              "currency": "SGD"
+            },
+            "confidence": "high",
+            "evidence": [
+              {
+                "kind": "document_span",
+                "document_id": "receipt_merchant_labeled",
+                "filename": "receipt_merchant_labeled.md",
+                "page": 1,
+                "quote": "Tip: SGD 4.50",
+                "origin": null
+              }
+            ],
+            "flags": []
+          },
+          "line_items": [
+            {
+              "description": {
+                "value": "Laksa Lunch",
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "receipt_merchant_labeled",
+                    "filename": "receipt_merchant_labeled.md",
+                    "page": 1,
+                    "quote": "Laksa Lunch    SGD 18.00",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              },
+              "amount": {
+                "value": {
+                  "amount": "18.00",
+                  "currency": "SGD"
+                },
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "receipt_merchant_labeled",
+                    "filename": "receipt_merchant_labeled.md",
+                    "page": 1,
+                    "quote": "Laksa Lunch    SGD 18.00",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              }
+            },
+            {
+              "description": {
+                "value": "Iced Tea",
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "receipt_merchant_labeled",
+                    "filename": "receipt_merchant_labeled.md",
+                    "page": 1,
+                    "quote": "Iced Tea       SGD 6.00",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              },
+              "amount": {
+                "value": {
+                  "amount": "6.00",
+                  "currency": "SGD"
+                },
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "receipt_merchant_labeled",
+                    "filename": "receipt_merchant_labeled.md",
+                    "page": 1,
+                    "quote": "Iced Tea       SGD 6.00",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              }
+            },
+            {
+              "description": {
+                "value": "Service Charge",
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "receipt_merchant_labeled",
+                    "filename": "receipt_merchant_labeled.md",
+                    "page": 1,
+                    "quote": "Service Charge SGD 4.00",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              },
+              "amount": {
+                "value": {
+                  "amount": "4.00",
+                  "currency": "SGD"
+                },
+                "confidence": "high",
+                "evidence": [
+                  {
+                    "kind": "document_span",
+                    "document_id": "receipt_merchant_labeled",
+                    "filename": "receipt_merchant_labeled.md",
+                    "page": 1,
+                    "quote": "Service Charge SGD 4.00",
+                    "origin": null
+                  }
+                ],
+                "flags": []
+              }
+            }
+          ]
+        }
+      },
+      "issues": []
+    }
+  ],
+  "payee": {
+    "name": {
+      "value": "Olivia Park",
+      "confidence": "high",
+      "evidence": [
+        {
+          "kind": "document_span",
+          "document_id": "airline_itinerary_trip_window",
+          "filename": "airline_itinerary_trip_window.md",
+          "page": 1,
+          "quote": "Passenger Name: Olivia Park",
+          "origin": null
+        }
+      ],
+      "flags": []
+    }
+  },
+  "trip": {
+    "window": {
+      "value": {
+        "start_date": "2025-04-21",
+        "end_date": "2025-04-29"
+      },
+      "confidence": "high",
+      "evidence": [
+        {
+          "kind": "document_span",
+          "document_id": "airline_itinerary_trip_window",
+          "filename": "airline_itinerary_trip_window.md",
+          "page": 1,
+          "quote": "Trip Window: 2025-04-21 to 2025-04-29",
+          "origin": null
+        }
+      ],
+      "flags": []
+    },
+    "origin": {
+      "value": {
+        "city": "San Francisco",
+        "region": "CA",
+        "country": "United States",
+        "airport_code": "SFO"
+      },
+      "confidence": "high",
+      "evidence": [
+        {
+          "kind": "document_span",
+          "document_id": "airline_itinerary_trip_window",
+          "filename": "airline_itinerary_trip_window.md",
+          "page": 1,
+          "quote": "Origin: San Francisco, CA, United States (SFO)",
+          "origin": null
+        }
+      ],
+      "flags": []
+    },
+    "destination": {
+      "value": {
+        "city": "Singapore",
+        "region": null,
+        "country": "Singapore",
+        "airport_code": null
+      },
+      "confidence": "high",
+      "evidence": [
+        {
+          "kind": "document_span",
+          "document_id": "hotel_folio_property_labeled",
+          "filename": "hotel_folio_property_labeled.md",
+          "page": 1,
+          "quote": "Property Location: Singapore, Singapore",
+          "origin": null
+        }
+      ],
+      "flags": []
+    },
+    "region": {
+      "value": "foreign",
+      "confidence": "high",
+      "evidence": [
+        {
+          "kind": "document_span",
+          "document_id": "hotel_folio_property_labeled",
+          "filename": "hotel_folio_property_labeled.md",
+          "page": 1,
+          "quote": "Property Location: Singapore, Singapore",
+          "origin": null
+        },
+        {
+          "kind": "system_generated",
+          "document_id": null,
+          "filename": null,
+          "page": null,
+          "quote": null,
+          "origin": "bundle_synthesis.infer_region_from_destination_country"
+        }
+      ],
+      "flags": []
+    }
+  },
+  "expense_lines": [
+    {
+      "line_id": "airline_itinerary_trip_window::airfare",
+      "kind": "airfare",
+      "document_id": "airline_itinerary_trip_window",
+      "date": {
+        "value": "2025-04-10",
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "airline_itinerary_trip_window",
+            "filename": "airline_itinerary_trip_window.md",
+            "page": 1,
+            "quote": "Booking Date: 2025-04-10",
+            "origin": null
+          }
+        ],
+        "flags": []
+      },
+      "line_amount_usd": {
+        "value": "1287.44",
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "airline_itinerary_trip_window",
+            "filename": "airline_itinerary_trip_window.md",
+            "page": 1,
+            "quote": "Fare Total: USD 1287.44",
+            "origin": null
+          },
+          {
+            "kind": "system_generated",
+            "document_id": null,
+            "filename": null,
+            "page": null,
+            "quote": null,
+            "origin": "bundle_synthesis.project_usd_amount"
+          }
+        ],
+        "flags": []
+      },
+      "exchange_rate": {
+        "value": "1.00",
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "airline_itinerary_trip_window",
+            "filename": "airline_itinerary_trip_window.md",
+            "page": 1,
+            "quote": "Fare Total: USD 1287.44",
+            "origin": null
+          },
+          {
+            "kind": "system_generated",
+            "document_id": null,
+            "filename": null,
+            "page": null,
+            "quote": null,
+            "origin": "bundle_synthesis.identity_exchange_rate_for_usd"
+          }
+        ],
+        "flags": []
+      },
+      "original_currency": {
+        "value": "USD",
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "airline_itinerary_trip_window",
+            "filename": "airline_itinerary_trip_window.md",
+            "page": 1,
+            "quote": "Fare Total: USD 1287.44",
+            "origin": null
+          },
+          {
+            "kind": "system_generated",
+            "document_id": null,
+            "filename": null,
+            "page": null,
+            "quote": null,
+            "origin": "bundle_synthesis.project_original_currency"
+          }
+        ],
+        "flags": []
+      },
+      "original_amount": {
+        "value": "1287.44",
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "airline_itinerary_trip_window",
+            "filename": "airline_itinerary_trip_window.md",
+            "page": 1,
+            "quote": "Fare Total: USD 1287.44",
+            "origin": null
+          },
+          {
+            "kind": "system_generated",
+            "document_id": null,
+            "filename": null,
+            "page": null,
+            "quote": null,
+            "origin": "bundle_synthesis.project_amount_number"
+          }
+        ],
+        "flags": []
+      },
+      "expense_type": {
+        "value": "airfare_foreign",
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "hotel_folio_property_labeled",
+            "filename": "hotel_folio_property_labeled.md",
+            "page": 1,
+            "quote": "Property Location: Singapore, Singapore",
+            "origin": null
+          },
+          {
+            "kind": "system_generated",
+            "document_id": null,
+            "filename": null,
+            "page": null,
+            "quote": null,
+            "origin": "bundle_synthesis.infer_region_from_destination_country"
+          },
+          {
+            "kind": "system_generated",
+            "document_id": null,
+            "filename": null,
+            "page": null,
+            "quote": null,
+            "origin": "bundle_synthesis.classify_airfare_expense_type"
+          }
+        ],
+        "flags": []
+      },
+      "remarks": {
+        "value": "Airfare SFO to SFO",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "airline_itinerary_trip_window",
+            "filename": "airline_itinerary_trip_window.md",
+            "page": 1,
+            "quote": "Fare Total: USD 1287.44",
+            "origin": null
+          },
+          {
+            "kind": "system_generated",
+            "document_id": null,
+            "filename": null,
+            "page": null,
+            "quote": null,
+            "origin": "bundle_synthesis.build_airfare_remarks"
+          }
+        ],
+        "flags": []
+      },
+      "country_of_activity": {
+        "value": "Singapore",
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "hotel_folio_property_labeled",
+            "filename": "hotel_folio_property_labeled.md",
+            "page": 1,
+            "quote": "Property Location: Singapore, Singapore",
+            "origin": null
+          },
+          {
+            "kind": "system_generated",
+            "document_id": null,
+            "filename": null,
+            "page": null,
+            "quote": null,
+            "origin": "bundle_synthesis.project_country_of_activity"
+          }
+        ],
+        "flags": []
+      },
+      "foreign_activity_type": {
+        "value": "other",
+        "confidence": "low",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "hotel_folio_property_labeled",
+            "filename": "hotel_folio_property_labeled.md",
+            "page": 1,
+            "quote": "Property Location: Singapore, Singapore",
+            "origin": null
+          },
+          {
+            "kind": "system_generated",
+            "document_id": null,
+            "filename": null,
+            "page": null,
+            "quote": null,
+            "origin": "bundle_synthesis.infer_region_from_destination_country"
+          },
+          {
+            "kind": "system_generated",
+            "document_id": null,
+            "filename": null,
+            "page": null,
+            "quote": null,
+            "origin": "bundle_synthesis.default_foreign_activity_type"
+          }
+        ],
+        "flags": [
+          "requires_activity_review"
+        ]
+      },
+      "source_documents": [
+        {
+          "document_id": "airline_itinerary_trip_window",
+          "filename": "airline_itinerary_trip_window.md",
+          "document_type": "booking_confirmation"
+        }
+      ],
+      "airfare_details": {
+        "travelers_name": {
+          "value": "Olivia Park",
+          "confidence": "high",
+          "evidence": [
+            {
+              "kind": "document_span",
+              "document_id": "airline_itinerary_trip_window",
+              "filename": "airline_itinerary_trip_window.md",
+              "page": 1,
+              "quote": "Passenger Name: Olivia Park",
+              "origin": null
+            }
+          ],
+          "flags": []
+        },
+        "ticket_number": {
+          "value": "0162459135784",
+          "confidence": "high",
+          "evidence": [
+            {
+              "kind": "document_span",
+              "document_id": "airline_itinerary_trip_window",
+              "filename": "airline_itinerary_trip_window.md",
+              "page": 1,
+              "quote": "Ticket No: 0162459135784",
+              "origin": null
+            }
+          ],
+          "flags": []
+        },
+        "ticket_amount": {
+          "value": "1287.44",
+          "confidence": "high",
+          "evidence": [
+            {
+              "kind": "document_span",
+              "document_id": "airline_itinerary_trip_window",
+              "filename": "airline_itinerary_trip_window.md",
+              "page": 1,
+              "quote": "Fare Total: USD 1287.44",
+              "origin": null
+            },
+            {
+              "kind": "system_generated",
+              "document_id": null,
+              "filename": null,
+              "page": null,
+              "quote": null,
+              "origin": "bundle_synthesis.project_amount_number"
+            }
+          ],
+          "flags": []
+        },
+        "booking_method": {
+          "value": "other",
+          "confidence": "high",
+          "evidence": [
+            {
+              "kind": "system_generated",
+              "document_id": null,
+              "filename": null,
+              "page": null,
+              "quote": null,
+              "origin": "bundle_synthesis.default_airfare_booking_method"
+            }
+          ],
+          "flags": []
+        },
+        "airline": {
+          "value": "ANA",
+          "confidence": "high",
+          "evidence": [
+            {
+              "kind": "document_span",
+              "document_id": "airline_itinerary_trip_window",
+              "filename": "airline_itinerary_trip_window.md",
+              "page": 1,
+              "quote": "Segment 1 | Departure Airport: SFO | Arrival Airport: NRT | Departure Date: 2025-04-21 | Arrival Date: 2025-04-22 | Marketing Carrier: ANA | Flight Number: NH107 | Cabin Class: Economy",
+              "origin": null
+            }
+          ],
+          "flags": []
+        },
+        "class_of_ticket": {
+          "value": "coach",
+          "confidence": "high",
+          "evidence": [
+            {
+              "kind": "document_span",
+              "document_id": "airline_itinerary_trip_window",
+              "filename": "airline_itinerary_trip_window.md",
+              "page": 1,
+              "quote": "Segment 1 | Departure Airport: SFO | Arrival Airport: NRT | Departure Date: 2025-04-21 | Arrival Date: 2025-04-22 | Marketing Carrier: ANA | Flight Number: NH107 | Cabin Class: Economy",
+              "origin": null
+            },
+            {
+              "kind": "system_generated",
+              "document_id": null,
+              "filename": null,
+              "page": null,
+              "quote": null,
+              "origin": "bundle_synthesis.normalize_airfare_class"
+            }
+          ],
+          "flags": []
+        },
+        "departure_airport": {
+          "value": "SFO",
+          "confidence": "high",
+          "evidence": [
+            {
+              "kind": "document_span",
+              "document_id": "airline_itinerary_trip_window",
+              "filename": "airline_itinerary_trip_window.md",
+              "page": 1,
+              "quote": "Origin: San Francisco, CA, United States (SFO)",
+              "origin": null
+            },
+            {
+              "kind": "system_generated",
+              "document_id": null,
+              "filename": null,
+              "page": null,
+              "quote": null,
+              "origin": "bundle_synthesis.project_departure_airport_from_location"
+            }
+          ],
+          "flags": []
+        },
+        "destination_airport": {
+          "value": "SIN",
+          "confidence": "high",
+          "evidence": [
+            {
+              "kind": "document_span",
+              "document_id": "airline_itinerary_trip_window",
+              "filename": "airline_itinerary_trip_window.md",
+              "page": 1,
+              "quote": "Destination: Singapore (SIN)",
+              "origin": null
+            },
+            {
+              "kind": "system_generated",
+              "document_id": null,
+              "filename": null,
+              "page": null,
+              "quote": null,
+              "origin": "bundle_synthesis.project_destination_airport_from_location"
+            }
+          ],
+          "flags": []
+        },
+        "round_trip": {
+          "value": true,
+          "confidence": "medium",
+          "evidence": [
+            {
+              "kind": "document_span",
+              "document_id": "airline_itinerary_trip_window",
+              "filename": "airline_itinerary_trip_window.md",
+              "page": 1,
+              "quote": "Segment 1 | Departure Airport: SFO | Arrival Airport: NRT | Departure Date: 2025-04-21 | Arrival Date: 2025-04-22 | Marketing Carrier: ANA | Flight Number: NH107 | Cabin Class: Economy",
+              "origin": null
+            },
+            {
+              "kind": "document_span",
+              "document_id": "airline_itinerary_trip_window",
+              "filename": "airline_itinerary_trip_window.md",
+              "page": 1,
+              "quote": "Segment 2 | Departure Airport: SIN | Arrival Airport: SFO | Departure Date: 2025-04-29 | Arrival Date: 2025-04-29 | Marketing Carrier: ANA | Flight Number: NH108 | Cabin Class: Economy",
+              "origin": null
+            },
+            {
+              "kind": "system_generated",
+              "document_id": null,
+              "filename": null,
+              "page": null,
+              "quote": null,
+              "origin": "bundle_synthesis.detect_round_trip"
+            }
+          ],
+          "flags": []
+        }
+      },
+      "lodging_details": null,
+      "meal_details": null,
+      "projection_supported": true
+    },
+    {
+      "line_id": "hotel_folio_property_labeled::lodging",
+      "kind": "lodging",
+      "document_id": "hotel_folio_property_labeled",
+      "date": {
+        "value": "2025-04-24",
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "hotel_folio_property_labeled",
+            "filename": "hotel_folio_property_labeled.md",
+            "page": 1,
+            "quote": "Stay Window: 2025-04-21 to 2025-04-24",
+            "origin": null
+          },
+          {
+            "kind": "system_generated",
+            "document_id": null,
+            "filename": null,
+            "page": null,
+            "quote": null,
+            "origin": "bundle_synthesis.project_lodging_line_date_from_checkout"
+          }
+        ],
+        "flags": []
+      },
+      "line_amount_usd": null,
+      "exchange_rate": null,
+      "original_currency": {
+        "value": "SGD",
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "hotel_folio_property_labeled",
+            "filename": "hotel_folio_property_labeled.md",
+            "page": 1,
+            "quote": "Total Paid: SGD 778.80",
+            "origin": null
+          },
+          {
+            "kind": "system_generated",
+            "document_id": null,
+            "filename": null,
+            "page": null,
+            "quote": null,
+            "origin": "bundle_synthesis.project_original_currency"
+          }
+        ],
+        "flags": []
+      },
+      "original_amount": {
+        "value": "778.80",
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "hotel_folio_property_labeled",
+            "filename": "hotel_folio_property_labeled.md",
+            "page": 1,
+            "quote": "Total Paid: SGD 778.80",
+            "origin": null
+          },
+          {
+            "kind": "system_generated",
+            "document_id": null,
+            "filename": null,
+            "page": null,
+            "quote": null,
+            "origin": "bundle_synthesis.project_amount_number"
+          }
+        ],
+        "flags": []
+      },
+      "expense_type": {
+        "value": "lodging_foreign",
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "hotel_folio_property_labeled",
+            "filename": "hotel_folio_property_labeled.md",
+            "page": 1,
+            "quote": "Property Location: Singapore, Singapore",
+            "origin": null
+          },
+          {
+            "kind": "system_generated",
+            "document_id": null,
+            "filename": null,
+            "page": null,
+            "quote": null,
+            "origin": "bundle_synthesis.infer_region_from_destination_country"
+          },
+          {
+            "kind": "system_generated",
+            "document_id": null,
+            "filename": null,
+            "page": null,
+            "quote": null,
+            "origin": "bundle_synthesis.classify_lodging_expense_type"
+          }
+        ],
+        "flags": []
+      },
+      "remarks": {
+        "value": "Lodging at Marina Bay Grand Hotel",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "hotel_folio_property_labeled",
+            "filename": "hotel_folio_property_labeled.md",
+            "page": 1,
+            "quote": "Total Paid: SGD 778.80",
+            "origin": null
+          },
+          {
+            "kind": "system_generated",
+            "document_id": null,
+            "filename": null,
+            "page": null,
+            "quote": null,
+            "origin": "bundle_synthesis.build_lodging_remarks"
+          }
+        ],
+        "flags": []
+      },
+      "country_of_activity": {
+        "value": "Singapore",
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "hotel_folio_property_labeled",
+            "filename": "hotel_folio_property_labeled.md",
+            "page": 1,
+            "quote": "Property Location: Singapore, Singapore",
+            "origin": null
+          },
+          {
+            "kind": "system_generated",
+            "document_id": null,
+            "filename": null,
+            "page": null,
+            "quote": null,
+            "origin": "bundle_synthesis.project_country_of_activity"
+          }
+        ],
+        "flags": []
+      },
+      "foreign_activity_type": {
+        "value": "other",
+        "confidence": "low",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "hotel_folio_property_labeled",
+            "filename": "hotel_folio_property_labeled.md",
+            "page": 1,
+            "quote": "Property Location: Singapore, Singapore",
+            "origin": null
+          },
+          {
+            "kind": "system_generated",
+            "document_id": null,
+            "filename": null,
+            "page": null,
+            "quote": null,
+            "origin": "bundle_synthesis.infer_region_from_destination_country"
+          },
+          {
+            "kind": "system_generated",
+            "document_id": null,
+            "filename": null,
+            "page": null,
+            "quote": null,
+            "origin": "bundle_synthesis.default_foreign_activity_type"
+          }
+        ],
+        "flags": [
+          "requires_activity_review"
+        ]
+      },
+      "source_documents": [
+        {
+          "document_id": "hotel_folio_property_labeled",
+          "filename": "hotel_folio_property_labeled.md",
+          "document_type": "receipt"
+        }
+      ],
+      "airfare_details": null,
+      "lodging_details": {
+        "hotel_name": {
+          "value": "Marina Bay Grand Hotel",
+          "confidence": "high",
+          "evidence": [
+            {
+              "kind": "document_span",
+              "document_id": "hotel_folio_property_labeled",
+              "filename": "hotel_folio_property_labeled.md",
+              "page": 1,
+              "quote": "Property Name: Marina Bay Grand Hotel",
+              "origin": null
+            }
+          ],
+          "flags": []
+        },
+        "location": {
+          "value": "Singapore",
+          "confidence": "high",
+          "evidence": [
+            {
+              "kind": "document_span",
+              "document_id": "hotel_folio_property_labeled",
+              "filename": "hotel_folio_property_labeled.md",
+              "page": 1,
+              "quote": "Property Location: Singapore, Singapore",
+              "origin": null
+            },
+            {
+              "kind": "system_generated",
+              "document_id": null,
+              "filename": null,
+              "page": null,
+              "quote": null,
+              "origin": "bundle_synthesis.project_lodging_location"
+            }
+          ],
+          "flags": []
+        },
+        "check_in_date": {
+          "value": "2025-04-21",
+          "confidence": "high",
+          "evidence": [
+            {
+              "kind": "document_span",
+              "document_id": "hotel_folio_property_labeled",
+              "filename": "hotel_folio_property_labeled.md",
+              "page": 1,
+              "quote": "Stay Window: 2025-04-21 to 2025-04-24",
+              "origin": null
+            },
+            {
+              "kind": "system_generated",
+              "document_id": null,
+              "filename": null,
+              "page": null,
+              "quote": null,
+              "origin": "bundle_synthesis.project_lodging_check_in"
+            }
+          ],
+          "flags": []
+        },
+        "check_out_date": {
+          "value": "2025-04-24",
+          "confidence": "high",
+          "evidence": [
+            {
+              "kind": "document_span",
+              "document_id": "hotel_folio_property_labeled",
+              "filename": "hotel_folio_property_labeled.md",
+              "page": 1,
+              "quote": "Stay Window: 2025-04-21 to 2025-04-24",
+              "origin": null
+            },
+            {
+              "kind": "system_generated",
+              "document_id": null,
+              "filename": null,
+              "page": null,
+              "quote": null,
+              "origin": "bundle_synthesis.project_lodging_check_out"
+            }
+          ],
+          "flags": []
+        },
+        "number_of_nights": {
+          "value": "3",
+          "confidence": "high",
+          "evidence": [
+            {
+              "kind": "document_span",
+              "document_id": "hotel_folio_property_labeled",
+              "filename": "hotel_folio_property_labeled.md",
+              "page": 1,
+              "quote": "2025-04-21 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+              "origin": null
+            },
+            {
+              "kind": "document_span",
+              "document_id": "hotel_folio_property_labeled",
+              "filename": "hotel_folio_property_labeled.md",
+              "page": 1,
+              "quote": "2025-04-22 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+              "origin": null
+            },
+            {
+              "kind": "document_span",
+              "document_id": "hotel_folio_property_labeled",
+              "filename": "hotel_folio_property_labeled.md",
+              "page": 1,
+              "quote": "2025-04-23 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+              "origin": null
+            },
+            {
+              "kind": "system_generated",
+              "document_id": null,
+              "filename": null,
+              "page": null,
+              "quote": null,
+              "origin": "bundle_synthesis.compute_number_of_nights"
+            }
+          ],
+          "flags": []
+        },
+        "daily_rate": {
+          "value": "220.00",
+          "confidence": "high",
+          "evidence": [
+            {
+              "kind": "document_span",
+              "document_id": "hotel_folio_property_labeled",
+              "filename": "hotel_folio_property_labeled.md",
+              "page": 1,
+              "quote": "2025-04-21 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+              "origin": null
+            },
+            {
+              "kind": "document_span",
+              "document_id": "hotel_folio_property_labeled",
+              "filename": "hotel_folio_property_labeled.md",
+              "page": 1,
+              "quote": "2025-04-22 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+              "origin": null
+            },
+            {
+              "kind": "document_span",
+              "document_id": "hotel_folio_property_labeled",
+              "filename": "hotel_folio_property_labeled.md",
+              "page": 1,
+              "quote": "2025-04-23 | Deluxe King Room | SGD 220.00 | SGD 39.60",
+              "origin": null
+            },
+            {
+              "kind": "system_generated",
+              "document_id": null,
+              "filename": null,
+              "page": null,
+              "quote": null,
+              "origin": "bundle_synthesis.compute_lodging_daily_rate"
+            }
+          ],
+          "flags": []
+        },
+        "booking_method": {
+          "value": "other",
+          "confidence": "high",
+          "evidence": [
+            {
+              "kind": "system_generated",
+              "document_id": null,
+              "filename": null,
+              "page": null,
+              "quote": null,
+              "origin": "bundle_synthesis.default_lodging_booking_method"
+            }
+          ],
+          "flags": []
+        },
+        "is_shared_lodging": {
+          "value": false,
+          "confidence": "medium",
+          "evidence": [
+            {
+              "kind": "document_span",
+              "document_id": "hotel_folio_property_labeled",
+              "filename": "hotel_folio_property_labeled.md",
+              "page": 1,
+              "quote": "Property Name: Marina Bay Grand Hotel",
+              "origin": null
+            },
+            {
+              "kind": "system_generated",
+              "document_id": null,
+              "filename": null,
+              "page": null,
+              "quote": null,
+              "origin": "bundle_synthesis.default_shared_lodging_false"
+            }
+          ],
+          "flags": []
+        }
+      },
+      "meal_details": null,
+      "projection_supported": true
+    },
+    {
+      "line_id": "receipt_merchant_labeled::meal",
+      "kind": "meal",
+      "document_id": "receipt_merchant_labeled",
+      "date": {
+        "value": "2025-04-24",
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "receipt_merchant_labeled",
+            "filename": "receipt_merchant_labeled.md",
+            "page": 1,
+            "quote": "Transaction Date: 2025-04-24",
+            "origin": null
+          }
+        ],
+        "flags": []
+      },
+      "line_amount_usd": null,
+      "exchange_rate": null,
+      "original_currency": {
+        "value": "SGD",
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "receipt_merchant_labeled",
+            "filename": "receipt_merchant_labeled.md",
+            "page": 1,
+            "quote": "Amount Paid: SGD 35.02",
+            "origin": null
+          },
+          {
+            "kind": "system_generated",
+            "document_id": null,
+            "filename": null,
+            "page": null,
+            "quote": null,
+            "origin": "bundle_synthesis.project_original_currency"
+          }
+        ],
+        "flags": []
+      },
+      "original_amount": {
+        "value": "35.02",
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "receipt_merchant_labeled",
+            "filename": "receipt_merchant_labeled.md",
+            "page": 1,
+            "quote": "Amount Paid: SGD 35.02",
+            "origin": null
+          },
+          {
+            "kind": "system_generated",
+            "document_id": null,
+            "filename": null,
+            "page": null,
+            "quote": null,
+            "origin": "bundle_synthesis.project_amount_number"
+          }
+        ],
+        "flags": []
+      },
+      "expense_type": {
+        "value": "business_meal",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "receipt_merchant_labeled",
+            "filename": "receipt_merchant_labeled.md",
+            "page": 1,
+            "quote": "Amount Paid: SGD 35.02",
+            "origin": null
+          },
+          {
+            "kind": "system_generated",
+            "document_id": null,
+            "filename": null,
+            "page": null,
+            "quote": null,
+            "origin": "bundle_synthesis.heuristic_meal_classification"
+          }
+        ],
+        "flags": [
+          "heuristic_receipt_classification"
+        ]
+      },
+      "remarks": {
+        "value": "Meal at East Bay Bistro",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "receipt_merchant_labeled",
+            "filename": "receipt_merchant_labeled.md",
+            "page": 1,
+            "quote": "Merchant: East Bay Bistro",
+            "origin": null
+          },
+          {
+            "kind": "system_generated",
+            "document_id": null,
+            "filename": null,
+            "page": null,
+            "quote": null,
+            "origin": "bundle_synthesis.build_meal_remarks"
+          }
+        ],
+        "flags": [
+          "heuristic_receipt_classification"
+        ]
+      },
+      "country_of_activity": {
+        "value": "Singapore",
+        "confidence": "high",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "receipt_merchant_labeled",
+            "filename": "receipt_merchant_labeled.md",
+            "page": 1,
+            "quote": "Merchant Location: Singapore, Singapore",
+            "origin": null
+          },
+          {
+            "kind": "system_generated",
+            "document_id": null,
+            "filename": null,
+            "page": null,
+            "quote": null,
+            "origin": "bundle_synthesis.project_country_of_activity"
+          }
+        ],
+        "flags": []
+      },
+      "foreign_activity_type": {
+        "value": "other",
+        "confidence": "low",
+        "evidence": [
+          {
+            "kind": "document_span",
+            "document_id": "hotel_folio_property_labeled",
+            "filename": "hotel_folio_property_labeled.md",
+            "page": 1,
+            "quote": "Property Location: Singapore, Singapore",
+            "origin": null
+          },
+          {
+            "kind": "system_generated",
+            "document_id": null,
+            "filename": null,
+            "page": null,
+            "quote": null,
+            "origin": "bundle_synthesis.infer_region_from_destination_country"
+          },
+          {
+            "kind": "system_generated",
+            "document_id": null,
+            "filename": null,
+            "page": null,
+            "quote": null,
+            "origin": "bundle_synthesis.default_foreign_activity_type"
+          }
+        ],
+        "flags": [
+          "requires_activity_review"
+        ]
+      },
+      "source_documents": [
+        {
+          "document_id": "receipt_merchant_labeled",
+          "filename": "receipt_merchant_labeled.md",
+          "document_type": "receipt"
+        }
+      ],
+      "airfare_details": null,
+      "lodging_details": null,
+      "meal_details": {
+        "venue_name": {
+          "value": "East Bay Bistro",
+          "confidence": "high",
+          "evidence": [
+            {
+              "kind": "document_span",
+              "document_id": "receipt_merchant_labeled",
+              "filename": "receipt_merchant_labeled.md",
+              "page": 1,
+              "quote": "Merchant: East Bay Bistro",
+              "origin": null
+            }
+          ],
+          "flags": []
+        },
+        "tip_amount": {
+          "value": "4.50",
+          "confidence": "high",
+          "evidence": [
+            {
+              "kind": "document_span",
+              "document_id": "receipt_merchant_labeled",
+              "filename": "receipt_merchant_labeled.md",
+              "page": 1,
+              "quote": "Tip: SGD 4.50",
+              "origin": null
+            },
+            {
+              "kind": "system_generated",
+              "document_id": null,
+              "filename": null,
+              "page": null,
+              "quote": null,
+              "origin": "bundle_synthesis.project_amount_number"
+            }
+          ],
+          "flags": []
+        },
+        "alcohol_amount": null,
+        "has_alcohol_on_receipt": {
+          "value": false,
+          "confidence": "medium",
+          "evidence": [
+            {
+              "kind": "document_span",
+              "document_id": "receipt_merchant_labeled",
+              "filename": "receipt_merchant_labeled.md",
+              "page": 1,
+              "quote": "Laksa Lunch    SGD 18.00",
+              "origin": null
+            },
+            {
+              "kind": "document_span",
+              "document_id": "receipt_merchant_labeled",
+              "filename": "receipt_merchant_labeled.md",
+              "page": 1,
+              "quote": "Iced Tea       SGD 6.00",
+              "origin": null
+            },
+            {
+              "kind": "document_span",
+              "document_id": "receipt_merchant_labeled",
+              "filename": "receipt_merchant_labeled.md",
+              "page": 1,
+              "quote": "Service Charge SGD 4.00",
+              "origin": null
+            },
+            {
+              "kind": "system_generated",
+              "document_id": null,
+              "filename": null,
+              "page": null,
+              "quote": null,
+              "origin": "bundle_synthesis.detect_receipt_alcohol"
+            }
+          ],
+          "flags": []
+        }
+      },
+      "projection_supported": true
+    }
+  ],
+  "issues": [
+    {
+      "severity": "warning",
+      "kind": "missing_usd_conversion",
+      "message": "Document hotel_folio_property_labeled needs FX enrichment before it can produce a complete projected line",
+      "document_ids": [
+        "hotel_folio_property_labeled"
+      ],
+      "evidence": [
+        {
+          "kind": "document_span",
+          "document_id": "hotel_folio_property_labeled",
+          "filename": "hotel_folio_property_labeled.md",
+          "page": 1,
+          "quote": "Total Paid: SGD 778.80",
+          "origin": null
+        },
+        {
+          "kind": "system_generated",
+          "document_id": null,
+          "filename": null,
+          "page": null,
+          "quote": null,
+          "origin": "bundle_synthesis.project_amount_number"
+        }
+      ]
+    },
+    {
+      "severity": "warning",
+      "kind": "missing_usd_conversion",
+      "message": "Document receipt_merchant_labeled needs FX enrichment before it can produce a complete projected line",
+      "document_ids": [
+        "receipt_merchant_labeled"
+      ],
+      "evidence": [
+        {
+          "kind": "document_span",
+          "document_id": "receipt_merchant_labeled",
+          "filename": "receipt_merchant_labeled.md",
+          "page": 1,
+          "quote": "Amount Paid: SGD 35.02",
+          "origin": null
+        },
+        {
+          "kind": "system_generated",
+          "document_id": null,
+          "filename": null,
+          "page": null,
+          "quote": null,
+          "origin": "bundle_synthesis.project_amount_number"
+        }
+      ]
+    }
+  ]
+}

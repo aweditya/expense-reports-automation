@@ -1,0 +1,130 @@
+{
+  "issues": [
+    {
+      "severity": "error",
+      "kind": "missing_required_field",
+      "path": "expense_report.general_information.payee.affiliation",
+      "schema_path": "expense_report.general_information.payee.affiliation",
+      "message": "Required field is missing"
+    },
+    {
+      "severity": "error",
+      "kind": "missing_required_field",
+      "path": "expense_report.general_information.business_purpose.what",
+      "schema_path": "expense_report.general_information.business_purpose.what",
+      "message": "Required field is missing"
+    },
+    {
+      "severity": "error",
+      "kind": "missing_required_field",
+      "path": "expense_report.general_information.business_purpose.why",
+      "schema_path": "expense_report.general_information.business_purpose.why",
+      "message": "Required field is missing"
+    },
+    {
+      "severity": "error",
+      "kind": "missing_required_field",
+      "path": "expense_report.general_information.business_purpose.key_30char",
+      "schema_path": "expense_report.general_information.business_purpose.key_30char",
+      "message": "Required field is missing"
+    },
+    {
+      "severity": "error",
+      "kind": "missing_required_field",
+      "path": "expense_report.general_information.event_name",
+      "schema_path": "expense_report.general_information.event_name",
+      "message": "Required field is missing"
+    },
+    {
+      "severity": "error",
+      "kind": "missing_dependency",
+      "path": "expense_report.general_information",
+      "schema_path": "expense_report.general_information.student_certification",
+      "message": "Dependent field \"general_information.payee.affiliation\" is missing"
+    },
+    {
+      "severity": "error",
+      "kind": "missing_required_field",
+      "path": "expense_report.general_information.authorized_by",
+      "schema_path": "expense_report.general_information.authorized_by",
+      "message": "Required field is missing"
+    },
+    {
+      "severity": "error",
+      "kind": "missing_required_field",
+      "path": "expense_report.transaction_summary.total_usd",
+      "schema_path": "expense_report.transaction_summary.total_usd",
+      "message": "Required field is missing"
+    },
+    {
+      "severity": "warning",
+      "kind": "manual_review_required",
+      "path": "expense_report.transaction_lines[0].common.date",
+      "schema_path": "expense_report.transaction_lines[].common.date",
+      "message": "Field has a schema validation note that still requires manual or custom validation logic"
+    },
+    {
+      "severity": "warning",
+      "kind": "manual_review_required",
+      "path": "expense_report.transaction_lines[1].common.date",
+      "schema_path": "expense_report.transaction_lines[].common.date",
+      "message": "Field has a schema validation note that still requires manual or custom validation logic"
+    },
+    {
+      "severity": "error",
+      "kind": "missing_required_field",
+      "path": "expense_report.transaction_lines[1].common.line_amount_usd",
+      "schema_path": "expense_report.transaction_lines[].common.line_amount_usd",
+      "message": "Required field is missing"
+    },
+    {
+      "severity": "error",
+      "kind": "missing_required_field",
+      "path": "expense_report.transaction_lines[1].common.exchange_rate",
+      "schema_path": "expense_report.transaction_lines[].common.exchange_rate",
+      "message": "Required field is missing"
+    },
+    {
+      "severity": "warning",
+      "kind": "manual_review_required",
+      "path": "expense_report.transaction_lines[2].common.date",
+      "schema_path": "expense_report.transaction_lines[].common.date",
+      "message": "Field has a schema validation note that still requires manual or custom validation logic"
+    },
+    {
+      "severity": "error",
+      "kind": "missing_required_field",
+      "path": "expense_report.transaction_lines[2].common.line_amount_usd",
+      "schema_path": "expense_report.transaction_lines[].common.line_amount_usd",
+      "message": "Required field is missing"
+    },
+    {
+      "severity": "error",
+      "kind": "missing_required_field",
+      "path": "expense_report.transaction_lines[2].common.exchange_rate",
+      "schema_path": "expense_report.transaction_lines[].common.exchange_rate",
+      "message": "Required field is missing"
+    },
+    {
+      "severity": "error",
+      "kind": "missing_required_field",
+      "path": "expense_report.transaction_lines[2].meal_details.attendees",
+      "schema_path": "expense_report.transaction_lines[].meal_details.attendees",
+      "message": "Required field is missing"
+    },
+    {
+      "severity": "error",
+      "kind": "missing_required_field",
+      "path": "expense_report.transaction_lines[2].meal_details.meal_purpose",
+      "schema_path": "expense_report.transaction_lines[].meal_details.meal_purpose",
+      "message": "Required field is missing"
+    },
+    {
+      "severity": "error",
+      "kind": "missing_required_field",
+      "path": "expense_report.allocation_and_approvers",
+      "schema_path": "expense_report.allocation_and_approvers",
+      "message": "Required field is missing"
+    }
+  ]
+}

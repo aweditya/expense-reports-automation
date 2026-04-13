@@ -3,7 +3,8 @@ use std::process::ExitCode;
 use expense_report_schema::{
     parse_document_facts_json_path, render_canonical_bundle_json_pretty,
     render_draft_report_json_pretty, render_draft_report_yaml, synthesize_bundle_projection,
-    BundleIssueSeverity, ValidationSeverity,
+    synthesize_bundle_projection_with_fx, BundleIssueSeverity, StaticFxRateProvider,
+    ValidationSeverity,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,6 +25,22 @@ impl OutputFormat {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FxMode {
+    None,
+    Demo,
+}
+
+impl FxMode {
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "none" => Some(Self::None),
+            "demo" => Some(Self::Demo),
+            _ => None,
+        }
+    }
+}
+
 fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
@@ -37,6 +54,7 @@ fn main() -> ExitCode {
 fn run() -> Result<(), String> {
     let mut args = std::env::args().skip(1);
     let mut output_format = OutputFormat::DraftYaml;
+    let mut fx_mode = FxMode::None;
     let mut input_paths = Vec::new();
 
     while let Some(arg) = args.next() {
@@ -49,9 +67,16 @@ fn run() -> Result<(), String> {
                     "output format must be one of draft-yaml | draft-json | bundle-json".to_owned()
                 })?;
             }
+            "--fx" => {
+                let value = args
+                    .next()
+                    .ok_or_else(|| "missing value after --fx".to_owned())?;
+                fx_mode = FxMode::parse(&value)
+                    .ok_or_else(|| "FX mode must be one of none | demo".to_owned())?;
+            }
             "--help" | "-h" => {
                 return Err(
-                    "usage: synthesize_bundle_from_facts [--output draft-yaml|draft-json|bundle-json] <facts.json>..."
+                    "usage: synthesize_bundle_from_facts [--output draft-yaml|draft-json|bundle-json] [--fx none|demo] <facts.json>..."
                         .to_owned(),
                 );
             }
@@ -61,7 +86,7 @@ fn run() -> Result<(), String> {
 
     if input_paths.is_empty() {
         return Err(
-            "usage: synthesize_bundle_from_facts [--output draft-yaml|draft-json|bundle-json] <facts.json>..."
+            "usage: synthesize_bundle_from_facts [--output draft-yaml|draft-json|bundle-json] [--fx none|demo] <facts.json>..."
                 .to_owned(),
         );
     }
@@ -74,7 +99,11 @@ fn run() -> Result<(), String> {
         );
     }
 
-    let result = synthesize_bundle_projection(&documents);
+    let demo_fx_provider = StaticFxRateProvider::demo();
+    let result = match fx_mode {
+        FxMode::None => synthesize_bundle_projection(&documents),
+        FxMode::Demo => synthesize_bundle_projection_with_fx(&documents, &demo_fx_provider),
+    };
     let output = match output_format {
         OutputFormat::DraftYaml => render_draft_report_yaml(&result.draft)
             .map_err(|err| format!("failed to render draft yaml: {err}"))?,
@@ -115,4 +144,24 @@ fn run() -> Result<(), String> {
     );
     println!("{output}");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{FxMode, OutputFormat};
+
+    #[test]
+    fn parses_output_formats() {
+        assert_eq!(OutputFormat::parse("draft-yaml"), Some(OutputFormat::DraftYaml));
+        assert_eq!(OutputFormat::parse("draft-json"), Some(OutputFormat::DraftJson));
+        assert_eq!(OutputFormat::parse("bundle-json"), Some(OutputFormat::BundleJson));
+        assert_eq!(OutputFormat::parse("projection-json"), None);
+    }
+
+    #[test]
+    fn parses_fx_modes() {
+        assert_eq!(FxMode::parse("none"), Some(FxMode::None));
+        assert_eq!(FxMode::parse("demo"), Some(FxMode::Demo));
+        assert_eq!(FxMode::parse("live"), None);
+    }
 }
