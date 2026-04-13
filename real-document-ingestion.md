@@ -207,4 +207,6 @@ Real Stanford summary PDFs can now flow through the ingestion CLI and produce ar
 
 The validated Gemini 3 live OCR path in this repo is the official Google Gen AI SDK helper in [scripts/transcribe_with_google_genai.py](/Users/adityasriram/Labs/stanford/research/expense-reports/scripts/transcribe_with_google_genai.py:1), now exposed directly through `vertex-gemini-sdk`. In live testing, that SDK path succeeded with `gemini-3-flash-preview`, `gemini-3.1-flash-lite-preview`, and `gemini-3-pro-preview` against synthetic PNG/PDF OCR fixtures.
 
+That helper now also applies a deterministic markdown cleanup pass after OCR generation to normalize section-heading spacing and merge wrapped pipe-delimited rows such as hotel nightly charge lines.
+
 The older Rust `vertex-gemini` REST path is still useful for mocked tests and lower-level contract work, but it returned `404` for the tested Gemini 3 preview model ids in this project, so `vertex-gemini-sdk` is the validated path for current Gemini 3 live OCR work.

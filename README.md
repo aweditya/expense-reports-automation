@@ -11,6 +11,8 @@ This repo builds the data spine for a robust expense-report automation system:
 
 The current validated live OCR path is `Gemini 3` on Vertex AI through the official Google Gen AI SDK, exposed via the `vertex-gemini-sdk` ingestion engine.
 
+That OCR path now applies a small deterministic markdown normalization pass after model output so downstream extraction does not churn on heading spacing or wrapped pipe-row continuations.
+
 ## Repo Map
 
 - [system-architecture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/system-architecture.md:1): full system design

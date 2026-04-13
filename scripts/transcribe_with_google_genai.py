@@ -4,10 +4,6 @@ import argparse
 import json
 from pathlib import Path
 
-from google import genai
-from google.genai import types
-from google.oauth2 import service_account
-
 
 DEFAULT_MODEL = "gemini-3-flash-preview"
 CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
@@ -117,13 +113,86 @@ def normalize_pages(payload: dict) -> list[dict]:
         normalized.append(
             {
                 "page_number": page.get("page_number") or index,
-                "text": page["text"],
+                "text": normalize_extractor_markdown(page["text"]),
             }
         )
     return normalized
 
 
+def normalize_extractor_markdown(text: str) -> str:
+    lines = [line.rstrip() for line in text.replace("\r\n", "\n").split("\n")]
+    normalized = []
+    index = 0
+
+    while index < len(lines):
+        line = lines[index]
+
+        if (
+            index + 2 < len(lines)
+            and is_section_heading(line)
+            and not lines[index + 1].strip()
+            and starts_extractor_content(lines[index + 2])
+        ):
+            normalized.append(line)
+            index += 2
+            continue
+
+        if (
+            index + 1 < len(lines)
+            and line.lstrip().startswith(("-", "*"))
+            and line.rstrip().endswith("|")
+            and is_pipe_row_continuation_line(lines[index + 1])
+        ):
+            normalized.append(f"{line.rstrip()} {normalize_bullet_prefix(lines[index + 1])}")
+            index += 2
+            continue
+
+        normalized.append(line)
+        index += 1
+
+    collapsed = []
+    previous_blank = False
+    for line in normalized:
+        is_blank = not line.strip()
+        if is_blank and previous_blank:
+            continue
+        collapsed.append(line)
+        previous_blank = is_blank
+
+    while collapsed and not collapsed[0].strip():
+        collapsed.pop(0)
+    while collapsed and not collapsed[-1].strip():
+        collapsed.pop()
+
+    return "\n".join(collapsed)
+
+
+def is_section_heading(line: str) -> bool:
+    stripped = line.lstrip()
+    return stripped.startswith("##")
+
+
+def starts_extractor_content(line: str) -> bool:
+    stripped = line.lstrip()
+    return stripped.startswith(("-", "*")) or ":" in stripped
+
+
+def is_pipe_row_continuation_line(line: str) -> bool:
+    stripped = normalize_bullet_prefix(line).lower()
+    return stripped.startswith("taxes & fees:") or stripped.startswith(
+        "taxes and fees:"
+    )
+
+
+def normalize_bullet_prefix(line: str) -> str:
+    return line.lstrip().lstrip("-").lstrip("*").strip()
+
+
 def main() -> int:
+    from google import genai
+    from google.genai import types
+    from google.oauth2 import service_account
+
     args = parse_args()
     document_path = Path(args.document)
     if not document_path.exists():
