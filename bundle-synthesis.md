@@ -18,7 +18,9 @@ The bundle layer currently synthesizes:
 - canonical payee
 - canonical trip window, destination, and domestic/foreign region
 - canonical expense lines for airfare and lodging
-- generic receipt coverage records that are intentionally not yet schema-projected
+- heuristic meal projection for restaurant-style receipts
+- generic receipt coverage records for receipts that are still not schema-projectable
+- optional FX enrichment for foreign-currency lines through a pluggable rate provider
 - synthesis issues for conflicts and projection gaps
 
 It then projects the bundle into a partial evidence-bearing draft report and runs the existing validator on that draft.
@@ -27,8 +29,8 @@ It then projects the bundle into a partial evidence-bearing draft report and run
 
 It does not yet:
 
-- fully classify generic receipts into meal vs. transport vs. other schema expense types
-- perform FX enrichment for non-USD lines
+- fully classify all generic receipts into meal vs. transport vs. other schema expense types
+- connect to a live FX source or persist enrichment provenance beyond the current draft metadata
 - fill user-input-only fields like affiliation, authorization, or beneficiary lists
 - generate final-ready reports with zero validation errors
 
@@ -42,10 +44,25 @@ Run the bundle-synthesis focused tests:
 cargo test bundle_synthesis -- --nocapture
 ```
 
+Run the fixture-backed bundle regression verifier:
+
+```bash
+cargo run --bin verify_bundle_regressions
+```
+
 Synthesize a draft report from curated expected fact JSON sidecars:
 
 ```bash
 cargo run --bin synthesize_bundle_from_facts -- \
+  fixtures/curated/flight_itinerary/airline_itinerary_classic.md.expected.json \
+  fixtures/curated/hotel_folio/hotel_folio_guest_bill.md.expected.json \
+  fixtures/curated/receipt/receipt_card_dotted.md.expected.json
+```
+
+Run the same packet with demo FX enrichment enabled:
+
+```bash
+cargo run --bin synthesize_bundle_from_facts -- --fx demo \
   fixtures/curated/flight_itinerary/airline_itinerary_classic.md.expected.json \
   fixtures/curated/hotel_folio/hotel_folio_guest_bill.md.expected.json \
   fixtures/curated/receipt/receipt_card_dotted.md.expected.json
@@ -76,7 +93,10 @@ The bundle tests currently check:
 - consistent payee/trip synthesis from a multi-document packet
 - conflict detection for mismatched payee names
 - curated sidecar compatibility
+- meal classification from restaurant-like receipts
+- FX enrichment and USD total projection for foreign lodging and meal lines
 - partial draft projection with field metadata
 - expected validation gaps for user-input and FX-dependent fields
 - missing-USD-conversion warnings for foreign lodging
 - review metadata on low-confidence defaulted fields
+- regression snapshots for realistic curated packets with and without FX enrichment
