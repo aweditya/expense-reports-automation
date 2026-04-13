@@ -22,7 +22,9 @@ use crate::transcribe::{
     render_transcribed_document_json_pretty, transcribe_document_path, TranscribedDocument,
 };
 use crate::validator::render_validation_report_json_pretty;
-use crate::vertex_gemini::{transcribe_document_path_with_vertex, VertexGeminiConfig};
+use crate::vertex_gemini::{
+    resolve_access_token, transcribe_document_path_with_vertex, VertexGeminiConfig,
+};
 use crate::ExtractedDocumentFacts;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -59,10 +61,7 @@ pub struct IngestionPipelineResult {
 #[derive(Debug)]
 pub enum IngestionError {
     NoInputDocuments,
-    Transcription {
-        path: PathBuf,
-        message: String,
-    },
+    Transcription { path: PathBuf, message: String },
     ReviewPacket(String),
     Ledger(String),
     Io(std::io::Error),
@@ -124,14 +123,31 @@ pub fn ingest_expense_documents(
 
     let mut transcriptions = Vec::new();
     let mut extracted_documents = Vec::new();
+    let resolved_vertex_config = match &config.transcriber {
+        IngestionTranscriber::VertexGemini(vertex_config) => {
+            let mut resolved = vertex_config.clone();
+            if resolved.access_token.is_none() {
+                resolved.access_token =
+                    Some(resolve_access_token(vertex_config).map_err(|err| {
+                        transcription_error(Path::new("<vertex-auth>"), err.to_string())
+                    })?);
+            }
+            Some(resolved)
+        }
+        IngestionTranscriber::Builtin => None,
+    };
 
     for path in paths {
         let document = match &config.transcriber {
-            IngestionTranscriber::Builtin => {
-                transcribe_document_path(path).map_err(|err| transcription_error(path, err.to_string()))?
-            }
-            IngestionTranscriber::VertexGemini(vertex_config) => transcribe_document_path_with_vertex(path, vertex_config)
+            IngestionTranscriber::Builtin => transcribe_document_path(path)
                 .map_err(|err| transcription_error(path, err.to_string()))?,
+            IngestionTranscriber::VertexGemini(_) => transcribe_document_path_with_vertex(
+                path,
+                resolved_vertex_config
+                    .as_ref()
+                    .expect("resolved vertex config should exist"),
+            )
+            .map_err(|err| transcription_error(path, err.to_string()))?,
         };
         let facts = extract_document_facts(&document);
         transcriptions.push(document);
@@ -146,8 +162,12 @@ pub fn ingest_expense_documents(
         }
     };
     let readiness = summarize_validation_readiness(&projection.validation);
-    let review_packet = build_review_packet(&projection.bundle, &projection.draft, &projection.validation)
-        .map_err(|err| IngestionError::ReviewPacket(format!("failed to build review packet: {err}")))?;
+    let review_packet = build_review_packet(
+        &projection.bundle,
+        &projection.draft,
+        &projection.validation,
+    )
+    .map_err(|err| IngestionError::ReviewPacket(format!("failed to build review packet: {err}")))?;
     let review_workbench_html = render_review_workbench_html(&review_packet);
 
     let bundle_id = config
@@ -160,7 +180,11 @@ pub fn ingest_expense_documents(
         &projection.draft,
         &projection.validation,
     )
-    .map_err(|err| IngestionError::Ledger(format!("failed to initialize review submission ledger: {err}")))?;
+    .map_err(|err| {
+        IngestionError::Ledger(format!(
+            "failed to initialize review submission ledger: {err}"
+        ))
+    })?;
 
     Ok(IngestionPipelineResult {
         bundle_id,
@@ -234,7 +258,8 @@ pub fn write_ingestion_artifacts(
     )?;
     fs::write(
         output_dir.join("ledger.json"),
-        render_review_submission_ledger_json_pretty(&result.ledger).map_err(IngestionError::Json)?,
+        render_review_submission_ledger_json_pretty(&result.ledger)
+            .map_err(IngestionError::Json)?,
     )?;
 
     let manifest = json!({
@@ -407,7 +432,11 @@ mod tests {
         });
 
         let result = ingest_expense_documents(
-            &[flight_path.clone(), hotel_path.clone(), receipt_path.clone()],
+            &[
+                flight_path.clone(),
+                hotel_path.clone(),
+                receipt_path.clone(),
+            ],
             &IngestionConfig {
                 bundle_id: Some("vertex_demo".to_owned()),
                 transcriber: IngestionTranscriber::VertexGemini(VertexGeminiConfig {
@@ -415,7 +444,9 @@ mod tests {
                     location: "us-central1".to_owned(),
                     model: "gemini-2.5-flash".to_owned(),
                     access_token: Some("test-token".to_owned()),
-                    endpoint_override: Some(endpoint),
+                    service_account_key_path: None,
+                    endpoint_override: Some(format!("{endpoint}/generate")),
+                    token_endpoint_override: None,
                 }),
                 fx_mode: IngestionFxMode::Demo,
             },
@@ -442,7 +473,10 @@ mod tests {
         match &result.extracted_documents[0].facts {
             crate::DocumentFactsPayload::FlightItinerary(facts) => {
                 assert_eq!(
-                    facts.traveler_names.first().map(|value| value.value.as_str()),
+                    facts
+                        .traveler_names
+                        .first()
+                        .map(|value| value.value.as_str()),
                     Some("Olivia Park")
                 );
             }
@@ -460,7 +494,10 @@ mod tests {
         match &result.extracted_documents[2].facts {
             crate::DocumentFactsPayload::Receipt(facts) => {
                 assert_eq!(
-                    facts.merchant_name.as_ref().map(|value| value.value.as_str()),
+                    facts
+                        .merchant_name
+                        .as_ref()
+                        .map(|value| value.value.as_str()),
                     Some("East Bay Bistro")
                 );
             }
@@ -475,7 +512,111 @@ mod tests {
         assert!(bodies.contains("Filename: receipt.png"));
     }
 
-    fn write_synthetic_packet(base_dir: &Path, fixtures: &[crate::SyntheticDocumentFixture]) -> Vec<PathBuf> {
+    #[test]
+    fn ingests_vertex_documents_with_service_account_key_using_single_token_exchange() {
+        let temp_dir = unique_temp_dir("ingest_vertex_service_account");
+        let packet = generate_synthetic_packet(SyntheticVariant::Baseline);
+        let flight = packet[0].clone();
+        let hotel = packet[1].clone();
+        let receipt = packet[2].clone();
+
+        let flight_path = temp_dir.join("flight.png");
+        let hotel_path = temp_dir.join("hotel.png");
+        let receipt_path = temp_dir.join("receipt.png");
+        let service_account_key_path = write_test_service_account_key(&temp_dir);
+        fs::write(&flight_path, b"flight-bytes").expect("temp png should write");
+        fs::write(&hotel_path, b"hotel-bytes").expect("temp png should write");
+        fs::write(&receipt_path, b"receipt-bytes").expect("temp png should write");
+
+        let requests = Arc::new(Mutex::new(Vec::<String>::new()));
+        let requests_for_server = Arc::clone(&requests);
+        let base_url = spawn_mock_server(4, move |request| {
+            requests_for_server.lock().unwrap().push(request.clone());
+            if request.starts_with("POST /token ") {
+                return http_ok(json!({
+                    "access_token": "bundle-token",
+                    "token_type": "Bearer",
+                    "expires_in": 3600
+                }));
+            }
+
+            let text = if request.contains("Filename: flight.png") {
+                flight.markdown.clone()
+            } else if request.contains("Filename: hotel.png") {
+                hotel.markdown.clone()
+            } else {
+                receipt.markdown.clone()
+            };
+            http_ok(json!({
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [
+                                {
+                                    "text": serde_json::to_string(&json!({
+                                        "pages": [{"page_number": 1, "text": text}]
+                                    })).unwrap()
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }))
+        });
+
+        let result = ingest_expense_documents(
+            &[
+                flight_path.clone(),
+                hotel_path.clone(),
+                receipt_path.clone(),
+            ],
+            &IngestionConfig {
+                bundle_id: Some("vertex_service_account_demo".to_owned()),
+                transcriber: IngestionTranscriber::VertexGemini(VertexGeminiConfig {
+                    project_id: "demo-project".to_owned(),
+                    location: "us-central1".to_owned(),
+                    model: "gemini-2.5-flash".to_owned(),
+                    access_token: None,
+                    service_account_key_path: Some(service_account_key_path),
+                    endpoint_override: Some(format!("{base_url}/generate")),
+                    token_endpoint_override: Some(format!("{base_url}/token")),
+                }),
+                fx_mode: IngestionFxMode::Demo,
+            },
+        )
+        .expect("vertex ingestion with service account should succeed");
+
+        assert_eq!(result.transcriptions.len(), 3);
+        assert!(result
+            .transcriptions
+            .iter()
+            .all(|document| document.engine == TranscriptionEngine::VertexGemini));
+
+        let captured = requests.lock().unwrap().clone();
+        assert_eq!(
+            captured
+                .iter()
+                .filter(|request| request.starts_with("POST /token "))
+                .count(),
+            1
+        );
+        assert_eq!(
+            captured
+                .iter()
+                .filter(|request| request.starts_with("POST /generate "))
+                .count(),
+            3
+        );
+        assert!(captured
+            .iter()
+            .filter(|request| request.starts_with("POST /generate "))
+            .all(|request| request.contains("Authorization: Bearer bundle-token")));
+    }
+
+    fn write_synthetic_packet(
+        base_dir: &Path,
+        fixtures: &[crate::SyntheticDocumentFixture],
+    ) -> Vec<PathBuf> {
         fs::create_dir_all(base_dir).expect("temp dir should create");
         fixtures
             .iter()
@@ -517,7 +658,7 @@ mod tests {
             }
         });
 
-        format!("http://{address}/v1/projects/test/locations/us-central1/publishers/google/models/gemini-2.5-flash:generateContent")
+        format!("http://{address}")
     }
 
     fn read_http_request(stream: &mut std::net::TcpStream) -> String {
@@ -562,5 +703,20 @@ mod tests {
             body.len(),
             body
         )
+    }
+
+    fn write_test_service_account_key(base_dir: &Path) -> PathBuf {
+        let path = base_dir.join("service_account.json");
+        let key = json!({
+            "type": "service_account",
+            "project_id": "demo-project",
+            "private_key_id": "test-private-key-id",
+            "private_key": "-----BEGIN PRIVATE KEY-----\nMIICdgIBADANBgkqhkiG9w0BAQEFAASCAmAwggJcAgEAAoGBAK8y5+xXnjF9T8/G\njFOXcY6zOiEhMbng2mMOt2H0nnzAlD2SfshsvBSvDgnCrIPkxFVJAbjw6zqLS5g+\nwMtj2z9yJR3m+CsQELIjpnNimkHf/X6U5PVCq/JJ5FhQag2tUVpOAghitsyYZ/HK\nPV0rRonfp3ausYYsupvlE21EXGtjAgMBAAECgYBim/1ryhkQ894zLSaYehoBXqFu\nOje5znQ84vCWos99mgsV6NmRR5pI7gqxta/SALX85r2gcYGEjxh6VX/AOrEQwvED\nHxTok3BSu7zpZIPWn/o4mUsdu6e6bx+HHhnXZ3kQX/b1q93aHBgqqxkSZVGpj0LC\nM24tnv1ftKW9tR0BuQJBAOHsXrnWM5k55zOVGM+dPMnB/4T5zIaeqUnP/sXGDkvR\nkjUS6efURNS0VdtjaOz4QQc+8RujSCRSBqAyYtkOmD0CQQDGhc8zS5iI8IaFjaoK\n3stxi2hioDvEFdlAaiRMsYU2OzGLmKeaoBX5hvcKfuOwQVB3U+gL4WGNGoJH38So\ne6wfAkEAqUAUAvK2ux7G1zzmVnr8VEXSsAMXtu5b8qEww2dJxIEfIEWoF/ZNDnB/\nNZk2vPiKduwvYr4jSJpuvkqhBO1LHQJAVpOigidUtVvX/sSCRM1XAgSfGGvyxJgW\nr93aSMweYUE9YTjI10k7bB/s+tnNqF9DnVatWwkGhwfpizjORf/xVwJADqDzk0tj\nJ8epIHPjma+48/Ygv3xDb+STi22O23g9BTL8ijFAVdGO3U0JRYN8XjCdgarXmKjs\nEFZnVwSb8Mb48w==\n-----END PRIVATE KEY-----\n",
+            "client_email": "vertex-test@demo-project.iam.gserviceaccount.com",
+            "token_uri": "https://oauth2.googleapis.com/token",
+        });
+        fs::write(&path, serde_json::to_vec_pretty(&key).unwrap())
+            .expect("service account key should write");
+        path
     }
 }

@@ -2,8 +2,8 @@ use std::process::ExitCode;
 
 use expense_report_schema::{
     build_review_packet, parse_document_facts_json_path, render_review_packet_json_pretty,
-    render_review_packet_markdown, synthesize_bundle_projection, synthesize_bundle_projection_with_fx,
-    StaticFxRateProvider,
+    render_review_packet_markdown, synthesize_bundle_projection,
+    synthesize_bundle_projection_with_fx, StaticFxRateProvider,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -100,8 +100,12 @@ fn run() -> Result<(), String> {
         FxMode::None => synthesize_bundle_projection(&documents),
         FxMode::Demo => synthesize_bundle_projection_with_fx(&documents, &demo_fx_provider),
     };
-    let packet = build_review_packet(&projection.bundle, &projection.draft, &projection.validation)
-        .map_err(|err| format!("failed to build review packet: {err}"))?;
+    let packet = build_review_packet(
+        &projection.bundle,
+        &projection.draft,
+        &projection.validation,
+    )
+    .map_err(|err| format!("failed to build review packet: {err}"))?;
 
     let rendered = match output_format {
         OutputFormat::Markdown => render_review_packet_markdown(&packet),
@@ -119,7 +123,10 @@ mod tests {
 
     #[test]
     fn parses_output_formats() {
-        assert_eq!(OutputFormat::parse("markdown"), Some(OutputFormat::Markdown));
+        assert_eq!(
+            OutputFormat::parse("markdown"),
+            Some(OutputFormat::Markdown)
+        );
         assert_eq!(OutputFormat::parse("json"), Some(OutputFormat::Json));
         assert_eq!(OutputFormat::parse("yaml"), None);
     }

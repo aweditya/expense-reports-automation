@@ -8,7 +8,10 @@ fn main() -> ExitCode {
         println!("curated corpus verified: 0 failure(s)");
         ExitCode::SUCCESS
     } else {
-        eprintln!("curated corpus verified: {} failure(s)", report.failures.len());
+        eprintln!(
+            "curated corpus verified: {} failure(s)",
+            report.failures.len()
+        );
         for failure in report.failures {
             eprintln!("\n[{}] {}", failure.case_id, failure.relative_path);
             eprintln!("{}", failure.message);

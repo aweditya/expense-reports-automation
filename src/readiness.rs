@@ -3,7 +3,9 @@ use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
 
 use crate::validation_rules::{field_rule, SourceTier};
-use crate::validator::{ValidationIssue, ValidationIssueKind, ValidationReport, ValidationSeverity};
+use crate::validator::{
+    ValidationIssue, ValidationIssueKind, ValidationReport, ValidationSeverity,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -82,14 +84,15 @@ fn issue_is_confirmed(issue: &ReadinessIssue, confirmed_paths: &BTreeSet<String>
     matches!(
         issue.kind,
         ValidationIssueKind::ManualReviewRequired | ValidationIssueKind::LowConfidenceWithoutReview
-    ) && confirmed_paths.iter().any(|path| issue.path == *path || issue.schema_path == *path)
+    ) && confirmed_paths
+        .iter()
+        .any(|path| issue.path == *path || issue.schema_path == *path)
 }
 
 fn classify_validation_issue(issue: &ValidationIssue) -> ReadinessIssue {
     let class = match issue.kind {
-        ValidationIssueKind::ManualReviewRequired | ValidationIssueKind::LowConfidenceWithoutReview => {
-            ReadinessIssueClass::ManualReview
-        }
+        ValidationIssueKind::ManualReviewRequired
+        | ValidationIssueKind::LowConfidenceWithoutReview => ReadinessIssueClass::ManualReview,
         ValidationIssueKind::MissingRequiredField | ValidationIssueKind::MissingDependency => {
             if issue_is_user_input(issue) {
                 ReadinessIssueClass::UserInputRequired
@@ -182,7 +185,9 @@ fn source_tier_name(source: SourceTier) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::{summarize_validation_readiness, ReadinessIssueClass};
-    use crate::bundle_synthesis::{synthesize_bundle_projection, synthesize_bundle_projection_with_fx, StaticFxRateProvider};
+    use crate::bundle_synthesis::{
+        synthesize_bundle_projection, synthesize_bundle_projection_with_fx, StaticFxRateProvider,
+    };
     use crate::synthetic_documents::{generate_synthetic_packet, SyntheticVariant};
 
     fn synthetic_documents() -> Vec<crate::ExtractedDocumentFacts> {
@@ -233,10 +238,8 @@ mod tests {
             .iter()
             .any(|issue| issue.class == ReadinessIssueClass::AutomationGap
                 && issue.path == "expense_report.transaction_lines[1].common.line_amount_usd"));
-        assert!(readiness
-            .issues
-            .iter()
-            .any(|issue| issue.class == ReadinessIssueClass::UserInputRequired
-                && issue.path == "expense_report.general_information.authorized_by"));
+        assert!(readiness.issues.iter().any(|issue| issue.class
+            == ReadinessIssueClass::UserInputRequired
+            && issue.path == "expense_report.general_information.authorized_by"));
     }
 }

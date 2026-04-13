@@ -1,14 +1,15 @@
 use std::process::ExitCode;
 
-use expense_report_schema::{
-    apply_review_revision, ingest_submission_feedback, initialize_review_submission_ledger,
-    parse_document_facts_json_path, record_submission_attempt, render_review_submission_ledger_json_pretty,
-    render_review_submission_ledger_markdown, synthesize_bundle_projection,
-    synthesize_bundle_projection_with_fx, ActorRole, DraftRevisionInput, FeedbackCategory,
-    FieldEditInput, StaticFxRateProvider, SubmissionFeedback, SubmissionStatus, SubmissionFieldFeedback,
-};
 use expense_report_schema::ReadinessIssueClass;
 use expense_report_schema::ReportValue;
+use expense_report_schema::{
+    apply_review_revision, ingest_submission_feedback, initialize_review_submission_ledger,
+    parse_document_facts_json_path, record_submission_attempt,
+    render_review_submission_ledger_json_pretty, render_review_submission_ledger_markdown,
+    synthesize_bundle_projection, synthesize_bundle_projection_with_fx, ActorRole,
+    DraftRevisionInput, FeedbackCategory, FieldEditInput, StaticFxRateProvider, SubmissionFeedback,
+    SubmissionFieldFeedback, SubmissionStatus,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum OutputFormat {
@@ -100,8 +101,9 @@ fn run() -> Result<(), String> {
                 let value = args
                     .next()
                     .ok_or_else(|| "missing value after --scenario".to_owned())?;
-                scenario = Scenario::parse(&value)
-                    .ok_or_else(|| "scenario must be one of initial | ready | accepted | returned".to_owned())?;
+                scenario = Scenario::parse(&value).ok_or_else(|| {
+                    "scenario must be one of initial | ready | accepted | returned".to_owned()
+                })?;
             }
             "--bundle-id" => {
                 bundle_id = args
@@ -157,8 +159,12 @@ fn run() -> Result<(), String> {
             let ready_revision = build_ready_revision(&ledger);
             let ready_version = apply_review_revision(&mut ledger, 1, ready_revision)
                 .map_err(|err| format!("failed to apply ready revision: {err}"))?;
-            let attempt_id = record_submission_attempt(&mut ledger, ready_version, Some("CLI submission".to_owned()))
-                .map_err(|err| format!("failed to record submission attempt: {err}"))?;
+            let attempt_id = record_submission_attempt(
+                &mut ledger,
+                ready_version,
+                Some("CLI submission".to_owned()),
+            )
+            .map_err(|err| format!("failed to record submission attempt: {err}"))?;
             ingest_submission_feedback(
                 &mut ledger,
                 attempt_id,
@@ -176,8 +182,12 @@ fn run() -> Result<(), String> {
             let ready_revision = build_ready_revision(&ledger);
             let ready_version = apply_review_revision(&mut ledger, 1, ready_revision)
                 .map_err(|err| format!("failed to apply ready revision: {err}"))?;
-            let attempt_id = record_submission_attempt(&mut ledger, ready_version, Some("CLI submission".to_owned()))
-                .map_err(|err| format!("failed to record submission attempt: {err}"))?;
+            let attempt_id = record_submission_attempt(
+                &mut ledger,
+                ready_version,
+                Some("CLI submission".to_owned()),
+            )
+            .map_err(|err| format!("failed to record submission attempt: {err}"))?;
             let return_revision = build_return_revision(&ledger);
             ingest_submission_feedback(
                 &mut ledger,
@@ -208,7 +218,9 @@ fn run() -> Result<(), String> {
     Ok(())
 }
 
-fn build_ready_revision(ledger: &expense_report_schema::ReviewSubmissionLedger) -> DraftRevisionInput {
+fn build_ready_revision(
+    ledger: &expense_report_schema::ReviewSubmissionLedger,
+) -> DraftRevisionInput {
     let current_version = ledger
         .draft_versions
         .iter()
@@ -290,7 +302,9 @@ fn build_ready_revision(ledger: &expense_report_schema::ReviewSubmissionLedger) 
     }
 }
 
-fn build_return_revision(ledger: &expense_report_schema::ReviewSubmissionLedger) -> DraftRevisionInput {
+fn build_return_revision(
+    ledger: &expense_report_schema::ReviewSubmissionLedger,
+) -> DraftRevisionInput {
     let current_version = ledger
         .draft_versions
         .iter()
@@ -370,7 +384,10 @@ mod tests {
 
     #[test]
     fn parses_output_formats() {
-        assert_eq!(OutputFormat::parse("markdown"), Some(OutputFormat::Markdown));
+        assert_eq!(
+            OutputFormat::parse("markdown"),
+            Some(OutputFormat::Markdown)
+        );
         assert_eq!(OutputFormat::parse("json"), Some(OutputFormat::Json));
         assert_eq!(OutputFormat::parse("yaml"), None);
     }

@@ -121,7 +121,10 @@ impl fmt::Display for FeedbackError {
             Self::Json(err) => write!(f, "JSON parse/render error: {err}"),
             Self::Yaml(err) => write!(f, "YAML parse/render error: {err}"),
             Self::UnsupportedFormat(ext) => {
-                write!(f, "unsupported feedback format {ext:?}; expected .json, .yaml, or .yml")
+                write!(
+                    f,
+                    "unsupported feedback format {ext:?}; expected .json, .yaml, or .yml"
+                )
             }
             Self::InvalidStructure(message) => write!(f, "{message}"),
         }
@@ -151,7 +154,9 @@ impl From<serde_yaml::Error> for FeedbackError {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(untagged)]
 enum CorrectionAnnotationDocument {
-    Wrapped { corrections: Vec<CorrectionAnnotation> },
+    Wrapped {
+        corrections: Vec<CorrectionAnnotation>,
+    },
     Bare(Vec<CorrectionAnnotation>),
 }
 
@@ -257,7 +262,10 @@ pub fn render_feedback_capture_markdown(capture: &FeedbackCapture) -> String {
         capture.summary.change_with_confirmed_reason_count
     ));
     if let Some(status) = capture.summary.submission_status {
-        lines.push(format!("- Submission status: {}", submission_status_name(status)));
+        lines.push(format!(
+            "- Submission status: {}",
+            submission_status_name(status)
+        ));
     }
     if capture.summary.returned_field_count > 0 {
         lines.push(format!(
@@ -290,7 +298,10 @@ pub fn render_feedback_capture_markdown(capture: &FeedbackCapture) -> String {
                     .unwrap_or("")
             ));
             if let Some(issue) = change.preexisting_issue {
-                lines.push(format!("  Preexisting issue: {}", readiness_issue_class_name(issue)));
+                lines.push(format!(
+                    "  Preexisting issue: {}",
+                    readiness_issue_class_name(issue)
+                ));
             }
             if let Some(note) = change.note.as_deref() {
                 lines.push(format!("  Note: {note}"));
@@ -305,7 +316,10 @@ pub fn render_feedback_capture_markdown(capture: &FeedbackCapture) -> String {
     lines.push("## Submission Feedback".to_owned());
     match &capture.submission_feedback {
         Some(feedback) => {
-            lines.push(format!("- Status: {}", submission_status_name(feedback.status)));
+            lines.push(format!(
+                "- Status: {}",
+                submission_status_name(feedback.status)
+            ));
             if let Some(message) = feedback.message.as_deref() {
                 lines.push(format!("- Message: {message}"));
             }
@@ -445,12 +459,8 @@ fn build_field_correction(
     let original_metadata = original.metadata.get(path);
     let corrected_metadata = corrected.metadata.get(path);
 
-    let suggested_reason = suggest_feedback_category(
-        operation,
-        &schema_path,
-        original_metadata,
-        issue,
-    );
+    let suggested_reason =
+        suggest_feedback_category(operation, &schema_path, original_metadata, issue);
 
     Some(FieldCorrection {
         path: path.to_owned(),
@@ -521,7 +531,8 @@ fn matching_site_feedback_messages(
         .returned_fields
         .iter()
         .filter(|field| {
-            field.path
+            field
+                .path
                 .as_deref()
                 .is_some_and(|candidate| candidates.iter().any(|value| value == candidate))
         })
@@ -613,9 +624,7 @@ fn humanize_path_tail(path: &str) -> String {
         .map(|word| {
             let mut chars = word.chars();
             match chars.next() {
-                Some(first) => {
-                    first.to_ascii_uppercase().to_string() + chars.as_str()
-                }
+                Some(first) => first.to_ascii_uppercase().to_string() + chars.as_str(),
                 None => String::new(),
             }
         })
@@ -685,7 +694,10 @@ fn wildcard_schema_path(path: &str) -> String {
     let mut chars = path.chars().peekable();
     while let Some(ch) = chars.next() {
         if ch == '[' {
-            while chars.next_if(|candidate| candidate.is_ascii_digit()).is_some() {}
+            while chars
+                .next_if(|candidate| candidate.is_ascii_digit())
+                .is_some()
+            {}
             if chars.next_if_eq(&']').is_some() {
                 output.push_str("[]");
                 continue;
@@ -802,7 +814,9 @@ fn set_value_segments(
                 ReportValue::Object(object) => object,
                 ReportValue::Null => {
                     *current = ReportValue::Object(BTreeMap::new());
-                    current.as_object_mut().ok_or_else(|| "failed to create object".to_owned())?
+                    current
+                        .as_object_mut()
+                        .ok_or_else(|| "failed to create object".to_owned())?
                 }
                 other => {
                     return Err(format!(
@@ -828,7 +842,9 @@ fn set_value_segments(
                 ReportValue::Array(array) => array,
                 ReportValue::Null => {
                     *current = ReportValue::Array(Vec::new());
-                    current.as_array_mut().ok_or_else(|| "failed to create array".to_owned())?
+                    current
+                        .as_array_mut()
+                        .ok_or_else(|| "failed to create array".to_owned())?
                 }
                 other => {
                     return Err(format!(
@@ -951,24 +967,18 @@ mod tests {
 
         assert_eq!(capture.summary.added_count, 6);
         assert_eq!(capture.summary.updated_count, 1);
-        assert!(capture
-            .field_changes
-            .iter()
-            .any(|change| change.path == "expense_report.general_information.payee.affiliation"
-                && change.operation == CorrectionOperation::Added
-                && change.preexisting_issue.is_some()
-                && change.confirmed_reason == Some(FeedbackCategory::MissingRequiredField)));
-        assert!(capture
-            .field_changes
-            .iter()
-            .any(|change| change.path == "expense_report.general_information.event_name"
-                && change.operation == CorrectionOperation::Updated
-                && change.suggested_reason == FeedbackCategory::WrongCrossDocumentMerge));
-        assert!(capture
-            .field_changes
-            .iter()
-            .any(|change| change.path == "expense_report.transaction_lines[2].meal_details.attendees[0].name"
-                && change.preexisting_issue.is_some()));
+        assert!(capture.field_changes.iter().any(|change| change.path
+            == "expense_report.general_information.payee.affiliation"
+            && change.operation == CorrectionOperation::Added
+            && change.preexisting_issue.is_some()
+            && change.confirmed_reason == Some(FeedbackCategory::MissingRequiredField)));
+        assert!(capture.field_changes.iter().any(|change| change.path
+            == "expense_report.general_information.event_name"
+            && change.operation == CorrectionOperation::Updated
+            && change.suggested_reason == FeedbackCategory::WrongCrossDocumentMerge));
+        assert!(capture.field_changes.iter().any(|change| change.path
+            == "expense_report.transaction_lines[2].meal_details.attendees[0].name"
+            && change.preexisting_issue.is_some()));
     }
 
     #[test]

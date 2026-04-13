@@ -55,7 +55,9 @@ fn render_header(html: &mut String, packet: &ReviewPacket) {
     html.push_str("<p class=\"eyebrow\">Expense Report Review</p>\n");
     html.push_str("<h1>FA Workbench</h1>\n");
     html.push_str("<p class=\"hero-status\">");
-    html.push_str(&escape_html(filing_status_label(packet.summary.filing_status)));
+    html.push_str(&escape_html(filing_status_label(
+        packet.summary.filing_status,
+    )));
     html.push_str("</p>\n");
     html.push_str("<p class=\"hero-subtitle\">");
     html.push_str(&escape_html(
@@ -84,7 +86,11 @@ fn render_header(html: &mut String, packet: &ReviewPacket) {
     summary_card(
         html,
         "Report Total USD",
-        packet.summary.report_total_usd.as_deref().unwrap_or("[missing]"),
+        packet
+            .summary
+            .report_total_usd
+            .as_deref()
+            .unwrap_or("[missing]"),
     );
     summary_card(
         html,
@@ -111,7 +117,9 @@ fn render_header(html: &mut String, packet: &ReviewPacket) {
 
 fn render_issues_panel(html: &mut String, packet: &ReviewPacket, index: &WorkbenchIndex) {
     html.push_str("<section class=\"panel issues-panel\">\n");
-    html.push_str("<div class=\"panel-heading\"><p class=\"eyebrow\">Queue</p><h2>Issues</h2></div>\n");
+    html.push_str(
+        "<div class=\"panel-heading\"><p class=\"eyebrow\">Queue</p><h2>Issues</h2></div>\n",
+    );
     if packet.issues_queue.is_empty() {
         html.push_str("<p class=\"empty-state\">No blocking or review issues.</p>\n");
     } else {
@@ -224,9 +232,7 @@ fn render_copy_field(html: &mut String, field: &CopyField, index: &WorkbenchInde
     html.push_str("</div>\n</div>\n");
     html.push_str("<div class=\"field-body\">\n");
     html.push_str("<div class=\"field-value\">");
-    html.push_str(&escape_html(
-        field.value.as_deref().unwrap_or("[missing]"),
-    ));
+    html.push_str(&escape_html(field.value.as_deref().unwrap_or("[missing]")));
     html.push_str("</div>\n");
     html.push_str("<div class=\"field-actions\">");
     if let Some(value) = field.value.as_deref() {
@@ -298,7 +304,9 @@ fn render_attachments_panel(html: &mut String, packet: &ReviewPacket) {
             html.push_str(&(item.line_index + 1).to_string());
             html.push_str("</h3>\n<p>");
             html.push_str(&escape_html(
-                item.expense_type.as_deref().unwrap_or("unknown expense type"),
+                item.expense_type
+                    .as_deref()
+                    .unwrap_or("unknown expense type"),
             ));
             html.push_str("</p>\n");
             if let Some(remarks) = item.remarks.as_deref() {
@@ -338,14 +346,17 @@ fn build_workbench_index(packet: &ReviewPacket) -> WorkbenchIndex {
                     .insert(field.path.clone(), field_id.clone());
                 for evidence in &field.evidence {
                     let key = evidence_key(evidence);
-                    let record = evidence_map.entry(key.clone()).or_insert_with(|| EvidenceRecord {
-                        id: anchor_id("evidence", &key),
-                        bucket: evidence_bucket(evidence),
-                        title: evidence_title(evidence),
-                        meta: evidence_meta(evidence),
-                        quote: evidence.quote.clone(),
-                        used_by: Vec::new(),
-                    });
+                    let record =
+                        evidence_map
+                            .entry(key.clone())
+                            .or_insert_with(|| EvidenceRecord {
+                                id: anchor_id("evidence", &key),
+                                bucket: evidence_bucket(evidence),
+                                title: evidence_title(evidence),
+                                meta: evidence_meta(evidence),
+                                quote: evidence.quote.clone(),
+                                used_by: Vec::new(),
+                            });
                     let usage = format!("{} · {}", instance.label, field.label);
                     if !record.used_by.contains(&usage) {
                         record.used_by.push(usage);
@@ -421,7 +432,11 @@ fn evidence_key(evidence: &EvidenceReference) -> String {
         evidence_kind_name(evidence),
         evidence.document_id.as_deref().unwrap_or(""),
         evidence.filename.as_deref().unwrap_or(""),
-        evidence.page.map(|value| value.to_string()).as_deref().unwrap_or(""),
+        evidence
+            .page
+            .map(|value| value.to_string())
+            .as_deref()
+            .unwrap_or(""),
         evidence.quote.as_deref().unwrap_or(""),
         evidence.origin.as_deref().unwrap_or("")
     )
@@ -513,7 +528,9 @@ fn escape_html_attribute(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::render_review_workbench_html;
-    use crate::bundle_synthesis::{synthesize_bundle_projection, synthesize_bundle_projection_with_fx, StaticFxRateProvider};
+    use crate::bundle_synthesis::{
+        synthesize_bundle_projection, synthesize_bundle_projection_with_fx, StaticFxRateProvider,
+    };
     use crate::review_packet::build_review_packet;
     use crate::synthetic_documents::{generate_synthetic_packet, SyntheticVariant};
 
@@ -528,9 +545,12 @@ mod tests {
     fn renders_fa_workbench_with_issue_links_and_copy_buttons() {
         let provider = StaticFxRateProvider::demo();
         let projection = synthesize_bundle_projection_with_fx(&synthetic_documents(), &provider);
-        let packet =
-            build_review_packet(&projection.bundle, &projection.draft, &projection.validation)
-                .expect("review packet should build");
+        let packet = build_review_packet(
+            &projection.bundle,
+            &projection.draft,
+            &projection.validation,
+        )
+        .expect("review packet should build");
         let rendered = render_review_workbench_html(&packet);
 
         assert!(rendered.contains("<title>Expense Report Review Workbench</title>"));
@@ -545,9 +565,12 @@ mod tests {
     fn workbench_filters_irrelevant_optional_fields_from_line_cards() {
         let provider = StaticFxRateProvider::demo();
         let projection = synthesize_bundle_projection_with_fx(&synthetic_documents(), &provider);
-        let packet =
-            build_review_packet(&projection.bundle, &projection.draft, &projection.validation)
-                .expect("review packet should build");
+        let packet = build_review_packet(
+            &projection.bundle,
+            &projection.draft,
+            &projection.validation,
+        )
+        .expect("review packet should build");
         let rendered = render_review_workbench_html(&packet);
 
         assert!(!rendered.contains("Shared With Transaction Number"));
@@ -559,9 +582,12 @@ mod tests {
     #[test]
     fn no_fx_workbench_still_shows_automation_blocked_status() {
         let projection = synthesize_bundle_projection(&synthetic_documents());
-        let packet =
-            build_review_packet(&projection.bundle, &projection.draft, &projection.validation)
-                .expect("review packet should build");
+        let packet = build_review_packet(
+            &projection.bundle,
+            &projection.draft,
+            &projection.validation,
+        )
+        .expect("review packet should build");
         let rendered = render_review_workbench_html(&packet);
 
         assert!(rendered.contains("automation blocked"));
@@ -572,9 +598,12 @@ mod tests {
     fn issue_fallback_links_cover_section_level_anchors() {
         let provider = StaticFxRateProvider::demo();
         let projection = synthesize_bundle_projection_with_fx(&synthetic_documents(), &provider);
-        let packet =
-            build_review_packet(&projection.bundle, &projection.draft, &projection.validation)
-                .expect("review packet should build");
+        let packet = build_review_packet(
+            &projection.bundle,
+            &projection.draft,
+            &projection.validation,
+        )
+        .expect("review packet should build");
         let rendered = render_review_workbench_html(&packet);
 
         assert!(rendered.contains(

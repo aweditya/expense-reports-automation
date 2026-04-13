@@ -10,7 +10,9 @@ use crate::feedback::{
     FeedbackCategory, SubmissionFeedback, SubmissionStatus,
 };
 use crate::readiness::{summarize_validation_readiness_with_confirmations, ReadinessReport};
-use crate::review_packet::{build_review_packet_with_readiness, FilingStatus, ReviewPacket, ReviewPacketError};
+use crate::review_packet::{
+    build_review_packet_with_readiness, FilingStatus, ReviewPacket, ReviewPacketError,
+};
 use crate::validator::{validate_draft_report, ValidationReport};
 use crate::value::ReportValue;
 
@@ -195,7 +197,9 @@ pub fn initialize_review_submission_ledger(
         bundle_id: bundle_id.into(),
         bundle: bundle.clone(),
         summary: LedgerSummary {
-            current_state: state_from_filing_status(initial_version.review_packet.summary.filing_status),
+            current_state: state_from_filing_status(
+                initial_version.review_packet.summary.filing_status,
+            ),
             current_draft_version_id: initial_version.version_id,
             latest_submission_attempt_id: None,
             document_count: bundle.documents.len(),
@@ -290,7 +294,8 @@ pub fn apply_review_revision(
 
     ledger.review_actions.extend(actions);
     ledger.summary.current_draft_version_id = version_id;
-    ledger.summary.current_state = state_from_filing_status(version.review_packet.summary.filing_status);
+    ledger.summary.current_state =
+        state_from_filing_status(version.review_packet.summary.filing_status);
     ledger.draft_versions.push(version);
     refresh_summary(ledger);
     Ok(version_id)
@@ -442,7 +447,10 @@ pub fn render_review_submission_ledger_markdown(ledger: &ReviewSubmissionLedger)
         String::new(),
         "## Summary".to_owned(),
         format!("- Bundle ID: {}", ledger.bundle_id),
-        format!("- State: {}", ledger_state_name(ledger.summary.current_state)),
+        format!(
+            "- State: {}",
+            ledger_state_name(ledger.summary.current_state)
+        ),
         format!(
             "- Draft Versions: {}, Review Actions: {}, Submission Attempts: {}",
             ledger.summary.draft_version_count,
@@ -540,7 +548,8 @@ fn build_version_record(
     feedback_from_parent: Option<FeedbackCapture>,
     source_submission_attempt_id: Option<u32>,
 ) -> Result<DraftVersionRecord, LedgerError> {
-    let readiness = summarize_validation_readiness_with_confirmations(&validation, &confirmed_review_paths);
+    let readiness =
+        summarize_validation_readiness_with_confirmations(&validation, &confirmed_review_paths);
     let review_packet = build_review_packet_with_readiness(bundle, &draft, &readiness)?;
     Ok(DraftVersionRecord {
         version_id,
@@ -757,7 +766,14 @@ mod tests {
         assert_eq!(ledger.summary.current_draft_version_id, 1);
         assert_eq!(ledger.summary.current_state, LedgerState::UserInputRequired);
         assert_eq!(ledger.draft_versions.len(), 1);
-        assert_eq!(ledger.draft_versions[0].review_packet.summary.readiness.user_input_gap_count, 4);
+        assert_eq!(
+            ledger.draft_versions[0]
+                .review_packet
+                .summary
+                .readiness
+                .user_input_gap_count,
+            4
+        );
     }
 
     #[test]
@@ -793,7 +809,8 @@ mod tests {
                         origin: "ledger.test.authorized_by".to_owned(),
                     },
                     FieldEditInput {
-                        path: "expense_report.transaction_lines[2].meal_details.attendees".to_owned(),
+                        path: "expense_report.transaction_lines[2].meal_details.attendees"
+                            .to_owned(),
                         value: ReportValue::array([
                             ReportValue::object([
                                 ("name", ReportValue::from("Olivia Park")),
@@ -825,8 +842,14 @@ mod tests {
             .find(|version| version.version_id == version_id)
             .expect("version should exist");
         assert_eq!(ledger.summary.current_state, LedgerState::ReadyToFile);
-        assert_eq!(latest.review_packet.summary.readiness.user_input_gap_count, 0);
-        assert_eq!(latest.review_packet.summary.readiness.manual_review_count, 0);
+        assert_eq!(
+            latest.review_packet.summary.readiness.user_input_gap_count,
+            0
+        );
+        assert_eq!(
+            latest.review_packet.summary.readiness.manual_review_count,
+            0
+        );
         assert_eq!(ledger.review_actions.len(), 6);
         assert!(latest.feedback_from_parent.is_some());
     }
@@ -864,7 +887,8 @@ mod tests {
                         origin: "ledger.test.authorized_by".to_owned(),
                     },
                     FieldEditInput {
-                        path: "expense_report.transaction_lines[2].meal_details.attendees".to_owned(),
+                        path: "expense_report.transaction_lines[2].meal_details.attendees"
+                            .to_owned(),
                         value: ReportValue::array([
                             ReportValue::object([
                                 ("name", ReportValue::from("Olivia Park")),
@@ -889,8 +913,12 @@ mod tests {
             },
         )
         .expect("revision should apply");
-        let attempt_id = record_submission_attempt(&mut ledger, ready_version, Some("First submission".to_owned()))
-            .expect("attempt should record");
+        let attempt_id = record_submission_attempt(
+            &mut ledger,
+            ready_version,
+            Some("First submission".to_owned()),
+        )
+        .expect("attempt should record");
         assert_eq!(ledger.summary.current_state, LedgerState::Submitted);
 
         let corrected_version = ingest_submission_feedback(

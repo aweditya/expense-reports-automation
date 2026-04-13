@@ -37,7 +37,11 @@ fn run() -> Result<(), String> {
                 format = match value.as_str() {
                     "yaml" => OutputFormat::Yaml,
                     "json" => OutputFormat::Json,
-                    _ => return Err(format!("unsupported output format {value:?}; expected yaml or json")),
+                    _ => {
+                        return Err(format!(
+                            "unsupported output format {value:?}; expected yaml or json"
+                        ))
+                    }
                 };
             }
             "--output" => {

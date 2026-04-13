@@ -348,7 +348,10 @@ impl fmt::Display for DocumentFactContractError {
                 payload_kind.as_str()
             ),
             Self::MissingClassificationEvidence => {
-                write!(f, "document classification must include at least one evidence reference")
+                write!(
+                    f,
+                    "document classification must include at least one evidence reference"
+                )
             }
         }
     }

@@ -433,17 +433,50 @@ fn build_flight_fixture(
     } else {
         "Booking Reference"
     };
-    let ticket_label = if document_id.ends_with('3') { "Ticket No" } else { "Ticket Number" };
-    let booking_label = if document_id.ends_with('6') { "Issue Date" } else { "Booking Date" };
-    let origin_label = if document_id.ends_with('7') { "From" } else { "Origin" };
-    let destination_label = if document_id.ends_with('8') { "To" } else { "Destination" };
-    let total_label = if document_id.ends_with('9') { "Fare Paid" } else { "Total Paid" };
+    let ticket_label = if document_id.ends_with('3') {
+        "Ticket No"
+    } else {
+        "Ticket Number"
+    };
+    let booking_label = if document_id.ends_with('6') {
+        "Issue Date"
+    } else {
+        "Booking Date"
+    };
+    let origin_label = if document_id.ends_with('7') {
+        "From"
+    } else {
+        "Origin"
+    };
+    let destination_label = if document_id.ends_with('8') {
+        "To"
+    } else {
+        "Destination"
+    };
+    let total_label = if document_id.ends_with('9') {
+        "Fare Paid"
+    } else {
+        "Total Paid"
+    };
     let traveler_line = format!("{bullet} {traveler_label}: {traveler}");
-    let confirmation_code = format!("{}{}{}", carrier.outbound_flight_number.chars().next().unwrap_or('A'), destination.airport_code.chars().next().unwrap_or('A'), packet_id.chars().rev().take(4).collect::<String>().chars().rev().collect::<String>());
+    let confirmation_code = format!(
+        "{}{}{}",
+        carrier.outbound_flight_number.chars().next().unwrap_or('A'),
+        destination.airport_code.chars().next().unwrap_or('A'),
+        packet_id
+            .chars()
+            .rev()
+            .take(4)
+            .collect::<String>()
+            .chars()
+            .rev()
+            .collect::<String>()
+    );
     let confirmation_line = format!("{bullet} {confirmation_label}: {confirmation_code}");
     let ticket_number = format!(
         "016{:010}",
-        3_100_000_000u64 + (packet_id.bytes().fold(0u64, |acc, byte| acc + byte as u64) % 9_000_000_000u64)
+        3_100_000_000u64
+            + (packet_id.bytes().fold(0u64, |acc, byte| acc + byte as u64) % 9_000_000_000u64)
     );
     let ticket_line = format!("{bullet} {ticket_label}: {ticket_number}");
     let booking_line = format!("{bullet} {booking_label}: {}", schedule.booking_date);
@@ -545,7 +578,12 @@ fn build_flight_fixture(
         expected_facts: ExtractedDocumentFacts {
             document_id: document_id.clone(),
             filename: filename.clone(),
-            classification: classification(DocumentKind::FlightItinerary, &document_id, &filename, heading),
+            classification: classification(
+                DocumentKind::FlightItinerary,
+                &document_id,
+                &filename,
+                heading,
+            ),
             extraction_status: ExtractionStatus::Complete,
             facts: DocumentFactsPayload::FlightItinerary(FlightItineraryFacts {
                 traveler_names: vec![observed(
@@ -734,19 +772,44 @@ fn build_hotel_fixture(
         SyntheticVariant::Baseline => "## Meals Included",
         SyntheticVariant::Noisy => "### included in room rate",
     };
-    let property_label = if document_id.ends_with('2') { "Hotel Name" } else { "Property Name" };
-    let guest_label = if document_id.ends_with('3') { "Guest" } else { "Guest Name" };
-    let folio_label = if document_id.ends_with('4') { "Folio #" } else { "Folio Number" };
-    let location_label = if document_id.ends_with('5') { "City/Country" } else { "Property Location" };
-    let property_name = destination.hotels[packet_id.bytes().fold(0usize, |acc, byte| acc + byte as usize) % destination.hotels.len()];
-    let room_description = destination.room_descriptions
-        [packet_id.bytes().fold(0usize, |acc, byte| acc + (byte as usize * 3)) % destination.room_descriptions.len()];
+    let property_label = if document_id.ends_with('2') {
+        "Hotel Name"
+    } else {
+        "Property Name"
+    };
+    let guest_label = if document_id.ends_with('3') {
+        "Guest"
+    } else {
+        "Guest Name"
+    };
+    let folio_label = if document_id.ends_with('4') {
+        "Folio #"
+    } else {
+        "Folio Number"
+    };
+    let location_label = if document_id.ends_with('5') {
+        "City/Country"
+    } else {
+        "Property Location"
+    };
+    let property_name = destination.hotels[packet_id
+        .bytes()
+        .fold(0usize, |acc, byte| acc + byte as usize)
+        % destination.hotels.len()];
+    let room_description = destination.room_descriptions[packet_id
+        .bytes()
+        .fold(0usize, |acc, byte| acc + (byte as usize * 3))
+        % destination.room_descriptions.len()];
     let property_line = format!("{bullet} {property_label}: {property_name}");
     let guest_line = format!("{bullet} {guest_label}: {traveler}");
     let folio_line = format!(
         "{bullet} {folio_label}: {}-{}",
         &destination.airport_code[..2],
-        84_000 + (packet_id.bytes().fold(0usize, |acc, byte| acc + byte as usize) % 900)
+        84_000
+            + (packet_id
+                .bytes()
+                .fold(0usize, |acc, byte| acc + byte as usize)
+                % 900)
     );
     let location_line = format!(
         "{bullet} {location_label}: {}, {}",
@@ -862,7 +925,12 @@ fn build_hotel_fixture(
         expected_facts: ExtractedDocumentFacts {
             document_id: document_id.clone(),
             filename: filename.clone(),
-            classification: classification(DocumentKind::HotelFolio, &document_id, &filename, heading),
+            classification: classification(
+                DocumentKind::HotelFolio,
+                &document_id,
+                &filename,
+                heading,
+            ),
             extraction_status: ExtractionStatus::Complete,
             facts: DocumentFactsPayload::HotelFolio(HotelFolioFacts {
                 guest_name: Some(observed(
@@ -933,7 +1001,12 @@ fn build_hotel_fixture(
                     .collect(),
                 total_paid,
                 meals_included: vec![
-                    observed("Breakfast".to_owned(), &document_id, &filename, &meal_one_line),
+                    observed(
+                        "Breakfast".to_owned(),
+                        &document_id,
+                        &filename,
+                        &meal_one_line,
+                    ),
                     observed(
                         "Evening Reception".to_owned(),
                         &document_id,
@@ -982,12 +1055,30 @@ fn build_receipt_fixture(
         SyntheticVariant::Baseline => "## Line Items",
         SyntheticVariant::Noisy => "### items",
     };
-    let merchant_label = if document_id.ends_with('2') { "Merchant" } else { "Merchant Name" };
-    let location_label = if document_id.ends_with('4') { "Location" } else { "Merchant Location" };
-    let date_label = if document_id.ends_with('6') { "Date" } else { "Transaction Date" };
-    let total_label = if document_id.ends_with('8') { "Amount Paid" } else { "Total Paid" };
-    let merchant_name = destination.merchants
-        [packet_id.bytes().fold(0usize, |acc, byte| acc + byte as usize) % destination.merchants.len()];
+    let merchant_label = if document_id.ends_with('2') {
+        "Merchant"
+    } else {
+        "Merchant Name"
+    };
+    let location_label = if document_id.ends_with('4') {
+        "Location"
+    } else {
+        "Merchant Location"
+    };
+    let date_label = if document_id.ends_with('6') {
+        "Date"
+    } else {
+        "Transaction Date"
+    };
+    let total_label = if document_id.ends_with('8') {
+        "Amount Paid"
+    } else {
+        "Total Paid"
+    };
+    let merchant_name = destination.merchants[packet_id
+        .bytes()
+        .fold(0usize, |acc, byte| acc + byte as usize)
+        % destination.merchants.len()];
     let merchant_line = format!("{bullet} {merchant_label}: {merchant_name}");
     let location_line = format!(
         "{bullet} {location_label}: {}, {}",

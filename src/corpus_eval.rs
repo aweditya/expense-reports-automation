@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::bundle_synthesis::{CanonicalExpenseKind, StaticFxRateProvider};
 use crate::document_extract::extract_document_facts;
-use crate::feedback::{FeedbackCategory, SubmissionFeedback, SubmissionFieldFeedback, SubmissionStatus};
+use crate::feedback::{
+    FeedbackCategory, SubmissionFeedback, SubmissionFieldFeedback, SubmissionStatus,
+};
 use crate::ledger::{
     apply_review_revision, ingest_submission_feedback, initialize_review_submission_ledger,
     record_submission_attempt, render_review_submission_ledger_markdown, ActorRole,
@@ -256,15 +258,16 @@ pub fn evaluate_synthetic_corpus(packet_count: usize) -> SyntheticCorpusEvaluati
                 None,
             ),
             SyntheticLedgerScenario::ReturnedAndCorrected => {
-                let returned_path =
-                    "expense_report.general_information.event_name".to_owned();
+                let returned_path = "expense_report.general_information.event_name".to_owned();
                 let correction = build_return_revision(&ledger, &returned_path);
                 ingest_submission_feedback(
                     &mut ledger,
                     attempt_id,
                     SubmissionFeedback {
                         status: SubmissionStatus::Returned,
-                        message: Some("Synthetic site requested a more specific event name".to_owned()),
+                        message: Some(
+                            "Synthetic site requested a more specific event name".to_owned(),
+                        ),
                         category: Some(FeedbackCategory::StanfordSiteWorkflowMismatch),
                         returned_fields: vec![SubmissionFieldFeedback {
                             path: Some(returned_path.clone()),
@@ -365,8 +368,7 @@ pub fn render_synthetic_corpus_evaluation_markdown(
         format!("- Documents: {}", report.summary.document_count),
         format!(
             "- Exact fact matches: {} / {}",
-            report.summary.exact_fact_match_count,
-            report.summary.document_count
+            report.summary.exact_fact_match_count, report.summary.document_count
         ),
         format!(
             "- Review packets: {}, Workbenches: {}, Ledgers initialized: {}",
@@ -380,16 +382,27 @@ pub fn render_synthetic_corpus_evaluation_markdown(
         ),
         format!(
             "- Accepted submissions: {}, Returned-and-corrected submissions: {}",
-            report.summary.accepted_submission_count,
-            report.summary.returned_correction_count
+            report.summary.accepted_submission_count, report.summary.returned_correction_count
         ),
         format!("- Failures: {}", report.failures.len()),
         String::new(),
         "## Coverage".to_owned(),
-        format!("- Destinations: {}", render_counts(&report.summary.destination_counts)),
-        format!("- Currencies: {}", render_counts(&report.summary.currency_counts)),
-        format!("- Variants: {}", render_counts(&report.summary.variant_counts)),
-        format!("- Scenarios: {}", render_counts(&report.summary.scenario_counts)),
+        format!(
+            "- Destinations: {}",
+            render_counts(&report.summary.destination_counts)
+        ),
+        format!(
+            "- Currencies: {}",
+            render_counts(&report.summary.currency_counts)
+        ),
+        format!(
+            "- Variants: {}",
+            render_counts(&report.summary.variant_counts)
+        ),
+        format!(
+            "- Scenarios: {}",
+            render_counts(&report.summary.scenario_counts)
+        ),
         format!(
             "- Trip window modes: {}",
             render_counts(&report.summary.trip_window_mode_counts)
@@ -522,7 +535,10 @@ fn build_ready_revision(ledger: &ReviewSubmissionLedger) -> DraftRevisionInput {
     }
 }
 
-fn build_return_revision(ledger: &ReviewSubmissionLedger, returned_path: &str) -> DraftRevisionInput {
+fn build_return_revision(
+    ledger: &ReviewSubmissionLedger,
+    returned_path: &str,
+) -> DraftRevisionInput {
     let current_version = current_version(ledger);
     let current_value = value_text_at(&current_version.draft.report, returned_path)
         .unwrap_or_else(|| "Returned Event".to_owned());
@@ -655,7 +671,11 @@ mod tests {
     #[test]
     fn synthetic_corpus_evaluation_is_clean_for_large_sample() {
         let report = evaluate_synthetic_corpus(128);
-        assert!(report.is_clean(), "synthetic corpus failures: {:#?}", report.failures);
+        assert!(
+            report.is_clean(),
+            "synthetic corpus failures: {:#?}",
+            report.failures
+        );
         assert_eq!(report.summary.packet_count, 128);
         assert_eq!(report.summary.document_count, 384);
         assert_eq!(report.summary.accepted_submission_count, 64);

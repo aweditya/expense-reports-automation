@@ -385,7 +385,9 @@ impl ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeEnum 
     }
 }
 
-impl core::str::FromStr for ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeEnum {
+impl core::str::FromStr
+    for ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeEnum
+{
     type Err = &'static str;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
@@ -402,7 +404,9 @@ impl core::str::FromStr for ExpenseReportTransactionLinesItemCommonSourceDocumen
     }
 }
 
-impl core::fmt::Display for ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeEnum {
+impl core::fmt::Display
+    for ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeEnum
+{
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str(self.as_str())
     }
@@ -518,7 +522,9 @@ impl ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonSourceEnum {
     }
 }
 
-impl core::str::FromStr for ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonSourceEnum {
+impl core::str::FromStr
+    for ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonSourceEnum
+{
     type Err = &'static str;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
@@ -530,7 +536,9 @@ impl core::str::FromStr for ExpenseReportTransactionLinesItemAirfareDetailsPrice
     }
 }
 
-impl core::fmt::Display for ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonSourceEnum {
+impl core::fmt::Display
+    for ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonSourceEnum
+{
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str(self.as_str())
     }
@@ -677,7 +685,6 @@ pub struct ExpenseReportGeneralInformationPayee {
     /// Source tier: T3
     /// Infer from:  Context from uploaded docs or FA input
     pub affiliation: ExpenseReportGeneralInformationPayeeAffiliationEnum,
-
 }
 
 ///  Structured purpose statement. First 30 chars of the combined text serve as a lookup key.
@@ -704,7 +711,6 @@ pub struct ExpenseReportGeneralInformationBusinessPurpose {
     /// Source tier: T2
     /// Infer from:  Computed from payee name, advisor, and event name
     pub key_30char: String,
-
 }
 
 ///  At least one reason must be selected. Determines required approvals.
@@ -730,7 +736,6 @@ pub struct ExpenseReportGeneralInformationStudentCertification {
     /// Conditionally required when:  student_certification.other == true
     /// Source tier: T3
     pub other_explanation: Option<String>,
-
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -763,7 +768,6 @@ pub struct ExpenseReportGeneralInformation {
     ///  Faculty member or approver name
     /// Source tier: T1
     pub authorized_by: String,
-
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -782,7 +786,6 @@ pub struct ExpenseReportTransactionSummary {
     ///  Sum of all transaction lines, converted to USD
     /// Source tier: T2
     pub total_usd: DecimalAmount,
-
 }
 
 /// Source tier: T1
@@ -791,8 +794,8 @@ pub struct ExpenseReportTransactionLinesItemCommonSourceDocumentsItem {
     /// Source tier: T1
     pub filename: Option<String>,
     /// Source tier: T1
-    pub document_type: Option<ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeEnum>,
-
+    pub document_type:
+        Option<ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeEnum>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -831,11 +834,11 @@ pub struct ExpenseReportTransactionLinesItemCommon {
     /// Conditionally required when:  general_information.category == expenses_foreign
     /// Source tier: T3
     /// Infer from:  Conference registration → 'conference'; otherwise from context
-    pub foreign_activity_type: Option<ExpenseReportTransactionLinesItemCommonForeignActivityTypeEnum>,
+    pub foreign_activity_type:
+        Option<ExpenseReportTransactionLinesItemCommonForeignActivityTypeEnum>,
     ///  References to uploaded documents supporting this line
     /// Source tier: T1
     pub source_documents: Vec<ExpenseReportTransactionLinesItemCommonSourceDocumentsItem>,
-
 }
 
 /// Source tier: T2
@@ -847,7 +850,6 @@ pub struct ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonCompara
     pub amount: Option<DecimalAmount>,
     /// Source tier: T2
     pub class: Option<String>,
-
 }
 
 ///  System-generated if not provided by payee
@@ -858,10 +860,11 @@ pub struct ExpenseReportTransactionLinesItemAirfareDetailsPriceComparison {
     /// Source tier: T2
     pub comparison_date: Option<IsoDate>,
     /// Source tier: T2
-    pub comparable_fares: Option<Vec<ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonComparableFaresItem>>,
+    pub comparable_fares: Option<
+        Vec<ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonComparableFaresItem>,
+    >,
     /// Source tier: T2
     pub source: Option<ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonSourceEnum>,
-
 }
 
 /// Conditionally required when:  expense_type in [airfare_domestic, airfare_foreign]
@@ -899,7 +902,6 @@ pub struct ExpenseReportTransactionLinesItemAirfareDetails {
     ///  System-generated if not provided by payee
     /// Source tier: T2
     pub price_comparison: ExpenseReportTransactionLinesItemAirfareDetailsPriceComparison,
-
 }
 
 /// Conditionally required when:  expense_type in [lodging_domestic, lodging_foreign]
@@ -940,7 +942,6 @@ pub struct ExpenseReportTransactionLinesItemLodgingDetails {
     /// Source tier: T2
     /// Infer from:  Compare hotel dates against conference dates from registration
     pub personal_nights_excluded: Option<DecimalAmount>,
-
 }
 
 /// Conditionally required when:  expense_type in [ground_transportation_foreign,
@@ -959,7 +960,6 @@ pub struct ExpenseReportTransactionLinesItemGroundTransportDetails {
     ///  If true, missing receipt form is used instead
     /// Source tier: T1
     pub missing_receipt: bool,
-
 }
 
 /// Source tier: T3
@@ -973,7 +973,6 @@ pub struct ExpenseReportTransactionLinesItemConferenceRegistrationDetailsMealsIn
     pub lunch: Option<bool>,
     /// Source tier: T3
     pub dinner: Option<bool>,
-
 }
 
 ///  Which meals the conference provides, by day. Feeds into per diem deductions.
@@ -982,8 +981,11 @@ pub struct ExpenseReportTransactionLinesItemConferenceRegistrationDetailsMealsIn
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExpenseReportTransactionLinesItemConferenceRegistrationDetailsMealsIncluded {
     /// Source tier: T3
-    pub schedule: Option<Vec<ExpenseReportTransactionLinesItemConferenceRegistrationDetailsMealsIncludedScheduleItem>>,
-
+    pub schedule: Option<
+        Vec<
+            ExpenseReportTransactionLinesItemConferenceRegistrationDetailsMealsIncludedScheduleItem,
+        >,
+    >,
 }
 
 /// Conditionally required when:  expense_type == conference_registration
@@ -1005,7 +1007,6 @@ pub struct ExpenseReportTransactionLinesItemConferenceRegistrationDetails {
     /// Source tier: T3
     /// Infer from:  Conference program/schedule (e.g., 'lunch provided to all attendees')
     pub meals_included: ExpenseReportTransactionLinesItemConferenceRegistrationDetailsMealsIncluded,
-
 }
 
 /// Source tier: T1
@@ -1015,7 +1016,6 @@ pub struct ExpenseReportTransactionLinesItemMealDetailsAttendeesItem {
     pub name: Option<String>,
     /// Source tier: T1
     pub affiliation: Option<String>,
-
 }
 
 /// Conditionally required when:  expense_type in [business_meal, business_meal_with_alcohol,
@@ -1043,7 +1043,6 @@ pub struct ExpenseReportTransactionLinesItemMealDetails {
     /// Source tier: T3
     /// Infer from:  Scan itemized receipt for alcohol items
     pub has_alcohol_on_receipt: bool,
-
 }
 
 /// Conditionally required when:  expense_type == car_rental
@@ -1070,7 +1069,6 @@ pub struct ExpenseReportTransactionLinesItemCarRentalDetails {
     /// Source tier: T3
     /// Infer from:  Rental receipt line items
     pub insurance_included: bool,
-
 }
 
 /// Conditionally required when:  expense_type in [gift_card_employee_foreign,
@@ -1083,7 +1081,6 @@ pub struct ExpenseReportTransactionLinesItemGiftDetails {
     pub recipient_relationship: String,
     /// Source tier: T1
     pub gift_purpose: String,
-
 }
 
 /// Conditionally required when:  expense_type == human_subject_incentive
@@ -1097,7 +1094,6 @@ pub struct ExpenseReportTransactionLinesItemHumanSubjectDetails {
     /// Source tier: T3
     /// Infer from:  Distribution log
     pub per_subject_amount: DecimalAmount,
-
 }
 
 ///  One entry per distinct expense
@@ -1112,7 +1108,8 @@ pub struct ExpenseReportTransactionLinesItem {
     /// Conditionally required when: ground_transportation_domestic]
     pub ground_transport_details: Option<ExpenseReportTransactionLinesItemGroundTransportDetails>,
     /// Conditionally required when:  expense_type == conference_registration
-    pub conference_registration_details: Option<ExpenseReportTransactionLinesItemConferenceRegistrationDetails>,
+    pub conference_registration_details:
+        Option<ExpenseReportTransactionLinesItemConferenceRegistrationDetails>,
     /// Conditionally required when:  expense_type in [business_meal,
     /// Conditionally required when: business_meal_with_alcohol, group_travel_meal,
     /// Conditionally required when: group_travel_meal_with_alcohol]
@@ -1124,7 +1121,6 @@ pub struct ExpenseReportTransactionLinesItem {
     pub gift_details: Option<ExpenseReportTransactionLinesItemGiftDetails>,
     /// Conditionally required when:  expense_type == human_subject_incentive
     pub human_subject_details: Option<ExpenseReportTransactionLinesItemHumanSubjectDetails>,
-
 }
 
 /// Source tier: T2
@@ -1141,7 +1137,6 @@ pub struct ExpenseReportPerDiemExpensesItemMealDeductionsItem {
     ///  Computed from per diem rate breakdown
     /// Source tier: T2
     pub deduction_amount: Option<DecimalAmount>,
-
 }
 
 /// Source tier: T2
@@ -1155,7 +1150,6 @@ pub struct ExpenseReportPerDiemExpensesItemReimbursementSummaryItem {
     pub meal_deduction: Option<DecimalAmount>,
     /// Source tier: T2
     pub net_amount: Option<DecimalAmount>,
-
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1200,12 +1194,10 @@ pub struct ExpenseReportPerDiemExpensesItem {
     ///  One entry per day. Auto-computed.
     /// Source tier: T2
     pub reimbursement_summary: Vec<ExpenseReportPerDiemExpensesItemReimbursementSummaryItem>,
-
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ExpenseReportMileageExpensesItem {
-}
+pub struct ExpenseReportMileageExpensesItem {}
 
 /// Source tier: T1
 #[derive(Debug, Clone, PartialEq)]
@@ -1214,7 +1206,6 @@ pub struct ExpenseReportAllocationAndApproversBeneficiaryListItem {
     pub name: Option<String>,
     /// Source tier: T1
     pub relationship: Option<String>,
-
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1225,7 +1216,6 @@ pub struct ExpenseReportAllocationAndApprovers {
     /// Conditionally required when:  allocation_and_approvers.other_beneficiaries == true
     /// Source tier: T1
     pub beneficiary_list: Option<Vec<ExpenseReportAllocationAndApproversBeneficiaryListItem>>,
-
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1237,7 +1227,6 @@ pub struct ExpenseReport {
     ///  Placeholder — details to be filled after FA consultation
     pub mileage_expenses: Option<Vec<ExpenseReportMileageExpensesItem>>,
     pub allocation_and_approvers: ExpenseReportAllocationAndApprovers,
-
 }
 
 pub type ExpenseReportModel = ExpenseReport;

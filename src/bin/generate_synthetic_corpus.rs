@@ -2,9 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use expense_report_schema::{
-    generate_synthetic_corpus, render_document_facts_json_pretty,
-};
+use expense_report_schema::{generate_synthetic_corpus, render_document_facts_json_pretty};
 use serde_json::json;
 
 fn main() -> ExitCode {
@@ -48,11 +46,9 @@ fn run() -> Result<(), String> {
         }
     }
 
-    let output_dir = output_dir
-        .map(PathBuf::from)
-        .ok_or_else(|| {
-            "usage: generate_synthetic_corpus --output-dir <dir> [--packets <count>]".to_owned()
-        })?;
+    let output_dir = output_dir.map(PathBuf::from).ok_or_else(|| {
+        "usage: generate_synthetic_corpus --output-dir <dir> [--packets <count>]".to_owned()
+    })?;
     fs::create_dir_all(&output_dir).map_err(|err| err.to_string())?;
 
     let packets = generate_synthetic_corpus(packet_count);

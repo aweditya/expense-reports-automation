@@ -57,8 +57,7 @@ fn run() -> Result<(), String> {
 
     if input_paths.is_empty() {
         return Err(
-            "usage: build_review_workbench_from_facts [--fx none|demo] <facts.json>..."
-                .to_owned(),
+            "usage: build_review_workbench_from_facts [--fx none|demo] <facts.json>...".to_owned(),
         );
     }
 
@@ -75,8 +74,12 @@ fn run() -> Result<(), String> {
         FxMode::None => synthesize_bundle_projection(&documents),
         FxMode::Demo => synthesize_bundle_projection_with_fx(&documents, &demo_fx_provider),
     };
-    let packet = build_review_packet(&projection.bundle, &projection.draft, &projection.validation)
-        .map_err(|err| format!("failed to build review packet: {err}"))?;
+    let packet = build_review_packet(
+        &projection.bundle,
+        &projection.draft,
+        &projection.validation,
+    )
+    .map_err(|err| format!("failed to build review packet: {err}"))?;
 
     println!("{}", render_review_workbench_html(&packet));
     Ok(())

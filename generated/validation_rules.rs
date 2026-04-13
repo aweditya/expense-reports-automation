@@ -2597,5 +2597,8 @@ pub fn field_rule(path: &str) -> Option<&'static FieldRule> {
 }
 
 pub fn conditional_rules_for(path: &str) -> Vec<&'static ConditionalRule> {
-    CONDITIONAL_RULES.iter().filter(|rule| rule.target_path == path).collect()
+    CONDITIONAL_RULES
+        .iter()
+        .filter(|rule| rule.target_path == path)
+        .collect()
 }

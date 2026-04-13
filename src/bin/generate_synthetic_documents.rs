@@ -40,7 +40,11 @@ fn run() -> Result<(), String> {
                 variant = match value.as_str() {
                     "baseline" => SyntheticVariant::Baseline,
                     "noisy" => SyntheticVariant::Noisy,
-                    _ => return Err(format!("unsupported variant {value:?}; expected baseline or noisy")),
+                    _ => {
+                        return Err(format!(
+                            "unsupported variant {value:?}; expected baseline or noisy"
+                        ))
+                    }
                 };
             }
             "--kind" => {
@@ -51,7 +55,11 @@ fn run() -> Result<(), String> {
                     "flight" => DocumentKind::FlightItinerary,
                     "hotel" => DocumentKind::HotelFolio,
                     "receipt" => DocumentKind::Receipt,
-                    _ => return Err(format!("unsupported kind {value:?}; expected flight, hotel, or receipt")),
+                    _ => {
+                        return Err(format!(
+                            "unsupported kind {value:?}; expected flight, hotel, or receipt"
+                        ))
+                    }
                 });
             }
             _ => return Err(format!("unknown flag {arg:?}")),
@@ -92,12 +100,17 @@ fn run() -> Result<(), String> {
     Ok(())
 }
 
-fn write_fixtures(output_dir: &PathBuf, fixtures: &[SyntheticDocumentFixture]) -> Result<(), String> {
+fn write_fixtures(
+    output_dir: &PathBuf,
+    fixtures: &[SyntheticDocumentFixture],
+) -> Result<(), String> {
     for fixture in fixtures {
-        fs::write(output_dir.join(&fixture.filename), &fixture.markdown).map_err(|err| err.to_string())?;
+        fs::write(output_dir.join(&fixture.filename), &fixture.markdown)
+            .map_err(|err| err.to_string())?;
         fs::write(
             output_dir.join(format!("{}.expected.json", fixture.filename)),
-            render_document_facts_json_pretty(&fixture.expected_facts).map_err(|err| err.to_string())?,
+            render_document_facts_json_pretty(&fixture.expected_facts)
+                .map_err(|err| err.to_string())?,
         )
         .map_err(|err| err.to_string())?;
     }

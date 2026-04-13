@@ -1,7 +1,9 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::bundle_regression::{bundle_regression_cases, run_bundle_regression_case, BundleRegressionCase};
+use crate::bundle_regression::{
+    bundle_regression_cases, run_bundle_regression_case, BundleRegressionCase,
+};
 use crate::review_packet::build_review_packet;
 use crate::review_workbench::render_review_workbench_html;
 
@@ -93,8 +95,12 @@ fn verify_workbench_regression_case(case: &BundleRegressionCase) -> Result<Optio
 
 fn render_workbench_regression_case(case: &BundleRegressionCase) -> Result<String, String> {
     let projection = run_bundle_regression_case(case)?;
-    let packet = build_review_packet(&projection.bundle, &projection.draft, &projection.validation)
-        .map_err(|err| format!("failed to build review packet: {err}"))?;
+    let packet = build_review_packet(
+        &projection.bundle,
+        &projection.draft,
+        &projection.validation,
+    )
+    .map_err(|err| format!("failed to build review packet: {err}"))?;
     Ok(render_review_workbench_html(&packet))
 }
 
@@ -104,8 +110,14 @@ fn render_text_mismatch(expected: &str, actual: &str) -> String {
     let max_lines = expected_lines.len().max(actual_lines.len());
 
     for line_index in 0..max_lines {
-        let expected_line = expected_lines.get(line_index).copied().unwrap_or("[end of file]");
-        let actual_line = actual_lines.get(line_index).copied().unwrap_or("[end of file]");
+        let expected_line = expected_lines
+            .get(line_index)
+            .copied()
+            .unwrap_or("[end of file]");
+        let actual_line = actual_lines
+            .get(line_index)
+            .copied()
+            .unwrap_or("[end of file]");
         if expected_line != actual_line {
             return format!(
                 "workbench html mismatch at line {}\nEXPECTED: {}\nACTUAL: {}",

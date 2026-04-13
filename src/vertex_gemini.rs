@@ -1,13 +1,18 @@
 use std::fmt;
 use std::fs;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Deserialize;
 use serde_json::{json, Value as JsonValue};
 
 use crate::transcribe::{TranscribedDocument, TranscribedPage, TranscriptionEngine};
+
+const CLOUD_PLATFORM_SCOPE: &str = "https://www.googleapis.com/auth/cloud-platform";
+const DEFAULT_GEMINI_MODEL: &str = "gemini-2.5-flash";
+const DEFAULT_TOKEN_ENDPOINT: &str = "https://oauth2.googleapis.com/token";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VertexGeminiConfig {
@@ -15,26 +20,63 @@ pub struct VertexGeminiConfig {
     pub location: String,
     pub model: String,
     pub access_token: Option<String>,
+    pub service_account_key_path: Option<PathBuf>,
     pub endpoint_override: Option<String>,
+    pub token_endpoint_override: Option<String>,
 }
 
 impl VertexGeminiConfig {
     pub fn from_env() -> Result<Self, VertexGeminiError> {
-        let project_id = std::env::var("VERTEX_PROJECT_ID")
-            .map_err(|_| VertexGeminiError::MissingConfiguration("VERTEX_PROJECT_ID".to_owned()))?;
-        let location = std::env::var("VERTEX_LOCATION")
-            .map_err(|_| VertexGeminiError::MissingConfiguration("VERTEX_LOCATION".to_owned()))?;
-        let model =
-            std::env::var("VERTEX_GEMINI_MODEL").unwrap_or_else(|_| "gemini-2.5-flash".to_owned());
-        let access_token = std::env::var("VERTEX_ACCESS_TOKEN").ok();
-        let endpoint_override = std::env::var("VERTEX_ENDPOINT_OVERRIDE").ok();
+        Self::resolve_from_sources(None, None, None, None, None, None, None)
+    }
+
+    pub fn resolve_from_sources(
+        project_id: Option<String>,
+        location: Option<String>,
+        model: Option<String>,
+        access_token: Option<String>,
+        service_account_key_path: Option<PathBuf>,
+        endpoint_override: Option<String>,
+        token_endpoint_override: Option<String>,
+    ) -> Result<Self, VertexGeminiError> {
+        let service_account_key_path = service_account_key_path.or_else(|| {
+            std::env::var("VERTEX_SERVICE_ACCOUNT_KEY")
+                .ok()
+                .map(PathBuf::from)
+        });
+        let project_id = match project_id.or_else(|| std::env::var("VERTEX_PROJECT_ID").ok()) {
+            Some(project_id) => project_id,
+            None => service_account_key_path
+                .as_deref()
+                .map(infer_project_id_from_service_account_key_path)
+                .transpose()?
+                .flatten()
+                .ok_or_else(|| {
+                    VertexGeminiError::MissingConfiguration(
+                        "VERTEX_PROJECT_ID or service account project_id".to_owned(),
+                    )
+                })?,
+        };
+        let location = location
+            .or_else(|| std::env::var("VERTEX_LOCATION").ok())
+            .ok_or_else(|| VertexGeminiError::MissingConfiguration("VERTEX_LOCATION".to_owned()))?;
+        let model = model
+            .or_else(|| std::env::var("VERTEX_GEMINI_MODEL").ok())
+            .unwrap_or_else(|| DEFAULT_GEMINI_MODEL.to_owned());
+        let access_token = access_token.or_else(|| std::env::var("VERTEX_ACCESS_TOKEN").ok());
+        let endpoint_override =
+            endpoint_override.or_else(|| std::env::var("VERTEX_ENDPOINT_OVERRIDE").ok());
+        let token_endpoint_override = token_endpoint_override
+            .or_else(|| std::env::var("VERTEX_TOKEN_ENDPOINT_OVERRIDE").ok());
 
         Ok(Self {
             project_id,
             location,
             model,
             access_token,
+            service_account_key_path,
             endpoint_override,
+            token_endpoint_override,
         })
     }
 
@@ -59,6 +101,7 @@ pub enum VertexGeminiError {
     UnsupportedDocumentFormat(String),
     CommandFailed(String),
     HttpStatus(u16, String),
+    InvalidServiceAccountKey(String),
     InvalidUtf8(String),
     InvalidResponse(String),
 }
@@ -80,6 +123,9 @@ impl fmt::Display for VertexGeminiError {
             Self::HttpStatus(status, body) => {
                 write!(f, "Vertex Gemini returned HTTP {status}: {body}")
             }
+            Self::InvalidServiceAccountKey(message) => {
+                write!(f, "invalid service account key: {message}")
+            }
             Self::InvalidUtf8(message) => write!(f, "invalid UTF-8 response: {message}"),
             Self::InvalidResponse(message) => write!(f, "invalid Vertex Gemini response: {message}"),
         }
@@ -98,6 +144,32 @@ impl From<serde_json::Error> for VertexGeminiError {
     fn from(value: serde_json::Error) -> Self {
         Self::Json(value)
     }
+}
+
+#[derive(Debug)]
+struct ServiceAccountKey {
+    project_id: Option<String>,
+    private_key_id: Option<String>,
+    client_email: String,
+    private_key: String,
+    token_uri: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawServiceAccountKey {
+    r#type: Option<String>,
+    project_id: Option<String>,
+    private_key_id: Option<String>,
+    private_key: Option<String>,
+    client_email: Option<String>,
+    token_uri: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OAuthTokenResponse {
+    access_token: Option<String>,
+    error: Option<String>,
+    error_description: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -190,57 +262,27 @@ fn send_generate_content_request(
     let token = resolve_access_token(config)?;
     let endpoint = config.endpoint();
     let request_body = serde_json::to_vec(request)?;
-
-    let mut child = Command::new("curl")
-        .arg("-sS")
-        .arg("-X")
-        .arg("POST")
-        .arg("-H")
-        .arg(format!("Authorization: Bearer {token}"))
-        .arg("-H")
-        .arg("Content-Type: application/json")
-        .arg("--data-binary")
-        .arg("@-")
-        .arg("-w")
-        .arg("\n%{http_code}")
-        .arg(endpoint)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
-
-    let mut stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| VertexGeminiError::CommandFailed("failed to open curl stdin".to_owned()))?;
-    stdin.write_all(&request_body)?;
-    drop(stdin);
-
-    let output = child.wait_with_output()?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
-        return Err(VertexGeminiError::CommandFailed(stderr));
-    }
-
-    let stdout = String::from_utf8(output.stdout)
-        .map_err(|err| VertexGeminiError::InvalidUtf8(err.to_string()))?;
-    let Some((body, status_line)) = stdout.rsplit_once('\n') else {
-        return Err(VertexGeminiError::InvalidResponse(
-            "curl output did not include an HTTP status line".to_owned(),
-        ));
-    };
-    let status = status_line
-        .trim()
-        .parse::<u16>()
-        .map_err(|_| VertexGeminiError::InvalidResponse("failed to parse HTTP status".to_owned()))?;
+    let (status, body) = send_http_post_request(
+        &endpoint,
+        &[
+            format!("Authorization: Bearer {token}"),
+            "Content-Type: application/json".to_owned(),
+        ],
+        &request_body,
+    )?;
     if !(200..300).contains(&status) {
-        return Err(VertexGeminiError::HttpStatus(status, body.trim().to_owned()));
+        return Err(VertexGeminiError::HttpStatus(
+            status,
+            body.trim().to_owned(),
+        ));
     }
 
-    Ok(serde_json::from_str(body)?)
+    Ok(serde_json::from_str(&body)?)
 }
 
-fn parse_generate_content_response(response: &JsonValue) -> Result<Vec<TranscribedPage>, VertexGeminiError> {
+fn parse_generate_content_response(
+    response: &JsonValue,
+) -> Result<Vec<TranscribedPage>, VertexGeminiError> {
     let text = extract_candidate_text(response)?;
     let payload = parse_json_payload(&text)?;
     let pages = payload
@@ -277,7 +319,10 @@ fn parse_generate_content_response(response: &JsonValue) -> Result<Vec<Transcrib
 }
 
 fn extract_candidate_text(response: &JsonValue) -> Result<String, VertexGeminiError> {
-    let Some(candidates) = response.get("candidates").and_then(|value| value.as_array()) else {
+    let Some(candidates) = response
+        .get("candidates")
+        .and_then(|value| value.as_array())
+    else {
         return Err(VertexGeminiError::InvalidResponse(
             "missing `candidates` array".to_owned(),
         ));
@@ -328,7 +373,9 @@ fn parse_json_payload(text: &str) -> Result<GeminiMarkdownResponse, VertexGemini
         ));
     };
 
-    Ok(serde_json::from_str::<GeminiMarkdownResponse>(&trimmed[start..=end])?)
+    Ok(serde_json::from_str::<GeminiMarkdownResponse>(
+        &trimmed[start..=end],
+    )?)
 }
 
 fn strip_code_fences(text: &str) -> &str {
@@ -356,13 +403,27 @@ fn detect_supported_mime_type(path: &Path) -> Result<&'static str, VertexGeminiE
     }
 }
 
-fn resolve_access_token(config: &VertexGeminiConfig) -> Result<String, VertexGeminiError> {
+pub(crate) fn resolve_access_token(
+    config: &VertexGeminiConfig,
+) -> Result<String, VertexGeminiError> {
     if let Some(token) = config
         .access_token
         .clone()
         .or_else(|| std::env::var("VERTEX_ACCESS_TOKEN").ok())
     {
         return Ok(token);
+    }
+
+    let service_account_key_path = config.service_account_key_path.clone().or_else(|| {
+        std::env::var("VERTEX_SERVICE_ACCOUNT_KEY")
+            .ok()
+            .map(PathBuf::from)
+    });
+    if let Some(path) = service_account_key_path.as_deref() {
+        return exchange_service_account_key_for_access_token(
+            path,
+            config.token_endpoint_override.as_deref(),
+        );
     }
 
     ensure_tool_available("gcloud")?;
@@ -379,10 +440,213 @@ fn resolve_access_token(config: &VertexGeminiConfig) -> Result<String, VertexGem
     let token = token.trim().to_owned();
     if token.is_empty() {
         return Err(VertexGeminiError::MissingConfiguration(
-            "VERTEX_ACCESS_TOKEN or gcloud auth print-access-token".to_owned(),
+            "VERTEX_ACCESS_TOKEN, VERTEX_SERVICE_ACCOUNT_KEY, or gcloud auth print-access-token"
+                .to_owned(),
         ));
     }
     Ok(token)
+}
+
+fn exchange_service_account_key_for_access_token(
+    path: &Path,
+    token_endpoint_override: Option<&str>,
+) -> Result<String, VertexGeminiError> {
+    let service_account = read_service_account_key(path)?;
+    let token_endpoint = token_endpoint_override
+        .map(str::to_owned)
+        .or(service_account.token_uri.clone())
+        .unwrap_or_else(|| DEFAULT_TOKEN_ENDPOINT.to_owned());
+    let assertion = build_service_account_assertion(&service_account, &token_endpoint)?;
+    let request_body = build_service_account_token_request_body(&assertion);
+    let (status, body) = send_http_post_request(
+        &token_endpoint,
+        &["Content-Type: application/x-www-form-urlencoded".to_owned()],
+        request_body.as_bytes(),
+    )?;
+    if !(200..300).contains(&status) {
+        return Err(VertexGeminiError::HttpStatus(
+            status,
+            body.trim().to_owned(),
+        ));
+    }
+
+    let token_response: OAuthTokenResponse = serde_json::from_str(&body)?;
+    if let Some(access_token) = token_response.access_token {
+        if access_token.trim().is_empty() {
+            return Err(VertexGeminiError::InvalidResponse(
+                "service account token exchange returned an empty access_token".to_owned(),
+            ));
+        }
+        return Ok(access_token);
+    }
+
+    let error = token_response.error;
+    let error_description = token_response.error_description;
+    let message = error
+        .clone()
+        .zip(error_description.clone())
+        .map(|(error, description)| format!("{error}: {description}"))
+        .or(error)
+        .or(error_description)
+        .unwrap_or_else(|| {
+            "service account token exchange response did not include access_token".to_owned()
+        });
+    Err(VertexGeminiError::InvalidResponse(message))
+}
+
+fn infer_project_id_from_service_account_key_path(
+    path: &Path,
+) -> Result<Option<String>, VertexGeminiError> {
+    Ok(read_service_account_key(path)?.project_id)
+}
+
+fn read_service_account_key(path: &Path) -> Result<ServiceAccountKey, VertexGeminiError> {
+    let raw = fs::read_to_string(path)?;
+    let parsed = serde_json::from_str::<RawServiceAccountKey>(&raw).map_err(|err| {
+        VertexGeminiError::InvalidServiceAccountKey(format!(
+            "failed to parse {}: {err}",
+            path.display()
+        ))
+    })?;
+    if let Some(key_type) = parsed.r#type.as_deref() {
+        if key_type != "service_account" {
+            return Err(VertexGeminiError::InvalidServiceAccountKey(format!(
+                "{} is type {key_type:?}, expected \"service_account\"",
+                path.display()
+            )));
+        }
+    }
+
+    let client_email = parsed
+        .client_email
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| {
+            VertexGeminiError::InvalidServiceAccountKey(format!(
+                "{} is missing client_email",
+                path.display()
+            ))
+        })?;
+    let private_key = parsed
+        .private_key
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| {
+            VertexGeminiError::InvalidServiceAccountKey(format!(
+                "{} is missing private_key",
+                path.display()
+            ))
+        })?;
+
+    Ok(ServiceAccountKey {
+        project_id: parsed.project_id.filter(|value| !value.trim().is_empty()),
+        private_key_id: parsed
+            .private_key_id
+            .filter(|value| !value.trim().is_empty()),
+        client_email,
+        private_key,
+        token_uri: parsed.token_uri.filter(|value| !value.trim().is_empty()),
+    })
+}
+
+fn build_service_account_assertion(
+    service_account: &ServiceAccountKey,
+    token_endpoint: &str,
+) -> Result<String, VertexGeminiError> {
+    let issued_at = current_unix_timestamp()?;
+    let expires_at = issued_at + 3600;
+    let header = if let Some(private_key_id) = &service_account.private_key_id {
+        json!({
+            "alg": "RS256",
+            "typ": "JWT",
+            "kid": private_key_id,
+        })
+    } else {
+        json!({
+            "alg": "RS256",
+            "typ": "JWT",
+        })
+    };
+    let claims = json!({
+        "iss": service_account.client_email,
+        "scope": CLOUD_PLATFORM_SCOPE,
+        "aud": token_endpoint,
+        "iat": issued_at,
+        "exp": expires_at,
+    });
+    let signing_input = format!(
+        "{}.{}",
+        base64_url_encode(serde_json::to_string(&header)?.as_bytes()),
+        base64_url_encode(serde_json::to_string(&claims)?.as_bytes())
+    );
+    let signature = sign_rs256(&service_account.private_key, &signing_input)?;
+    Ok(format!("{signing_input}.{}", base64_url_encode(&signature)))
+}
+
+fn current_unix_timestamp() -> Result<u64, VertexGeminiError> {
+    Ok(SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|err| VertexGeminiError::InvalidResponse(format!("clock error: {err}")))?
+        .as_secs())
+}
+
+fn sign_rs256(private_key_pem: &str, signing_input: &str) -> Result<Vec<u8>, VertexGeminiError> {
+    ensure_tool_available("openssl")?;
+    let temp_key_path = temporary_private_key_path();
+    fs::write(&temp_key_path, private_key_pem)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        let mut permissions = fs::metadata(&temp_key_path)?.permissions();
+        permissions.set_mode(0o600);
+        fs::set_permissions(&temp_key_path, permissions)?;
+    }
+
+    let result = (|| {
+        let mut child = Command::new("openssl")
+            .args(["dgst", "-binary", "-sha256", "-sign"])
+            .arg(&temp_key_path)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+
+        let mut stdin = child.stdin.take().ok_or_else(|| {
+            VertexGeminiError::CommandFailed("failed to open openssl stdin".to_owned())
+        })?;
+        stdin.write_all(signing_input.as_bytes())?;
+        drop(stdin);
+
+        let output = child.wait_with_output()?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+            return Err(VertexGeminiError::CommandFailed(stderr));
+        }
+
+        Ok(output.stdout)
+    })();
+
+    let _ = fs::remove_file(&temp_key_path);
+    result
+}
+
+fn temporary_private_key_path() -> PathBuf {
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock should be valid")
+        .as_nanos();
+    std::env::temp_dir().join(format!(
+        "expense_report_schema_vertex_key_{}_{}.pem",
+        std::process::id(),
+        timestamp
+    ))
+}
+
+fn build_service_account_token_request_body(assertion: &str) -> String {
+    format!(
+        "grant_type={}&assertion={}",
+        percent_encode_form_component("urn:ietf:params:oauth:grant-type:jwt-bearer"),
+        percent_encode_form_component(assertion),
+    )
 }
 
 fn ensure_tool_available(tool: &'static str) -> Result<(), VertexGeminiError> {
@@ -464,6 +728,76 @@ fn base64_encode(bytes: &[u8]) -> String {
     encoded
 }
 
+fn base64_url_encode(bytes: &[u8]) -> String {
+    base64_encode(bytes)
+        .trim_end_matches('=')
+        .replace('+', "-")
+        .replace('/', "_")
+}
+
+fn percent_encode_form_component(value: &str) -> String {
+    let mut encoded = String::new();
+    for byte in value.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                encoded.push(byte as char)
+            }
+            b' ' => encoded.push('+'),
+            _ => encoded.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    encoded
+}
+
+fn send_http_post_request(
+    endpoint: &str,
+    headers: &[String],
+    body: &[u8],
+) -> Result<(u16, String), VertexGeminiError> {
+    ensure_tool_available("curl")?;
+
+    let mut command = Command::new("curl");
+    command.arg("-sS").arg("-X").arg("POST");
+    for header in headers {
+        command.arg("-H").arg(header);
+    }
+    let mut child = command
+        .arg("--data-binary")
+        .arg("@-")
+        .arg("-w")
+        .arg("\n%{http_code}")
+        .arg(endpoint)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+
+    let mut stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| VertexGeminiError::CommandFailed("failed to open curl stdin".to_owned()))?;
+    stdin.write_all(body)?;
+    drop(stdin);
+
+    let output = child.wait_with_output()?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        return Err(VertexGeminiError::CommandFailed(stderr));
+    }
+
+    let stdout = String::from_utf8(output.stdout)
+        .map_err(|err| VertexGeminiError::InvalidUtf8(err.to_string()))?;
+    let Some((response_body, status_line)) = stdout.rsplit_once('\n') else {
+        return Err(VertexGeminiError::InvalidResponse(
+            "curl output did not include an HTTP status line".to_owned(),
+        ));
+    };
+    let status = status_line.trim().parse::<u16>().map_err(|_| {
+        VertexGeminiError::InvalidResponse("failed to parse HTTP status".to_owned())
+    })?;
+    Ok((status, response_body.to_owned()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -473,6 +807,23 @@ mod tests {
     use std::sync::Mutex;
     use std::thread;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    const TEST_PRIVATE_KEY: &str = "-----BEGIN PRIVATE KEY-----\n\
+MIICdgIBADANBgkqhkiG9w0BAQEFAASCAmAwggJcAgEAAoGBAK8y5+xXnjF9T8/G\n\
+jFOXcY6zOiEhMbng2mMOt2H0nnzAlD2SfshsvBSvDgnCrIPkxFVJAbjw6zqLS5g+\n\
+wMtj2z9yJR3m+CsQELIjpnNimkHf/X6U5PVCq/JJ5FhQag2tUVpOAghitsyYZ/HK\n\
+PV0rRonfp3ausYYsupvlE21EXGtjAgMBAAECgYBim/1ryhkQ894zLSaYehoBXqFu\n\
+Oje5znQ84vCWos99mgsV6NmRR5pI7gqxta/SALX85r2gcYGEjxh6VX/AOrEQwvED\n\
+HxTok3BSu7zpZIPWn/o4mUsdu6e6bx+HHhnXZ3kQX/b1q93aHBgqqxkSZVGpj0LC\n\
+M24tnv1ftKW9tR0BuQJBAOHsXrnWM5k55zOVGM+dPMnB/4T5zIaeqUnP/sXGDkvR\n\
+kjUS6efURNS0VdtjaOz4QQc+8RujSCRSBqAyYtkOmD0CQQDGhc8zS5iI8IaFjaoK\n\
+3stxi2hioDvEFdlAaiRMsYU2OzGLmKeaoBX5hvcKfuOwQVB3U+gL4WGNGoJH38So\n\
+e6wfAkEAqUAUAvK2ux7G1zzmVnr8VEXSsAMXtu5b8qEww2dJxIEfIEWoF/ZNDnB/\n\
+NZk2vPiKduwvYr4jSJpuvkqhBO1LHQJAVpOigidUtVvX/sSCRM1XAgSfGGvyxJgW\n\
+r93aSMweYUE9YTjI10k7bB/s+tnNqF9DnVatWwkGhwfpizjORf/xVwJADqDzk0tj\n\
+J8epIHPjma+48/Ygv3xDb+STi22O23g9BTL8ijFAVdGO3U0JRYN8XjCdgarXmKjs\n\
+EFZnVwSb8Mb48w==\n\
+-----END PRIVATE KEY-----\n";
 
     #[test]
     fn detects_supported_mime_types() {
@@ -497,6 +848,89 @@ mod tests {
         )
         .expect("code fenced json should parse");
         assert_eq!(payload.pages.unwrap()[0].text, "# Merchant Receipt");
+    }
+
+    #[test]
+    fn resolves_project_id_from_service_account_key() {
+        let temp_dir = unique_temp_dir("vertex_key_project");
+        let service_account_key_path = write_test_service_account_key(&temp_dir);
+
+        let config = VertexGeminiConfig::resolve_from_sources(
+            None,
+            Some("us-central1".to_owned()),
+            None,
+            None,
+            Some(service_account_key_path.clone()),
+            Some("http://127.0.0.1:0/generate".to_owned()),
+            Some("http://127.0.0.1:0/token".to_owned()),
+        )
+        .expect("config should resolve from service account key");
+
+        assert_eq!(config.project_id, "demo-project");
+        assert_eq!(config.model, DEFAULT_GEMINI_MODEL);
+        assert_eq!(
+            config.service_account_key_path,
+            Some(service_account_key_path)
+        );
+    }
+
+    #[test]
+    fn exchanges_service_account_key_for_access_token() {
+        let temp_dir = unique_temp_dir("vertex_token_exchange");
+        let service_account_key_path = write_test_service_account_key(&temp_dir);
+        let requests = Arc::new(Mutex::new(Vec::<String>::new()));
+        let requests_for_server = Arc::clone(&requests);
+        let base_url = spawn_mock_server(1, move |request| {
+            requests_for_server.lock().unwrap().push(request);
+            http_ok(json!({
+                "access_token": "service-account-token",
+                "token_type": "Bearer",
+                "expires_in": 3600
+            }))
+        });
+
+        let token = resolve_access_token(&VertexGeminiConfig {
+            project_id: "demo-project".to_owned(),
+            location: "us-central1".to_owned(),
+            model: DEFAULT_GEMINI_MODEL.to_owned(),
+            access_token: None,
+            service_account_key_path: Some(service_account_key_path),
+            endpoint_override: Some(format!("{base_url}/generate")),
+            token_endpoint_override: Some(format!("{base_url}/token")),
+        })
+        .expect("service account key exchange should succeed");
+
+        assert_eq!(token, "service-account-token");
+
+        let request = requests.lock().unwrap().join("\n");
+        assert!(request.starts_with("POST /token "));
+        let body = http_request_body(&request);
+        let form = parse_form_urlencoded(body);
+        assert_eq!(
+            form.get("grant_type").map(String::as_str),
+            Some("urn:ietf:params:oauth:grant-type:jwt-bearer")
+        );
+        let assertion = form
+            .get("assertion")
+            .expect("assertion should be present in token exchange");
+        let segments = assertion.split('.').collect::<Vec<_>>();
+        assert_eq!(segments.len(), 3);
+
+        let header: JsonValue = serde_json::from_slice(
+            &base64_url_decode(segments[0]).expect("jwt header should decode"),
+        )
+        .expect("jwt header should parse");
+        let claims: JsonValue = serde_json::from_slice(
+            &base64_url_decode(segments[1]).expect("jwt claims should decode"),
+        )
+        .expect("jwt claims should parse");
+        assert_eq!(header["alg"], "RS256");
+        assert_eq!(
+            claims["iss"],
+            "vertex-test@demo-project.iam.gserviceaccount.com"
+        );
+        assert_eq!(claims["scope"], CLOUD_PLATFORM_SCOPE);
+        assert_eq!(claims["aud"], format!("{base_url}/token"));
     }
 
     #[test]
@@ -532,21 +966,93 @@ mod tests {
             &VertexGeminiConfig {
                 project_id: "demo-project".to_owned(),
                 location: "us-central1".to_owned(),
-                model: "gemini-2.5-flash".to_owned(),
+                model: DEFAULT_GEMINI_MODEL.to_owned(),
                 access_token: Some("test-token".to_owned()),
-                endpoint_override: Some(endpoint),
+                service_account_key_path: None,
+                endpoint_override: Some(format!("{endpoint}/generate")),
+                token_endpoint_override: None,
             },
         )
         .expect("mock vertex transcription should succeed");
 
         assert_eq!(document.engine, TranscriptionEngine::VertexGemini);
         assert_eq!(document.pages.len(), 1);
-        assert!(document.pages[0].text.contains("Merchant Name: Test Bistro"));
+        assert!(document.pages[0]
+            .text
+            .contains("Merchant Name: Test Bistro"));
 
         let request_body = requests.lock().unwrap().join("\n");
         assert!(request_body.contains("\"mimeType\":\"image/png\""));
         assert!(request_body.contains("vertex_mock_"));
         assert!(request_body.contains("\"responseMimeType\":\"application/json\""));
+
+        fs::remove_file(path).expect("temp input should be removable");
+    }
+
+    #[test]
+    fn transcribes_document_with_service_account_key() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time should be valid")
+            .as_nanos();
+        let temp_dir = unique_temp_dir("vertex_key_transcribe");
+        let service_account_key_path = write_test_service_account_key(&temp_dir);
+        let path = std::env::temp_dir().join(format!("vertex_key_mock_{unique}.png"));
+        fs::write(&path, b"not-a-real-png").expect("temp input should be writable");
+
+        let requests = Arc::new(Mutex::new(Vec::<String>::new()));
+        let requests_for_server = Arc::clone(&requests);
+        let base_url = spawn_mock_server(2, move |request| {
+            requests_for_server.lock().unwrap().push(request.clone());
+            if request.starts_with("POST /token ") {
+                http_ok(json!({
+                    "access_token": "minted-token",
+                    "token_type": "Bearer",
+                    "expires_in": 3600
+                }))
+            } else {
+                http_ok(json!({
+                    "candidates": [
+                        {
+                            "content": {
+                                "parts": [
+                                    {
+                                        "text": "{\"pages\":[{\"page_number\":1,\"text\":\"# Merchant Receipt\\n\\n- Merchant Name: Token Bistro\"}]}"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }))
+            }
+        });
+
+        let document = transcribe_document_path_with_vertex(
+            &path,
+            &VertexGeminiConfig {
+                project_id: "demo-project".to_owned(),
+                location: "us-central1".to_owned(),
+                model: DEFAULT_GEMINI_MODEL.to_owned(),
+                access_token: None,
+                service_account_key_path: Some(service_account_key_path),
+                endpoint_override: Some(format!("{base_url}/generate")),
+                token_endpoint_override: Some(format!("{base_url}/token")),
+            },
+        )
+        .expect("mock vertex transcription should succeed");
+
+        assert_eq!(document.engine, TranscriptionEngine::VertexGemini);
+        assert_eq!(document.pages.len(), 1);
+        assert!(document.pages[0]
+            .text
+            .contains("Merchant Name: Token Bistro"));
+
+        let captured = requests.lock().unwrap().clone();
+        assert_eq!(captured.len(), 2);
+        assert!(captured[0].starts_with("POST /token "));
+        assert!(captured[1].starts_with("POST /generate "));
+        assert!(captured[1].contains("Authorization: Bearer minted-token"));
+        assert!(captured[1].contains("\"mimeType\":\"image/png\""));
 
         fs::remove_file(path).expect("temp input should be removable");
     }
@@ -570,7 +1076,7 @@ mod tests {
             }
         });
 
-        format!("http://{address}/v1/projects/test/locations/us-central1/publishers/google/models/gemini-2.5-flash:generateContent")
+        format!("http://{address}")
     }
 
     fn read_http_request(stream: &mut std::net::TcpStream) -> String {
@@ -613,5 +1119,131 @@ mod tests {
             body.len(),
             body
         )
+    }
+
+    fn unique_temp_dir(prefix: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time should be valid")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("expense_report_schema_{prefix}_{unique}"));
+        fs::create_dir_all(&path).expect("temp dir should create");
+        path
+    }
+
+    fn write_test_service_account_key(base_dir: &Path) -> PathBuf {
+        let path = base_dir.join("service_account.json");
+        let key = json!({
+            "type": "service_account",
+            "project_id": "demo-project",
+            "private_key_id": "test-private-key-id",
+            "private_key": TEST_PRIVATE_KEY,
+            "client_email": "vertex-test@demo-project.iam.gserviceaccount.com",
+            "token_uri": "https://oauth2.googleapis.com/token",
+        });
+        fs::write(&path, serde_json::to_vec_pretty(&key).unwrap())
+            .expect("service account key should write");
+        path
+    }
+
+    fn http_request_body(request: &str) -> &str {
+        request
+            .split_once("\r\n\r\n")
+            .map(|(_, body)| body)
+            .unwrap_or("")
+    }
+
+    fn parse_form_urlencoded(body: &str) -> std::collections::HashMap<String, String> {
+        body.split('&')
+            .filter(|pair| !pair.is_empty())
+            .map(|pair| {
+                let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+                (
+                    percent_decode_form_component(key),
+                    percent_decode_form_component(value),
+                )
+            })
+            .collect()
+    }
+
+    fn percent_decode_form_component(value: &str) -> String {
+        let mut decoded = Vec::new();
+        let bytes = value.as_bytes();
+        let mut index = 0usize;
+        while index < bytes.len() {
+            match bytes[index] {
+                b'+' => {
+                    decoded.push(b' ');
+                    index += 1;
+                }
+                b'%' if index + 2 < bytes.len() => {
+                    let high = (bytes[index + 1] as char)
+                        .to_digit(16)
+                        .expect("percent encoding should be hex");
+                    let low = (bytes[index + 2] as char)
+                        .to_digit(16)
+                        .expect("percent encoding should be hex");
+                    decoded.push(((high << 4) + low) as u8);
+                    index += 3;
+                }
+                byte => {
+                    decoded.push(byte);
+                    index += 1;
+                }
+            }
+        }
+        String::from_utf8(decoded).expect("decoded form component should be utf8")
+    }
+
+    fn base64_url_decode(segment: &str) -> Result<Vec<u8>, String> {
+        let mut normalized = segment.replace('-', "+").replace('_', "/");
+        while normalized.len() % 4 != 0 {
+            normalized.push('=');
+        }
+        base64_decode(&normalized)
+    }
+
+    fn base64_decode(value: &str) -> Result<Vec<u8>, String> {
+        let mut bytes = Vec::new();
+        let mut block = Vec::with_capacity(4);
+        for ch in value.bytes().filter(|byte| !byte.is_ascii_whitespace()) {
+            block.push(ch);
+            if block.len() == 4 {
+                decode_base64_block(&block, &mut bytes)?;
+                block.clear();
+            }
+        }
+        if !block.is_empty() {
+            return Err("base64 input length was not a multiple of 4".to_owned());
+        }
+        Ok(bytes)
+    }
+
+    fn decode_base64_block(block: &[u8], output: &mut Vec<u8>) -> Result<(), String> {
+        let mut values = [0u8; 4];
+        let mut padding = 0usize;
+        for (index, byte) in block.iter().enumerate() {
+            values[index] = match byte {
+                b'A'..=b'Z' => byte - b'A',
+                b'a'..=b'z' => byte - b'a' + 26,
+                b'0'..=b'9' => byte - b'0' + 52,
+                b'+' => 62,
+                b'/' => 63,
+                b'=' => {
+                    padding += 1;
+                    0
+                }
+                other => return Err(format!("invalid base64 byte {other:?}")),
+            };
+        }
+
+        output.push((values[0] << 2) | (values[1] >> 4));
+        if padding < 2 {
+            output.push((values[1] << 4) | (values[2] >> 2));
+        }
+        if padding == 0 {
+            output.push((values[2] << 6) | values[3]);
+        }
+        Ok(())
     }
 }

@@ -49,8 +49,18 @@ Environment variables:
 - `VERTEX_PROJECT_ID`
 - `VERTEX_LOCATION`
 - `VERTEX_GEMINI_MODEL` optional, defaults to `gemini-2.5-flash`
-- `VERTEX_ACCESS_TOKEN` optional if `gcloud auth print-access-token` is available
+- `VERTEX_ACCESS_TOKEN` optional if you want to pass a short-lived bearer token directly
+- `VERTEX_SERVICE_ACCOUNT_KEY` optional path to a Google Cloud service-account JSON key
 - `VERTEX_ENDPOINT_OVERRIDE` optional for tests
+- `VERTEX_TOKEN_ENDPOINT_OVERRIDE` optional for tests
+
+Auth resolution order:
+
+1. explicit `--access-token` or `VERTEX_ACCESS_TOKEN`
+2. explicit `--service-account-key` or `VERTEX_SERVICE_ACCOUNT_KEY`
+3. `gcloud auth print-access-token`
+
+When a service-account key is supplied, the repo now signs a JWT locally, exchanges it for a short-lived OAuth access token, and then uses that bearer token for Vertex requests. During bundle ingestion, that token exchange is done once per bundle, not once per document.
 
 CLI flags can override the same values:
 
@@ -58,7 +68,9 @@ CLI flags can override the same values:
 - `--location`
 - `--model`
 - `--access-token`
+- `--service-account-key`
 - `--endpoint`
+- `--token-endpoint`
 
 ## Commands
 
@@ -85,6 +97,19 @@ cargo run --bin ingest_expense_documents -- \
   receipt.png hotel_folio.png itinerary.pdf
 ```
 
+Run the same pipeline with a raw service-account JSON key instead of a pre-minted access token:
+
+```bash
+cargo run --bin ingest_expense_documents -- \
+  --output-dir /tmp/ingest_vertex_output \
+  --engine vertex-gemini \
+  --service-account-key /abs/path/to/service-account.json \
+  --location "$VERTEX_LOCATION" \
+  receipt.png hotel_folio.png itinerary.pdf
+```
+
+If the JSON key contains `project_id`, `--project` is optional.
+
 Transcribe a single document directly through Vertex Gemini:
 
 ```bash
@@ -95,15 +120,28 @@ cargo run --bin transcribe_document -- \
   receipt.png
 ```
 
+Or with a service-account key:
+
+```bash
+cargo run --bin transcribe_document -- \
+  --engine vertex-gemini \
+  --service-account-key /abs/path/to/service-account.json \
+  --location "$VERTEX_LOCATION" \
+  receipt.png
+```
+
 ## Current test coverage
 
 The new ingestion coverage includes:
 
 - mocked Vertex HTTP transcription requests
+- mocked service-account JWT exchange requests
+- service-account project inference from JSON keys
 - fenced and unfenced JSON response parsing
 - MIME detection for supported upload types
 - builtin end-to-end ingestion on synthetic packets
 - mocked Vertex end-to-end ingestion into document facts, review packet, workbench, and ledger
+- mocked bundle ingestion with service-account auth and single token exchange per bundle
 - artifact writing checks for the ingestion output bundle
 
 ## Current limitation

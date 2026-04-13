@@ -4,7 +4,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::bundle_synthesis::CanonicalExpenseBundle;
 use crate::draft::{ConfidenceLevel, DraftReport, EvidenceReference};
-use crate::readiness::{summarize_validation_readiness, ReadinessIssue, ReadinessIssueClass, ReadinessReport};
+use crate::readiness::{
+    summarize_validation_readiness, ReadinessIssue, ReadinessIssueClass, ReadinessReport,
+};
 use crate::validator::ValidationReport;
 use crate::value::ReportValue;
 
@@ -185,12 +187,35 @@ pub fn render_review_packet_markdown(packet: &ReviewPacket) -> String {
     let mut lines = vec!["# Review Packet".to_owned(), String::new()];
 
     lines.push("## Packet Summary".to_owned());
-    lines.push(format!("- Filing Status: {}", filing_status_label(packet.summary.filing_status)));
-    push_optional_line(&mut lines, "- Payee: ", packet.summary.payee_name.as_deref());
-    push_optional_line(&mut lines, "- Event: ", packet.summary.event_name.as_deref());
-    push_optional_line(&mut lines, "- Trip Window: ", packet.summary.trip_window.as_deref());
-    push_optional_line(&mut lines, "- Report Total USD: ", packet.summary.report_total_usd.as_deref());
-    push_optional_line(&mut lines, "- Category: ", packet.summary.category.as_deref());
+    lines.push(format!(
+        "- Filing Status: {}",
+        filing_status_label(packet.summary.filing_status)
+    ));
+    push_optional_line(
+        &mut lines,
+        "- Payee: ",
+        packet.summary.payee_name.as_deref(),
+    );
+    push_optional_line(
+        &mut lines,
+        "- Event: ",
+        packet.summary.event_name.as_deref(),
+    );
+    push_optional_line(
+        &mut lines,
+        "- Trip Window: ",
+        packet.summary.trip_window.as_deref(),
+    );
+    push_optional_line(
+        &mut lines,
+        "- Report Total USD: ",
+        packet.summary.report_total_usd.as_deref(),
+    );
+    push_optional_line(
+        &mut lines,
+        "- Category: ",
+        packet.summary.category.as_deref(),
+    );
     push_optional_line(
         &mut lines,
         "- Transaction Type: ",
@@ -225,7 +250,8 @@ pub fn render_review_packet_markdown(packet: &ReviewPacket) -> String {
                 readiness_class_label(issue.class),
                 issue.label,
                 issue.path,
-                issue.current_value
+                issue
+                    .current_value
                     .as_ref()
                     .map(|value| format!(" -> {value}"))
                     .unwrap_or_default()
@@ -262,7 +288,9 @@ pub fn render_review_packet_markdown(packet: &ReviewPacket) -> String {
             lines.push(format!(
                 "- Line {}: {}",
                 item.line_index + 1,
-                item.expense_type.as_deref().unwrap_or("unknown expense type")
+                item.expense_type
+                    .as_deref()
+                    .unwrap_or("unknown expense type")
             ));
             if let Some(remarks) = item.remarks.as_deref() {
                 lines.push(format!("  - Remarks: {remarks}"));
@@ -283,13 +311,22 @@ fn build_packet_summary(
 ) -> PacketSummary {
     PacketSummary {
         filing_status: filing_status_from_readiness(readiness),
-        payee_name: value_text_at(&draft.report, "expense_report.general_information.payee.name"),
-        event_name: value_text_at(&draft.report, "expense_report.general_information.event_name"),
+        payee_name: value_text_at(
+            &draft.report,
+            "expense_report.general_information.payee.name",
+        ),
+        event_name: value_text_at(
+            &draft.report,
+            "expense_report.general_information.event_name",
+        ),
         trip_window: value_text_at(
             &draft.report,
             "expense_report.general_information.business_purpose.when",
         ),
-        report_total_usd: value_text_at(&draft.report, "expense_report.transaction_summary.total_usd"),
+        report_total_usd: value_text_at(
+            &draft.report,
+            "expense_report.transaction_summary.total_usd",
+        ),
         category: value_text_at(&draft.report, "expense_report.general_information.category"),
         transaction_type: value_text_at(
             &draft.report,
@@ -335,7 +372,13 @@ fn build_issue_queue(
         })
         .collect::<Vec<_>>();
 
-    issues.sort_by_key(|issue| (issue_class_rank(issue.class), issue.label.clone(), issue.path.clone()));
+    issues.sort_by_key(|issue| {
+        (
+            issue_class_rank(issue.class),
+            issue.label.clone(),
+            issue.path.clone(),
+        )
+    });
     issues
 }
 
@@ -387,19 +430,25 @@ fn build_section_instances(draft: &DraftReport, section: &UiSection) -> Vec<Copy
             Vec::new()
         } else {
             vec![CopySectionInstance {
-            path: section.path.clone(),
-            label: section.label.clone(),
-            fields,
-        }]
+                path: section.path.clone(),
+                label: section.label.clone(),
+                fields,
+            }]
         }
     }
 }
 
-fn build_copy_field(draft: &DraftReport, field: &UiField, line_index: Option<usize>) -> Option<CopyField> {
+fn build_copy_field(
+    draft: &DraftReport,
+    field: &UiField,
+    line_index: Option<usize>,
+) -> Option<CopyField> {
     let resolved_path = resolve_ui_field_path(&field.path, line_index);
     let value = value_at(&draft.report, &resolved_path);
     let present = value.is_some();
-    let relevant = line_index.map_or(true, |index| field_is_relevant_for_line(draft, field, index));
+    let relevant = line_index.map_or(true, |index| {
+        field_is_relevant_for_line(draft, field, index)
+    });
 
     if !relevant || (!present && !field.required) {
         return None;
@@ -495,7 +544,9 @@ fn ui_field_for_issue<'a>(ui_map: &'a UiFieldMap, issue: &ReadinessIssue) -> Opt
 }
 
 fn actual_line_count(draft: &DraftReport, section_path: &str) -> usize {
-    let path = section_path.strip_prefix("expense_report.").unwrap_or(section_path);
+    let path = section_path
+        .strip_prefix("expense_report.")
+        .unwrap_or(section_path);
     value_at(&draft.report, path)
         .and_then(ReportValue::as_array)
         .map_or(0, |lines| lines.len())
@@ -510,7 +561,10 @@ fn resolve_ui_field_path(path: &str, line_index: Option<usize>) -> String {
 }
 
 fn field_is_relevant_for_line(draft: &DraftReport, field: &UiField, line_index: usize) -> bool {
-    let wildcard_path = field.path.strip_prefix("expense_report.transaction_lines[].").unwrap_or(&field.path);
+    let wildcard_path = field
+        .path
+        .strip_prefix("expense_report.transaction_lines[].")
+        .unwrap_or(&field.path);
     let top_group = wildcard_path.split('.').next().unwrap_or(wildcard_path);
     if top_group == "common" {
         return true;
@@ -587,10 +641,7 @@ fn wildcard_schema_path(path: &str) -> String {
 }
 
 fn humanize_path_tail(path: &str) -> String {
-    path.rsplit('.')
-        .next()
-        .unwrap_or(path)
-        .replace('_', " ")
+    path.rsplit('.').next().unwrap_or(path).replace('_', " ")
 }
 
 fn issue_class_rank(class: ReadinessIssueClass) -> u8 {
@@ -627,7 +678,9 @@ fn push_optional_line(lines: &mut Vec<String>, prefix: &str, value: Option<&str>
 #[cfg(test)]
 mod tests {
     use super::{build_review_packet, render_review_packet_markdown, FilingStatus};
-    use crate::bundle_synthesis::{synthesize_bundle_projection, synthesize_bundle_projection_with_fx, StaticFxRateProvider};
+    use crate::bundle_synthesis::{
+        synthesize_bundle_projection, synthesize_bundle_projection_with_fx, StaticFxRateProvider,
+    };
     use crate::synthetic_documents::{generate_synthetic_packet, SyntheticVariant};
 
     fn synthetic_documents() -> Vec<crate::ExtractedDocumentFacts> {
@@ -641,13 +694,22 @@ mod tests {
     fn review_packet_summarizes_fx_ready_bundle_for_fa() {
         let provider = StaticFxRateProvider::demo();
         let projection = synthesize_bundle_projection_with_fx(&synthetic_documents(), &provider);
-        let packet =
-            build_review_packet(&projection.bundle, &projection.draft, &projection.validation)
-                .expect("review packet should build");
+        let packet = build_review_packet(
+            &projection.bundle,
+            &projection.draft,
+            &projection.validation,
+        )
+        .expect("review packet should build");
 
-        assert_eq!(packet.summary.filing_status, FilingStatus::UserInputRequired);
+        assert_eq!(
+            packet.summary.filing_status,
+            FilingStatus::UserInputRequired
+        );
         assert_eq!(packet.summary.payee_name.as_deref(), Some("Olivia Park"));
-        assert_eq!(packet.summary.event_name.as_deref(), Some("Foreign Expenses"));
+        assert_eq!(
+            packet.summary.event_name.as_deref(),
+            Some("Foreign Expenses")
+        );
         assert_eq!(packet.summary.report_total_usd.as_deref(), Some("1889.66"));
         assert_eq!(packet.summary.readiness.automation_gap_count, 0);
         assert_eq!(packet.summary.readiness.user_input_gap_count, 4);
@@ -671,9 +733,12 @@ mod tests {
     fn review_packet_copy_view_tracks_repeated_transaction_lines() {
         let provider = StaticFxRateProvider::demo();
         let projection = synthesize_bundle_projection_with_fx(&synthetic_documents(), &provider);
-        let packet =
-            build_review_packet(&projection.bundle, &projection.draft, &projection.validation)
-                .expect("review packet should build");
+        let packet = build_review_packet(
+            &projection.bundle,
+            &projection.draft,
+            &projection.validation,
+        )
+        .expect("review packet should build");
 
         let transaction_lines = packet
             .copy_sections
@@ -684,7 +749,8 @@ mod tests {
         assert!(transaction_lines.instances[0]
             .fields
             .iter()
-            .any(|field| field.path == "expense_report.transaction_lines[0].common.source_documents[0].filename"
+            .any(|field| field.path
+                == "expense_report.transaction_lines[0].common.source_documents[0].filename"
                 && field.value.as_deref() == Some("synthetic_flight_itinerary_baseline.md")));
         assert!(!transaction_lines.instances[0]
             .fields
@@ -694,7 +760,8 @@ mod tests {
         assert!(transaction_lines.instances[2]
             .fields
             .iter()
-            .any(|field| field.path == "expense_report.transaction_lines[2].meal_details.meal_purpose"
+            .any(|field| field.path
+                == "expense_report.transaction_lines[2].meal_details.meal_purpose"
                 && field.value.as_deref() == Some("Business meal during travel in Singapore")
                 && field.needs_review));
     }
@@ -702,25 +769,32 @@ mod tests {
     #[test]
     fn review_packet_marks_no_fx_draft_as_automation_blocked() {
         let projection = synthesize_bundle_projection(&synthetic_documents());
-        let packet =
-            build_review_packet(&projection.bundle, &projection.draft, &projection.validation)
-                .expect("review packet should build");
+        let packet = build_review_packet(
+            &projection.bundle,
+            &projection.draft,
+            &projection.validation,
+        )
+        .expect("review packet should build");
 
-        assert_eq!(packet.summary.filing_status, FilingStatus::AutomationBlocked);
-        assert!(packet
-            .issues_queue
-            .iter()
-            .any(|issue| issue.class == crate::ReadinessIssueClass::AutomationGap
-                && issue.path == "expense_report.transaction_summary.total_usd"));
+        assert_eq!(
+            packet.summary.filing_status,
+            FilingStatus::AutomationBlocked
+        );
+        assert!(packet.issues_queue.iter().any(|issue| issue.class
+            == crate::ReadinessIssueClass::AutomationGap
+            && issue.path == "expense_report.transaction_summary.total_usd"));
     }
 
     #[test]
     fn review_packet_markdown_contains_summary_and_issue_headings() {
         let provider = StaticFxRateProvider::demo();
         let projection = synthesize_bundle_projection_with_fx(&synthetic_documents(), &provider);
-        let packet =
-            build_review_packet(&projection.bundle, &projection.draft, &projection.validation)
-                .expect("review packet should build");
+        let packet = build_review_packet(
+            &projection.bundle,
+            &projection.draft,
+            &projection.validation,
+        )
+        .expect("review packet should build");
         let rendered = render_review_packet_markdown(&packet);
 
         assert!(rendered.contains("# Review Packet"));

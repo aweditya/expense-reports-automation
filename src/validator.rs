@@ -246,9 +246,12 @@ impl<'a> Validator<'a> {
             return;
         };
 
-        let item_rule = immediate_child_rules(schema_path)
-            .into_iter()
-            .find(|rule| matches!(last_schema_segment(rule.path), Some(SchemaPathSegment::AnyIndex)));
+        let item_rule = immediate_child_rules(schema_path).into_iter().find(|rule| {
+            matches!(
+                last_schema_segment(rule.path),
+                Some(SchemaPathSegment::AnyIndex)
+            )
+        });
 
         let Some(item_rule) = item_rule else {
             if !items.is_empty() {
@@ -312,12 +315,16 @@ impl<'a> Validator<'a> {
             SchemaType::Array => matches!(value.kind(), ValueKind::Array),
             SchemaType::String => matches!(value.kind(), ValueKind::String),
             SchemaType::Boolean => matches!(value.kind(), ValueKind::Bool),
-            SchemaType::Number => matches!(value, ReportValue::Number(_))
-                || value
-                    .as_text()
-                    .is_some_and(|text| text.parse::<f64>().is_ok()),
-            SchemaType::Date => matches!(value, ReportValue::Date(_))
-                || value.as_text().is_some_and(is_iso_date_like),
+            SchemaType::Number => {
+                matches!(value, ReportValue::Number(_))
+                    || value
+                        .as_text()
+                        .is_some_and(|text| text.parse::<f64>().is_ok())
+            }
+            SchemaType::Date => {
+                matches!(value, ReportValue::Date(_))
+                    || value.as_text().is_some_and(is_iso_date_like)
+            }
             SchemaType::Enum => value.as_text().is_some(),
         };
 
@@ -345,7 +352,10 @@ impl<'a> Validator<'a> {
             }
 
             for dependency in conditional.depends_on {
-                if self.resolve_reference(current_actual_path, dependency).is_none() {
+                if self
+                    .resolve_reference(current_actual_path, dependency)
+                    .is_none()
+                {
                     self.push_issue(
                         ValidationSeverity::Error,
                         ValidationIssueKind::MissingDependency,
@@ -411,7 +421,10 @@ impl<'a> Validator<'a> {
         if let Some((left, right)) = expression.split_once(" in ") {
             let reference = left.trim();
             let raw_set = right.trim();
-            let Some(stripped) = raw_set.strip_prefix('[').and_then(|value| value.strip_suffix(']')) else {
+            let Some(stripped) = raw_set
+                .strip_prefix('[')
+                .and_then(|value| value.strip_suffix(']'))
+            else {
                 return Err(ValidationIssueKind::UnsupportedExpression);
             };
             let Some(value) = self.resolve_reference(current_actual_path, reference) else {
@@ -430,7 +443,11 @@ impl<'a> Validator<'a> {
         Err(ValidationIssueKind::UnsupportedExpression)
     }
 
-    fn resolve_reference(&self, current_actual_path: &str, reference: &str) -> Option<&'a ReportValue> {
+    fn resolve_reference(
+        &self,
+        current_actual_path: &str,
+        reference: &str,
+    ) -> Option<&'a ReportValue> {
         for candidate in reference_candidates(current_actual_path, reference) {
             if let Some(value) = lookup_actual_path(self.root, &candidate) {
                 return Some(value);
@@ -530,10 +547,13 @@ fn last_schema_segment(path: &str) -> Option<SchemaPathSegment<'_>> {
 }
 
 fn terminal_field_name(path: &str) -> Option<&str> {
-    parse_schema_path(path).into_iter().rev().find_map(|segment| match segment {
-        SchemaPathSegment::Field(name) => Some(name),
-        SchemaPathSegment::AnyIndex => None,
-    })
+    parse_schema_path(path)
+        .into_iter()
+        .rev()
+        .find_map(|segment| match segment {
+            SchemaPathSegment::Field(name) => Some(name),
+            SchemaPathSegment::AnyIndex => None,
+        })
 }
 
 fn join_object_path(base: &str, field: &str) -> String {
@@ -583,7 +603,11 @@ fn trim_quotes(value: &str) -> &str {
     value
         .strip_prefix('"')
         .and_then(|inner| inner.strip_suffix('"'))
-        .or_else(|| value.strip_prefix('\'').and_then(|inner| inner.strip_suffix('\'')))
+        .or_else(|| {
+            value
+                .strip_prefix('\'')
+                .and_then(|inner| inner.strip_suffix('\''))
+        })
         .unwrap_or(value)
 }
 
@@ -600,11 +624,19 @@ fn reference_candidates(current_actual_path: &str, reference: &str) -> Vec<Strin
             push_candidate(&mut candidates, format!("{parent_path}.{reference}"));
         }
         if !reference.contains('.') {
-            push_candidate(&mut candidates, format!("{current_actual_path}.{reference}"));
+            push_candidate(
+                &mut candidates,
+                format!("{current_actual_path}.{reference}"),
+            );
         }
         if let (Some(parent_path), Some(current_field_name)) = (parent_path, current_field_name) {
-            if let Some(stripped_reference) = reference.strip_prefix(&format!("{current_field_name}.")) {
-                push_candidate(&mut candidates, format!("{current_actual_path}.{stripped_reference}"));
+            if let Some(stripped_reference) =
+                reference.strip_prefix(&format!("{current_field_name}."))
+            {
+                push_candidate(
+                    &mut candidates,
+                    format!("{current_actual_path}.{stripped_reference}"),
+                );
                 push_candidate(&mut candidates, format!("{parent_path}.{reference}"));
             }
         }
@@ -664,7 +696,10 @@ fn lookup_actual_path<'a>(root: &'a ReportValue, path: &str) -> Option<&'a Repor
     let mut current = root;
     let mut segments = parse_actual_path(path).into_iter();
 
-    if matches!(segments.next(), Some(ActualPathSegment::Field("expense_report"))) {
+    if matches!(
+        segments.next(),
+        Some(ActualPathSegment::Field("expense_report"))
+    ) {
         // The root report value itself corresponds to expense_report.
     } else {
         return None;
@@ -708,7 +743,9 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::*;
-    use crate::draft::{ConfidenceLevel, DraftReport, EvidenceKind, EvidenceReference, FieldMetadata};
+    use crate::draft::{
+        ConfidenceLevel, DraftReport, EvidenceKind, EvidenceReference, FieldMetadata,
+    };
     use crate::value::ReportValue;
 
     fn text(value: &str) -> ReportValue {
@@ -802,7 +839,11 @@ mod tests {
         }
     }
 
-    fn metadata(confidence: ConfidenceLevel, source_document: &str, needs_review: bool) -> FieldMetadata {
+    fn metadata(
+        confidence: ConfidenceLevel,
+        source_document: &str,
+        needs_review: bool,
+    ) -> FieldMetadata {
         let evidence = match source_document {
             "system_generated" => vec![generated_evidence(source_document)],
             "fa_input" | "payee_form" | "user_input" => vec![user_input_evidence(source_document)],
@@ -943,11 +984,9 @@ mod tests {
         ]);
 
         let validation = validate_expense_report(&report);
-        assert!(validation
-            .issues
-            .iter()
-            .any(|issue| issue.kind == ValidationIssueKind::MissingRequiredField
-                && issue.path == "expense_report.allocation_and_approvers.beneficiary_list"));
+        assert!(validation.issues.iter().any(|issue| issue.kind
+            == ValidationIssueKind::MissingRequiredField
+            && issue.path == "expense_report.allocation_and_approvers.beneficiary_list"));
     }
 
     #[test]
@@ -1029,24 +1068,15 @@ mod tests {
         ]);
 
         let validation = validate_expense_report(&report);
-        assert!(validation
-            .issues
-            .iter()
-            .any(|issue| issue.kind == ValidationIssueKind::MissingRequiredField
-                && issue.path
-                    == "expense_report.transaction_lines[0].common.original_currency"));
-        assert!(validation
-            .issues
-            .iter()
-            .any(|issue| issue.kind == ValidationIssueKind::MissingRequiredField
-                && issue.path
-                    == "expense_report.transaction_lines[0].common.original_amount"));
-        assert!(validation
-            .issues
-            .iter()
-            .any(|issue| issue.kind == ValidationIssueKind::MissingRequiredField
-                && issue.path
-                    == "expense_report.transaction_lines[0].common.exchange_rate"));
+        assert!(validation.issues.iter().any(|issue| issue.kind
+            == ValidationIssueKind::MissingRequiredField
+            && issue.path == "expense_report.transaction_lines[0].common.original_currency"));
+        assert!(validation.issues.iter().any(|issue| issue.kind
+            == ValidationIssueKind::MissingRequiredField
+            && issue.path == "expense_report.transaction_lines[0].common.original_amount"));
+        assert!(validation.issues.iter().any(|issue| issue.kind
+            == ValidationIssueKind::MissingRequiredField
+            && issue.path == "expense_report.transaction_lines[0].common.exchange_rate"));
     }
 
     #[test]
@@ -1057,11 +1087,9 @@ mod tests {
         };
 
         let validation = validate_draft_report(&draft);
-        assert!(validation
-            .issues
-            .iter()
-            .any(|issue| issue.kind == ValidationIssueKind::MissingFieldMetadata
-                && issue.path == "expense_report.general_information.category"));
+        assert!(validation.issues.iter().any(|issue| issue.kind
+            == ValidationIssueKind::MissingFieldMetadata
+            && issue.path == "expense_report.general_information.category"));
     }
 
     #[test]
@@ -1087,11 +1115,9 @@ mod tests {
             .issues
             .iter()
             .any(|issue| issue.kind == ValidationIssueKind::MissingFieldMetadata));
-        assert!(validation
-            .issues
-            .iter()
-            .any(|issue| issue.kind == ValidationIssueKind::LowConfidenceWithoutReview
-                && issue.path == "expense_report.general_information.event_name"));
+        assert!(validation.issues.iter().any(|issue| issue.kind
+            == ValidationIssueKind::LowConfidenceWithoutReview
+            && issue.path == "expense_report.general_information.event_name"));
     }
 
     #[test]
@@ -1113,10 +1139,8 @@ mod tests {
         };
 
         let validation = validate_draft_report(&draft);
-        assert!(validation
-            .issues
-            .iter()
-            .any(|issue| issue.kind == ValidationIssueKind::MissingEvidenceReference
-                && issue.path == "expense_report.general_information.event_name"));
+        assert!(validation.issues.iter().any(|issue| issue.kind
+            == ValidationIssueKind::MissingEvidenceReference
+            && issue.path == "expense_report.general_information.event_name"));
     }
 }

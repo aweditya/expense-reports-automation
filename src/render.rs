@@ -19,7 +19,10 @@ impl fmt::Display for RenderDraftReportError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::MissingMetadata(path) => {
-                write!(f, "cannot render draft instance: missing metadata for leaf field {path}")
+                write!(
+                    f,
+                    "cannot render draft instance: missing metadata for leaf field {path}"
+                )
             }
             Self::Yaml(err) => write!(f, "YAML render error: {err}"),
             Self::Json(err) => write!(f, "JSON render error: {err}"),
@@ -46,7 +49,9 @@ pub fn render_draft_report_yaml(draft: &DraftReport) -> Result<String, RenderDra
     Ok(serde_yaml::to_string(&value)?)
 }
 
-pub fn render_draft_report_json_pretty(draft: &DraftReport) -> Result<String, RenderDraftReportError> {
+pub fn render_draft_report_json_pretty(
+    draft: &DraftReport,
+) -> Result<String, RenderDraftReportError> {
     let value = draft_to_json_value(draft)?;
     Ok(serde_json::to_string_pretty(&value)?)
 }
@@ -140,7 +145,10 @@ fn render_wrapped_leaf_yaml(
         .ok_or_else(|| RenderDraftReportError::MissingMetadata(path.to_owned()))?;
 
     let mut mapping = YamlMapping::new();
-    mapping.insert(YamlValue::String("value".to_owned()), render_leaf_yaml(leaf));
+    mapping.insert(
+        YamlValue::String("value".to_owned()),
+        render_leaf_yaml(leaf),
+    );
     mapping.insert(
         YamlValue::String("_meta".to_owned()),
         field_metadata_to_yaml(metadata),
@@ -236,7 +244,10 @@ fn field_metadata_to_json(metadata: &FieldMetadata) -> JsonValue {
                 .collect(),
         ),
     );
-    mapping.insert("needs_review".to_owned(), JsonValue::Bool(metadata.needs_review));
+    mapping.insert(
+        "needs_review".to_owned(),
+        JsonValue::Bool(metadata.needs_review),
+    );
     mapping.insert(
         "flags".to_owned(),
         JsonValue::Array(
@@ -257,7 +268,11 @@ fn evidence_reference_to_yaml(reference: &EvidenceReference) -> YamlValue {
         YamlValue::String("kind".to_owned()),
         YamlValue::String(evidence_kind_to_str(reference.kind).to_owned()),
     );
-    maybe_insert_yaml_string(&mut mapping, "document_id", reference.document_id.as_deref());
+    maybe_insert_yaml_string(
+        &mut mapping,
+        "document_id",
+        reference.document_id.as_deref(),
+    );
     maybe_insert_yaml_string(&mut mapping, "filename", reference.filename.as_deref());
     maybe_insert_yaml_u32(&mut mapping, "page", reference.page);
     maybe_insert_yaml_string(&mut mapping, "quote", reference.quote.as_deref());
@@ -271,7 +286,11 @@ fn evidence_reference_to_json(reference: &EvidenceReference) -> JsonValue {
         "kind".to_owned(),
         JsonValue::String(evidence_kind_to_str(reference.kind).to_owned()),
     );
-    maybe_insert_json_string(&mut mapping, "document_id", reference.document_id.as_deref());
+    maybe_insert_json_string(
+        &mut mapping,
+        "document_id",
+        reference.document_id.as_deref(),
+    );
     maybe_insert_json_string(&mut mapping, "filename", reference.filename.as_deref());
     maybe_insert_json_u32(&mut mapping, "page", reference.page);
     maybe_insert_json_string(&mut mapping, "quote", reference.quote.as_deref());
@@ -297,7 +316,11 @@ fn maybe_insert_yaml_u32(mapping: &mut YamlMapping, key: &str, value: Option<u32
     }
 }
 
-fn maybe_insert_json_string(mapping: &mut JsonMap<String, JsonValue>, key: &str, value: Option<&str>) {
+fn maybe_insert_json_string(
+    mapping: &mut JsonMap<String, JsonValue>,
+    key: &str,
+    value: Option<&str>,
+) {
     if let Some(value) = value {
         mapping.insert(key.to_owned(), JsonValue::String(value.to_owned()));
     }
@@ -338,7 +361,10 @@ mod tests {
         DraftReport {
             report: ReportValue::object([(
                 "general_information",
-                ReportValue::object([("category", ReportValue::String("expenses_domestic".to_owned()))]),
+                ReportValue::object([(
+                    "category",
+                    ReportValue::String("expenses_domestic".to_owned()),
+                )]),
             )]),
             metadata: BTreeMap::from([(
                 "expense_report.general_information.category".to_owned(),

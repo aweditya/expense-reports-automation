@@ -112,7 +112,9 @@ pub fn export_feedback_regressions() -> Result<(), String> {
     Ok(())
 }
 
-pub fn run_feedback_regression_case(case: &FeedbackRegressionCase) -> Result<FeedbackCapture, String> {
+pub fn run_feedback_regression_case(
+    case: &FeedbackRegressionCase,
+) -> Result<FeedbackCapture, String> {
     let bundle_case = bundle_regression_cases()
         .into_iter()
         .find(|candidate| candidate.id == case.bundle_case_id)
@@ -260,7 +262,9 @@ pub fn run_feedback_regression_case(case: &FeedbackRegressionCase) -> Result<Fee
     ))
 }
 
-fn verify_feedback_regression_case(case: &FeedbackRegressionCase) -> Result<Option<String>, String> {
+fn verify_feedback_regression_case(
+    case: &FeedbackRegressionCase,
+) -> Result<Option<String>, String> {
     let actual = parse_rendered_json(&render_feedback_regression_case(case)?)
         .map_err(|err| format!("failed to parse rendered feedback json: {err}"))?;
     let expected = load_expected_json(expected_feedback_relative_path(case.id))?;

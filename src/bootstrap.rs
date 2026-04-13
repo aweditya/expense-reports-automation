@@ -10,10 +10,7 @@ use crate::value::ReportValue;
 pub enum BootstrapExtractionError {
     Transcription(TranscriptionError),
     MissingField(&'static str),
-    InvalidField {
-        field: &'static str,
-        value: String,
-    },
+    InvalidField { field: &'static str, value: String },
     UnsupportedDocument(&'static str),
 }
 
@@ -21,7 +18,9 @@ impl fmt::Display for BootstrapExtractionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Transcription(err) => write!(f, "{err}"),
-            Self::MissingField(field) => write!(f, "missing expected Stanford summary field: {field}"),
+            Self::MissingField(field) => {
+                write!(f, "missing expected Stanford summary field: {field}")
+            }
             Self::InvalidField { field, value } => {
                 write!(f, "invalid Stanford summary field {field}: {value}")
             }
@@ -48,12 +47,13 @@ pub fn extract_stanford_summary_path(
 pub fn extract_stanford_summary_document(
     document: &TranscribedDocument,
 ) -> Result<DraftReport, BootstrapExtractionError> {
-    let first_page = document
-        .pages
-        .first()
-        .ok_or(BootstrapExtractionError::UnsupportedDocument(
-            "Stanford summary extraction requires at least one transcribed page",
-        ))?;
+    let first_page =
+        document
+            .pages
+            .first()
+            .ok_or(BootstrapExtractionError::UnsupportedDocument(
+                "Stanford summary extraction requires at least one transcribed page",
+            ))?;
     let normalized = normalize_whitespace(&first_page.text);
 
     if !normalized.contains("Expense Report") || !normalized.contains("Business Purpose") {
@@ -67,7 +67,9 @@ pub fn extract_stanford_summary_document(
     } else if normalized.contains("Expenses (Domestic)") {
         "Expenses (Domestic)"
     } else {
-        return Err(BootstrapExtractionError::MissingField("general_information.category"));
+        return Err(BootstrapExtractionError::MissingField(
+            "general_information.category",
+        ));
     };
     let category = match category_quote {
         "Expenses (Foreign)" => "expenses_foreign",
@@ -80,18 +82,21 @@ pub fn extract_stanford_summary_document(
         _ => unreachable!(),
     };
 
-    let payee_raw =
-        extract_between(&normalized, "Payee:", "Event Name:").ok_or(BootstrapExtractionError::MissingField(
-            "general_information.payee.name",
-        ))?;
-    let event_name =
-        extract_between(&normalized, "Event Name:", "Report Total:").ok_or(BootstrapExtractionError::MissingField(
-            "general_information.event_name",
-        ))?;
+    let payee_raw = extract_between(&normalized, "Payee:", "Event Name:").ok_or(
+        BootstrapExtractionError::MissingField("general_information.payee.name"),
+    )?;
+    let event_name = extract_between(&normalized, "Event Name:", "Report Total:").ok_or(
+        BootstrapExtractionError::MissingField("general_information.event_name"),
+    )?;
     let report_total_raw = extract_between_any(
         &normalized,
         "Report Total:",
-        &["SUNet ID:", "Travel Card Business Expenses:", "ER", "Expense Report"],
+        &[
+            "SUNet ID:",
+            "Travel Card Business Expenses:",
+            "ER",
+            "Expense Report",
+        ],
     )
     .ok_or(BootstrapExtractionError::MissingField(
         "transaction_summary.total_usd",
@@ -102,26 +107,30 @@ pub fn extract_stanford_summary_document(
             value: report_total_raw.clone(),
         }
     })?;
-    let submitted_on_raw =
-        extract_between(&normalized, "Submitted On:", "Advance Applied:").ok_or(
-            BootstrapExtractionError::MissingField("transaction_summary.transaction_date"),
-        )?;
+    let submitted_on_raw = extract_between(&normalized, "Submitted On:", "Advance Applied:")
+        .ok_or(BootstrapExtractionError::MissingField(
+            "transaction_summary.transaction_date",
+        ))?;
     let submitted_on = parse_summary_date(&submitted_on_raw).ok_or_else(|| {
         BootstrapExtractionError::InvalidField {
             field: "transaction_summary.transaction_date",
             value: submitted_on_raw.clone(),
         }
     })?;
-    let rush_processing_raw =
-        extract_between(&normalized, "Rush Processing:", "Itemized Personal Expenses:")
-            .ok_or(BootstrapExtractionError::MissingField(
-                "general_information.rush_processing",
-            ))?;
-    let rush_processing =
-        normalize_yes_no(&rush_processing_raw).ok_or_else(|| BootstrapExtractionError::InvalidField {
+    let rush_processing_raw = extract_between(
+        &normalized,
+        "Rush Processing:",
+        "Itemized Personal Expenses:",
+    )
+    .ok_or(BootstrapExtractionError::MissingField(
+        "general_information.rush_processing",
+    ))?;
+    let rush_processing = normalize_yes_no(&rush_processing_raw).ok_or_else(|| {
+        BootstrapExtractionError::InvalidField {
             field: "general_information.rush_processing",
             value: rush_processing_raw.clone(),
-        })?;
+        }
+    })?;
     let payment_method_raw =
         extract_between(&normalized, "Payment Method:", "Reimbursement Amount:").ok_or(
             BootstrapExtractionError::MissingField("general_information.payment_method"),
@@ -131,10 +140,9 @@ pub fn extract_stanford_summary_document(
     let status = status_raw
         .as_ref()
         .map(|value| normalize_whitespace(value).to_ascii_lowercase());
-    let transaction_number = extract_transaction_number(&normalized)
-        .ok_or(BootstrapExtractionError::MissingField(
-            "transaction_summary.transaction_number",
-        ))?;
+    let transaction_number = extract_transaction_number(&normalized).ok_or(
+        BootstrapExtractionError::MissingField("transaction_summary.transaction_number"),
+    )?;
 
     let business_purpose_block = extract_between(
         &normalized,
@@ -174,10 +182,10 @@ pub fn extract_stanford_summary_document(
         "Expense Authorized By:",
     )
     .unwrap_or_default();
-    let authorized_by =
-        extract_between(&normalized, "Expense Authorized By:", "Affiliation:").ok_or(
-            BootstrapExtractionError::MissingField("general_information.authorized_by"),
-        )?;
+    let authorized_by = extract_between(&normalized, "Expense Authorized By:", "Affiliation:")
+        .ok_or(BootstrapExtractionError::MissingField(
+            "general_information.authorized_by",
+        ))?;
 
     let payee_name = clean_payee_name(&payee_raw)
         .or_else(|| infer_payee_name_from_who(&purpose_who))
@@ -188,10 +196,10 @@ pub fn extract_stanford_summary_document(
 
     let certification_supports = certification_block
         .contains("Directly support faculty member's project or research program");
-    let certification_presenting = certification_block
-        .contains("Are related to presenting at a conference");
-    let certification_degree = certification_block
-        .contains("Are an integral part of this student's degree work");
+    let certification_presenting =
+        certification_block.contains("Are related to presenting at a conference");
+    let certification_degree =
+        certification_block.contains("Are an integral part of this student's degree work");
     let certification_employment = certification_block.contains("Are related to employment");
     let certification_other = certification_block.contains("Other");
 
@@ -200,17 +208,32 @@ pub fn extract_stanford_summary_document(
     insert_metadata(
         &mut metadata,
         "expense_report.general_information.category",
-        document_span_metadata(document, first_page.page_number, category_quote, ConfidenceLevel::High),
+        document_span_metadata(
+            document,
+            first_page.page_number,
+            category_quote,
+            ConfidenceLevel::High,
+        ),
     );
     insert_metadata(
         &mut metadata,
         "expense_report.general_information.payee.name",
-        document_span_metadata(document, first_page.page_number, &payee_name, ConfidenceLevel::High),
+        document_span_metadata(
+            document,
+            first_page.page_number,
+            &payee_name,
+            ConfidenceLevel::High,
+        ),
     );
     insert_metadata(
         &mut metadata,
         "expense_report.general_information.payee.affiliation",
-        document_span_metadata(document, first_page.page_number, &purpose_who, ConfidenceLevel::Medium),
+        document_span_metadata(
+            document,
+            first_page.page_number,
+            &purpose_who,
+            ConfidenceLevel::Medium,
+        ),
     );
     insert_metadata(
         &mut metadata,
@@ -235,37 +258,72 @@ pub fn extract_stanford_summary_document(
     insert_metadata(
         &mut metadata,
         "expense_report.general_information.business_purpose.who",
-        document_span_metadata(document, first_page.page_number, &purpose_who, ConfidenceLevel::High),
+        document_span_metadata(
+            document,
+            first_page.page_number,
+            &purpose_who,
+            ConfidenceLevel::High,
+        ),
     );
     insert_metadata(
         &mut metadata,
         "expense_report.general_information.business_purpose.what",
-        document_span_metadata(document, first_page.page_number, &purpose_what, ConfidenceLevel::High),
+        document_span_metadata(
+            document,
+            first_page.page_number,
+            &purpose_what,
+            ConfidenceLevel::High,
+        ),
     );
     insert_metadata(
         &mut metadata,
         "expense_report.general_information.business_purpose.when",
-        document_span_metadata(document, first_page.page_number, &purpose_when, ConfidenceLevel::High),
+        document_span_metadata(
+            document,
+            first_page.page_number,
+            &purpose_when,
+            ConfidenceLevel::High,
+        ),
     );
     insert_metadata(
         &mut metadata,
         "expense_report.general_information.business_purpose.where",
-        document_span_metadata(document, first_page.page_number, &purpose_where, ConfidenceLevel::High),
+        document_span_metadata(
+            document,
+            first_page.page_number,
+            &purpose_where,
+            ConfidenceLevel::High,
+        ),
     );
     insert_metadata(
         &mut metadata,
         "expense_report.general_information.business_purpose.why",
-        document_span_metadata(document, first_page.page_number, &purpose_why, ConfidenceLevel::High),
+        document_span_metadata(
+            document,
+            first_page.page_number,
+            &purpose_why,
+            ConfidenceLevel::High,
+        ),
     );
     insert_metadata(
         &mut metadata,
         "expense_report.general_information.business_purpose.key_30char",
-        document_span_metadata(document, first_page.page_number, &purpose_key_raw, ConfidenceLevel::High),
+        document_span_metadata(
+            document,
+            first_page.page_number,
+            &purpose_key_raw,
+            ConfidenceLevel::High,
+        ),
     );
     insert_metadata(
         &mut metadata,
         "expense_report.general_information.event_name",
-        document_span_metadata(document, first_page.page_number, &event_name, ConfidenceLevel::High),
+        document_span_metadata(
+            document,
+            first_page.page_number,
+            &event_name,
+            ConfidenceLevel::High,
+        ),
     );
     if certification_supports {
         insert_metadata(
@@ -319,13 +377,23 @@ pub fn extract_stanford_summary_document(
         insert_metadata(
             &mut metadata,
             "expense_report.general_information.student_certification.other",
-            document_span_metadata(document, first_page.page_number, "Other", ConfidenceLevel::Medium),
+            document_span_metadata(
+                document,
+                first_page.page_number,
+                "Other",
+                ConfidenceLevel::Medium,
+            ),
         );
     }
     insert_metadata(
         &mut metadata,
         "expense_report.general_information.authorized_by",
-        document_span_metadata(document, first_page.page_number, &authorized_by, ConfidenceLevel::High),
+        document_span_metadata(
+            document,
+            first_page.page_number,
+            &authorized_by,
+            ConfidenceLevel::High,
+        ),
     );
     insert_metadata(
         &mut metadata,
@@ -340,7 +408,12 @@ pub fn extract_stanford_summary_document(
     insert_metadata(
         &mut metadata,
         "expense_report.transaction_summary.transaction_number",
-        document_span_metadata(document, first_page.page_number, &transaction_number, ConfidenceLevel::High),
+        document_span_metadata(
+            document,
+            first_page.page_number,
+            &transaction_number,
+            ConfidenceLevel::High,
+        ),
     );
     insert_metadata(
         &mut metadata,
@@ -393,22 +466,13 @@ pub fn extract_stanford_summary_document(
 
     let mut student_certification_fields = Vec::new();
     if certification_supports {
-        student_certification_fields.push((
-            "supports_faculty_research",
-            ReportValue::Bool(true),
-        ));
+        student_certification_fields.push(("supports_faculty_research", ReportValue::Bool(true)));
     }
     if certification_presenting {
-        student_certification_fields.push((
-            "presenting_at_conference",
-            ReportValue::Bool(true),
-        ));
+        student_certification_fields.push(("presenting_at_conference", ReportValue::Bool(true)));
     }
     if certification_degree {
-        student_certification_fields.push((
-            "integral_to_degree_work",
-            ReportValue::Bool(true),
-        ));
+        student_certification_fields.push(("integral_to_degree_work", ReportValue::Bool(true)));
     }
     if certification_employment {
         student_certification_fields.push(("related_to_employment", ReportValue::Bool(true)));
@@ -418,8 +482,14 @@ pub fn extract_stanford_summary_document(
     }
 
     let mut transaction_summary_fields = vec![
-        ("transaction_type", ReportValue::String(transaction_type.to_owned())),
-        ("transaction_number", ReportValue::String(transaction_number)),
+        (
+            "transaction_type",
+            ReportValue::String(transaction_type.to_owned()),
+        ),
+        (
+            "transaction_number",
+            ReportValue::String(transaction_number),
+        ),
         ("transaction_date", ReportValue::Date(submitted_on)),
         ("total_usd", ReportValue::Number(report_total)),
     ];
@@ -443,10 +513,7 @@ pub fn extract_stanford_summary_document(
                     "rush_processing",
                     ReportValue::String(rush_processing.to_owned()),
                 ),
-                (
-                    "payment_method",
-                    ReportValue::String(payment_method),
-                ),
+                ("payment_method", ReportValue::String(payment_method)),
                 (
                     "business_purpose",
                     ReportValue::object([
@@ -479,7 +546,11 @@ pub fn extract_stanford_summary_document(
     Ok(DraftReport { report, metadata })
 }
 
-fn insert_metadata(metadata: &mut BTreeMap<String, FieldMetadata>, path: &str, value: FieldMetadata) {
+fn insert_metadata(
+    metadata: &mut BTreeMap<String, FieldMetadata>,
+    path: &str,
+    value: FieldMetadata,
+) {
     metadata.insert(path.to_owned(), value);
 }
 
@@ -602,11 +673,7 @@ fn extract_transaction_number(text: &str) -> Option<String> {
     for index in 0..bytes.len().saturating_sub(8) {
         if bytes.get(index) == Some(&b'E') && bytes.get(index + 1) == Some(&b'R') {
             let candidate = &text[index..index + 9];
-            if candidate
-                .chars()
-                .skip(2)
-                .all(|ch| ch.is_ascii_digit())
-            {
+            if candidate.chars().skip(2).all(|ch| ch.is_ascii_digit()) {
                 return Some(candidate.to_owned());
             }
         }

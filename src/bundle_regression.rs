@@ -149,12 +149,12 @@ fn verify_bundle_regression_case(case: &BundleRegressionCase) -> Result<Option<S
         &render_canonical_bundle_json_pretty(&result.bundle)
             .map_err(|err| format!("failed to render bundle json: {err}"))?,
     )
-        .map_err(|err| format!("failed to parse rendered bundle json: {err}"))?;
+    .map_err(|err| format!("failed to parse rendered bundle json: {err}"))?;
     let actual_draft = parse_rendered_json(
         &render_draft_report_json_pretty(&result.draft)
             .map_err(|err| format!("failed to render draft json: {err}"))?,
     )
-        .map_err(|err| format!("failed to parse rendered draft json: {err}"))?;
+    .map_err(|err| format!("failed to parse rendered draft json: {err}"))?;
     let actual_validation = parse_rendered_json(
         &render_validation_report_json_pretty(&result.validation)
             .map_err(|err| format!("failed to render validation json: {err}"))?,
@@ -166,12 +166,7 @@ fn verify_bundle_regression_case(case: &BundleRegressionCase) -> Result<Option<S
     let expected_validation = load_expected_json(case.expected_validation_relative_path())?;
 
     let mut mismatches = Vec::new();
-    push_json_mismatch(
-        &mut mismatches,
-        "bundle",
-        &expected_bundle,
-        &actual_bundle,
-    );
+    push_json_mismatch(&mut mismatches, "bundle", &expected_bundle, &actual_bundle);
     push_json_mismatch(&mut mismatches, "draft", &expected_draft, &actual_draft);
     push_json_mismatch(
         &mut mismatches,

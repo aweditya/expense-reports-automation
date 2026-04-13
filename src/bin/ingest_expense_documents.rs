@@ -26,7 +26,9 @@ fn run() -> Result<(), String> {
     let mut location = None;
     let mut model = None;
     let mut access_token = None;
+    let mut service_account_key_path = None;
     let mut endpoint_override = None;
+    let mut token_endpoint_override = None;
     let mut input_paths = Vec::new();
 
     while let Some(arg) = args.next() {
@@ -80,15 +82,27 @@ fn run() -> Result<(), String> {
                         .ok_or_else(|| "missing value for --access-token".to_owned())?,
                 );
             }
+            "--service-account-key" => {
+                service_account_key_path = Some(
+                    args.next()
+                        .ok_or_else(|| "missing value for --service-account-key".to_owned())?,
+                );
+            }
             "--endpoint" => {
                 endpoint_override = Some(
                     args.next()
                         .ok_or_else(|| "missing value for --endpoint".to_owned())?,
                 );
             }
+            "--token-endpoint" => {
+                token_endpoint_override = Some(
+                    args.next()
+                        .ok_or_else(|| "missing value for --token-endpoint".to_owned())?,
+                );
+            }
             "--help" | "-h" => {
                 return Err(
-                    "usage: ingest_expense_documents --output-dir <dir> [--bundle-id ID] [--fx none|demo] [--engine builtin|vertex-gemini] [--project PROJECT] [--location LOCATION] [--model MODEL] [--access-token TOKEN] [--endpoint URL] <document>..."
+                    "usage: ingest_expense_documents --output-dir <dir> [--bundle-id ID] [--fx none|demo] [--engine builtin|vertex-gemini] [--project PROJECT] [--location LOCATION] [--model MODEL] [--access-token TOKEN] [--service-account-key PATH] [--endpoint URL] [--token-endpoint URL] <document>..."
                         .to_owned(),
                 )
             }
@@ -100,31 +114,30 @@ fn run() -> Result<(), String> {
     let output_dir = output_dir
         .map(PathBuf::from)
         .ok_or_else(|| {
-            "usage: ingest_expense_documents --output-dir <dir> [--bundle-id ID] [--fx none|demo] [--engine builtin|vertex-gemini] [--project PROJECT] [--location LOCATION] [--model MODEL] [--access-token TOKEN] [--endpoint URL] <document>..."
+            "usage: ingest_expense_documents --output-dir <dir> [--bundle-id ID] [--fx none|demo] [--engine builtin|vertex-gemini] [--project PROJECT] [--location LOCATION] [--model MODEL] [--access-token TOKEN] [--service-account-key PATH] [--endpoint URL] [--token-endpoint URL] <document>..."
                 .to_owned()
         })?;
     if input_paths.is_empty() {
         return Err(
-            "usage: ingest_expense_documents --output-dir <dir> [--bundle-id ID] [--fx none|demo] [--engine builtin|vertex-gemini] [--project PROJECT] [--location LOCATION] [--model MODEL] [--access-token TOKEN] [--endpoint URL] <document>..."
+            "usage: ingest_expense_documents --output-dir <dir> [--bundle-id ID] [--fx none|demo] [--engine builtin|vertex-gemini] [--project PROJECT] [--location LOCATION] [--model MODEL] [--access-token TOKEN] [--service-account-key PATH] [--endpoint URL] [--token-endpoint URL] <document>..."
                 .to_owned(),
         );
     }
 
     let transcriber = match engine.as_str() {
         "builtin" => IngestionTranscriber::Builtin,
-        "vertex-gemini" => IngestionTranscriber::VertexGemini(VertexGeminiConfig {
-            project_id: project_id
-                .or_else(|| std::env::var("VERTEX_PROJECT_ID").ok())
-                .ok_or_else(|| "Vertex Gemini requires --project or VERTEX_PROJECT_ID".to_owned())?,
-            location: location
-                .or_else(|| std::env::var("VERTEX_LOCATION").ok())
-                .ok_or_else(|| "Vertex Gemini requires --location or VERTEX_LOCATION".to_owned())?,
-            model: model
-                .or_else(|| std::env::var("VERTEX_GEMINI_MODEL").ok())
-                .unwrap_or_else(|| "gemini-2.5-flash".to_owned()),
-            access_token: access_token.or_else(|| std::env::var("VERTEX_ACCESS_TOKEN").ok()),
-            endpoint_override: endpoint_override.or_else(|| std::env::var("VERTEX_ENDPOINT_OVERRIDE").ok()),
-        }),
+        "vertex-gemini" => IngestionTranscriber::VertexGemini(
+            VertexGeminiConfig::resolve_from_sources(
+                project_id,
+                location,
+                model,
+                access_token,
+                service_account_key_path.map(Into::into),
+                endpoint_override,
+                token_endpoint_override,
+            )
+            .map_err(|err| err.to_string())?,
+        ),
         _ => return Err("engine must be one of builtin | vertex-gemini".to_owned()),
     };
 

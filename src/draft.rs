@@ -73,7 +73,9 @@ impl From<ParseReportError> for ParseDraftReportError {
     }
 }
 
-pub fn parse_draft_report_path(path: impl AsRef<Path>) -> Result<DraftReport, ParseDraftReportError> {
+pub fn parse_draft_report_path(
+    path: impl AsRef<Path>,
+) -> Result<DraftReport, ParseDraftReportError> {
     let root = parse_document_path(path)?;
     parse_draft_report_value(root)
 }
@@ -139,7 +141,9 @@ fn unwrap_draft_node(
             values
                 .into_iter()
                 .enumerate()
-                .map(|(index, value)| unwrap_draft_node(value, &format!("{path}[{index}]"), metadata))
+                .map(|(index, value)| {
+                    unwrap_draft_node(value, &format!("{path}[{index}]"), metadata)
+                })
                 .collect::<Result<Vec<_>, _>>()?,
         )),
         other => Ok(other),
@@ -147,13 +151,13 @@ fn unwrap_draft_node(
 }
 
 fn looks_like_wrapped_value(object: &BTreeMap<String, ReportValue>) -> bool {
-    object.contains_key("value")
-        && object
-            .keys()
-            .all(|key| key == "value" || key == "_meta")
+    object.contains_key("value") && object.keys().all(|key| key == "value" || key == "_meta")
 }
 
-fn parse_field_metadata(value: ReportValue, path: &str) -> Result<FieldMetadata, ParseDraftReportError> {
+fn parse_field_metadata(
+    value: ReportValue,
+    path: &str,
+) -> Result<FieldMetadata, ParseDraftReportError> {
     let ReportValue::Object(mut object) = value else {
         return Err(ParseDraftReportError::InvalidMetadata(format!(
             "_meta at {path} must be an object"
@@ -250,7 +254,9 @@ fn parse_evidence_list(
     values
         .into_iter()
         .enumerate()
-        .map(|(index, value)| parse_evidence_reference(value, &format!("{path}._meta.evidence[{index}]")))
+        .map(|(index, value)| {
+            parse_evidence_reference(value, &format!("{path}._meta.evidence[{index}]"))
+        })
         .collect()
 }
 
@@ -381,14 +387,13 @@ fn parse_optional_u32(
 ) -> Result<Option<u32>, ParseDraftReportError> {
     match value {
         None => Ok(None),
-        Some(ReportValue::Number(value)) | Some(ReportValue::String(value)) => value
-            .parse::<u32>()
-            .map(Some)
-            .map_err(|_| {
+        Some(ReportValue::Number(value)) | Some(ReportValue::String(value)) => {
+            value.parse::<u32>().map(Some).map_err(|_| {
                 ParseDraftReportError::InvalidMetadata(format!(
                     "{key} at {path} must be a positive integer when present"
                 ))
-            }),
+            })
+        }
         Some(_) => Err(ParseDraftReportError::InvalidMetadata(format!(
             "{key} at {path} must be a positive integer when present"
         ))),

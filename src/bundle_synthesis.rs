@@ -4,8 +4,8 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::document_facts::{
-    DateRange, DocumentFactsPayload, ExtractedDocumentFacts, FlightItineraryFacts,
-    HotelFolioFacts, Location, MoneyAmount, Observed, ReceiptFacts,
+    DateRange, DocumentFactsPayload, ExtractedDocumentFacts, FlightItineraryFacts, HotelFolioFacts,
+    Location, MoneyAmount, Observed, ReceiptFacts,
 };
 use crate::draft::{ConfidenceLevel, DraftReport, EvidenceKind, EvidenceReference, FieldMetadata};
 use crate::validator::{validate_draft_report, ValidationReport};
@@ -289,21 +289,16 @@ pub fn enrich_bundle_with_fx(
         enrich_line_with_fx(line, fx_rate_provider);
     }
 
-    bundle
-        .issues
-        .retain(|issue| match issue.kind {
-            BundleIssueKind::MissingUsdConversion => issue
-                .document_ids
+    bundle.issues.retain(|issue| match issue.kind {
+        BundleIssueKind::MissingUsdConversion => issue.document_ids.iter().any(|document_id| {
+            bundle
+                .expense_lines
                 .iter()
-                .any(|document_id| {
-                    bundle
-                        .expense_lines
-                        .iter()
-                        .find(|line| &line.document_id == document_id)
-                        .is_some_and(|line| line.line_amount_usd.is_none())
-                }),
-            _ => true,
-        });
+                .find(|line| &line.document_id == document_id)
+                .is_some_and(|line| line.line_amount_usd.is_none())
+        }),
+        _ => true,
+    });
 }
 
 pub fn project_bundle_to_draft(bundle: &CanonicalExpenseBundle) -> (DraftReport, Vec<BundleIssue>) {
@@ -311,11 +306,7 @@ pub fn project_bundle_to_draft(bundle: &CanonicalExpenseBundle) -> (DraftReport,
     let mut projection_issues = Vec::new();
 
     let mut general_information = BTreeMap::new();
-    let category = bundle
-        .trip
-        .region
-        .as_ref()
-        .map(category_from_region);
+    let category = bundle.trip.region.as_ref().map(category_from_region);
     if let Some(category) = category.as_ref() {
         insert_observed_leaf(
             &mut general_information,
@@ -550,7 +541,8 @@ pub fn project_bundle_to_draft(bundle: &CanonicalExpenseBundle) -> (DraftReport,
         projection_issues.push(bundle_issue(
             BundleIssueSeverity::Warning,
             BundleIssueKind::MissingTransactionSummaryTotal,
-            "Bundle cannot compute total_usd until every projected line has a USD amount".to_owned(),
+            "Bundle cannot compute total_usd until every projected line has a USD amount"
+                .to_owned(),
             bundle
                 .expense_lines
                 .iter()
@@ -608,7 +600,9 @@ pub fn project_bundle_to_draft(bundle: &CanonicalExpenseBundle) -> (DraftReport,
     (draft, projection_issues)
 }
 
-pub fn synthesize_bundle_projection(documents: &[ExtractedDocumentFacts]) -> BundleProjectionResult {
+pub fn synthesize_bundle_projection(
+    documents: &[ExtractedDocumentFacts],
+) -> BundleProjectionResult {
     let bundle = synthesize_bundle(documents);
     let (draft, projection_issues) = project_bundle_to_draft(&bundle);
     let mut issues = bundle.issues.clone();
@@ -654,7 +648,9 @@ fn synthesize_payee(
 
     for document in documents {
         match &document.facts {
-            DocumentFactsPayload::FlightItinerary(FlightItineraryFacts { traveler_names, .. }) => {
+            DocumentFactsPayload::FlightItinerary(FlightItineraryFacts {
+                traveler_names, ..
+            }) => {
                 if let Some(name) = traveler_names.first() {
                     candidates.push((name.clone(), document.document_id.clone()));
                 }
@@ -988,17 +984,21 @@ fn synthesize_airfare_line(
     let remarks = Some(system_observed(
         format!(
             "Airfare {} to {}",
-            facts.segments
+            facts
+                .segments
                 .first()
                 .map(|segment| segment.departure_airport.value.clone())
                 .unwrap_or_else(|| "unknown origin".to_owned()),
-            facts.segments
+            facts
+                .segments
                 .last()
                 .map(|segment| segment.arrival_airport.value.clone())
                 .unwrap_or_else(|| "unknown destination".to_owned())
         ),
         ConfidenceLevel::Medium,
-        amount.map(|value| value.evidence.clone()).unwrap_or_default(),
+        amount
+            .map(|value| value.evidence.clone())
+            .unwrap_or_default(),
         "bundle_synthesis.build_airfare_remarks",
         Vec::new(),
     ));
@@ -1039,28 +1039,32 @@ fn synthesize_airfare_line(
     let departure_airport = facts
         .departure_location
         .as_ref()
-        .and_then(|location| location.value.airport_code.as_ref().map(|value| {
-            system_observed(
-                value.clone(),
-                location.confidence,
-                location.evidence.clone(),
-                "bundle_synthesis.project_departure_airport_from_location",
-                location.flags.clone(),
-            )
-        }))
+        .and_then(|location| {
+            location.value.airport_code.as_ref().map(|value| {
+                system_observed(
+                    value.clone(),
+                    location.confidence,
+                    location.evidence.clone(),
+                    "bundle_synthesis.project_departure_airport_from_location",
+                    location.flags.clone(),
+                )
+            })
+        })
         .or_else(|| first_segment.map(|segment| clone_string_observed(&segment.departure_airport)));
     let destination_airport = facts
         .arrival_location
         .as_ref()
-        .and_then(|location| location.value.airport_code.as_ref().map(|value| {
-            system_observed(
-                value.clone(),
-                location.confidence,
-                location.evidence.clone(),
-                "bundle_synthesis.project_destination_airport_from_location",
-                location.flags.clone(),
-            )
-        }))
+        .and_then(|location| {
+            location.value.airport_code.as_ref().map(|value| {
+                system_observed(
+                    value.clone(),
+                    location.confidence,
+                    location.evidence.clone(),
+                    "bundle_synthesis.project_destination_airport_from_location",
+                    location.flags.clone(),
+                )
+            })
+        })
         .or_else(|| first_segment.map(|segment| clone_string_observed(&segment.arrival_airport)))
         .or_else(|| last_segment.map(|segment| clone_string_observed(&segment.arrival_airport)));
     let airfare_details = Some(CanonicalAirfareDetails {
@@ -1151,7 +1155,12 @@ fn synthesize_lodging_line(
                 window.flags.clone(),
             )
         })
-        .or_else(|| facts.nightly_charges.last().map(|night| clone_string_observed(&night.date)));
+        .or_else(|| {
+            facts
+                .nightly_charges
+                .last()
+                .map(|night| clone_string_observed(&night.date))
+        });
     let line_amount_usd = amount.and_then(|amount| usd_amount_from_money(amount));
     let original_currency = trip
         .region
@@ -1178,13 +1187,16 @@ fn synthesize_lodging_line(
     let remarks = Some(system_observed(
         format!(
             "Lodging at {}",
-            facts.property_name
+            facts
+                .property_name
                 .as_ref()
                 .map(|value| value.value.clone())
                 .unwrap_or_else(|| "unknown hotel".to_owned())
         ),
         ConfidenceLevel::Medium,
-        amount.map(|value| value.evidence.clone()).unwrap_or_default(),
+        amount
+            .map(|value| value.evidence.clone())
+            .unwrap_or_default(),
         "bundle_synthesis.build_lodging_remarks",
         Vec::new(),
     ));
@@ -1255,7 +1267,8 @@ fn synthesize_lodging_line(
             Some(system_observed(
                 facts.nightly_charges.len().to_string(),
                 ConfidenceLevel::High,
-                facts.nightly_charges
+                facts
+                    .nightly_charges
                     .iter()
                     .flat_map(|night| night.date.evidence.clone())
                     .collect(),
@@ -1323,7 +1336,10 @@ fn synthesize_receipt_line(
         date: facts.transaction_date.as_ref().map(clone_string_observed),
         line_amount_usd: facts.total_paid.as_ref().and_then(usd_amount_from_money),
         exchange_rate: identity_exchange_rate_if_usd(facts.total_paid.as_ref(), trip),
-        original_currency: facts.total_paid.as_ref().and_then(currency_observed_from_money),
+        original_currency: facts
+            .total_paid
+            .as_ref()
+            .and_then(currency_observed_from_money),
         original_amount: facts.total_paid.as_ref().map(number_observed_from_money),
         expense_type: None,
         remarks: facts.merchant_name.as_ref().map(|merchant| {
@@ -1368,7 +1384,17 @@ fn synthesize_meal_line(
     let has_alcohol = receipt_has_alcohol(facts);
     let alcohol_amount = sum_receipt_items_by_keywords(
         facts,
-        &["beer", "wine", "cocktail", "whiskey", "vodka", "gin", "ale", "lager", "champagne"],
+        &[
+            "beer",
+            "wine",
+            "cocktail",
+            "whiskey",
+            "vodka",
+            "gin",
+            "ale",
+            "lager",
+            "champagne",
+        ],
     );
     let expense_type = trip.region.as_ref().map_or_else(
         || {
@@ -1379,7 +1405,9 @@ fn synthesize_meal_line(
                     "business_meal".to_owned()
                 },
                 ConfidenceLevel::Medium,
-                amount.map(|value| value.evidence.clone()).unwrap_or_default(),
+                amount
+                    .map(|value| value.evidence.clone())
+                    .unwrap_or_default(),
                 "bundle_synthesis.heuristic_meal_classification",
                 vec!["heuristic_receipt_classification".to_owned()],
             ))
@@ -1392,7 +1420,9 @@ fn synthesize_meal_line(
                     "business_meal".to_owned()
                 },
                 ConfidenceLevel::Medium,
-                amount.map(|value| value.evidence.clone()).unwrap_or_default(),
+                amount
+                    .map(|value| value.evidence.clone())
+                    .unwrap_or_default(),
                 "bundle_synthesis.heuristic_meal_classification",
                 vec!["heuristic_receipt_classification".to_owned()],
             ))
@@ -1482,7 +1512,11 @@ fn project_transaction_lines(
 ) -> Vec<ReportValue> {
     let mut lines = Vec::new();
 
-    for line in bundle.expense_lines.iter().filter(|line| line.projection_supported) {
+    for line in bundle
+        .expense_lines
+        .iter()
+        .filter(|line| line.projection_supported)
+    {
         let line_index = lines.len();
         let base_path = format!("expense_report.transaction_lines[{line_index}]");
 
@@ -1730,10 +1764,7 @@ fn project_transaction_lines(
                         );
                     }
                 }
-                airfare_details.insert(
-                    "price_comparison".to_owned(),
-                    ReportValue::empty_object(),
-                );
+                airfare_details.insert("price_comparison".to_owned(), ReportValue::empty_object());
                 line_object.insert(
                     "airfare_details".to_owned(),
                     ReportValue::Object(airfare_details),
@@ -1882,10 +1913,7 @@ fn project_transaction_lines(
                         );
                     }
                 }
-                line_object.insert(
-                    "meal_details".to_owned(),
-                    ReportValue::Object(meal_details),
-                );
+                line_object.insert("meal_details".to_owned(), ReportValue::Object(meal_details));
             }
             CanonicalExpenseKind::GenericReceipt => {
                 issues.push(bundle_issue(
@@ -1933,7 +1961,11 @@ fn synthesize_total_usd(bundle: &CanonicalExpenseBundle) -> Option<Observed<Stri
         .filter(|line| line.projection_supported)
         .collect::<Vec<_>>();
 
-    if supported_lines.is_empty() || supported_lines.iter().any(|line| line.line_amount_usd.is_none()) {
+    if supported_lines.is_empty()
+        || supported_lines
+            .iter()
+            .any(|line| line.line_amount_usd.is_none())
+    {
         return None;
     }
 
@@ -2026,7 +2058,10 @@ fn synthesize_business_purpose_what(bundle: &CanonicalExpenseBundle) -> Option<O
 
     bundle.trip.destination.as_ref().map(|destination| {
         system_observed(
-            format!("Business travel to {}", location_to_display(&destination.value)),
+            format!(
+                "Business travel to {}",
+                location_to_display(&destination.value)
+            ),
             ConfidenceLevel::Low,
             destination.evidence.clone(),
             "bundle_synthesis.default_business_purpose_what",
@@ -2098,7 +2133,11 @@ fn synthesize_business_purpose_key(
             category.evidence.as_slice(),
         ]),
         "bundle_synthesis.compute_business_purpose_key",
-        combined_flags([who.flags.as_slice(), what.flags.as_slice(), category.flags.as_slice()]),
+        combined_flags([
+            who.flags.as_slice(),
+            what.flags.as_slice(),
+            category.flags.as_slice(),
+        ]),
     ))
 }
 
@@ -2198,17 +2237,29 @@ fn first_document_event_name(bundle: &CanonicalExpenseBundle) -> Option<&Observe
 fn first_summary_business_purpose_what(
     bundle: &CanonicalExpenseBundle,
 ) -> Option<&Observed<String>> {
-    bundle.documents.iter().find_map(|document| match &document.facts {
-        DocumentFactsPayload::StanfordExpenseSummary(facts) => facts.business_purpose_what.as_ref(),
-        _ => None,
-    })
+    bundle
+        .documents
+        .iter()
+        .find_map(|document| match &document.facts {
+            DocumentFactsPayload::StanfordExpenseSummary(facts) => {
+                facts.business_purpose_what.as_ref()
+            }
+            _ => None,
+        })
 }
 
-fn first_summary_business_purpose_why(bundle: &CanonicalExpenseBundle) -> Option<&Observed<String>> {
-    bundle.documents.iter().find_map(|document| match &document.facts {
-        DocumentFactsPayload::StanfordExpenseSummary(facts) => facts.business_purpose_why.as_ref(),
-        _ => None,
-    })
+fn first_summary_business_purpose_why(
+    bundle: &CanonicalExpenseBundle,
+) -> Option<&Observed<String>> {
+    bundle
+        .documents
+        .iter()
+        .find_map(|document| match &document.facts {
+            DocumentFactsPayload::StanfordExpenseSummary(facts) => {
+                facts.business_purpose_why.as_ref()
+            }
+            _ => None,
+        })
 }
 
 fn collect_line_level_issues(lines: &[CanonicalExpenseLine]) -> Vec<BundleIssue> {
@@ -2316,25 +2367,28 @@ fn identity_exchange_rate_if_usd(
 }
 
 fn looks_like_meal_receipt(facts: &ReceiptFacts) -> bool {
-    facts
-        .merchant_name
-        .as_ref()
-        .is_some_and(|merchant| contains_any(&merchant.value, &[
-            "restaurant",
-            "bistro",
-            "cafe",
-            "coffee",
-            "bar",
-            "grill",
-            "kitchen",
-            "diner",
-            "noodle",
-            "pizza",
-            "burger",
-            "steak",
-        ]))
-        || facts.line_items.iter().any(|item| {
-            contains_any(&item.description.value, &[
+    facts.merchant_name.as_ref().is_some_and(|merchant| {
+        contains_any(
+            &merchant.value,
+            &[
+                "restaurant",
+                "bistro",
+                "cafe",
+                "coffee",
+                "bar",
+                "grill",
+                "kitchen",
+                "diner",
+                "noodle",
+                "pizza",
+                "burger",
+                "steak",
+            ],
+        )
+    }) || facts.line_items.iter().any(|item| {
+        contains_any(
+            &item.description.value,
+            &[
                 "breakfast",
                 "lunch",
                 "dinner",
@@ -2346,23 +2400,27 @@ fn looks_like_meal_receipt(facts: &ReceiptFacts) -> bool {
                 "salad",
                 "soup",
                 "service charge",
-            ])
-        })
+            ],
+        )
+    })
 }
 
 fn receipt_has_alcohol(facts: &ReceiptFacts) -> bool {
     facts.line_items.iter().any(|item| {
-        contains_any(&item.description.value, &[
-            "beer",
-            "wine",
-            "cocktail",
-            "whiskey",
-            "vodka",
-            "gin",
-            "ale",
-            "lager",
-            "champagne",
-        ])
+        contains_any(
+            &item.description.value,
+            &[
+                "beer",
+                "wine",
+                "cocktail",
+                "whiskey",
+                "vodka",
+                "gin",
+                "ale",
+                "lager",
+                "champagne",
+            ],
+        )
     })
 }
 
@@ -2436,7 +2494,8 @@ fn enrich_line_with_fx(line: &mut CanonicalExpenseLine, fx_rate_provider: &dyn F
         return;
     };
 
-    let Some(converted_amount) = multiply_amounts(&original_amount.value, &quote.usd_per_unit) else {
+    let Some(converted_amount) = multiply_amounts(&original_amount.value, &quote.usd_per_unit)
+    else {
         return;
     };
 
@@ -2672,12 +2731,14 @@ fn truncate_chars(value: &str, max_chars: usize) -> String {
 fn lowest_confidence(values: impl IntoIterator<Item = ConfidenceLevel>) -> ConfidenceLevel {
     values
         .into_iter()
-        .fold(ConfidenceLevel::High, |lowest, current| match (lowest, current) {
-            (ConfidenceLevel::Low, _) | (_, ConfidenceLevel::Low) => ConfidenceLevel::Low,
-            (ConfidenceLevel::Medium, _) | (_, ConfidenceLevel::Medium) => {
-                ConfidenceLevel::Medium
+        .fold(ConfidenceLevel::High, |lowest, current| {
+            match (lowest, current) {
+                (ConfidenceLevel::Low, _) | (_, ConfidenceLevel::Low) => ConfidenceLevel::Low,
+                (ConfidenceLevel::Medium, _) | (_, ConfidenceLevel::Medium) => {
+                    ConfidenceLevel::Medium
+                }
+                _ => ConfidenceLevel::High,
             }
-            _ => ConfidenceLevel::High,
         })
 }
 
@@ -2734,9 +2795,9 @@ mod tests {
     use super::*;
     use crate::curated_corpus::curated_corpus_root;
     use crate::document_facts::parse_document_facts_json_path;
-    use crate::DocumentKind;
     use crate::synthetic_documents::{generate_synthetic_document, SyntheticVariant};
     use crate::validator::{ValidationIssueKind, ValidationSeverity};
+    use crate::DocumentKind;
 
     fn synthetic_docs() -> Vec<ExtractedDocumentFacts> {
         vec![
@@ -2785,9 +2846,16 @@ mod tests {
     fn synthesizes_consistent_bundle_from_synthetic_documents() {
         let bundle = synthesize_bundle(&synthetic_docs());
 
-        assert_eq!(bundle.payee.as_ref().map(|payee| payee.name.value.as_str()), Some("Olivia Park"));
         assert_eq!(
-            bundle.trip.destination.as_ref().and_then(|destination| destination.value.country.as_deref()),
+            bundle.payee.as_ref().map(|payee| payee.name.value.as_str()),
+            Some("Olivia Park")
+        );
+        assert_eq!(
+            bundle
+                .trip
+                .destination
+                .as_ref()
+                .and_then(|destination| destination.value.country.as_deref()),
             Some("Singapore")
         );
         assert_eq!(
@@ -2825,30 +2893,42 @@ mod tests {
         let result = synthesize_bundle_projection(&synthetic_docs());
 
         assert_eq!(
-            get_path(&result.draft.report, "general_information.category").and_then(ReportValue::as_text),
+            get_path(&result.draft.report, "general_information.category")
+                .and_then(ReportValue::as_text),
             Some("expenses_foreign")
         );
         assert_eq!(
-            get_path(&result.draft.report, "general_information.rush_processing").and_then(ReportValue::as_text),
+            get_path(&result.draft.report, "general_information.rush_processing")
+                .and_then(ReportValue::as_text),
             Some("no")
         );
         assert_eq!(
-            get_path(&result.draft.report, "transaction_summary.transaction_type").and_then(ReportValue::as_text),
+            get_path(&result.draft.report, "transaction_summary.transaction_type")
+                .and_then(ReportValue::as_text),
             Some("foreign")
         );
         assert_eq!(
-            get_path(&result.draft.report, "transaction_lines[0].common.expense_type")
-                .and_then(ReportValue::as_text),
+            get_path(
+                &result.draft.report,
+                "transaction_lines[0].common.expense_type"
+            )
+            .and_then(ReportValue::as_text),
             Some("airfare_foreign")
         );
         assert_eq!(
-            get_path(&result.draft.report, "transaction_lines[1].common.expense_type")
-                .and_then(ReportValue::as_text),
+            get_path(
+                &result.draft.report,
+                "transaction_lines[1].common.expense_type"
+            )
+            .and_then(ReportValue::as_text),
             Some("lodging_foreign")
         );
         assert_eq!(
-            get_path(&result.draft.report, "transaction_lines[2].common.expense_type")
-                .and_then(ReportValue::as_text),
+            get_path(
+                &result.draft.report,
+                "transaction_lines[2].common.expense_type"
+            )
+            .and_then(ReportValue::as_text),
             Some("business_meal")
         );
         assert!(result
@@ -2883,41 +2963,27 @@ mod tests {
                 .and_then(ReportValue::as_text),
             Some("Foreign Expenses")
         );
-        assert!(result
-            .validation
-            .issues
-            .iter()
-            .any(|issue| issue.kind == ValidationIssueKind::MissingRequiredField
-                && issue.path == "expense_report.general_information.payee.affiliation"));
-        assert!(result
-            .validation
-            .issues
-            .iter()
-            .any(|issue| issue.kind == ValidationIssueKind::MissingRequiredField
-                && issue.path == "expense_report.transaction_summary.total_usd"));
-        assert!(result
-            .validation
-            .issues
-            .iter()
-            .any(|issue| issue.kind == ValidationIssueKind::MissingRequiredField
-                && issue.path == "expense_report.transaction_lines[1].common.line_amount_usd"));
-        assert!(result
-            .validation
-            .issues
-            .iter()
-            .any(|issue| issue.kind == ValidationIssueKind::MissingRequiredField
-                && issue.path == "expense_report.transaction_lines[2].meal_details.attendees"));
-        assert!(!result
-            .validation
-            .issues
-            .iter()
-            .any(|issue| issue.kind == ValidationIssueKind::MissingRequiredField
-                && (issue.path == "expense_report.general_information.business_purpose.what"
-                    || issue.path == "expense_report.general_information.business_purpose.why"
-                    || issue.path == "expense_report.general_information.business_purpose.key_30char"
-                    || issue.path == "expense_report.general_information.event_name"
-                    || issue.path == "expense_report.transaction_lines[2].meal_details.meal_purpose"
-                    || issue.path == "expense_report.allocation_and_approvers")));
+        assert!(result.validation.issues.iter().any(|issue| issue.kind
+            == ValidationIssueKind::MissingRequiredField
+            && issue.path == "expense_report.general_information.payee.affiliation"));
+        assert!(result.validation.issues.iter().any(|issue| issue.kind
+            == ValidationIssueKind::MissingRequiredField
+            && issue.path == "expense_report.transaction_summary.total_usd"));
+        assert!(result.validation.issues.iter().any(|issue| issue.kind
+            == ValidationIssueKind::MissingRequiredField
+            && issue.path == "expense_report.transaction_lines[1].common.line_amount_usd"));
+        assert!(result.validation.issues.iter().any(|issue| issue.kind
+            == ValidationIssueKind::MissingRequiredField
+            && issue.path == "expense_report.transaction_lines[2].meal_details.attendees"));
+        assert!(!result.validation.issues.iter().any(|issue| issue.kind
+            == ValidationIssueKind::MissingRequiredField
+            && (issue.path == "expense_report.general_information.business_purpose.what"
+                || issue.path == "expense_report.general_information.business_purpose.why"
+                || issue.path
+                    == "expense_report.general_information.business_purpose.key_30char"
+                || issue.path == "expense_report.general_information.event_name"
+                || issue.path == "expense_report.transaction_lines[2].meal_details.meal_purpose"
+                || issue.path == "expense_report.allocation_and_approvers")));
     }
 
     #[test]
@@ -2925,13 +2991,19 @@ mod tests {
         let result = synthesize_bundle_projection(&synthetic_docs());
 
         assert_eq!(
-            get_path(&result.draft.report, "transaction_lines[0].common.original_currency")
-                .and_then(ReportValue::as_text),
+            get_path(
+                &result.draft.report,
+                "transaction_lines[0].common.original_currency"
+            )
+            .and_then(ReportValue::as_text),
             Some("USD")
         );
         assert_eq!(
-            get_path(&result.draft.report, "transaction_lines[0].common.original_amount")
-                .and_then(ReportValue::as_text),
+            get_path(
+                &result.draft.report,
+                "transaction_lines[0].common.original_amount"
+            )
+            .and_then(ReportValue::as_text),
             Some("1287.44")
         );
     }
@@ -2947,17 +3019,27 @@ mod tests {
         let result = synthesize_bundle_projection(&documents);
 
         assert_eq!(
-            result.bundle.payee.as_ref().map(|payee| payee.name.value.as_str()),
+            result
+                .bundle
+                .payee
+                .as_ref()
+                .map(|payee| payee.name.value.as_str()),
             Some("Olivia Park")
         );
         assert_eq!(
-            get_path(&result.draft.report, "transaction_lines[0].airfare_details.airline")
-                .and_then(ReportValue::as_text),
+            get_path(
+                &result.draft.report,
+                "transaction_lines[0].airfare_details.airline"
+            )
+            .and_then(ReportValue::as_text),
             Some("ANA")
         );
         assert_eq!(
-            get_path(&result.draft.report, "transaction_lines[1].lodging_details.hotel_name")
-                .and_then(ReportValue::as_text),
+            get_path(
+                &result.draft.report,
+                "transaction_lines[1].lodging_details.hotel_name"
+            )
+            .and_then(ReportValue::as_text),
             Some("MARINA BAY GRAND HOTEL")
         );
         assert!(!result
@@ -3035,28 +3117,30 @@ mod tests {
             .metadata
             .get("expense_report.allocation_and_approvers.other_beneficiaries")
             .is_some_and(|metadata| metadata.needs_review));
-        assert!(!result
-            .validation
-            .issues
-            .iter()
-            .any(|issue| issue.kind == ValidationIssueKind::LowConfidenceWithoutReview
-                && (issue.path
-                    == "expense_report.transaction_lines[0].common.foreign_activity_type"
-                    || issue.path
-                        == "expense_report.transaction_lines[1].common.foreign_activity_type")));
+        assert!(!result.validation.issues.iter().any(|issue| issue.kind
+            == ValidationIssueKind::LowConfidenceWithoutReview
+            && (issue.path == "expense_report.transaction_lines[0].common.foreign_activity_type"
+                || issue.path
+                    == "expense_report.transaction_lines[1].common.foreign_activity_type")));
     }
 
     #[test]
     fn classifies_restaurant_receipt_into_meal_projection() {
         let result = synthesize_bundle_projection(&synthetic_docs());
         assert_eq!(
-            get_path(&result.draft.report, "transaction_lines[2].meal_details.venue_name")
-                .and_then(ReportValue::as_text),
+            get_path(
+                &result.draft.report,
+                "transaction_lines[2].meal_details.venue_name"
+            )
+            .and_then(ReportValue::as_text),
             Some("East Bay Bistro")
         );
         assert_eq!(
-            get_path(&result.draft.report, "transaction_lines[2].meal_details.tip_amount")
-                .and_then(ReportValue::as_text),
+            get_path(
+                &result.draft.report,
+                "transaction_lines[2].meal_details.tip_amount"
+            )
+            .and_then(ReportValue::as_text),
             Some("4.50")
         );
         assert_eq!(
@@ -3099,18 +3183,27 @@ mod tests {
         let result = synthesize_bundle_projection_with_fx(&synthetic_docs(), &provider);
 
         assert_eq!(
-            get_path(&result.draft.report, "transaction_lines[1].common.exchange_rate")
-                .and_then(ReportValue::as_text),
+            get_path(
+                &result.draft.report,
+                "transaction_lines[1].common.exchange_rate"
+            )
+            .and_then(ReportValue::as_text),
             Some("0.74")
         );
         assert_eq!(
-            get_path(&result.draft.report, "transaction_lines[1].common.line_amount_usd")
-                .and_then(ReportValue::as_text),
+            get_path(
+                &result.draft.report,
+                "transaction_lines[1].common.line_amount_usd"
+            )
+            .and_then(ReportValue::as_text),
             Some("576.31")
         );
         assert_eq!(
-            get_path(&result.draft.report, "transaction_lines[2].common.line_amount_usd")
-                .and_then(ReportValue::as_text),
+            get_path(
+                &result.draft.report,
+                "transaction_lines[2].common.line_amount_usd"
+            )
+            .and_then(ReportValue::as_text),
             Some("25.91")
         );
         assert_eq!(
@@ -3122,16 +3215,13 @@ mod tests {
             .issues
             .iter()
             .any(|issue| issue.kind == BundleIssueKind::MissingUsdConversion));
-        assert!(!result
-            .validation
-            .issues
-            .iter()
-            .any(|issue| issue.kind == ValidationIssueKind::MissingRequiredField
-                && (issue.path == "expense_report.transaction_lines[1].common.line_amount_usd"
-                    || issue.path == "expense_report.transaction_lines[1].common.exchange_rate"
-                    || issue.path == "expense_report.transaction_lines[2].common.line_amount_usd"
-                    || issue.path == "expense_report.transaction_lines[2].common.exchange_rate"
-                    || issue.path == "expense_report.transaction_summary.total_usd")));
+        assert!(!result.validation.issues.iter().any(|issue| issue.kind
+            == ValidationIssueKind::MissingRequiredField
+            && (issue.path == "expense_report.transaction_lines[1].common.line_amount_usd"
+                || issue.path == "expense_report.transaction_lines[1].common.exchange_rate"
+                || issue.path == "expense_report.transaction_lines[2].common.line_amount_usd"
+                || issue.path == "expense_report.transaction_lines[2].common.exchange_rate"
+                || issue.path == "expense_report.transaction_summary.total_usd")));
         let remaining_error_paths = result
             .validation
             .issues

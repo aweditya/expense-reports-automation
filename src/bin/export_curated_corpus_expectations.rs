@@ -2,7 +2,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use expense_report_schema::{curated_corpus_cases, curated_corpus_root, render_document_facts_json_pretty};
+use expense_report_schema::{
+    curated_corpus_cases, curated_corpus_root, render_document_facts_json_pretty,
+};
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]

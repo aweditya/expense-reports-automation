@@ -167,7 +167,10 @@ mod tests {
 
     #[test]
     fn parses_output_formats() {
-        assert_eq!(OutputFormat::parse("markdown"), Some(OutputFormat::Markdown));
+        assert_eq!(
+            OutputFormat::parse("markdown"),
+            Some(OutputFormat::Markdown)
+        );
         assert_eq!(OutputFormat::parse("json"), Some(OutputFormat::Json));
         assert_eq!(OutputFormat::parse("yaml"), None);
     }

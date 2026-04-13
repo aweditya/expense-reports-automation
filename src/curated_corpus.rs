@@ -64,7 +64,9 @@ pub fn verify_curated_corpus() -> CuratedCorpusVerificationReport {
                     failures.push(CuratedCorpusFailure {
                         case_id: case.id.to_owned(),
                         relative_path: case.relative_path.to_owned(),
-                        message: format!("facts mismatch\nEXPECTED:\n{expected_json}\nACTUAL:\n{actual_json}"),
+                        message: format!(
+                            "facts mismatch\nEXPECTED:\n{expected_json}\nACTUAL:\n{actual_json}"
+                        ),
                     });
                 } else if let Err(err) = actual.validate_contract() {
                     failures.push(CuratedCorpusFailure {
@@ -531,7 +533,12 @@ fn receipt_card_dotted_case() -> CuratedCorpusCase {
         expected_facts: ExtractedDocumentFacts {
             document_id: document_id.to_owned(),
             filename: filename.to_owned(),
-            classification: classification(DocumentKind::Receipt, document_id, filename, "Card Receipt"),
+            classification: classification(
+                DocumentKind::Receipt,
+                document_id,
+                filename,
+                "Card Receipt",
+            ),
             extraction_status: ExtractionStatus::Complete,
             facts: DocumentFactsPayload::Receipt(ReceiptFacts {
                 merchant_name: Some(Observed {
@@ -594,8 +601,20 @@ fn receipt_card_dotted_case() -> CuratedCorpusCase {
                     "Tip SGD 4.50",
                 )),
                 line_items: vec![
-                    receipt_item(document_id, filename, "Laksa Lunch ........ SGD 18.00", "Laksa Lunch", "18.00"),
-                    receipt_item(document_id, filename, "Iced Tea ........... SGD 6.00", "Iced Tea", "6.00"),
+                    receipt_item(
+                        document_id,
+                        filename,
+                        "Laksa Lunch ........ SGD 18.00",
+                        "Laksa Lunch",
+                        "18.00",
+                    ),
+                    receipt_item(
+                        document_id,
+                        filename,
+                        "Iced Tea ........... SGD 6.00",
+                        "Iced Tea",
+                        "6.00",
+                    ),
                     receipt_item(
                         document_id,
                         filename,
@@ -688,8 +707,20 @@ fn receipt_merchant_labeled_case() -> CuratedCorpusCase {
                     "Tip: SGD 4.50",
                 )),
                 line_items: vec![
-                    receipt_item(document_id, filename, "Laksa Lunch    SGD 18.00", "Laksa Lunch", "18.00"),
-                    receipt_item(document_id, filename, "Iced Tea       SGD 6.00", "Iced Tea", "6.00"),
+                    receipt_item(
+                        document_id,
+                        filename,
+                        "Laksa Lunch    SGD 18.00",
+                        "Laksa Lunch",
+                        "18.00",
+                    ),
+                    receipt_item(
+                        document_id,
+                        filename,
+                        "Iced Tea       SGD 6.00",
+                        "Iced Tea",
+                        "6.00",
+                    ),
                     receipt_item(
                         document_id,
                         filename,
@@ -704,7 +735,12 @@ fn receipt_merchant_labeled_case() -> CuratedCorpusCase {
     }
 }
 
-fn classification(kind: DocumentKind, document_id: &str, filename: &str, quote: &str) -> DocumentClassification {
+fn classification(
+    kind: DocumentKind,
+    document_id: &str,
+    filename: &str,
+    quote: &str,
+) -> DocumentClassification {
     DocumentClassification {
         kind,
         confidence: ConfidenceLevel::High,
@@ -760,14 +796,39 @@ fn flight_segment(
         departure_airport: observed(departure_airport.to_owned(), document_id, filename, quote),
         arrival_airport: observed(arrival_airport.to_owned(), document_id, filename, quote),
         departure_date: observed(departure_date.to_owned(), document_id, filename, quote),
-        arrival_date: Some(observed(arrival_date.to_owned(), document_id, filename, quote)),
-        marketing_carrier: Some(observed(marketing_carrier.to_owned(), document_id, filename, quote)),
-        flight_number: Some(observed(flight_number.to_owned(), document_id, filename, quote)),
-        cabin_class: Some(observed(cabin_class.to_owned(), document_id, filename, quote)),
+        arrival_date: Some(observed(
+            arrival_date.to_owned(),
+            document_id,
+            filename,
+            quote,
+        )),
+        marketing_carrier: Some(observed(
+            marketing_carrier.to_owned(),
+            document_id,
+            filename,
+            quote,
+        )),
+        flight_number: Some(observed(
+            flight_number.to_owned(),
+            document_id,
+            filename,
+            quote,
+        )),
+        cabin_class: Some(observed(
+            cabin_class.to_owned(),
+            document_id,
+            filename,
+            quote,
+        )),
     }
 }
 
-fn hotel_night(document_id: &str, filename: &str, quote: &str, date: &str) -> HotelNightChargeFacts {
+fn hotel_night(
+    document_id: &str,
+    filename: &str,
+    quote: &str,
+    date: &str,
+) -> HotelNightChargeFacts {
     HotelNightChargeFacts {
         date: observed(date.to_owned(), document_id, filename, quote),
         room_rate: Some(observed(

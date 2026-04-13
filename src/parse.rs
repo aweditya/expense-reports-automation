@@ -31,7 +31,10 @@ impl fmt::Display for ParseReportError {
             Self::Json(err) => write!(f, "JSON parse error: {err}"),
             Self::Yaml(err) => write!(f, "YAML parse error: {err}"),
             Self::UnsupportedFormat(ext) => {
-                write!(f, "Unsupported report format {ext:?}; expected .json, .yaml, or .yml")
+                write!(
+                    f,
+                    "Unsupported report format {ext:?}; expected .json, .yaml, or .yml"
+                )
             }
             Self::InvalidRoot(message) => write!(f, "Invalid report root: {message}"),
             Self::NonStringObjectKey(path) => {
@@ -72,19 +75,23 @@ pub fn parse_document_path(path: impl AsRef<Path>) -> Result<ReportValue, ParseR
 
     match detect_format(path) {
         Some(format) => parse_document_str(&contents, format),
-        None => {
-            parse_document_str(&contents, ReportFormat::Json)
-                .or_else(|_| parse_document_str(&contents, ReportFormat::Yaml))
-        }
+        None => parse_document_str(&contents, ReportFormat::Json)
+            .or_else(|_| parse_document_str(&contents, ReportFormat::Yaml)),
     }
 }
 
-pub fn parse_report_str(input: &str, format: ReportFormat) -> Result<ReportValue, ParseReportError> {
+pub fn parse_report_str(
+    input: &str,
+    format: ReportFormat,
+) -> Result<ReportValue, ParseReportError> {
     let root = parse_document_str(input, format)?;
     normalize_report_root(root)
 }
 
-pub fn parse_document_str(input: &str, format: ReportFormat) -> Result<ReportValue, ParseReportError> {
+pub fn parse_document_str(
+    input: &str,
+    format: ReportFormat,
+) -> Result<ReportValue, ParseReportError> {
     let root = match format {
         ReportFormat::Json => from_json_value(serde_json::from_str::<JsonValue>(input)?),
         ReportFormat::Yaml => from_yaml_value(serde_yaml::from_str::<YamlValue>(input)?, "$")?,
@@ -127,7 +134,9 @@ fn from_json_value(value: JsonValue) -> ReportValue {
         JsonValue::Bool(value) => ReportValue::Bool(value),
         JsonValue::Number(value) => ReportValue::Number(value.to_string()),
         JsonValue::String(value) => ReportValue::String(value),
-        JsonValue::Array(values) => ReportValue::Array(values.into_iter().map(from_json_value).collect()),
+        JsonValue::Array(values) => {
+            ReportValue::Array(values.into_iter().map(from_json_value).collect())
+        }
         JsonValue::Object(values) => ReportValue::Object(
             values
                 .into_iter()

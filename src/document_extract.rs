@@ -63,17 +63,37 @@ fn collect_lines(document: &TranscribedDocument) -> Vec<LineRef> {
 fn classify_document(document: &TranscribedDocument, lines: &[LineRef]) -> DocumentClassification {
     if let Some(line) = find_line_with_any(
         lines,
-        &["itinerary / receipt", "itinerary receipt", "e-ticket itinerary", "e ticket itinerary"],
+        &[
+            "itinerary / receipt",
+            "itinerary receipt",
+            "e-ticket itinerary",
+            "e ticket itinerary",
+        ],
     ) {
-        return classification_from_line(document, DocumentKind::FlightItinerary, line, ConfidenceLevel::High);
+        return classification_from_line(
+            document,
+            DocumentKind::FlightItinerary,
+            line,
+            ConfidenceLevel::High,
+        );
     }
 
     if let Some(line) = find_line_with_any(lines, &["hotel folio", "guest folio", "guest bill"]) {
-        return classification_from_line(document, DocumentKind::HotelFolio, line, ConfidenceLevel::High);
+        return classification_from_line(
+            document,
+            DocumentKind::HotelFolio,
+            line,
+            ConfidenceLevel::High,
+        );
     }
 
     if let Some(line) = find_line_with_any(lines, &["merchant receipt", "card receipt"]) {
-        return classification_from_line(document, DocumentKind::Receipt, line, ConfidenceLevel::High);
+        return classification_from_line(
+            document,
+            DocumentKind::Receipt,
+            line,
+            ConfidenceLevel::High,
+        );
     }
 
     if let Some(line) = lines.first() {
@@ -107,7 +127,12 @@ fn extract_flight_itinerary(
     let confirmation_code = observed_string(
         document,
         lines,
-        &["booking reference", "confirmation code", "record locator", "reservation code"],
+        &[
+            "booking reference",
+            "confirmation code",
+            "record locator",
+            "reservation code",
+        ],
         ConfidenceLevel::High,
     );
     let ticket_number = observed_string(
@@ -122,20 +147,30 @@ fn extract_flight_itinerary(
         &["booking date", "issue date", "issued", "booked"],
         ConfidenceLevel::High,
     );
-    let departure_location = observed_location(document, lines, &["origin", "from"], ConfidenceLevel::High);
-    let arrival_location = observed_location(document, lines, &["destination", "to"], ConfidenceLevel::High);
-    let explicit_trip_window =
-        observed_date_range(document, lines, &["trip window", "travel window"], ConfidenceLevel::High)
-            .or_else(|| {
-                observed_date_range_from_labels(
-                    document,
-                    lines,
-                    &["departure", "outbound"],
-                    &["return", "arrival"],
-                    ConfidenceLevel::Medium,
-                    "document_extract.infer_trip_window_from_departure_return",
-                )
-            });
+    let departure_location =
+        observed_location(document, lines, &["origin", "from"], ConfidenceLevel::High);
+    let arrival_location = observed_location(
+        document,
+        lines,
+        &["destination", "to"],
+        ConfidenceLevel::High,
+    );
+    let explicit_trip_window = observed_date_range(
+        document,
+        lines,
+        &["trip window", "travel window"],
+        ConfidenceLevel::High,
+    )
+    .or_else(|| {
+        observed_date_range_from_labels(
+            document,
+            lines,
+            &["departure", "outbound"],
+            &["return", "arrival"],
+            ConfidenceLevel::Medium,
+            "document_extract.infer_trip_window_from_departure_return",
+        )
+    });
     let total_paid = observed_money(
         document,
         lines,
@@ -152,10 +187,16 @@ fn extract_flight_itinerary(
     let mut issues = Vec::new();
 
     if traveler_name.is_none() {
-        issues.push(missing_field_issue("missing_traveler_name", "Flight itinerary is missing traveler name"));
+        issues.push(missing_field_issue(
+            "missing_traveler_name",
+            "Flight itinerary is missing traveler name",
+        ));
     }
     if segments.is_empty() {
-        issues.push(missing_field_issue("missing_segments", "Flight itinerary is missing segment details"));
+        issues.push(missing_field_issue(
+            "missing_segments",
+            "Flight itinerary is missing segment details",
+        ));
     }
 
     let extraction_status = extraction_status_from_issues(&issues);
@@ -185,62 +226,109 @@ fn extract_hotel_folio(
     lines: &[LineRef],
     classification: DocumentClassification,
 ) -> ExtractedDocumentFacts {
-    let guest_name =
-        observed_string(document, lines, &["guest name", "guest"], ConfidenceLevel::High);
+    let guest_name = observed_string(
+        document,
+        lines,
+        &["guest name", "guest"],
+        ConfidenceLevel::High,
+    );
     let property_name = observed_string(
         document,
         lines,
         &["property name", "hotel name"],
         ConfidenceLevel::High,
     )
-    .or_else(|| infer_heading_value(document, lines, &["hotel folio", "guest folio", "guest bill"]));
-    let folio_number =
-        observed_string(document, lines, &["folio number", "folio #", "folio"], ConfidenceLevel::High);
+    .or_else(|| {
+        infer_heading_value(
+            document,
+            lines,
+            &["hotel folio", "guest folio", "guest bill"],
+        )
+    });
+    let folio_number = observed_string(
+        document,
+        lines,
+        &["folio number", "folio #", "folio"],
+        ConfidenceLevel::High,
+    );
     let property_location = observed_location(
         document,
         lines,
-        &["property location", "hotel location", "city/country", "location"],
+        &[
+            "property location",
+            "hotel location",
+            "city/country",
+            "location",
+        ],
         ConfidenceLevel::High,
     );
-    let explicit_stay_window =
-        observed_date_range(document, lines, &["stay window", "check-in / check-out"], ConfidenceLevel::High)
-            .or_else(|| {
-                observed_date_range_from_labels(
-                    document,
-                    lines,
-                    &["check in", "arrival"],
-                    &["check out", "departure"],
-                    ConfidenceLevel::Medium,
-                    "document_extract.infer_stay_window_from_checkin_checkout",
-                )
-            });
+    let explicit_stay_window = observed_date_range(
+        document,
+        lines,
+        &["stay window", "check-in / check-out"],
+        ConfidenceLevel::High,
+    )
+    .or_else(|| {
+        observed_date_range_from_labels(
+            document,
+            lines,
+            &["check in", "arrival"],
+            &["check out", "departure"],
+            ConfidenceLevel::Medium,
+            "document_extract.infer_stay_window_from_checkin_checkout",
+        )
+    });
     let nightly_lines = collect_section_rows(lines, &["nightly charges", "charges"]);
     let nightly_charges = nightly_lines
         .iter()
         .filter_map(|line| parse_hotel_night_charge(document, line))
         .collect::<Vec<_>>();
-    let stay_window = explicit_stay_window.or_else(|| infer_stay_window_from_nights(&nightly_charges));
+    let stay_window =
+        explicit_stay_window.or_else(|| infer_stay_window_from_nights(&nightly_charges));
     let total_paid = observed_money(
         document,
         lines,
         &["total paid", "amount paid", "balance due", "total amount"],
         ConfidenceLevel::High,
     )
-        .or_else(|| infer_hotel_total_from_nights(&nightly_charges));
-    let meals_included = collect_section_rows(lines, &["meals included", "included in rate", "included in room rate"])
-        .into_iter()
-        .map(|line| observed_from_line(line, normalize_bullet_content(&line.raw), ConfidenceLevel::High, document))
-        .collect::<Vec<_>>();
+    .or_else(|| infer_hotel_total_from_nights(&nightly_charges));
+    let meals_included = collect_section_rows(
+        lines,
+        &[
+            "meals included",
+            "included in rate",
+            "included in room rate",
+        ],
+    )
+    .into_iter()
+    .map(|line| {
+        observed_from_line(
+            line,
+            normalize_bullet_content(&line.raw),
+            ConfidenceLevel::High,
+            document,
+        )
+    })
+    .collect::<Vec<_>>();
 
     let mut issues = Vec::new();
     if guest_name.is_none() {
-        issues.push(missing_field_issue("missing_guest_name", "Hotel folio is missing guest name"));
+        issues.push(missing_field_issue(
+            "missing_guest_name",
+            "Hotel folio is missing guest name",
+        ));
     }
     if property_name.is_none() {
-        issues.push(missing_field_issue("missing_property_name", "Hotel folio is missing property name"));
+        issues.push(missing_field_issue(
+            "missing_property_name",
+            "Hotel folio is missing property name",
+        ));
     }
     if nightly_charges.is_empty() {
-        issues.push(missing_field_issue("missing_nightly_charges", "Hotel folio is missing nightly charges"));
+        issues.push(missing_field_issue(
+            "missing_nightly_charges",
+            "Hotel folio is missing nightly charges",
+        ));
     }
 
     let extraction_status = extraction_status_from_issues(&issues);
@@ -276,29 +364,59 @@ fn extract_receipt(
         ConfidenceLevel::High,
     )
     .or_else(|| infer_heading_value(document, lines, &["merchant receipt", "card receipt"]));
-    let merchant_location =
-        observed_location(document, lines, &["merchant location", "location"], ConfidenceLevel::High);
-    let transaction_date =
-        observed_string(document, lines, &["transaction date", "date"], ConfidenceLevel::High);
+    let merchant_location = observed_location(
+        document,
+        lines,
+        &["merchant location", "location"],
+        ConfidenceLevel::High,
+    );
+    let transaction_date = observed_string(
+        document,
+        lines,
+        &["transaction date", "date"],
+        ConfidenceLevel::High,
+    );
     let subtotal = observed_money(document, lines, &["subtotal"], ConfidenceLevel::High);
-    let tax_amount = observed_money(document, lines, &["tax", "gst", "vat"], ConfidenceLevel::High);
+    let tax_amount = observed_money(
+        document,
+        lines,
+        &["tax", "gst", "vat"],
+        ConfidenceLevel::High,
+    );
     let tip_amount = observed_money(document, lines, &["tip"], ConfidenceLevel::High);
-    let total_paid = observed_money(document, lines, &["total paid", "total", "amount paid"], ConfidenceLevel::High)
-        .or_else(|| infer_receipt_total(subtotal.as_ref(), tax_amount.as_ref(), tip_amount.as_ref()));
-    let line_items = collect_section_rows(lines, &["line items", "items", "purchased items", "items purchased"])
-        .into_iter()
-        .filter_map(|line| parse_receipt_line_item(document, line))
-        .collect::<Vec<_>>();
+    let total_paid = observed_money(
+        document,
+        lines,
+        &["total paid", "total", "amount paid"],
+        ConfidenceLevel::High,
+    )
+    .or_else(|| infer_receipt_total(subtotal.as_ref(), tax_amount.as_ref(), tip_amount.as_ref()));
+    let line_items = collect_section_rows(
+        lines,
+        &["line items", "items", "purchased items", "items purchased"],
+    )
+    .into_iter()
+    .filter_map(|line| parse_receipt_line_item(document, line))
+    .collect::<Vec<_>>();
 
     let mut issues = Vec::new();
     if merchant_name.is_none() {
-        issues.push(missing_field_issue("missing_merchant_name", "Receipt is missing merchant name"));
+        issues.push(missing_field_issue(
+            "missing_merchant_name",
+            "Receipt is missing merchant name",
+        ));
     }
     if transaction_date.is_none() {
-        issues.push(missing_field_issue("missing_transaction_date", "Receipt is missing transaction date"));
+        issues.push(missing_field_issue(
+            "missing_transaction_date",
+            "Receipt is missing transaction date",
+        ));
     }
     if total_paid.is_none() {
-        issues.push(missing_field_issue("missing_total_paid", "Receipt is missing total paid"));
+        issues.push(missing_field_issue(
+            "missing_total_paid",
+            "Receipt is missing total paid",
+        ));
     }
 
     let extraction_status = extraction_status_from_issues(&issues);
@@ -327,13 +445,22 @@ fn unknown_document(
     classification: DocumentClassification,
     lines: &[LineRef],
 ) -> ExtractedDocumentFacts {
-    let title_hint = lines
-        .iter()
-        .find(|line| line.is_heading)
-        .map(|line| observed_from_line(line, normalize_bullet_content(&line.raw), ConfidenceLevel::Low, document));
-    let text_summary = lines
-        .first()
-        .map(|line| observed_from_line(line, normalize_bullet_content(&line.raw), ConfidenceLevel::Low, document));
+    let title_hint = lines.iter().find(|line| line.is_heading).map(|line| {
+        observed_from_line(
+            line,
+            normalize_bullet_content(&line.raw),
+            ConfidenceLevel::Low,
+            document,
+        )
+    });
+    let text_summary = lines.first().map(|line| {
+        observed_from_line(
+            line,
+            normalize_bullet_content(&line.raw),
+            ConfidenceLevel::Low,
+            document,
+        )
+    });
 
     finalized_document(
         document,
@@ -347,7 +474,9 @@ fn unknown_document(
             severity: IssueSeverity::Warning,
             code: "unsupported_document_kind".to_owned(),
             message: "No extractor is available for this document kind".to_owned(),
-            evidence: vec![system_generated_evidence("document_extract.unknown_document")],
+            evidence: vec![system_generated_evidence(
+                "document_extract.unknown_document",
+            )],
         }],
     )
 }
@@ -370,26 +499,42 @@ fn finalized_document(
 }
 
 fn extraction_status_from_issues(issues: &[DocumentExtractionIssue]) -> ExtractionStatus {
-    if issues.iter().any(|issue| issue.severity == IssueSeverity::Error) {
+    if issues
+        .iter()
+        .any(|issue| issue.severity == IssueSeverity::Error)
+    {
         ExtractionStatus::Partial
     } else {
         ExtractionStatus::Complete
     }
 }
 
-fn parse_flight_segment(document: &TranscribedDocument, line: &LineRef) -> Option<FlightSegmentFacts> {
-    if let Some(departure_airport) =
-        observed_pipe_field(document, line, &["departure airport"], ConfidenceLevel::High)
-    {
+fn parse_flight_segment(
+    document: &TranscribedDocument,
+    line: &LineRef,
+) -> Option<FlightSegmentFacts> {
+    if let Some(departure_airport) = observed_pipe_field(
+        document,
+        line,
+        &["departure airport"],
+        ConfidenceLevel::High,
+    ) {
         let arrival_airport =
             observed_pipe_field(document, line, &["arrival airport"], ConfidenceLevel::High)?;
         let departure_date =
             observed_pipe_field(document, line, &["departure date"], ConfidenceLevel::High)?;
-        let arrival_date = observed_pipe_field(document, line, &["arrival date"], ConfidenceLevel::High);
-        let marketing_carrier =
-            observed_pipe_field(document, line, &["marketing carrier", "carrier"], ConfidenceLevel::High);
-        let flight_number = observed_pipe_field(document, line, &["flight number"], ConfidenceLevel::High);
-        let cabin_class = observed_pipe_field(document, line, &["cabin class"], ConfidenceLevel::High);
+        let arrival_date =
+            observed_pipe_field(document, line, &["arrival date"], ConfidenceLevel::High);
+        let marketing_carrier = observed_pipe_field(
+            document,
+            line,
+            &["marketing carrier", "carrier"],
+            ConfidenceLevel::High,
+        );
+        let flight_number =
+            observed_pipe_field(document, line, &["flight number"], ConfidenceLevel::High);
+        let cabin_class =
+            observed_pipe_field(document, line, &["cabin class"], ConfidenceLevel::High);
 
         return Some(FlightSegmentFacts {
             departure_airport,
@@ -432,10 +577,21 @@ fn parse_flight_segment(document: &TranscribedDocument, line: &LineRef) -> Optio
     let cabin_class = columns.last().map(|value| value.trim().to_owned());
 
     Some(FlightSegmentFacts {
-        departure_airport: observed_from_line(line, route_parts[0].to_owned(), ConfidenceLevel::High, document),
-        arrival_airport: observed_from_line(line, route_parts[1].to_owned(), ConfidenceLevel::High, document),
+        departure_airport: observed_from_line(
+            line,
+            route_parts[0].to_owned(),
+            ConfidenceLevel::High,
+            document,
+        ),
+        arrival_airport: observed_from_line(
+            line,
+            route_parts[1].to_owned(),
+            ConfidenceLevel::High,
+            document,
+        ),
         departure_date: observed_from_line(line, departure_date, ConfidenceLevel::High, document),
-        arrival_date: arrival_date.map(|value| observed_from_line(line, value, ConfidenceLevel::High, document)),
+        arrival_date: arrival_date
+            .map(|value| observed_from_line(line, value, ConfidenceLevel::High, document)),
         marketing_carrier: Some(observed_from_line(
             line,
             marketing_carrier,
@@ -448,17 +604,24 @@ fn parse_flight_segment(document: &TranscribedDocument, line: &LineRef) -> Optio
             ConfidenceLevel::High,
             document,
         )),
-        cabin_class: cabin_class.map(|value| observed_from_line(line, value, ConfidenceLevel::High, document)),
+        cabin_class: cabin_class
+            .map(|value| observed_from_line(line, value, ConfidenceLevel::High, document)),
     })
 }
 
-fn parse_hotel_night_charge(document: &TranscribedDocument, line: &LineRef) -> Option<HotelNightChargeFacts> {
+fn parse_hotel_night_charge(
+    document: &TranscribedDocument,
+    line: &LineRef,
+) -> Option<HotelNightChargeFacts> {
     if let Some(date) = observed_pipe_field(document, line, &["date"], ConfidenceLevel::High) {
-        let description = observed_pipe_field(document, line, &["description"], ConfidenceLevel::High);
-        let room_rate = observed_pipe_field_money(document, line, &["room rate"], ConfidenceLevel::High);
-        let taxes_and_fees = observed_pipe_field_money(document, line, &["taxes & fees"], ConfidenceLevel::High)
-            .into_iter()
-            .collect::<Vec<_>>();
+        let description =
+            observed_pipe_field(document, line, &["description"], ConfidenceLevel::High);
+        let room_rate =
+            observed_pipe_field_money(document, line, &["room rate"], ConfidenceLevel::High);
+        let taxes_and_fees =
+            observed_pipe_field_money(document, line, &["taxes & fees"], ConfidenceLevel::High)
+                .into_iter()
+                .collect::<Vec<_>>();
 
         return Some(HotelNightChargeFacts {
             date,
@@ -480,18 +643,31 @@ fn parse_hotel_night_charge(document: &TranscribedDocument, line: &LineRef) -> O
 
     Some(HotelNightChargeFacts {
         date: observed_from_line(line, date, ConfidenceLevel::High, document),
-        room_rate: Some(observed_from_line(line, room_rate, ConfidenceLevel::High, document)),
+        room_rate: Some(observed_from_line(
+            line,
+            room_rate,
+            ConfidenceLevel::High,
+            document,
+        )),
         taxes_and_fees: vec![observed_from_line(
             line,
             taxes_and_fees,
             ConfidenceLevel::High,
             document,
         )],
-        description: Some(observed_from_line(line, description, ConfidenceLevel::High, document)),
+        description: Some(observed_from_line(
+            line,
+            description,
+            ConfidenceLevel::High,
+            document,
+        )),
     })
 }
 
-fn parse_receipt_line_item(document: &TranscribedDocument, line: &LineRef) -> Option<ReceiptLineItemFacts> {
+fn parse_receipt_line_item(
+    document: &TranscribedDocument,
+    line: &LineRef,
+) -> Option<ReceiptLineItemFacts> {
     let content = normalize_bullet_content(&line.raw);
     let (description, amount) = if content.contains('|') {
         let mut parts = content.split('|').map(str::trim);
@@ -547,7 +723,10 @@ fn infer_trip_window_from_segments(segments: &[FlightSegmentFacts]) -> Option<Ob
     ));
 
     Some(Observed {
-        value: DateRange { start_date, end_date },
+        value: DateRange {
+            start_date,
+            end_date,
+        },
         confidence: ConfidenceLevel::Medium,
         evidence,
         flags: Vec::new(),
@@ -565,14 +744,19 @@ fn infer_stay_window_from_nights(nights: &[HotelNightChargeFacts]) -> Option<Obs
     ));
 
     Some(Observed {
-        value: DateRange { start_date, end_date },
+        value: DateRange {
+            start_date,
+            end_date,
+        },
         confidence: ConfidenceLevel::Medium,
         evidence,
         flags: Vec::new(),
     })
 }
 
-fn infer_hotel_total_from_nights(nights: &[HotelNightChargeFacts]) -> Option<Observed<MoneyAmount>> {
+fn infer_hotel_total_from_nights(
+    nights: &[HotelNightChargeFacts],
+) -> Option<Observed<MoneyAmount>> {
     let mut currency = None;
     let mut total_cents = 0i64;
     let mut evidence = Vec::new();
@@ -696,7 +880,10 @@ fn observed_date_range_from_labels(
 ) -> Option<Observed<DateRange>> {
     let (start_line, start_value) = find_label_value(lines, start_labels)?;
     let (end_line, end_value) = find_label_value(lines, end_labels)?;
-    let mut evidence = vec![document_span_evidence(document, start_line), document_span_evidence(document, end_line)];
+    let mut evidence = vec![
+        document_span_evidence(document, start_line),
+        document_span_evidence(document, end_line),
+    ];
     evidence.push(system_generated_evidence(origin));
 
     Some(Observed {
@@ -759,7 +946,9 @@ fn collect_section_rows<'a>(lines: &'a [LineRef], headings: &[&str]) -> Vec<&'a 
 
     for line in lines {
         if line.is_heading {
-            let is_target = headings.iter().any(|heading| matches_heading(line, heading));
+            let is_target = headings
+                .iter()
+                .any(|heading| matches_heading(line, heading));
             if is_target {
                 in_section = true;
                 continue;
@@ -835,7 +1024,9 @@ fn strip_label_value(line: &str, labels: &[&str], allow_loose_prefix: bool) -> O
             }
 
             let value = raw_tokens[prefix_len..].join(" ");
-            let value = value.trim_start_matches(|ch: char| ch == ':' || ch == '-' || ch == '#').trim();
+            let value = value
+                .trim_start_matches(|ch: char| ch == ':' || ch == '-' || ch == '#')
+                .trim();
             if !value.is_empty() {
                 return Some(value.to_owned());
             }
@@ -911,7 +1102,11 @@ fn looks_like_heading(value: &str) -> bool {
     !content.contains(':')
         && !content.contains('|')
         && !content.chars().any(|ch| ch.is_ascii_digit())
-        && content.chars().filter(|ch| ch.is_ascii_alphabetic()).count() >= 3
+        && content
+            .chars()
+            .filter(|ch| ch.is_ascii_alphabetic())
+            .count()
+            >= 3
         && content
             .chars()
             .filter(|ch| ch.is_ascii_alphabetic())
@@ -1087,13 +1282,7 @@ fn split_description_and_money(value: &str) -> Option<(String, MoneyAmount)> {
         return None;
     }
 
-    Some((
-        description.to_owned(),
-        MoneyAmount {
-            amount,
-            currency,
-        },
-    ))
+    Some((description.to_owned(), MoneyAmount { amount, currency }))
 }
 
 fn infer_heading_value(
@@ -1101,7 +1290,8 @@ fn infer_heading_value(
     lines: &[LineRef],
     excluded_headings: &[&str],
 ) -> Option<Observed<String>> {
-    lines.iter()
+    lines
+        .iter()
         .find(|line| {
             line.is_heading
                 && !excluded_headings
@@ -1179,7 +1369,9 @@ fn missing_field_issue(code: &str, message: &str) -> DocumentExtractionIssue {
 mod tests {
     use super::*;
     use crate::document_facts::{render_document_facts_json_pretty, DocumentFactsPayload};
-    use crate::synthetic_documents::{generate_synthetic_document, generate_synthetic_packet, SyntheticVariant};
+    use crate::synthetic_documents::{
+        generate_synthetic_document, generate_synthetic_packet, SyntheticVariant,
+    };
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -1301,7 +1493,8 @@ mod tests {
 
     #[test]
     fn extracted_facts_render_to_json() {
-        let fixture = generate_synthetic_document(DocumentKind::Receipt, SyntheticVariant::Baseline);
+        let fixture =
+            generate_synthetic_document(DocumentKind::Receipt, SyntheticVariant::Baseline);
         let rendered = render_document_facts_json_pretty(&fixture.expected_facts)
             .expect("facts should render to json");
         assert!(rendered.contains("\"classification\""));

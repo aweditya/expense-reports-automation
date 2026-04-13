@@ -44,11 +44,16 @@ impl fmt::Display for TranscriptionError {
             Self::Io(err) => write!(f, "I/O error: {err}"),
             Self::Json(err) => write!(f, "JSON render error: {err}"),
             Self::UnsupportedFormat(ext) => {
-                write!(f, "Unsupported document format {ext:?}; expected .pdf, .txt, .md, or .markdown")
+                write!(
+                    f,
+                    "Unsupported document format {ext:?}; expected .pdf, .txt, .md, or .markdown"
+                )
             }
             Self::MissingTool(tool) => write!(f, "Required transcription tool is missing: {tool}"),
             Self::CommandFailed(message) => write!(f, "Transcription command failed: {message}"),
-            Self::InvalidUtf8(message) => write!(f, "Transcription output was not valid UTF-8: {message}"),
+            Self::InvalidUtf8(message) => {
+                write!(f, "Transcription output was not valid UTF-8: {message}")
+            }
         }
     }
 }
@@ -67,7 +72,9 @@ impl From<serde_json::Error> for TranscriptionError {
     }
 }
 
-pub fn transcribe_document_path(path: impl AsRef<Path>) -> Result<TranscribedDocument, TranscriptionError> {
+pub fn transcribe_document_path(
+    path: impl AsRef<Path>,
+) -> Result<TranscribedDocument, TranscriptionError> {
     let path = path.as_ref();
     let extension = path
         .extension()
@@ -112,7 +119,9 @@ pub fn render_transcribed_document_markdown(document: &TranscribedDocument) -> S
 pub fn render_transcribed_document_json_pretty(
     document: &TranscribedDocument,
 ) -> Result<String, TranscriptionError> {
-    Ok(serde_json::to_string_pretty(&transcribed_document_to_json_value(document))?)
+    Ok(serde_json::to_string_pretty(
+        &transcribed_document_to_json_value(document),
+    )?)
 }
 
 pub fn transcribed_document_to_json_value(document: &TranscribedDocument) -> JsonValue {
@@ -281,7 +290,10 @@ mod tests {
 
     #[test]
     fn sanitizes_document_id_from_filename_stem() {
-        assert_eq!(sanitize_identifier("ER5499574_Redacted"), "er5499574_redacted");
+        assert_eq!(
+            sanitize_identifier("ER5499574_Redacted"),
+            "er5499574_redacted"
+        );
         assert_eq!(sanitize_identifier(" weird---name "), "weird_name");
     }
 

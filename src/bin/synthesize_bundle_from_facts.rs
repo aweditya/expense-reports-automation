@@ -2,8 +2,8 @@ use std::process::ExitCode;
 
 use expense_report_schema::{
     parse_document_facts_json_path, render_canonical_bundle_json_pretty,
-    render_draft_report_json_pretty, render_draft_report_yaml, synthesize_bundle_projection,
-    summarize_validation_readiness, synthesize_bundle_projection_with_fx, BundleIssueSeverity,
+    render_draft_report_json_pretty, render_draft_report_yaml, summarize_validation_readiness,
+    synthesize_bundle_projection, synthesize_bundle_projection_with_fx, BundleIssueSeverity,
     StaticFxRateProvider, ValidationSeverity,
 };
 
@@ -137,12 +137,8 @@ fn run() -> Result<(), String> {
         .count();
     let readiness = summarize_validation_readiness(&result.validation);
 
-    eprintln!(
-        "bundle synthesis: {synthesis_errors} error(s), {synthesis_warnings} warning(s)"
-    );
-    eprintln!(
-        "draft validation: {validation_errors} error(s), {validation_warnings} warning(s)"
-    );
+    eprintln!("bundle synthesis: {synthesis_errors} error(s), {synthesis_warnings} warning(s)");
+    eprintln!("draft validation: {validation_errors} error(s), {validation_warnings} warning(s)");
     eprintln!(
         "readiness: {} automation gap(s), {} user input gap(s), {} manual review item(s), {} other warning(s)",
         readiness.automation_gap_count(),
@@ -160,9 +156,18 @@ mod tests {
 
     #[test]
     fn parses_output_formats() {
-        assert_eq!(OutputFormat::parse("draft-yaml"), Some(OutputFormat::DraftYaml));
-        assert_eq!(OutputFormat::parse("draft-json"), Some(OutputFormat::DraftJson));
-        assert_eq!(OutputFormat::parse("bundle-json"), Some(OutputFormat::BundleJson));
+        assert_eq!(
+            OutputFormat::parse("draft-yaml"),
+            Some(OutputFormat::DraftYaml)
+        );
+        assert_eq!(
+            OutputFormat::parse("draft-json"),
+            Some(OutputFormat::DraftJson)
+        );
+        assert_eq!(
+            OutputFormat::parse("bundle-json"),
+            Some(OutputFormat::BundleJson)
+        );
         assert_eq!(OutputFormat::parse("projection-json"), None);
     }
 

@@ -4,7 +4,9 @@ use std::path::{Path, PathBuf};
 use serde_json::Value as JsonValue;
 
 use crate::bundle_regression::{bundle_regression_cases, run_bundle_regression_case};
-use crate::feedback::{FeedbackCategory, SubmissionFeedback, SubmissionFieldFeedback, SubmissionStatus};
+use crate::feedback::{
+    FeedbackCategory, SubmissionFeedback, SubmissionFieldFeedback, SubmissionStatus,
+};
 use crate::ledger::{
     apply_review_revision, ingest_submission_feedback, initialize_review_submission_ledger,
     record_submission_attempt, render_review_submission_ledger_json_pretty, ActorRole,
@@ -113,7 +115,9 @@ pub fn export_ledger_regressions() -> Result<(), String> {
     Ok(())
 }
 
-pub fn run_ledger_regression_case(case: &LedgerRegressionCase) -> Result<ReviewSubmissionLedger, String> {
+pub fn run_ledger_regression_case(
+    case: &LedgerRegressionCase,
+) -> Result<ReviewSubmissionLedger, String> {
     let bundle_case = bundle_regression_cases()
         .into_iter()
         .find(|candidate| candidate.id == case.bundle_case_id)
@@ -130,8 +134,12 @@ pub fn run_ledger_regression_case(case: &LedgerRegressionCase) -> Result<ReviewS
     let ready_revision = build_ready_revision(&ledger);
     let ready_version_id = apply_review_revision(&mut ledger, 1, ready_revision)
         .map_err(|err| format!("failed to apply ready revision: {err}"))?;
-    let attempt_id = record_submission_attempt(&mut ledger, ready_version_id, Some("Automated regression submission".to_owned()))
-        .map_err(|err| format!("failed to record submission attempt: {err}"))?;
+    let attempt_id = record_submission_attempt(
+        &mut ledger,
+        ready_version_id,
+        Some("Automated regression submission".to_owned()),
+    )
+    .map_err(|err| format!("failed to record submission attempt: {err}"))?;
 
     match case.scenario {
         LedgerScenario::AcceptedSubmission => {
@@ -278,7 +286,10 @@ fn build_ready_revision(ledger: &ReviewSubmissionLedger) -> DraftRevisionInput {
     }
 }
 
-fn build_return_revision(ledger: &ReviewSubmissionLedger, returned_path: &str) -> DraftRevisionInput {
+fn build_return_revision(
+    ledger: &ReviewSubmissionLedger,
+    returned_path: &str,
+) -> DraftRevisionInput {
     let current_version = current_version(ledger);
     let current_value = value_text_at(&current_version.draft.report, returned_path)
         .unwrap_or_else(|| "Returned Event".to_owned());

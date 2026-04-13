@@ -3,7 +3,9 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value as JsonValue;
 
-use crate::bundle_regression::{bundle_regression_cases, run_bundle_regression_case, BundleRegressionCase};
+use crate::bundle_regression::{
+    bundle_regression_cases, run_bundle_regression_case, BundleRegressionCase,
+};
 use crate::review_packet::{build_review_packet, render_review_packet_json_pretty};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -97,8 +99,12 @@ fn verify_review_regression_case(case: &BundleRegressionCase) -> Result<Option<S
 
 fn render_review_regression_case(case: &BundleRegressionCase) -> Result<String, String> {
     let projection = run_bundle_regression_case(case)?;
-    let packet = build_review_packet(&projection.bundle, &projection.draft, &projection.validation)
-        .map_err(|err| format!("failed to build review packet: {err}"))?;
+    let packet = build_review_packet(
+        &projection.bundle,
+        &projection.draft,
+        &projection.validation,
+    )
+    .map_err(|err| format!("failed to build review packet: {err}"))?;
     render_review_packet_json_pretty(&packet)
         .map_err(|err| format!("failed to render review packet json: {err}"))
 }

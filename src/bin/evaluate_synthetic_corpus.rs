@@ -50,9 +50,8 @@ fn run() -> Result<ExitCode, String> {
                 let value = args
                     .next()
                     .ok_or_else(|| "missing value for --output".to_owned())?;
-                output_format = OutputFormat::parse(&value).ok_or_else(|| {
-                    "output format must be one of markdown | json".to_owned()
-                })?;
+                output_format = OutputFormat::parse(&value)
+                    .ok_or_else(|| "output format must be one of markdown | json".to_owned())?;
             }
             "--help" | "-h" => {
                 return Err(
@@ -85,7 +84,10 @@ mod tests {
 
     #[test]
     fn parses_output_formats() {
-        assert_eq!(OutputFormat::parse("markdown"), Some(OutputFormat::Markdown));
+        assert_eq!(
+            OutputFormat::parse("markdown"),
+            Some(OutputFormat::Markdown)
+        );
         assert_eq!(OutputFormat::parse("json"), Some(OutputFormat::Json));
         assert_eq!(OutputFormat::parse("yaml"), None);
     }

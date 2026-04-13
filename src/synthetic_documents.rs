@@ -44,7 +44,9 @@ pub fn generate_synthetic_document(
         DocumentKind::FlightItinerary => synthetic_flight_itinerary(variant),
         DocumentKind::HotelFolio => synthetic_hotel_folio(variant),
         DocumentKind::Receipt => synthetic_receipt(variant),
-        _ => panic!("synthetic generator currently supports flight itinerary, hotel folio, and receipt"),
+        _ => panic!(
+            "synthetic generator currently supports flight itinerary, hotel folio, and receipt"
+        ),
     }
 }
 
@@ -542,7 +544,13 @@ fn synthetic_receipt(variant: SyntheticVariant) -> SyntheticDocumentFixture {
                 &tip_line,
             )),
             line_items: vec![
-                receipt_line_item(&document_id, &filename, &item_one_line, "Laksa Lunch", "18.00"),
+                receipt_line_item(
+                    &document_id,
+                    &filename,
+                    &item_one_line,
+                    "Laksa Lunch",
+                    "18.00",
+                ),
                 receipt_line_item(&document_id, &filename, &item_two_line, "Iced Tea", "6.00"),
                 receipt_line_item(
                     &document_id,
@@ -691,7 +699,10 @@ mod tests {
     fn noisy_variant_uses_markdown_headings_and_expected_kinds() {
         let receipt = generate_synthetic_document(DocumentKind::Receipt, SyntheticVariant::Noisy);
         assert!(receipt.markdown.contains("card receipt"));
-        assert_eq!(receipt.expected_facts.classification.kind, DocumentKind::Receipt);
+        assert_eq!(
+            receipt.expected_facts.classification.kind,
+            DocumentKind::Receipt
+        );
         assert!(receipt.expected_facts.validate_contract().is_ok());
     }
 }

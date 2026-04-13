@@ -37,8 +37,14 @@ fn export_bundle_regression_expectations() -> Result<(), Box<dyn std::error::Err
         let draft_path = repo_root().join(case.expected_draft_relative_path());
         let validation_path = repo_root().join(case.expected_validation_relative_path());
 
-        write_output(&bundle_path, &render_canonical_bundle_json_pretty(&result.bundle)?)?;
-        write_output(&draft_path, &render_draft_report_json_pretty(&result.draft)?)?;
+        write_output(
+            &bundle_path,
+            &render_canonical_bundle_json_pretty(&result.bundle)?,
+        )?;
+        write_output(
+            &draft_path,
+            &render_draft_report_json_pretty(&result.draft)?,
+        )?;
         write_output(
             &validation_path,
             &render_validation_report_json_pretty(&result.validation)?,
@@ -50,7 +56,11 @@ fn export_bundle_regression_expectations() -> Result<(), Box<dyn std::error::Err
                 expense_report_schema::BundleRegressionFxMode::None => "none".to_owned(),
                 expense_report_schema::BundleRegressionFxMode::Demo => "demo".to_owned(),
             },
-            fact_paths: case.fact_paths.iter().map(|path| (*path).to_owned()).collect(),
+            fact_paths: case
+                .fact_paths
+                .iter()
+                .map(|path| (*path).to_owned())
+                .collect(),
             expected_bundle_path: case.expected_bundle_relative_path(),
             expected_draft_path: case.expected_draft_relative_path(),
             expected_validation_path: case.expected_validation_relative_path(),
