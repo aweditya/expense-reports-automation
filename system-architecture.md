@@ -319,6 +319,8 @@ The review workbench should have four panes:
    - one-click copy for business purpose, event name, line remarks, totals, and line items
    - attachment checklist per line item
 
+The current Rust backend implementation of this handoff now lives in [src/review_packet.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/review_packet.rs:1), with usage notes in [review-packet.md](/Users/adityasriram/Labs/stanford/research/expense-reports/review-packet.md:1). It is not a UI yet, but it already produces the typed review artifact a UI should consume.
+
 This UI should explicitly separate:
 
 - machine-filled fields
