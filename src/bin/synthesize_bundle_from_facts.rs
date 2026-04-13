@@ -3,8 +3,8 @@ use std::process::ExitCode;
 use expense_report_schema::{
     parse_document_facts_json_path, render_canonical_bundle_json_pretty,
     render_draft_report_json_pretty, render_draft_report_yaml, synthesize_bundle_projection,
-    synthesize_bundle_projection_with_fx, BundleIssueSeverity, StaticFxRateProvider,
-    ValidationSeverity,
+    summarize_validation_readiness, synthesize_bundle_projection_with_fx, BundleIssueSeverity,
+    StaticFxRateProvider, ValidationSeverity,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -135,12 +135,20 @@ fn run() -> Result<(), String> {
         .iter()
         .filter(|issue| issue.severity == ValidationSeverity::Warning)
         .count();
+    let readiness = summarize_validation_readiness(&result.validation);
 
     eprintln!(
         "bundle synthesis: {synthesis_errors} error(s), {synthesis_warnings} warning(s)"
     );
     eprintln!(
         "draft validation: {validation_errors} error(s), {validation_warnings} warning(s)"
+    );
+    eprintln!(
+        "readiness: {} automation gap(s), {} user input gap(s), {} manual review item(s), {} other warning(s)",
+        readiness.automation_gap_count(),
+        readiness.user_input_required_count(),
+        readiness.manual_review_count(),
+        readiness.other_warning_count(),
     );
     println!("{output}");
     Ok(())
