@@ -9,34 +9,6 @@
     },
     {
       "severity": "error",
-      "kind": "missing_required_field",
-      "path": "expense_report.general_information.business_purpose.what",
-      "schema_path": "expense_report.general_information.business_purpose.what",
-      "message": "Required field is missing"
-    },
-    {
-      "severity": "error",
-      "kind": "missing_required_field",
-      "path": "expense_report.general_information.business_purpose.why",
-      "schema_path": "expense_report.general_information.business_purpose.why",
-      "message": "Required field is missing"
-    },
-    {
-      "severity": "error",
-      "kind": "missing_required_field",
-      "path": "expense_report.general_information.business_purpose.key_30char",
-      "schema_path": "expense_report.general_information.business_purpose.key_30char",
-      "message": "Required field is missing"
-    },
-    {
-      "severity": "error",
-      "kind": "missing_required_field",
-      "path": "expense_report.general_information.event_name",
-      "schema_path": "expense_report.general_information.event_name",
-      "message": "Required field is missing"
-    },
-    {
-      "severity": "error",
       "kind": "missing_dependency",
       "path": "expense_report.general_information",
       "schema_path": "expense_report.general_information.student_certification",
@@ -110,20 +82,6 @@
       "kind": "missing_required_field",
       "path": "expense_report.transaction_lines[2].meal_details.attendees",
       "schema_path": "expense_report.transaction_lines[].meal_details.attendees",
-      "message": "Required field is missing"
-    },
-    {
-      "severity": "error",
-      "kind": "missing_required_field",
-      "path": "expense_report.transaction_lines[2].meal_details.meal_purpose",
-      "schema_path": "expense_report.transaction_lines[].meal_details.meal_purpose",
-      "message": "Required field is missing"
-    },
-    {
-      "severity": "error",
-      "kind": "missing_required_field",
-      "path": "expense_report.allocation_and_approvers",
-      "schema_path": "expense_report.allocation_and_approvers",
       "message": "Required field is missing"
     }
   ]

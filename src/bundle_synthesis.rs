@@ -338,6 +338,33 @@ pub fn project_bundle_to_draft(bundle: &CanonicalExpenseBundle) -> (DraftReport,
         general_information.insert("payee".to_owned(), ReportValue::Object(payee_fields));
     }
 
+    let business_purpose_who = bundle.payee.as_ref().map(|payee| payee.name.clone());
+    let business_purpose_when = bundle.trip.window.as_ref().map(|window| {
+        system_observed(
+            format!("{} to {}", window.value.start_date, window.value.end_date),
+            window.confidence,
+            window.evidence.clone(),
+            "bundle_synthesis.project_business_purpose_when",
+            window.flags.clone(),
+        )
+    });
+    let business_purpose_where = bundle.trip.destination.as_ref().map(|destination| {
+        system_observed(
+            location_to_display(&destination.value),
+            destination.confidence,
+            destination.evidence.clone(),
+            "bundle_synthesis.project_business_purpose_where",
+            destination.flags.clone(),
+        )
+    });
+    let business_purpose_what = synthesize_business_purpose_what(bundle);
+    let business_purpose_why = synthesize_business_purpose_why(bundle);
+    let business_purpose_key = synthesize_business_purpose_key(
+        business_purpose_who.as_ref(),
+        business_purpose_what.as_ref(),
+        category.as_ref(),
+    );
+
     let rush_processing = default_string_observed(
         "no".to_owned(),
         ConfidenceLevel::High,
@@ -367,49 +394,68 @@ pub fn project_bundle_to_draft(bundle: &CanonicalExpenseBundle) -> (DraftReport,
     );
 
     let mut business_purpose = BTreeMap::new();
-    if let Some(payee) = bundle.payee.as_ref() {
+    if let Some(payee_name) = business_purpose_who.as_ref() {
         insert_observed_leaf(
             &mut business_purpose,
             &mut metadata,
             "expense_report.general_information.business_purpose.who",
             "who",
-            &payee.name,
+            payee_name,
             |value| ReportValue::String(value.clone()),
         );
     }
 
-    if let Some(window) = bundle.trip.window.as_ref() {
-        let when = system_observed(
-            format!("{} to {}", window.value.start_date, window.value.end_date),
-            window.confidence,
-            window.evidence.clone(),
-            "bundle_synthesis.project_business_purpose_when",
-            window.flags.clone(),
-        );
+    if let Some(when) = business_purpose_when.as_ref() {
         insert_observed_leaf(
             &mut business_purpose,
             &mut metadata,
             "expense_report.general_information.business_purpose.when",
             "when",
-            &when,
+            when,
             |value| ReportValue::String(value.clone()),
         );
     }
 
-    if let Some(destination) = bundle.trip.destination.as_ref() {
-        let where_value = system_observed(
-            location_to_display(&destination.value),
-            destination.confidence,
-            destination.evidence.clone(),
-            "bundle_synthesis.project_business_purpose_where",
-            destination.flags.clone(),
+    if let Some(what) = business_purpose_what.as_ref() {
+        insert_observed_leaf(
+            &mut business_purpose,
+            &mut metadata,
+            "expense_report.general_information.business_purpose.what",
+            "what",
+            what,
+            |value| ReportValue::String(value.clone()),
         );
+    }
+
+    if let Some(where_value) = business_purpose_where.as_ref() {
         insert_observed_leaf(
             &mut business_purpose,
             &mut metadata,
             "expense_report.general_information.business_purpose.where",
             "where",
-            &where_value,
+            where_value,
+            |value| ReportValue::String(value.clone()),
+        );
+    }
+
+    if let Some(why) = business_purpose_why.as_ref() {
+        insert_observed_leaf(
+            &mut business_purpose,
+            &mut metadata,
+            "expense_report.general_information.business_purpose.why",
+            "why",
+            why,
+            |value| ReportValue::String(value.clone()),
+        );
+    }
+
+    if let Some(key_30char) = business_purpose_key.as_ref() {
+        insert_observed_leaf(
+            &mut business_purpose,
+            &mut metadata,
+            "expense_report.general_information.business_purpose.key_30char",
+            "key_30char",
+            key_30char,
             |value| ReportValue::String(value.clone()),
         );
     }
@@ -418,6 +464,17 @@ pub fn project_bundle_to_draft(bundle: &CanonicalExpenseBundle) -> (DraftReport,
         general_information.insert(
             "business_purpose".to_owned(),
             ReportValue::Object(business_purpose),
+        );
+    }
+
+    if let Some(event_name) = synthesize_event_name(bundle, category.as_ref()) {
+        insert_observed_leaf(
+            &mut general_information,
+            &mut metadata,
+            "expense_report.general_information.event_name",
+            "event_name",
+            &event_name,
+            |value| ReportValue::String(value.clone()),
         );
     }
 
@@ -510,6 +567,23 @@ pub fn project_bundle_to_draft(bundle: &CanonicalExpenseBundle) -> (DraftReport,
             ReportValue::Array(transaction_lines),
         );
     }
+    report.insert(
+        "allocation_and_approvers".to_owned(),
+        ReportValue::Object(BTreeMap::from([(
+            "other_beneficiaries".to_owned(),
+            ReportValue::Bool(false),
+        )])),
+    );
+    metadata.insert(
+        "expense_report.allocation_and_approvers.other_beneficiaries".to_owned(),
+        field_metadata_from_observed(&system_observed(
+            false,
+            ConfidenceLevel::Low,
+            Vec::new(),
+            "bundle_synthesis.default_other_beneficiaries_false",
+            vec!["requires_beneficiary_review".to_owned()],
+        )),
+    );
 
     let draft = DraftReport {
         report: ReportValue::Object(report),
@@ -1751,6 +1825,16 @@ fn project_transaction_lines(
                             |value| ReportValue::String(value.clone()),
                         );
                     }
+                    if let Some(meal_purpose) = synthesize_meal_purpose(bundle, line).as_ref() {
+                        insert_observed_leaf(
+                            &mut meal_details,
+                            metadata,
+                            &format!("{base_path}.meal_details.meal_purpose"),
+                            "meal_purpose",
+                            meal_purpose,
+                            |value| ReportValue::String(value.clone()),
+                        );
+                    }
                     if let Some(tip_amount) = details.tip_amount.as_ref() {
                         insert_observed_leaf(
                             &mut meal_details,
@@ -1901,6 +1985,214 @@ fn category_from_region(region: &Observed<TravelRegion>) -> Observed<String> {
         "bundle_synthesis.project_category_from_region",
         region.flags.clone(),
     )
+}
+
+fn synthesize_business_purpose_what(bundle: &CanonicalExpenseBundle) -> Option<Observed<String>> {
+    if let Some(summary_what) = first_summary_business_purpose_what(bundle) {
+        return Some(system_observed(
+            summary_what.value.clone(),
+            summary_what.confidence,
+            summary_what.evidence.clone(),
+            "bundle_synthesis.project_business_purpose_what_from_summary",
+            summary_what.flags.clone(),
+        ));
+    }
+
+    if let Some(event_name) = first_document_event_name(bundle) {
+        return Some(system_observed(
+            event_name.value.clone(),
+            event_name.confidence,
+            event_name.evidence.clone(),
+            "bundle_synthesis.project_business_purpose_what_from_event_name",
+            event_name.flags.clone(),
+        ));
+    }
+
+    bundle.trip.destination.as_ref().map(|destination| {
+        system_observed(
+            format!("Business travel to {}", location_to_display(&destination.value)),
+            ConfidenceLevel::Low,
+            destination.evidence.clone(),
+            "bundle_synthesis.default_business_purpose_what",
+            vec!["requires_purpose_review".to_owned()],
+        )
+    })
+}
+
+fn synthesize_business_purpose_why(bundle: &CanonicalExpenseBundle) -> Option<Observed<String>> {
+    if let Some(summary_why) = first_summary_business_purpose_why(bundle) {
+        return Some(system_observed(
+            summary_why.value.clone(),
+            summary_why.confidence,
+            summary_why.evidence.clone(),
+            "bundle_synthesis.project_business_purpose_why_from_summary",
+            summary_why.flags.clone(),
+        ));
+    }
+
+    if let Some(event_name) = first_document_event_name(bundle) {
+        return Some(system_observed(
+            format!("Participation in {}", event_name.value),
+            ConfidenceLevel::Low,
+            event_name.evidence.clone(),
+            "bundle_synthesis.default_business_purpose_why_from_event_name",
+            with_review_flag(&event_name.flags, "requires_purpose_review"),
+        ));
+    }
+
+    bundle.trip.destination.as_ref().map(|destination| {
+        system_observed(
+            format!(
+                "Travel and related business expenses for work in {}",
+                location_to_display(&destination.value)
+            ),
+            ConfidenceLevel::Low,
+            destination.evidence.clone(),
+            "bundle_synthesis.default_business_purpose_why",
+            vec!["requires_purpose_review".to_owned()],
+        )
+    })
+}
+
+fn synthesize_business_purpose_key(
+    who: Option<&Observed<String>>,
+    what: Option<&Observed<String>>,
+    category: Option<&Observed<String>>,
+) -> Option<Observed<String>> {
+    let who = who?;
+    let what = what?;
+    let category = category?;
+
+    let key = truncate_chars(
+        &format!(
+            "{}{}{}",
+            compact_key_token(&who.value, 10),
+            compact_key_token(&what.value, 12),
+            compact_key_token(&category.value, 8),
+        ),
+        30,
+    );
+
+    Some(system_observed(
+        key,
+        lowest_confidence([who.confidence, what.confidence, category.confidence]),
+        combined_evidence([
+            who.evidence.as_slice(),
+            what.evidence.as_slice(),
+            category.evidence.as_slice(),
+        ]),
+        "bundle_synthesis.compute_business_purpose_key",
+        combined_flags([who.flags.as_slice(), what.flags.as_slice(), category.flags.as_slice()]),
+    ))
+}
+
+fn synthesize_event_name(
+    bundle: &CanonicalExpenseBundle,
+    category: Option<&Observed<String>>,
+) -> Option<Observed<String>> {
+    if let Some(event_name) = first_document_event_name(bundle) {
+        return Some(system_observed(
+            event_name.value.clone(),
+            event_name.confidence,
+            event_name.evidence.clone(),
+            "bundle_synthesis.project_event_name_from_document",
+            event_name.flags.clone(),
+        ));
+    }
+
+    let category = category?;
+    let event_name = match category.value.as_str() {
+        "expenses_foreign" => "Foreign Expenses",
+        "expenses_domestic" => "Domestic Expenses",
+        _ => "Expense Report",
+    };
+
+    Some(system_observed(
+        event_name.to_owned(),
+        ConfidenceLevel::Low,
+        category.evidence.clone(),
+        "bundle_synthesis.default_event_name_from_category",
+        with_review_flag(&category.flags, "requires_event_name_review"),
+    ))
+}
+
+fn synthesize_meal_purpose(
+    bundle: &CanonicalExpenseBundle,
+    line: &CanonicalExpenseLine,
+) -> Option<Observed<String>> {
+    if let Some(event_name) = first_document_event_name(bundle) {
+        return Some(system_observed(
+            format!("Meal during {}", event_name.value),
+            ConfidenceLevel::Low,
+            event_name.evidence.clone(),
+            "bundle_synthesis.default_meal_purpose_from_event_name",
+            with_review_flag(&event_name.flags, "requires_meal_purpose_review"),
+        ));
+    }
+
+    if let Some(country) = line.country_of_activity.as_ref() {
+        return Some(system_observed(
+            format!("Business meal during travel in {}", country.value),
+            ConfidenceLevel::Low,
+            country.evidence.clone(),
+            "bundle_synthesis.default_meal_purpose_from_activity_country",
+            with_review_flag(&country.flags, "requires_meal_purpose_review"),
+        ));
+    }
+
+    bundle.trip.destination.as_ref().map(|destination| {
+        system_observed(
+            format!(
+                "Business meal during travel to {}",
+                location_to_display(&destination.value)
+            ),
+            ConfidenceLevel::Low,
+            destination.evidence.clone(),
+            "bundle_synthesis.default_meal_purpose_from_trip_destination",
+            vec!["requires_meal_purpose_review".to_owned()],
+        )
+    })
+}
+
+fn first_document_event_name(bundle: &CanonicalExpenseBundle) -> Option<&Observed<String>> {
+    for document in &bundle.documents {
+        match &document.facts {
+            DocumentFactsPayload::ConferenceRegistration(facts) => {
+                if let Some(event_name) = facts.event_name.as_ref() {
+                    return Some(event_name);
+                }
+            }
+            DocumentFactsPayload::ConferenceProgram(facts) => {
+                if let Some(event_name) = facts.event_name.as_ref() {
+                    return Some(event_name);
+                }
+            }
+            DocumentFactsPayload::StanfordExpenseSummary(facts) => {
+                if let Some(event_name) = facts.event_name.as_ref() {
+                    return Some(event_name);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    None
+}
+
+fn first_summary_business_purpose_what(
+    bundle: &CanonicalExpenseBundle,
+) -> Option<&Observed<String>> {
+    bundle.documents.iter().find_map(|document| match &document.facts {
+        DocumentFactsPayload::StanfordExpenseSummary(facts) => facts.business_purpose_what.as_ref(),
+        _ => None,
+    })
+}
+
+fn first_summary_business_purpose_why(bundle: &CanonicalExpenseBundle) -> Option<&Observed<String>> {
+    bundle.documents.iter().find_map(|document| match &document.facts {
+        DocumentFactsPayload::StanfordExpenseSummary(facts) => facts.business_purpose_why.as_ref(),
+        _ => None,
+    })
 }
 
 fn collect_line_level_issues(lines: &[CanonicalExpenseLine]) -> Vec<BundleIssue> {
@@ -2346,6 +2638,62 @@ fn normalize_text(value: &str) -> String {
         .join(" ")
 }
 
+fn compact_key_token(value: &str, max_chars: usize) -> String {
+    truncate_chars(
+        &value
+            .chars()
+            .filter(|ch| ch.is_ascii_alphanumeric())
+            .map(|ch| ch.to_ascii_uppercase())
+            .collect::<String>(),
+        max_chars,
+    )
+}
+
+fn truncate_chars(value: &str, max_chars: usize) -> String {
+    value.chars().take(max_chars).collect()
+}
+
+fn lowest_confidence(values: impl IntoIterator<Item = ConfidenceLevel>) -> ConfidenceLevel {
+    values
+        .into_iter()
+        .fold(ConfidenceLevel::High, |lowest, current| match (lowest, current) {
+            (ConfidenceLevel::Low, _) | (_, ConfidenceLevel::Low) => ConfidenceLevel::Low,
+            (ConfidenceLevel::Medium, _) | (_, ConfidenceLevel::Medium) => {
+                ConfidenceLevel::Medium
+            }
+            _ => ConfidenceLevel::High,
+        })
+}
+
+fn combined_evidence<'a>(
+    groups: impl IntoIterator<Item = &'a [EvidenceReference]>,
+) -> Vec<EvidenceReference> {
+    groups
+        .into_iter()
+        .flat_map(|group| group.iter().cloned())
+        .collect()
+}
+
+fn combined_flags<'a>(groups: impl IntoIterator<Item = &'a [String]>) -> Vec<String> {
+    let mut flags = Vec::new();
+    for group in groups {
+        for flag in group {
+            if !flags.contains(flag) {
+                flags.push(flag.clone());
+            }
+        }
+    }
+    flags
+}
+
+fn with_review_flag(flags: &[String], review_flag: &str) -> Vec<String> {
+    let mut combined = flags.to_vec();
+    if !combined.iter().any(|flag| flag == review_flag) {
+        combined.push(review_flag.to_owned());
+    }
+    combined
+}
+
 fn is_us_country(value: &str) -> bool {
     matches!(
         normalize_text(value).as_str(),
@@ -2372,7 +2720,7 @@ mod tests {
     use crate::document_facts::parse_document_facts_json_path;
     use crate::DocumentKind;
     use crate::synthetic_documents::{generate_synthetic_document, SyntheticVariant};
-    use crate::validator::ValidationIssueKind;
+    use crate::validator::{ValidationIssueKind, ValidationSeverity};
 
     fn synthetic_docs() -> Vec<ExtractedDocumentFacts> {
         vec![
@@ -2498,6 +2846,27 @@ mod tests {
         let result = synthesize_bundle_projection(&synthetic_docs());
 
         assert!(result.validation.has_errors());
+        assert_eq!(
+            get_path(
+                &result.draft.report,
+                "general_information.business_purpose.what"
+            )
+            .and_then(ReportValue::as_text),
+            Some("Business travel to Singapore")
+        );
+        assert_eq!(
+            get_path(
+                &result.draft.report,
+                "general_information.business_purpose.why"
+            )
+            .and_then(ReportValue::as_text),
+            Some("Travel and related business expenses for work in Singapore")
+        );
+        assert_eq!(
+            get_path(&result.draft.report, "general_information.event_name")
+                .and_then(ReportValue::as_text),
+            Some("Foreign Expenses")
+        );
         assert!(result
             .validation
             .issues
@@ -2522,6 +2891,17 @@ mod tests {
             .iter()
             .any(|issue| issue.kind == ValidationIssueKind::MissingRequiredField
                 && issue.path == "expense_report.transaction_lines[2].meal_details.attendees"));
+        assert!(!result
+            .validation
+            .issues
+            .iter()
+            .any(|issue| issue.kind == ValidationIssueKind::MissingRequiredField
+                && (issue.path == "expense_report.general_information.business_purpose.what"
+                    || issue.path == "expense_report.general_information.business_purpose.why"
+                    || issue.path == "expense_report.general_information.business_purpose.key_30char"
+                    || issue.path == "expense_report.general_information.event_name"
+                    || issue.path == "expense_report.transaction_lines[2].meal_details.meal_purpose"
+                    || issue.path == "expense_report.allocation_and_approvers")));
     }
 
     #[test]
@@ -2618,6 +2998,26 @@ mod tests {
             .draft
             .metadata
             .get("expense_report.transaction_lines[1].common.foreign_activity_type")
+            .is_some_and(|metadata| metadata.needs_review));
+        assert!(result
+            .draft
+            .metadata
+            .get("expense_report.general_information.business_purpose.what")
+            .is_some_and(|metadata| metadata.needs_review));
+        assert!(result
+            .draft
+            .metadata
+            .get("expense_report.general_information.business_purpose.why")
+            .is_some_and(|metadata| metadata.needs_review));
+        assert!(result
+            .draft
+            .metadata
+            .get("expense_report.general_information.event_name")
+            .is_some_and(|metadata| metadata.needs_review));
+        assert!(result
+            .draft
+            .metadata
+            .get("expense_report.allocation_and_approvers.other_beneficiaries")
             .is_some_and(|metadata| metadata.needs_review));
         assert!(!result
             .validation
@@ -2716,5 +3116,21 @@ mod tests {
                     || issue.path == "expense_report.transaction_lines[2].common.line_amount_usd"
                     || issue.path == "expense_report.transaction_lines[2].common.exchange_rate"
                     || issue.path == "expense_report.transaction_summary.total_usd")));
+        let remaining_error_paths = result
+            .validation
+            .issues
+            .iter()
+            .filter(|issue| issue.severity == ValidationSeverity::Error)
+            .map(|issue| issue.path.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            remaining_error_paths,
+            vec![
+                "expense_report.general_information.payee.affiliation",
+                "expense_report.general_information",
+                "expense_report.general_information.authorized_by",
+                "expense_report.transaction_lines[2].meal_details.attendees",
+            ]
+        );
     }
 }
