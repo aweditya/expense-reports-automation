@@ -46,6 +46,32 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
             comparison = ocr_eval.compare_markdown(source_path, transcribed_path)
 
             self.assertFalse(comparison["exact_match"])
+            self.assertFalse(comparison["relaxed_match"])
+            self.assertTrue(comparison["content_match"])
+
+    def test_compare_markdown_relaxed_match_tolerates_repeated_blank_lines(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            source_path = temp_path / "source.md"
+            transcribed_path = temp_path / "transcribed.json"
+            source_path.write_text("# Receipt\n\n- Total: USD 12.40\n")
+            transcribed_path.write_text(
+                json.dumps(
+                    {
+                        "pages": [
+                            {
+                                "page_number": 1,
+                                "text": "# Receipt\n\n\n- Total: USD 12.40",
+                            }
+                        ]
+                    }
+                )
+            )
+
+            comparison = ocr_eval.compare_markdown(source_path, transcribed_path)
+
+            self.assertFalse(comparison["exact_match"])
+            self.assertTrue(comparison["relaxed_match"])
             self.assertTrue(comparison["content_match"])
 
     def test_summarize_readiness_counts_issue_classes(self):
@@ -162,6 +188,29 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
 
         self.assertIn("gemini-3-pro-preview: error=404 NOT_FOUND", markdown)
         self.assertIn("gemini-3-pro-preview: unavailable", markdown)
+
+    def test_condense_error_message_prefers_404_marker(self):
+        error = "command failed with exit code 1\nupstream detail\n404 NOT_FOUND\nextra context"
+
+        condensed = ocr_eval.condense_error_message(error)
+
+        self.assertEqual(condensed, "404 NOT_FOUND")
+
+    def test_failed_model_report_has_zeroed_summary_counts(self):
+        report = ocr_eval.failed_model_report(
+            "gemini-3-pro-preview",
+            "global",
+            "command failed with exit code 1\n404 NOT_FOUND",
+        )
+
+        self.assertEqual(report["summary"]["status"], "error")
+        self.assertEqual(report["summary"]["error_summary"], "404 NOT_FOUND")
+        self.assertEqual(report["summary"]["packet_count"], 0)
+        self.assertEqual(report["summary"]["document_count"], 0)
+        self.assertEqual(report["summary"]["exact_match_count"], 0)
+        self.assertEqual(report["summary"]["relaxed_match_count"], 0)
+        self.assertEqual(report["summary"]["content_match_count"], 0)
+        self.assertEqual(report["packets"], [])
 
 
 if __name__ == "__main__":
