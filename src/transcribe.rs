@@ -11,6 +11,7 @@ pub enum TranscriptionEngine {
     PdfToText,
     PlainText,
     VertexGemini,
+    VertexGeminiSdk,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -233,6 +234,7 @@ fn transcription_engine_name(value: TranscriptionEngine) -> &'static str {
         TranscriptionEngine::PdfToText => "pdftotext",
         TranscriptionEngine::PlainText => "plain_text",
         TranscriptionEngine::VertexGemini => "vertex_gemini",
+        TranscriptionEngine::VertexGeminiSdk => "vertex_gemini_sdk",
     }
 }
 

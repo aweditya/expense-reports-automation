@@ -27,6 +27,7 @@ pub mod validation_rules;
 pub mod validator;
 pub mod value;
 pub mod vertex_gemini;
+pub mod vertex_gemini_sdk;
 pub mod workbench_regression;
 
 pub use bootstrap::extract_stanford_summary_document;
@@ -253,6 +254,9 @@ pub use value::ValueKind;
 pub use vertex_gemini::transcribe_document_path_with_vertex;
 pub use vertex_gemini::VertexGeminiConfig;
 pub use vertex_gemini::VertexGeminiError;
+pub use vertex_gemini_sdk::transcribe_document_path_with_vertex_sdk;
+pub use vertex_gemini_sdk::VertexGeminiSdkConfig;
+pub use vertex_gemini_sdk::VertexGeminiSdkError;
 pub use workbench_regression::export_workbench_regressions;
 pub use workbench_regression::verify_workbench_regressions;
 pub use workbench_regression::workbench_regression_root;

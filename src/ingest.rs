@@ -25,6 +25,7 @@ use crate::validator::render_validation_report_json_pretty;
 use crate::vertex_gemini::{
     resolve_access_token, transcribe_document_path_with_vertex, VertexGeminiConfig,
 };
+use crate::vertex_gemini_sdk::{transcribe_document_path_with_vertex_sdk, VertexGeminiSdkConfig};
 use crate::ExtractedDocumentFacts;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,6 +38,7 @@ pub enum IngestionFxMode {
 pub enum IngestionTranscriber {
     Builtin,
     VertexGemini(VertexGeminiConfig),
+    VertexGeminiSdk(VertexGeminiSdkConfig),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -134,7 +136,7 @@ pub fn ingest_expense_documents(
             }
             Some(resolved)
         }
-        IngestionTranscriber::Builtin => None,
+        IngestionTranscriber::Builtin | IngestionTranscriber::VertexGeminiSdk(_) => None,
     };
 
     for path in paths {
@@ -148,6 +150,10 @@ pub fn ingest_expense_documents(
                     .expect("resolved vertex config should exist"),
             )
             .map_err(|err| transcription_error(path, err.to_string()))?,
+            IngestionTranscriber::VertexGeminiSdk(sdk_config) => {
+                transcribe_document_path_with_vertex_sdk(path, sdk_config)
+                    .map_err(|err| transcription_error(path, err.to_string()))?
+            }
         };
         let facts = extract_document_facts(&document);
         transcriptions.push(document);
@@ -611,6 +617,62 @@ mod tests {
             .iter()
             .filter(|request| request.starts_with("POST /generate "))
             .all(|request| request.contains("Authorization: Bearer bundle-token")));
+    }
+
+    #[test]
+    fn ingests_documents_with_sdk_transcriber_mock() {
+        let temp_dir = unique_temp_dir("ingest_vertex_sdk");
+        let packet = generate_synthetic_packet(SyntheticVariant::Baseline);
+        let paths = write_synthetic_packet(&temp_dir, &packet);
+        let script_path = temp_dir.join("mock_sdk.py");
+        let key_path = temp_dir.join("service_account.json");
+        fs::write(&key_path, "{}").expect("key should write");
+        fs::write(
+            &script_path,
+            r###"import json, pathlib, sys
+doc = pathlib.Path(sys.argv[-1])
+stem = doc.stem
+payloads = {
+  "synthetic_flight_itinerary_baseline": "# E-Ticket Itinerary / Receipt\n\n## Passenger\n- Traveler Name: Olivia Park\n- Booking Reference: H7K9Q2\n- Ticket Number: 0162459135784\n- Booking Date: 2025-04-10\n- Airline: ANA All Nippon Airways\n- Fare Brand: Economy Basic\n- Baggage Allowance: 1 checked bag\n\n## Trip Summary\n- Origin: San Francisco, CA, United States (SFO)\n- Destination: Singapore (SIN)\n- Trip Window: 2025-04-21 to 2025-04-29\n- Total Paid: USD 1287.44\n\n## Segments\n- Segment 1 | Departure Airport: SFO | Arrival Airport: NRT | Departure Date: 2025-04-21 | Arrival Date: 2025-04-22 | Marketing Carrier: ANA | Flight Number: NH107 | Cabin Class: Economy\n- Segment 2 | Departure Airport: SIN | Arrival Airport: SFO | Departure Date: 2025-04-29 | Arrival Date: 2025-04-29 | Marketing Carrier: ANA | Flight Number: NH108 | Cabin Class: Economy",
+  "synthetic_hotel_folio_baseline": "# Hotel Folio\n\n## Stay Summary\n- Property Name: Marina Bay Grand Hotel\n- Guest Name: Olivia Park\n- Folio Number: MBG-88421\n- Confirmation Number: SG88421\n- Room Number: 1814\n- Check-In: 2025-04-21\n- Check-Out: 2025-04-24\n- Property Location: Singapore, Singapore\n- Stay Window: 2025-04-21 to 2025-04-24\n- Total Paid: SGD 778.80\n\n## Nightly Charges\n- Date: 2025-04-21 | Description: Deluxe King Room | Room Rate: SGD 220.00 | Taxes & Fees: SGD 39.60\n- Date: 2025-04-22 | Description: Deluxe King Room | Room Rate: SGD 220.00 | Taxes & Fees: SGD 39.60\n- Date: 2025-04-23 | Description: Deluxe King Room | Room Rate: SGD 220.00 | Taxes & Fees: SGD 39.60\n\n## Meals Included\n- Breakfast\n- Evening Reception",
+  "synthetic_receipt_baseline": "# Merchant Receipt\n\n## Purchase Summary\n- Merchant Name: East Bay Bistro\n- Merchant Location: Singapore, Singapore\n- Merchant Address: 18 Battery Road\n- Card: VISA •••• 4242\n- Authorization Code: A1189Q\n- Terminal ID: SG-TERM-07\n- Transaction Date: 2025-04-24\n- Subtotal: SGD 28.00\n- Tax: SGD 2.52\n- Tip: SGD 4.50\n- Total Paid: SGD 35.02\n\n## Line Items\n- Laksa Lunch | SGD 18.00\n- Iced Tea | SGD 6.00\n- Service Charge | SGD 4.00"
+}
+print(json.dumps({
+  "document_id": stem,
+  "filename": doc.name,
+  "source_path": str(doc),
+  "engine": "vertex_gemini_sdk",
+  "pages": [{"page_number": 1, "text": payloads[stem]}]
+}))
+"###,
+        )
+        .expect("mock sdk script should write");
+
+        let result = ingest_expense_documents(
+            &paths,
+            &IngestionConfig {
+                bundle_id: Some("sdk_demo".to_owned()),
+                transcriber: IngestionTranscriber::VertexGeminiSdk(VertexGeminiSdkConfig {
+                    project_id: Some("demo-project".to_owned()),
+                    location: "global".to_owned(),
+                    model: "gemini-3.1-flash-lite-preview".to_owned(),
+                    service_account_key_path: key_path,
+                    python_bin: PathBuf::from("python3"),
+                    script_path,
+                }),
+                fx_mode: IngestionFxMode::Demo,
+            },
+        )
+        .expect("sdk ingestion should succeed");
+
+        assert_eq!(result.transcriptions.len(), 3);
+        assert!(result
+            .transcriptions
+            .iter()
+            .all(|document| document.engine == TranscriptionEngine::VertexGeminiSdk));
+        assert_eq!(result.bundle_id, "sdk_demo");
+        assert_eq!(result.projection.bundle.expense_lines.len(), 3);
+        assert!(result.review_workbench_html.contains("<!DOCTYPE html>"));
     }
 
     fn write_synthetic_packet(

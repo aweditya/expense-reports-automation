@@ -4,7 +4,8 @@ use std::process::ExitCode;
 
 use expense_report_schema::{
     render_transcribed_document_json_pretty, render_transcribed_document_markdown,
-    transcribe_document_path, transcribe_document_path_with_vertex, VertexGeminiConfig,
+    transcribe_document_path, transcribe_document_path_with_vertex,
+    transcribe_document_path_with_vertex_sdk, VertexGeminiConfig, VertexGeminiSdkConfig,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,6 +37,8 @@ fn run() -> Result<(), String> {
     let mut service_account_key_path = None;
     let mut endpoint_override = None;
     let mut token_endpoint_override = None;
+    let mut sdk_python = None;
+    let mut sdk_script = None;
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -106,6 +109,18 @@ fn run() -> Result<(), String> {
                         .ok_or_else(|| "missing value for --token-endpoint".to_owned())?,
                 );
             }
+            "--sdk-python" => {
+                sdk_python = Some(
+                    args.next()
+                        .ok_or_else(|| "missing value for --sdk-python".to_owned())?,
+                );
+            }
+            "--sdk-script" => {
+                sdk_script = Some(
+                    args.next()
+                        .ok_or_else(|| "missing value for --sdk-script".to_owned())?,
+                );
+            }
             _ if arg.starts_with("--") => {
                 return Err(format!("unknown flag {arg:?}"));
             }
@@ -118,7 +133,7 @@ fn run() -> Result<(), String> {
     }
 
     let Some(path) = path else {
-        return Err("usage: transcribe_document [--format markdown|json] [--output PATH] [--engine builtin|vertex-gemini] [--project PROJECT] [--location LOCATION] [--model MODEL] [--access-token TOKEN] [--service-account-key PATH] [--endpoint URL] [--token-endpoint URL] <document>".to_owned());
+        return Err("usage: transcribe_document [--format markdown|json] [--output PATH] [--engine builtin|vertex-gemini|vertex-gemini-sdk] [--project PROJECT] [--location LOCATION] [--model MODEL] [--access-token TOKEN] [--service-account-key PATH] [--endpoint URL] [--token-endpoint URL] [--sdk-python PATH] [--sdk-script PATH] <document>".to_owned());
     };
 
     let document = match engine.as_str() {
@@ -137,7 +152,24 @@ fn run() -> Result<(), String> {
             transcribe_document_path_with_vertex(&path, &vertex_config)
                 .map_err(|err| err.to_string())?
         }
-        _ => return Err("engine must be one of builtin | vertex-gemini".to_owned()),
+        "vertex-gemini-sdk" => {
+            let sdk_config = VertexGeminiSdkConfig::resolve_from_sources(
+                project_id,
+                location,
+                model,
+                service_account_key_path.map(Into::into),
+                sdk_python.map(Into::into),
+                sdk_script.map(Into::into),
+            )
+            .map_err(|err| err.to_string())?;
+            transcribe_document_path_with_vertex_sdk(&path, &sdk_config)
+                .map_err(|err| err.to_string())?
+        }
+        _ => {
+            return Err(
+                "engine must be one of builtin | vertex-gemini | vertex-gemini-sdk".to_owned(),
+            )
+        }
     };
     let rendered = match format {
         OutputFormat::Markdown => render_transcribed_document_markdown(&document),
