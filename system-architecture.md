@@ -365,6 +365,12 @@ The current Rust backend implementation of this layer now lives in:
 - [src/feedback_regression.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/feedback_regression.rs:1) for fixture-backed regression coverage
 - [feedback-capture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/feedback-capture.md:1) for usage notes and example commands
 
+The versioned workflow wrapper around that stage now also lives in:
+
+- [src/ledger.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/ledger.rs:1) for draft versions, review actions, submission attempts, and site-return revisions
+- [src/ledger_regression.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/ledger_regression.rs:1) for fixture-backed workflow regressions
+- [review-submission-ledger.md](/Users/adityasriram/Labs/stanford/research/expense-reports/review-submission-ledger.md:1) for usage notes and example commands
+
 ## Recommended internal data model
 
 At minimum:
@@ -390,6 +396,23 @@ Recommended bundle lifecycle:
 `uploaded -> normalized -> transcribed -> doc_facts_ready -> draft_ready -> validated -> needs_review | ready_for_fa -> submitted -> accepted | returned`
 
 If the FA edits anything, create a new draft version rather than mutating history invisibly.
+
+That recommendation is now implemented concretely in the review/submission ledger layer above.
+
+## Synthetic evaluation harness
+
+The current repo also has a deterministic large-corpus evaluation harness for the downstream spine:
+
+- [src/synthetic_corpus.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/synthetic_corpus.rs:1)
+- [src/corpus_eval.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/corpus_eval.rs:1)
+- [synthetic-corpus-evaluation.md](/Users/adityasriram/Labs/stanford/research/expense-reports/synthetic-corpus-evaluation.md:1)
+
+That harness currently stress-tests:
+
+- document extraction on diverse synthetic flights, hotels, and receipts
+- bundle synthesis and validation/readiness
+- review packet and workbench rendering
+- versioned review/submission ledger flows for both accepted and returned submissions
 
 ## Robustness mechanisms that matter most
 

@@ -192,20 +192,36 @@ impl StaticFxRateProvider {
 
     pub fn demo() -> Self {
         let mut provider = Self::new();
-        for date in ["2025-04-21", "2025-04-22", "2025-04-23", "2025-04-24", "2025-04-29"] {
-            provider.insert_rate(
-                "SGD",
-                date,
-                "0.74",
-                vec![EvidenceReference {
-                    kind: EvidenceKind::SystemGenerated,
-                    document_id: None,
-                    filename: None,
-                    page: None,
-                    quote: None,
-                    origin: Some("bundle_synthesis.demo_fx_rate_provider".to_owned()),
-                }],
-            );
+        let demo_evidence = vec![EvidenceReference {
+            kind: EvidenceKind::SystemGenerated,
+            document_id: None,
+            filename: None,
+            page: None,
+            quote: None,
+            origin: Some("bundle_synthesis.demo_fx_rate_provider".to_owned()),
+        }];
+
+        for date in [
+            "2025-04-21",
+            "2025-04-22",
+            "2025-04-23",
+            "2025-04-24",
+            "2025-04-25",
+            "2025-04-26",
+            "2025-04-27",
+            "2025-04-28",
+            "2025-04-29",
+        ] {
+            for (currency, rate) in [
+                ("SGD", "0.74"),
+                ("JPY", "0.0067"),
+                ("GBP", "1.25"),
+                ("EUR", "1.08"),
+                ("CAD", "0.73"),
+                ("AUD", "0.66"),
+            ] {
+                provider.insert_rate(currency, date, rate, demo_evidence.clone());
+            }
         }
         provider
     }

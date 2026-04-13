@@ -11,6 +11,8 @@ The relevant code lives in:
 
 This is the current backend implementation of the `Feedback capture and continuous improvement` stage from [system-architecture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/system-architecture.md:338).
 
+For the versioned workflow wrapper around those corrections and site outcomes, see [review-submission-ledger.md](/Users/adityasriram/Labs/stanford/research/expense-reports/review-submission-ledger.md:1).
+
 ## What it captures
 
 - original machine value
