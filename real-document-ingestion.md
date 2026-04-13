@@ -152,6 +152,31 @@ python3 scripts/evaluate_synthetic_ocr_corpus.py \
   --packets 2
 ```
 
+By default that compares:
+
+- `gemini-3-flash-preview`
+- `gemini-3-pro-preview`
+
+You can override the model set by repeating `--model`:
+
+```bash
+python3 scripts/evaluate_synthetic_ocr_corpus.py \
+  --service-account-key /abs/path/to/service-account.json \
+  --location global \
+  --output-dir /tmp/expense_ocr_eval_flash_only \
+  --packets 4 \
+  --model gemini-3-flash-preview
+```
+
+The evaluator writes per-model OCR reports plus a comparison summary:
+
+- `ocr_comparison.json`
+- `ocr_comparison.md`
+- `ocr_evaluation_<model>.json`
+- `ocr_evaluation_<model>.md`
+
+If a requested model is not available to the current Vertex project, the evaluator records that model as unavailable instead of aborting the whole comparison run.
+
 ## Current test coverage
 
 The new ingestion coverage includes:
