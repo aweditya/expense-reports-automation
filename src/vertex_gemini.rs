@@ -11,7 +11,7 @@ use serde_json::{json, Value as JsonValue};
 use crate::transcribe::{TranscribedDocument, TranscribedPage, TranscriptionEngine};
 
 const CLOUD_PLATFORM_SCOPE: &str = "https://www.googleapis.com/auth/cloud-platform";
-const DEFAULT_GEMINI_MODEL: &str = "gemini-2.5-flash";
+const DEFAULT_GEMINI_MODEL: &str = "gemini-3.1-flash-lite-preview";
 const DEFAULT_TOKEN_ENDPOINT: &str = "https://oauth2.googleapis.com/token";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -186,17 +186,40 @@ struct GeminiMarkdownPage {
     text: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RenderedPdfPage {
+    page_number: u32,
+    filename: String,
+    bytes: Vec<u8>,
+}
+
 pub fn transcribe_document_path_with_vertex(
     path: impl AsRef<Path>,
     config: &VertexGeminiConfig,
 ) -> Result<TranscribedDocument, VertexGeminiError> {
+    transcribe_document_path_with_vertex_and_pdf_renderer(path, config, render_pdf_pages_to_png)
+}
+
+fn transcribe_document_path_with_vertex_and_pdf_renderer<F>(
+    path: impl AsRef<Path>,
+    config: &VertexGeminiConfig,
+    pdf_renderer: F,
+) -> Result<TranscribedDocument, VertexGeminiError>
+where
+    F: Fn(&Path) -> Result<Vec<RenderedPdfPage>, VertexGeminiError>,
+{
     ensure_tool_available("curl")?;
     let path = path.as_ref();
-    let mime_type = detect_supported_mime_type(path)?;
-    let bytes = fs::read(path)?;
-    let request = build_generate_content_request(path, mime_type, &bytes);
-    let response = send_generate_content_request(config, &request)?;
-    let pages = parse_generate_content_response(&response)?;
+    let mut resolved_config = config.clone();
+    if resolved_config.access_token.is_none() {
+        resolved_config.access_token = Some(resolve_access_token(config)?);
+    }
+
+    let pages = if is_pdf_path(path) {
+        transcribe_pdf_pages_with_vertex(path, &resolved_config, pdf_renderer)?
+    } else {
+        transcribe_binary_document_with_vertex(path, &resolved_config)?
+    };
 
     Ok(TranscribedDocument {
         document_id: document_id_for_path(path),
@@ -205,6 +228,63 @@ pub fn transcribe_document_path_with_vertex(
         engine: TranscriptionEngine::VertexGemini,
         pages,
     })
+}
+
+fn transcribe_binary_document_with_vertex(
+    path: &Path,
+    config: &VertexGeminiConfig,
+) -> Result<Vec<TranscribedPage>, VertexGeminiError> {
+    let mime_type = detect_supported_mime_type(path)?;
+    let bytes = fs::read(path)?;
+    let request = build_generate_content_request(path, mime_type, &bytes);
+    let response = send_generate_content_request(config, &request)?;
+    parse_generate_content_response(&response)
+}
+
+fn transcribe_pdf_pages_with_vertex<F>(
+    path: &Path,
+    config: &VertexGeminiConfig,
+    pdf_renderer: F,
+) -> Result<Vec<TranscribedPage>, VertexGeminiError>
+where
+    F: Fn(&Path) -> Result<Vec<RenderedPdfPage>, VertexGeminiError>,
+{
+    let rendered_pages = pdf_renderer(path)?;
+    if rendered_pages.is_empty() {
+        return Err(VertexGeminiError::InvalidResponse(
+            "pdf renderer did not produce any pages".to_owned(),
+        ));
+    }
+
+    let mut pages = Vec::with_capacity(rendered_pages.len());
+    for rendered_page in rendered_pages {
+        let request = build_generate_content_request(
+            Path::new(&rendered_page.filename),
+            "image/png",
+            &rendered_page.bytes,
+        );
+        let response = send_generate_content_request(config, &request)?;
+        let page_text = coerce_single_page_text(parse_generate_content_response(&response)?);
+        pages.push(TranscribedPage {
+            page_number: rendered_page.page_number,
+            text: page_text,
+        });
+    }
+
+    Ok(pages)
+}
+
+fn coerce_single_page_text(pages: Vec<TranscribedPage>) -> String {
+    if pages.len() == 1 {
+        return pages.into_iter().next().unwrap().text;
+    }
+
+    pages
+        .into_iter()
+        .map(|page| page.text)
+        .filter(|text| !text.trim().is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n")
 }
 
 fn build_generate_content_request(path: &Path, mime_type: &str, bytes: &[u8]) -> JsonValue {
@@ -227,7 +307,7 @@ fn build_generate_content_request(path: &Path, mime_type: &str, bytes: &[u8]) ->
         "generationConfig": {
             "temperature": 0,
             "responseMimeType": "application/json",
-            "maxOutputTokens": 8192
+            "maxOutputTokens": 16384
         }
     })
 }
@@ -389,6 +469,13 @@ fn strip_code_fences(text: &str) -> &str {
     trimmed
 }
 
+fn is_pdf_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|value| value.to_str())
+        .map(|value| value.eq_ignore_ascii_case("pdf"))
+        .unwrap_or(false)
+}
+
 fn detect_supported_mime_type(path: &Path) -> Result<&'static str, VertexGeminiError> {
     let extension = path
         .extension()
@@ -401,6 +488,79 @@ fn detect_supported_mime_type(path: &Path) -> Result<&'static str, VertexGeminiE
         "jpg" | "jpeg" => Ok("image/jpeg"),
         _ => Err(VertexGeminiError::UnsupportedDocumentFormat(extension)),
     }
+}
+
+fn render_pdf_pages_to_png(path: &Path) -> Result<Vec<RenderedPdfPage>, VertexGeminiError> {
+    ensure_tool_available("pdfinfo")?;
+    ensure_tool_available("pdftoppm")?;
+
+    let page_count = pdf_page_count(path)?;
+    let temp_dir = temporary_render_dir("vertex_pdf_pages");
+    fs::create_dir_all(&temp_dir)?;
+    let render_result = (|| {
+        let base_name = document_id_for_path(path);
+        let mut rendered_pages = Vec::with_capacity(page_count as usize);
+        for page_number in 1..=page_count {
+            let output_prefix = temp_dir.join(format!("page_{page_number}"));
+            let output = Command::new("pdftoppm")
+                .arg("-png")
+                .arg("-f")
+                .arg(page_number.to_string())
+                .arg("-l")
+                .arg(page_number.to_string())
+                .arg("-singlefile")
+                .arg(path)
+                .arg(&output_prefix)
+                .output()?;
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+                return Err(VertexGeminiError::CommandFailed(format!(
+                    "pdftoppm failed for page {page_number}: {stderr}"
+                )));
+            }
+
+            let image_path = output_prefix.with_extension("png");
+            let bytes = fs::read(&image_path)?;
+            rendered_pages.push(RenderedPdfPage {
+                page_number,
+                filename: format!("{base_name}_page_{page_number}.png"),
+                bytes,
+            });
+        }
+        Ok(rendered_pages)
+    })();
+
+    let _ = fs::remove_dir_all(&temp_dir);
+    render_result
+}
+
+fn pdf_page_count(path: &Path) -> Result<u32, VertexGeminiError> {
+    let output = Command::new("pdfinfo").arg(path).output()?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        return Err(VertexGeminiError::CommandFailed(format!(
+            "pdfinfo failed: {stderr}"
+        )));
+    }
+    let stdout = String::from_utf8(output.stdout)
+        .map_err(|err| VertexGeminiError::InvalidUtf8(err.to_string()))?;
+    for line in stdout.lines() {
+        if let Some(value) = line.strip_prefix("Pages:") {
+            let page_count = value.trim().parse::<u32>().map_err(|_| {
+                VertexGeminiError::InvalidResponse(format!(
+                    "failed to parse pdf page count from {:?}",
+                    line
+                ))
+            })?;
+            if page_count > 0 {
+                return Ok(page_count);
+            }
+        }
+    }
+
+    Err(VertexGeminiError::InvalidResponse(
+        "pdfinfo output did not contain a positive page count".to_owned(),
+    ))
 }
 
 pub(crate) fn resolve_access_token(
@@ -630,15 +790,24 @@ fn sign_rs256(private_key_pem: &str, signing_input: &str) -> Result<Vec<u8>, Ver
 }
 
 fn temporary_private_key_path() -> PathBuf {
+    temporary_timestamped_path("expense_report_schema_vertex_key", "pem")
+}
+
+fn temporary_render_dir(prefix: &str) -> PathBuf {
+    temporary_timestamped_path(&format!("expense_report_schema_{prefix}"), "")
+}
+
+fn temporary_timestamped_path(prefix: &str, extension: &str) -> PathBuf {
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("system clock should be valid")
         .as_nanos();
-    std::env::temp_dir().join(format!(
-        "expense_report_schema_vertex_key_{}_{}.pem",
-        std::process::id(),
-        timestamp
-    ))
+    let basename = format!("{prefix}_{}_{}", std::process::id(), timestamp);
+    if extension.is_empty() {
+        std::env::temp_dir().join(basename)
+    } else {
+        std::env::temp_dir().join(format!("{basename}.{extension}"))
+    }
 }
 
 fn build_service_account_token_request_body(assertion: &str) -> String {
@@ -1055,6 +1224,94 @@ EFZnVwSb8Mb48w==\n\
         assert!(captured[1].contains("\"mimeType\":\"image/png\""));
 
         fs::remove_file(path).expect("temp input should be removable");
+    }
+
+    #[test]
+    fn transcribes_pdf_by_rendering_pages_individually() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time should be valid")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("vertex_pdf_mock_{unique}.pdf"));
+        fs::write(&path, b"%PDF-1.4 mock").expect("temp pdf should be writable");
+
+        let requests = Arc::new(Mutex::new(Vec::<String>::new()));
+        let requests_for_server = Arc::clone(&requests);
+        let endpoint = spawn_mock_server(2, move |request| {
+            requests_for_server.lock().unwrap().push(request.clone());
+            if request.contains("Filename: mock_report_page_1.png") {
+                http_ok(json!({
+                    "candidates": [
+                        {
+                            "content": {
+                                "parts": [
+                                    {
+                                        "text": "{\"pages\":[{\"page_number\":1,\"text\":\"# Page One\\n\\n- Merchant Name: First Page Cafe\"}]}"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }))
+            } else {
+                http_ok(json!({
+                    "candidates": [
+                        {
+                            "content": {
+                                "parts": [
+                                    {
+                                        "text": "{\"pages\":[{\"page_number\":1,\"text\":\"# Page Two\\n\\n- Merchant Name: Second Page Cafe\"}]}"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }))
+            }
+        });
+
+        let document = transcribe_document_path_with_vertex_and_pdf_renderer(
+            &path,
+            &VertexGeminiConfig {
+                project_id: "demo-project".to_owned(),
+                location: "us-central1".to_owned(),
+                model: DEFAULT_GEMINI_MODEL.to_owned(),
+                access_token: Some("test-token".to_owned()),
+                service_account_key_path: None,
+                endpoint_override: Some(format!("{endpoint}/generate")),
+                token_endpoint_override: None,
+            },
+            |_| {
+                Ok(vec![
+                    RenderedPdfPage {
+                        page_number: 1,
+                        filename: "mock_report_page_1.png".to_owned(),
+                        bytes: b"page-one".to_vec(),
+                    },
+                    RenderedPdfPage {
+                        page_number: 2,
+                        filename: "mock_report_page_2.png".to_owned(),
+                        bytes: b"page-two".to_vec(),
+                    },
+                ])
+            },
+        )
+        .expect("pdf should transcribe via page renderer");
+
+        assert_eq!(document.engine, TranscriptionEngine::VertexGemini);
+        assert_eq!(document.pages.len(), 2);
+        assert_eq!(document.pages[0].page_number, 1);
+        assert_eq!(document.pages[1].page_number, 2);
+        assert!(document.pages[0].text.contains("First Page Cafe"));
+        assert!(document.pages[1].text.contains("Second Page Cafe"));
+
+        let captured = requests.lock().unwrap().join("\n");
+        assert!(!captured.contains("\"mimeType\":\"application/pdf\""));
+        assert_eq!(captured.matches("\"mimeType\":\"image/png\"").count(), 2);
+        assert!(captured.contains("mock_report_page_1.png"));
+        assert!(captured.contains("mock_report_page_2.png"));
+
+        fs::remove_file(path).expect("temp pdf should be removable");
     }
 
     fn spawn_mock_server(

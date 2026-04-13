@@ -78,6 +78,9 @@ fn synthetic_flight_itinerary(variant: SyntheticVariant) -> SyntheticDocumentFix
     let booking_reference_line = format!("{bullet} Booking Reference: H7K9Q2");
     let ticket_number_line = format!("{bullet} Ticket Number: 0162459135784");
     let booking_date_line = format!("{bullet} Booking Date: 2025-04-10");
+    let airline_line = format!("{bullet} Airline: ANA All Nippon Airways");
+    let fare_brand_line = format!("{bullet} Fare Brand: Economy Basic");
+    let baggage_line = format!("{bullet} Baggage Allowance: 1 checked bag");
     let origin_line = format!("{bullet} Origin: San Francisco, CA, United States (SFO)");
     let destination_line = format!("{bullet} Destination: Singapore (SIN)");
     let trip_window_line = format!("{bullet} Trip Window: 2025-04-21 to 2025-04-29");
@@ -93,6 +96,9 @@ fn synthetic_flight_itinerary(variant: SyntheticVariant) -> SyntheticDocumentFix
         &booking_reference_line,
         &ticket_number_line,
         &booking_date_line,
+        &airline_line,
+        &fare_brand_line,
+        &baggage_line,
         "",
         trip_heading,
         &origin_line,
@@ -311,6 +317,10 @@ fn synthetic_hotel_folio(variant: SyntheticVariant) -> SyntheticDocumentFixture 
     let property_line = format!("{bullet} Property Name: Marina Bay Grand Hotel");
     let guest_line = format!("{bullet} Guest Name: Olivia Park");
     let folio_line = format!("{bullet} Folio Number: MBG-88421");
+    let confirmation_line = format!("{bullet} Confirmation Number: SG88421");
+    let room_line = format!("{bullet} Room Number: 1814");
+    let check_in_line = format!("{bullet} Check-In: 2025-04-21");
+    let check_out_line = format!("{bullet} Check-Out: 2025-04-24");
     let location_line = format!("{bullet} Property Location: Singapore, Singapore");
     let stay_window_line = format!("{bullet} Stay Window: 2025-04-21 to 2025-04-24");
     let total_line = format!("{bullet} Total Paid: SGD 778.80");
@@ -327,6 +337,10 @@ fn synthetic_hotel_folio(variant: SyntheticVariant) -> SyntheticDocumentFixture 
         &property_line,
         &guest_line,
         &folio_line,
+        &confirmation_line,
+        &room_line,
+        &check_in_line,
+        &check_out_line,
         &location_line,
         &stay_window_line,
         &total_line,
@@ -449,6 +463,10 @@ fn synthetic_receipt(variant: SyntheticVariant) -> SyntheticDocumentFixture {
 
     let merchant_line = format!("{bullet} Merchant Name: East Bay Bistro");
     let location_line = format!("{bullet} Merchant Location: Singapore, Singapore");
+    let address_line = format!("{bullet} Merchant Address: 18 Battery Road");
+    let card_line = format!("{bullet} Card: VISA •••• 4242");
+    let auth_line = format!("{bullet} Authorization Code: A1189Q");
+    let terminal_line = format!("{bullet} Terminal ID: SG-TERM-07");
     let date_line = format!("{bullet} Transaction Date: 2025-04-24");
     let subtotal_line = format!("{bullet} Subtotal: SGD 28.00");
     let tax_line = format!("{bullet} Tax: SGD 2.52");
@@ -464,6 +482,10 @@ fn synthetic_receipt(variant: SyntheticVariant) -> SyntheticDocumentFixture {
         purchase_heading,
         &merchant_line,
         &location_line,
+        &address_line,
+        &card_line,
+        &auth_line,
+        &terminal_line,
         &date_line,
         &subtotal_line,
         &tax_line,

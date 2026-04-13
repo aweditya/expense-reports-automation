@@ -442,7 +442,7 @@ mod tests {
                 transcriber: IngestionTranscriber::VertexGemini(VertexGeminiConfig {
                     project_id: "demo-project".to_owned(),
                     location: "us-central1".to_owned(),
-                    model: "gemini-2.5-flash".to_owned(),
+                    model: "gemini-3.1-flash-lite-preview".to_owned(),
                     access_token: Some("test-token".to_owned()),
                     service_account_key_path: None,
                     endpoint_override: Some(format!("{endpoint}/generate")),
@@ -575,7 +575,7 @@ mod tests {
                 transcriber: IngestionTranscriber::VertexGemini(VertexGeminiConfig {
                     project_id: "demo-project".to_owned(),
                     location: "us-central1".to_owned(),
-                    model: "gemini-2.5-flash".to_owned(),
+                    model: "gemini-3.1-flash-lite-preview".to_owned(),
                     access_token: None,
                     service_account_key_path: Some(service_account_key_path),
                     endpoint_override: Some(format!("{base_url}/generate")),

@@ -48,11 +48,20 @@ Environment variables:
 
 - `VERTEX_PROJECT_ID`
 - `VERTEX_LOCATION`
-- `VERTEX_GEMINI_MODEL` optional, defaults to `gemini-2.5-flash`
+- `VERTEX_GEMINI_MODEL` optional, defaults to `gemini-3.1-flash-lite-preview`
 - `VERTEX_ACCESS_TOKEN` optional if you want to pass a short-lived bearer token directly
 - `VERTEX_SERVICE_ACCOUNT_KEY` optional path to a Google Cloud service-account JSON key
 - `VERTEX_ENDPOINT_OVERRIDE` optional for tests
 - `VERTEX_TOKEN_ENDPOINT_OVERRIDE` optional for tests
+
+For live OCR work, prefer:
+
+- `gemini-3.1-flash-lite-preview` for the default OCR path
+- `gemini-3.1-pro-preview` when you want a slower, higher-fidelity comparison run
+
+Live OCR validation in this repo was also successfully exercised with `gemini-3-flash-preview`.
+
+These Gemini 3 preview examples are intended to run in `global`.
 
 Auth resolution order:
 
@@ -92,8 +101,8 @@ cargo run --bin ingest_expense_documents -- \
   --output-dir /tmp/ingest_vertex_output \
   --engine vertex-gemini \
   --project "$VERTEX_PROJECT_ID" \
-  --location "$VERTEX_LOCATION" \
-  --model gemini-2.5-flash \
+  --location global \
+  --model gemini-3.1-flash-lite-preview \
   receipt.png hotel_folio.png itinerary.pdf
 ```
 
@@ -104,7 +113,7 @@ cargo run --bin ingest_expense_documents -- \
   --output-dir /tmp/ingest_vertex_output \
   --engine vertex-gemini \
   --service-account-key /abs/path/to/service-account.json \
-  --location "$VERTEX_LOCATION" \
+  --location global \
   receipt.png hotel_folio.png itinerary.pdf
 ```
 
@@ -116,7 +125,7 @@ Transcribe a single document directly through Vertex Gemini:
 cargo run --bin transcribe_document -- \
   --engine vertex-gemini \
   --project "$VERTEX_PROJECT_ID" \
-  --location "$VERTEX_LOCATION" \
+  --location global \
   receipt.png
 ```
 
@@ -126,7 +135,7 @@ Or with a service-account key:
 cargo run --bin transcribe_document -- \
   --engine vertex-gemini \
   --service-account-key /abs/path/to/service-account.json \
-  --location "$VERTEX_LOCATION" \
+  --location global \
   receipt.png
 ```
 
@@ -153,3 +162,9 @@ The real ingestion stack is now complete up to the current document-fact extract
 - restaurant-style receipts
 
 Real Stanford summary PDFs can now flow through the ingestion CLI and produce artifacts, but they still end up `automation_blocked` unless they match one of the currently implemented extractor families.
+
+## Gemini 3 Note
+
+The live Gemini 3 OCR probes in this repo currently use the official Google Gen AI SDK helper in [scripts/transcribe_with_google_genai.py](/Users/adityasriram/Labs/stanford/research/expense-reports/scripts/transcribe_with_google_genai.py:1). In live testing, that SDK path succeeded with `gemini-3-flash-preview`, `gemini-3.1-flash-lite-preview`, and `gemini-3.1-pro-preview` against synthetic PNG/PDF OCR fixtures.
+
+The older Rust `vertex-gemini` REST path is still useful for mocked tests and lower-level contract work, but it returned `404` for the tested Gemini 3 preview model ids in this project, so the SDK helper is the validated path for current Gemini 3 live OCR work.
