@@ -1,0 +1,394 @@
+import importlib.util
+import json
+import socket
+import tempfile
+import unittest
+from pathlib import Path
+from subprocess import CompletedProcess
+
+
+def load_module():
+    script_path = Path(__file__).resolve().parent.parent / "scripts" / "local_app.py"
+    spec = importlib.util.spec_from_file_location("local_app", script_path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+local_app = load_module()
+
+
+def build_manifest(bundle_id: str, *, updated_at_epoch_ms: int = 1000) -> dict:
+    return {
+        "bundle_id": bundle_id,
+        "current_stage": "user_input_required",
+        "updated_at_epoch_ms": updated_at_epoch_ms,
+        "latest_run_id": "demo_run",
+        "documents": [
+            {
+                "stored_filename": "receipt.png",
+                "media_type": "image/png",
+                "byte_count": 42,
+            }
+        ],
+        "runs": [
+            {
+                "run_id": "demo_run",
+                "output_dir": "runs/demo_run/artifacts",
+                "config": {"engine": "builtin"},
+                "filing_status": "UserInputRequired",
+                "ledger_state": "UserInputRequired",
+            }
+        ],
+    }
+
+
+def write_bundle_fixture(workspace_root: Path, bundle_id: str, *, with_workbench: bool = True) -> None:
+    bundle_root = workspace_root / "bundles" / bundle_id
+    artifacts_dir = bundle_root / "runs" / "demo_run" / "artifacts"
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    (bundle_root / "bundle_manifest.json").write_text(
+        json.dumps(build_manifest(bundle_id), indent=2)
+    )
+    if with_workbench:
+        (artifacts_dir / "review_workbench.html").write_text(
+            "<!DOCTYPE html><html><body><h1>Workbench</h1></body></html>"
+        )
+
+
+class LocalAppTests(unittest.TestCase):
+    def test_parse_multipart_request_extracts_fields_and_files(self):
+        boundary = "----expense-boundary"
+        body = (
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="engine"\r\n\r\n'
+            "builtin\r\n"
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="documents"; filename="receipt 1.png"\r\n'
+            "Content-Type: image/png\r\n\r\n"
+            "PNGDATA\r\n"
+            f"--{boundary}--\r\n"
+        ).encode("utf-8")
+
+        request = local_app.parse_multipart_request(
+            f"multipart/form-data; boundary={boundary}",
+            body,
+        )
+
+        self.assertEqual(request.fields, {"engine": "builtin"})
+        self.assertEqual(len(request.files), 1)
+        self.assertEqual(request.files[0].filename, "receipt 1.png")
+        self.assertEqual(request.files[0].content, b"PNGDATA")
+
+    def test_save_uploaded_files_deduplicates_colliding_names(self):
+        uploads = [
+            local_app.UploadedFile(
+                filename="receipt 1.png",
+                content_type="image/png",
+                content=b"first",
+            ),
+            local_app.UploadedFile(
+                filename="receipt 1.png",
+                content_type="image/png",
+                content=b"second",
+            ),
+        ]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            saved_paths = local_app.save_uploaded_files(Path(temp_dir), uploads)
+
+            self.assertEqual([path.name for path in saved_paths], ["receipt_1.png", "receipt_1_2.png"])
+            self.assertEqual(saved_paths[0].read_bytes(), b"first")
+            self.assertEqual(saved_paths[1].read_bytes(), b"second")
+
+    def test_build_ingest_command_uses_cargo_fallback_for_builtin_engine(self):
+        with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as workspace_dir:
+            input_path = Path(workspace_dir) / "receipt.png"
+            input_path.write_bytes(b"stub")
+
+            command = local_app.build_ingest_command(
+                Path(repo_dir),
+                Path(workspace_dir),
+                {"engine": "builtin", "fx": "demo"},
+                [input_path],
+            )
+
+            self.assertEqual(command[:4], ["cargo", "run", "--bin", "ingest_bundle_workspace"])
+            self.assertIn("--engine", command)
+            self.assertIn("builtin", command)
+            self.assertIn("--bundle-id", command)
+            self.assertIn("receipt", command)
+
+    def test_build_ingest_command_prefers_built_binary_and_vertex_fields(self):
+        with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as workspace_dir:
+            repo_root = Path(repo_dir)
+            binary = repo_root / "target" / "debug" / "ingest_bundle_workspace"
+            binary.parent.mkdir(parents=True, exist_ok=True)
+            binary.write_text("#!/bin/sh\nexit 0\n")
+            binary.chmod(0o755)
+            input_path = Path(workspace_dir) / "folio.pdf"
+            input_path.write_bytes(b"stub")
+
+            command = local_app.build_ingest_command(
+                repo_root,
+                Path(workspace_dir),
+                {
+                    "bundle_id": "Demo Bundle",
+                    "run_id": "Gemini Flash",
+                    "engine": "vertex-gemini-sdk",
+                    "project": "demo-project",
+                    "location": "global",
+                    "model": "gemini-3-flash-preview",
+                    "service_account_key": "/tmp/key.json",
+                    "sdk_python": "/tmp/venv/bin/python",
+                },
+                [input_path],
+            )
+
+            self.assertEqual(command[0], str(binary))
+            self.assertIn("demo_bundle", command)
+            self.assertIn("gemini_flash", command)
+            self.assertIn("--project", command)
+            self.assertIn("demo-project", command)
+            self.assertIn("--service-account-key", command)
+            self.assertIn("/tmp/key.json", command)
+
+    def test_list_bundles_sorts_by_latest_update(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            write_bundle_fixture(workspace_root, "older_bundle")
+            newer_root = workspace_root / "bundles" / "newer_bundle"
+            newer_root.mkdir(parents=True, exist_ok=True)
+            (newer_root / "bundle_manifest.json").write_text(
+                json.dumps(build_manifest("newer_bundle", updated_at_epoch_ms=2000), indent=2)
+            )
+
+            bundles = local_app.list_bundles(workspace_root)
+
+            self.assertEqual([bundle.bundle_id for bundle in bundles], ["newer_bundle", "older_bundle"])
+
+    def test_latest_workbench_path_returns_existing_html(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            write_bundle_fixture(workspace_root, "demo_bundle", with_workbench=True)
+
+            workbench_path = local_app.latest_workbench_path(workspace_root, "demo_bundle")
+
+            self.assertIsNotNone(workbench_path)
+            assert workbench_path is not None
+            self.assertTrue(workbench_path.name.endswith(".html"))
+
+    def test_handle_upload_submission_invokes_pipeline_runner(self):
+        captured = {}
+
+        def runner(command, cwd):
+            captured["command"] = command
+            captured["cwd"] = cwd
+            return CompletedProcess(command, 0, stdout="ok", stderr="")
+
+        request = local_app.UploadRequest(
+            fields={"engine": "builtin", "bundle_id": "demo_bundle"},
+            files=[
+                local_app.UploadedFile(
+                    filename="receipt.png",
+                    content_type="image/png",
+                    content=b"image",
+                )
+            ],
+        )
+
+        with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as workspace_dir:
+            bundle_id = local_app.handle_upload_submission(
+                Path(repo_dir),
+                Path(workspace_dir),
+                request,
+                command_runner=runner,
+            )
+
+            self.assertEqual(bundle_id, "demo_bundle")
+            self.assertEqual(captured["cwd"], Path(repo_dir))
+            self.assertIn("--bundle-id", captured["command"])
+            self.assertIn("demo_bundle", captured["command"])
+
+    def test_handle_upload_submission_rejects_empty_upload(self):
+        request = local_app.UploadRequest(fields={}, files=[])
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaises(local_app.LocalAppError):
+                local_app.handle_upload_submission(
+                    Path(temp_dir),
+                    Path(temp_dir),
+                    request,
+                )
+
+    def test_render_bundle_page_handles_missing_workbench(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            write_bundle_fixture(workspace_root, "demo_bundle", with_workbench=False)
+            config = local_app.LocalAppConfig(
+                repo_root=Path(temp_dir),
+                workspace_root=workspace_root,
+                host="127.0.0.1",
+                port=8765,
+            )
+
+            page = local_app.render_bundle_page(
+                config,
+                local_app.load_bundle_manifest(workspace_root, "demo_bundle"),
+            )
+
+            self.assertIn("Workbench unavailable", page)
+            self.assertNotIn("<iframe", page)
+
+    def test_ensure_safe_bundle_id_rejects_path_traversal(self):
+        with self.assertRaises(local_app.LocalAppError):
+            local_app.ensure_safe_bundle_id("../escape")
+
+    def test_main_handles_keyboard_interrupt_cleanly(self):
+        original_parse_args = local_app.parse_args
+        original_run_server = local_app.run_server
+
+        class Args:
+            workspace_root = "/tmp/local-app-test"
+            host = "127.0.0.1"
+            port = 8765
+
+        local_app.parse_args = lambda: Args()
+        local_app.run_server = lambda config: (_ for _ in ()).throw(KeyboardInterrupt())
+        try:
+            self.assertEqual(local_app.main(), 0)
+        finally:
+            local_app.parse_args = original_parse_args
+            local_app.run_server = original_run_server
+
+
+class LocalAppHttpTests(unittest.TestCase):
+    def make_config(self, workspace_root: Path):
+        config = local_app.LocalAppConfig(
+            repo_root=Path(__file__).resolve().parent.parent,
+            workspace_root=workspace_root,
+            host="127.0.0.1",
+            port=0,
+        )
+        return config
+
+    def request(
+        self,
+        config,
+        method: str,
+        path: str,
+        *,
+        body: bytes | None = None,
+        headers: dict | None = None,
+    ):
+        headers = headers or {}
+        body = body or b""
+        request_lines = [
+            f"{method} {path} HTTP/1.1",
+            "Host: localhost",
+        ]
+        for key, value in headers.items():
+            request_lines.append(f"{key}: {value}")
+        if body and "Content-Length" not in headers:
+            request_lines.append(f"Content-Length: {len(body)}")
+        request_bytes = ("\r\n".join(request_lines) + "\r\n\r\n").encode("utf-8") + body
+
+        client_sock, server_sock = socket.socketpair()
+        try:
+            server = type("Server", (), {"config": config})()
+            client_sock.sendall(request_bytes)
+            client_sock.shutdown(socket.SHUT_WR)
+            local_app.LocalAppHandler(server_sock, ("127.0.0.1", 12345), server)
+            server_sock.close()
+            client_sock.settimeout(1)
+
+            response_bytes = b""
+            while True:
+                try:
+                    chunk = client_sock.recv(65536)
+                except TimeoutError:
+                    break
+                if not chunk:
+                    break
+                response_bytes += chunk
+        finally:
+            client_sock.close()
+            if server_sock.fileno() != -1:
+                server_sock.close()
+
+        header_bytes, payload = response_bytes.split(b"\r\n\r\n", 1)
+        header_lines = header_bytes.split(b"\r\n")
+        status = int(header_lines[0].split()[1])
+        parsed_headers = {}
+        for line in header_lines[1:]:
+            key, value = line.decode("utf-8").split(":", 1)
+            parsed_headers[key.strip()] = value.strip()
+        return status, parsed_headers, payload
+
+    def test_http_routes_serve_index_bundle_manifest_and_workbench(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            write_bundle_fixture(workspace_root, "demo_bundle", with_workbench=True)
+            config = self.make_config(workspace_root)
+
+            status, _, payload = self.request(config, "GET", "/")
+            self.assertEqual(status, 200)
+            self.assertIn(b"Local FA Intake App", payload)
+
+            status, _, payload = self.request(config, "GET", "/bundle/demo_bundle")
+            self.assertEqual(status, 200)
+            self.assertIn(b"Managed bundle", payload)
+
+            status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/manifest")
+            self.assertEqual(status, 200)
+            manifest = json.loads(payload)
+            self.assertEqual(manifest["bundle_id"], "demo_bundle")
+
+            status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/workbench")
+            self.assertEqual(status, 200)
+            self.assertIn(b"Workbench", payload)
+
+    def test_http_upload_redirects_after_successful_submission(self):
+        original = local_app.handle_upload_submission
+
+        def fake_handle_upload_submission(repo_root, workspace_root, request, command_runner=local_app.run_pipeline_command):
+            self.assertEqual(request.fields["engine"], "builtin")
+            self.assertEqual(len(request.files), 1)
+            return "demo_bundle"
+
+        local_app.handle_upload_submission = fake_handle_upload_submission
+        boundary = "----expense-boundary"
+        body = (
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="engine"\r\n\r\n'
+            "builtin\r\n"
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="documents"; filename="receipt.png"\r\n'
+            "Content-Type: image/png\r\n\r\n"
+            "PNGDATA\r\n"
+            f"--{boundary}--\r\n"
+        ).encode("utf-8")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            try:
+                config = self.make_config(workspace_root)
+                status, response_headers, payload = self.request(
+                    config,
+                    "POST",
+                    "/upload",
+                    body=body,
+                    headers={
+                        "Content-Type": f"multipart/form-data; boundary={boundary}",
+                        "Content-Length": str(len(body)),
+                    },
+                )
+                self.assertEqual(status, 303)
+                self.assertEqual(response_headers["Location"], "/bundle/demo_bundle")
+                self.assertEqual(payload, b"")
+            finally:
+                local_app.handle_upload_submission = original
+
+
+if __name__ == "__main__":
+    unittest.main()
