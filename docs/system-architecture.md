@@ -102,7 +102,7 @@ The local implementation in this repo now has a filesystem-backed analogue of th
 
 - [src/workspace.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/workspace.rs:1)
 - [src/bin/ingest_bundle_workspace.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/bin/ingest_bundle_workspace.rs:1)
-- [ingestion-workspace.md](/Users/adityasriram/Labs/stanford/research/expense-reports/ingestion-workspace.md:1)
+- [ingestion-workspace.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/ingestion-workspace.md:1)
 
 Key robustness features:
 
@@ -158,7 +158,7 @@ The current upstream implementation in this repo now lives in:
 - [src/vertex_gemini.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/vertex_gemini.rs:1) for Gemini-on-Vertex transcription over PDFs and images
 - [src/transcribe.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/transcribe.rs:1) for the builtin `pdftotext` and plain-text path
 - [src/ingest.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/ingest.rs:1) for end-to-end document ingestion into the existing downstream spine
-- [real-document-ingestion.md](/Users/adityasriram/Labs/stanford/research/expense-reports/real-document-ingestion.md:1) for CLI usage and environment setup
+- [real-document-ingestion.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/real-document-ingestion.md:1) for CLI usage and environment setup
 
 ### 4. Document classification and fact extraction
 
@@ -193,7 +193,7 @@ Suggested runtime contract:
 - `Observed<T>` for evidence-bearing normalized values
 - `DocumentFactsPayload::{FlightItinerary, HotelFolio, Receipt, ...}`
 
-The concrete Rust model for this now lives in [src/document_facts.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/document_facts.rs:1), with a design note in [document-facts.md](/Users/adityasriram/Labs/stanford/research/expense-reports/document-facts.md:1).
+The concrete Rust model for this now lives in [src/document_facts.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/document_facts.rs:1), with a design note in [document-facts.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/document-facts.md:1).
 
 Why this matters:
 
@@ -229,7 +229,7 @@ This stage should also detect unresolved conflicts, such as:
 - receipt total not matching converted amount
 - conference program present but payee missing from agenda
 
-The first Rust implementation of this layer now lives in [src/bundle_synthesis.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/bundle_synthesis.rs:1), with usage notes in [bundle-synthesis.md](/Users/adityasriram/Labs/stanford/research/expense-reports/bundle-synthesis.md:1).
+The first Rust implementation of this layer now lives in [src/bundle_synthesis.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/bundle_synthesis.rs:1), with usage notes in [bundle-synthesis.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/bundle-synthesis.md:1).
 
 ### 6. Schema projection
 
@@ -334,8 +334,8 @@ The review workbench should have four panes:
 
 The current Rust backend implementation of this handoff now has two layers:
 
-- the typed review artifact in [src/review_packet.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/review_packet.rs:1), documented in [review-packet.md](/Users/adityasriram/Labs/stanford/research/expense-reports/review-packet.md:1)
-- a deterministic static HTML renderer in [src/review_workbench.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/review_workbench.rs:1), documented in [review-workbench.md](/Users/adityasriram/Labs/stanford/research/expense-reports/review-workbench.md:1)
+- the typed review artifact in [src/review_packet.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/review_packet.rs:1), documented in [review-packet.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/review-packet.md:1)
+- a deterministic static HTML renderer in [src/review_workbench.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/review_workbench.rs:1), documented in [review-workbench.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/review-workbench.md:1)
 
 It is not yet an interactive web app, but it already produces both the stable typed contract and a concrete FA-facing presentation.
 
@@ -376,13 +376,13 @@ The current Rust backend implementation of this layer now lives in:
 
 - [src/feedback.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/feedback.rs:1) for typed correction and submission feedback artifacts
 - [src/feedback_regression.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/feedback_regression.rs:1) for fixture-backed regression coverage
-- [feedback-capture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/feedback-capture.md:1) for usage notes and example commands
+- [feedback-capture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/feedback-capture.md:1) for usage notes and example commands
 
 The versioned workflow wrapper around that stage now also lives in:
 
 - [src/ledger.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/ledger.rs:1) for draft versions, review actions, submission attempts, and site-return revisions
 - [src/ledger_regression.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/ledger_regression.rs:1) for fixture-backed workflow regressions
-- [review-submission-ledger.md](/Users/adityasriram/Labs/stanford/research/expense-reports/review-submission-ledger.md:1) for usage notes and example commands
+- [review-submission-ledger.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/review-submission-ledger.md:1) for usage notes and example commands
 
 ## Recommended internal data model
 
@@ -418,7 +418,7 @@ The current repo also has a deterministic large-corpus evaluation harness for th
 
 - [src/synthetic_corpus.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/synthetic_corpus.rs:1)
 - [src/corpus_eval.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/corpus_eval.rs:1)
-- [synthetic-corpus-evaluation.md](/Users/adityasriram/Labs/stanford/research/expense-reports/synthetic-corpus-evaluation.md:1)
+- [synthetic-corpus-evaluation.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/synthetic-corpus-evaluation.md:1)
 
 That harness currently stress-tests:
 

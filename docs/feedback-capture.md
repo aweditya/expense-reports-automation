@@ -9,9 +9,9 @@ The relevant code lives in:
 - [src/bin/capture_feedback_from_drafts.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/bin/capture_feedback_from_drafts.rs:1)
 - [src/bin/verify_feedback_regressions.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/bin/verify_feedback_regressions.rs:1)
 
-This is the current backend implementation of the `Feedback capture and continuous improvement` stage from [system-architecture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/system-architecture.md:338).
+This is the current backend implementation of the `Feedback capture and continuous improvement` stage from [system-architecture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/system-architecture.md:338).
 
-For the versioned workflow wrapper around those corrections and site outcomes, see [review-submission-ledger.md](/Users/adityasriram/Labs/stanford/research/expense-reports/review-submission-ledger.md:1).
+For the versioned workflow wrapper around those corrections and site outcomes, see [review-submission-ledger.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/review-submission-ledger.md:1).
 
 ## What it captures
 

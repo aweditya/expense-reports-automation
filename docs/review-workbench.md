@@ -10,7 +10,7 @@ The relevant code lives in:
 - [src/bin/build_review_workbench_from_facts.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/bin/build_review_workbench_from_facts.rs:1)
 - [src/bin/verify_workbench_regressions.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/bin/verify_workbench_regressions.rs:1)
 
-The workbench is the first concrete backend realization of the `FA Review Workbench` stage from [system-architecture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/system-architecture.md:297). It is still static HTML, but it already exposes the stable information architecture a richer UI can build on.
+The workbench is the first concrete backend realization of the `FA Review Workbench` stage from [system-architecture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/system-architecture.md:297). It is still static HTML, but it already exposes the stable information architecture a richer UI can build on.
 
 ## What it renders
 

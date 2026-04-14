@@ -7,7 +7,7 @@ The relevant code lives in:
 - [src/bundle_synthesis.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/bundle_synthesis.rs:1)
 - [src/bin/synthesize_bundle_from_facts.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/bin/synthesize_bundle_from_facts.rs:1)
 
-This is the architecture slice described in [system-architecture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/system-architecture.md:192):
+This is the architecture slice described in [system-architecture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/system-architecture.md:192):
 
 `ExtractedDocumentFacts -> CanonicalExpenseBundle -> DraftReport -> validator`
 

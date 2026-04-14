@@ -15,13 +15,16 @@ That OCR path now applies a small deterministic markdown normalization pass afte
 
 ## Repo Map
 
-- [system-architecture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/system-architecture.md:1): full system design
-- [real-document-ingestion.md](/Users/adityasriram/Labs/stanford/research/expense-reports/real-document-ingestion.md:1): OCR and ingestion CLI details
-- [ingestion-workspace.md](/Users/adityasriram/Labs/stanford/research/expense-reports/ingestion-workspace.md:1): managed bundle workspace and rerunnable upload flow
-- [document-facts.md](/Users/adityasriram/Labs/stanford/research/expense-reports/document-facts.md:1): typed per-document extraction contract
-- [bundle-synthesis.md](/Users/adityasriram/Labs/stanford/research/expense-reports/bundle-synthesis.md:1): cross-document synthesis and draft projection
-- [review-workbench.md](/Users/adityasriram/Labs/stanford/research/expense-reports/review-workbench.md:1): FA-facing output surface
-- [review-submission-ledger.md](/Users/adityasriram/Labs/stanford/research/expense-reports/review-submission-ledger.md:1): versioned review and submission tracking
+- [docs/README.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/README.md:1): documentation index
+- [docs/system-architecture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/system-architecture.md:1): full system design
+- [docs/real-document-ingestion.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/real-document-ingestion.md:1): OCR and ingestion CLI details
+- [docs/ingestion-workspace.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/ingestion-workspace.md:1): managed bundle workspace and rerunnable upload flow
+- [docs/local-app.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/local-app.md:1): tiny local upload app for FA review
+- [docs/document-facts.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/document-facts.md:1): typed per-document extraction contract
+- [docs/bundle-synthesis.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/bundle-synthesis.md:1): cross-document synthesis and draft projection
+- [docs/review-workbench.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/review-workbench.md:1): FA-facing output surface
+- [docs/review-submission-ledger.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/review-submission-ledger.md:1): versioned review and submission tracking
+- [reference/README.md](/Users/adityasriram/Labs/stanford/research/expense-reports/reference/README.md:1): reference artifacts and non-code assets
 
 ## Prerequisites
 
@@ -52,6 +55,16 @@ Run the Python evaluator tests:
 ```bash
 python3 -m unittest discover -s tests
 ```
+
+Run the tiny local upload app:
+
+```bash
+python3 scripts/local_app.py \
+  --workspace-root /tmp/expense_local_app_workspace \
+  --port 8765
+```
+
+Then open `http://127.0.0.1:8765` in a browser. The app stages uploads into the managed workspace, runs the pipeline, and redirects to the generated FA workbench for the bundle.
 
 Generate a synthetic corpus for inspection:
 
@@ -130,6 +143,8 @@ That creates a stable bundle directory with:
 - `runs/<run_id>/artifacts/`
 - `bundle_manifest.json`
 
+The same workflow is also available through the local browser app in [scripts/local_app.py](/Users/adityasriram/Labs/stanford/research/expense-reports/scripts/local_app.py:1), documented in [docs/local-app.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/local-app.md:1).
+
 ## Synthetic OCR Evaluation
 
 The main regression harness for live OCR is [scripts/evaluate_synthetic_ocr_corpus.py](/Users/adityasriram/Labs/stanford/research/expense-reports/scripts/evaluate_synthetic_ocr_corpus.py:1). It:
@@ -203,6 +218,7 @@ Current automated coverage includes:
 - mocked SDK-backed OCR ingestion tests
 - live synthetic OCR evaluation against Gemini 3
 - Python unit tests for the OCR comparison harness
+- Python unit tests for the local upload app, including multipart parsing, command construction, handler routing, and upload redirects
 
 ## Current Limits
 
@@ -211,4 +227,4 @@ Current automated coverage includes:
   - flight itineraries
   - hotel folios
   - restaurant-style receipts
-- Stanford accepted expense report PDFs in this repo are reference material, not the intended OCR input set for extractor evaluation.
+- Stanford accepted expense report PDFs now live under [reference/README.md](/Users/adityasriram/Labs/stanford/research/expense-reports/reference/README.md:1). They are reference material, not the intended OCR input set for extractor evaluation.

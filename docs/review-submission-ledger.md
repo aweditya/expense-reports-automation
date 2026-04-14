@@ -9,7 +9,7 @@ The relevant code lives in:
 - [src/bin/build_review_submission_ledger_from_facts.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/bin/build_review_submission_ledger_from_facts.rs:1)
 - [src/bin/verify_ledger_regressions.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/bin/verify_ledger_regressions.rs:1)
 
-This is the concrete backend realization of the versioned workflow implied by the `FA Review Workbench -> submission -> site return -> correction` portion of [system-architecture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/system-architecture.md:335).
+This is the concrete backend realization of the versioned workflow implied by the `FA Review Workbench -> submission -> site return -> correction` portion of [system-architecture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/system-architecture.md:335).
 
 ## What it records
 

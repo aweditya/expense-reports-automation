@@ -164,4 +164,4 @@ The first synthetic extraction loop now exists for:
 2. `HotelFolioFacts`
 3. `ReceiptFacts`
 
-See [synthetic-pipeline.md](/Users/adityasriram/Labs/stanford/research/expense-reports/synthetic-pipeline.md:1) for the generator, extractor, and testing commands.
+See [synthetic-pipeline.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/synthetic-pipeline.md:1) for the generator, extractor, and testing commands.

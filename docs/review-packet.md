@@ -9,9 +9,9 @@ The relevant code lives in:
 - [src/bin/build_review_packet_from_facts.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/bin/build_review_packet_from_facts.rs:1)
 - [src/bin/verify_review_regressions.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/bin/verify_review_regressions.rs:1)
 
-The review packet is the typed backend artifact for the `FA Review Workbench` handoff from [system-architecture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/system-architecture.md:297).
+The review packet is the typed backend artifact for the `FA Review Workbench` handoff from [system-architecture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/system-architecture.md:297).
 
-The deterministic HTML presentation built on top of it now lives in [review-workbench.md](/Users/adityasriram/Labs/stanford/research/expense-reports/review-workbench.md:1).
+The deterministic HTML presentation built on top of it now lives in [review-workbench.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/review-workbench.md:1).
 
 ## What it contains
 
