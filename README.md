@@ -95,6 +95,12 @@ cargo run --bin transcribe_document -- \
   receipt.png
 ```
 
+Run the checked-in Gemini smoke wrapper:
+
+```bash
+bash scripts/run_gemini_smoke_test.sh --packets 2
+```
+
 Run end-to-end ingestion on a packet of rendered source documents:
 
 ```bash

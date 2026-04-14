@@ -187,6 +187,12 @@ python3 scripts/evaluate_synthetic_ocr_corpus.py \
   --packets 2
 ```
 
+If you want one checked-in command that exercises isolated OCR, full ingestion, and the synthetic OCR evaluator in sequence, use:
+
+```bash
+bash scripts/run_gemini_smoke_test.sh --packets 2
+```
+
 By default that compares:
 
 - `gemini-3-flash-preview`
