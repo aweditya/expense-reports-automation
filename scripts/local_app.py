@@ -236,20 +236,19 @@ def build_ingest_command(
 ) -> list[str]:
     bundle_id = sanitize_identifier(form_fields.get("bundle_id") or default_bundle_id(input_paths))
     engine = form_fields.get("engine") or "builtin"
-    run_id = sanitize_identifier(form_fields.get("run_id") or engine)
     command = resolve_cli_command(repo_root) + [
         "stage-and-run",
         "--workspace-root",
         str(workspace_root),
         "--bundle-id",
         bundle_id,
-        "--run-id",
-        run_id,
         "--fx",
         form_fields.get("fx", "demo"),
         "--engine",
         engine,
     ]
+    if form_fields.get("run_id"):
+        command.extend(["--run-id", sanitize_identifier(form_fields["run_id"])])
     if form_fields.get("user_id"):
         command.extend(["--user-id", form_fields["user_id"]])
     if engine == "vertex-gemini-sdk":
@@ -330,12 +329,108 @@ def render_index_page(config: LocalAppConfig, bundles: list[BundleListEntry], me
     input, select {{ font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid #c9bca8; background: white; }}
     input[type=file] {{ padding: 8px; }}
     button {{ font: inherit; background: #2f5b53; color: white; border: 0; border-radius: 999px; padding: 12px 18px; cursor: pointer; }}
+    .ghost-button {{ background: transparent; color: #2f5b53; border: 1px solid #9db5b0; }}
     .grid {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }}
     ul {{ margin: 0; padding-left: 18px; }}
     a {{ color: #204c63; }}
     .meta {{ color: #5d5349; font-size: 0.95rem; }}
+    .pending-uploads {{ padding: 14px 16px; border: 1px solid #dbcdb7; border-radius: 14px; background: rgba(244, 239, 226, 0.7); }}
+    .pending-uploads ul {{ margin-top: 8px; }}
+    .pending-uploads li {{ display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 8px; }}
+    .pending-file-name {{ overflow-wrap: anywhere; }}
+    .error-text {{ color: #8d2c21; font-weight: 600; }}
     @media (max-width: 920px) {{ .hero, .grid {{ grid-template-columns: 1fr; }} }}
   </style>
+  <script>
+    const pendingFiles = [];
+
+    function pendingLabel(file) {{
+      return `${{file.name}} (${{file.size}} bytes)`;
+    }}
+
+    function renderPendingUploads() {{
+      const list = document.getElementById("pending-documents");
+      if (!list) {{
+        return;
+      }}
+      if (pendingFiles.length === 0) {{
+        list.innerHTML = "<li>No documents selected yet.</li>";
+        return;
+      }}
+      list.innerHTML = "";
+      pendingFiles.forEach((file, index) => {{
+        const item = document.createElement("li");
+        const label = document.createElement("span");
+        label.className = "pending-file-name";
+        label.textContent = pendingLabel(file);
+        const removeButton = document.createElement("button");
+        removeButton.type = "button";
+        removeButton.className = "ghost-button";
+        removeButton.textContent = "Remove";
+        removeButton.addEventListener("click", () => {{
+          pendingFiles.splice(index, 1);
+          renderPendingUploads();
+        }});
+        item.appendChild(label);
+        item.appendChild(removeButton);
+        list.appendChild(item);
+      }});
+    }}
+
+    function addPendingFiles(input) {{
+      for (const file of Array.from(input.files || [])) {{
+        pendingFiles.push(file);
+      }}
+      input.value = "";
+      clearDocumentError();
+      renderPendingUploads();
+    }}
+
+    function clearDocumentError() {{
+      const error = document.getElementById("document-error");
+      if (error) {{
+        error.hidden = true;
+        error.textContent = "";
+      }}
+    }}
+
+    function setDocumentError(message) {{
+      const error = document.getElementById("document-error");
+      if (!error) {{
+        return;
+      }}
+      error.hidden = false;
+      error.textContent = message;
+    }}
+
+    function syncPendingFilesToInput(input) {{
+      if (pendingFiles.length === 0) {{
+        return input.files && input.files.length > 0;
+      }}
+      const transfer = new DataTransfer();
+      for (const file of pendingFiles) {{
+        transfer.items.add(file);
+      }}
+      input.files = transfer.files;
+      return input.files.length > 0;
+    }}
+
+    document.addEventListener("DOMContentLoaded", () => {{
+      const form = document.getElementById("upload-form");
+      const input = document.getElementById("documents-input");
+      if (!form || !input) {{
+        return;
+      }}
+      input.addEventListener("change", () => addPendingFiles(input));
+      form.addEventListener("submit", (event) => {{
+        if (!syncPendingFilesToInput(input)) {{
+          event.preventDefault();
+          setDocumentError("Select at least one document before running the pipeline.");
+        }}
+      }});
+      renderPendingUploads();
+    }});
+  </script>
 </head>
 <body>
   <div class="shell">
@@ -345,7 +440,7 @@ def render_index_page(config: LocalAppConfig, bundles: list[BundleListEntry], me
         <h1>Local FA Intake App</h1>
         <p>This app uploads documents into the managed bundle workspace, runs the ingestion pipeline, and then opens the generated FA workbench for copy-and-paste filing.</p>
         {notice}
-        <form method="post" action="/upload" enctype="multipart/form-data">
+        <form id="upload-form" method="post" action="/upload" enctype="multipart/form-data">
           <div class="grid">
             <label>Bundle ID
               <input name="bundle_id" placeholder="optional_bundle_id">
@@ -354,7 +449,7 @@ def render_index_page(config: LocalAppConfig, bundles: list[BundleListEntry], me
               <input name="user_id" placeholder="fa_or_requester_id">
             </label>
             <label>Run ID
-              <input name="run_id" placeholder="optional_run_id">
+              <input name="run_id" placeholder="optional_run_id (leave blank to auto-generate)">
             </label>
             <label>FX Mode
               <select name="fx">
@@ -385,8 +480,13 @@ def render_index_page(config: LocalAppConfig, bundles: list[BundleListEntry], me
             </label>
           </div>
           <label>Documents
-            <input type="file" name="documents" multiple required>
+            <input id="documents-input" type="file" name="documents" multiple>
           </label>
+          <div class="pending-uploads">
+            <p class="meta">Pending uploads. You can reopen the file picker and selections will accumulate until you submit.</p>
+            <ul id="pending-documents"><li>No documents selected yet.</li></ul>
+            <p id="document-error" class="error-text" hidden></p>
+          </div>
           <button type="submit">Run Intake Pipeline</button>
         </form>
       </div>

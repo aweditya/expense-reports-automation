@@ -119,6 +119,7 @@ class LocalAppTests(unittest.TestCase):
             self.assertIn("builtin", command)
             self.assertIn("--bundle-id", command)
             self.assertIn("receipt", command)
+            self.assertNotIn("--run-id", command)
 
     def test_build_ingest_command_prefers_built_binary_and_vertex_fields(self):
         with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as workspace_dir:
@@ -153,6 +154,8 @@ class LocalAppTests(unittest.TestCase):
             self.assertIn("demo-project", command)
             self.assertIn("--service-account-key", command)
             self.assertIn("/tmp/key.json", command)
+            self.assertIn("--run-id", command)
+            self.assertIn("gemini_flash", command)
 
     def test_list_bundles_sorts_by_latest_update(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -239,6 +242,22 @@ class LocalAppTests(unittest.TestCase):
 
             self.assertIn("Workbench unavailable", page)
             self.assertNotIn("<iframe", page)
+
+    def test_render_index_page_includes_pending_upload_accumulator(self):
+        config = local_app.LocalAppConfig(
+            repo_root=Path("/tmp/repo"),
+            workspace_root=Path("/tmp/workspace"),
+            host="127.0.0.1",
+            port=8765,
+        )
+
+        page = local_app.render_index_page(config, [])
+
+        self.assertIn('id="upload-form"', page)
+        self.assertIn('id="documents-input"', page)
+        self.assertIn('id="pending-documents"', page)
+        self.assertIn("pendingFiles", page)
+        self.assertIn("DataTransfer()", page)
 
     def test_ensure_safe_bundle_id_rejects_path_traversal(self):
         with self.assertRaises(local_app.LocalAppError):

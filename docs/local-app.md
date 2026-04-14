@@ -9,6 +9,7 @@ It sits on top of the managed workspace flow rather than replacing it. The app i
 ## What it does
 
 - renders an upload form for PDF, PNG, JPG, markdown, and text inputs
+- accumulates file selections across repeated file-picker opens before submit
 - stores documents in the managed bundle workspace
 - runs `ingest_bundle_workspace stage-and-run`
 - shows recent bundles and their current stages
@@ -34,6 +35,12 @@ The app supports:
 
 - `builtin` transcription for markdown/text and native PDF text extraction
 - `vertex-gemini-sdk` for live Gemini 3 OCR
+
+Notes:
+
+- If you leave `Run ID` blank, the workspace generates a unique run id automatically.
+- That avoids overwriting the prior run directory when you submit the same bundle again.
+- You can also reopen the file picker multiple times before submit; the pending upload list will accumulate those selections.
 
 ## Vertex-backed usage
 
