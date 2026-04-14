@@ -4,11 +4,12 @@ This directory contains the project’s design notes, workflow guides, and archi
 
 Suggested reading order for a new reader:
 
-1. [system-architecture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/system-architecture.md:1)
-2. [document-facts.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/document-facts.md:1)
-3. [bundle-synthesis.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/bundle-synthesis.md:1)
-4. [review-workbench.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/review-workbench.md:1)
-5. [review-submission-ledger.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/review-submission-ledger.md:1)
+1. [getting-up-to-speed.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/getting-up-to-speed.md:1)
+2. [system-architecture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/system-architecture.md:1)
+3. [document-facts.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/document-facts.md:1)
+4. [bundle-synthesis.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/bundle-synthesis.md:1)
+5. [review-workbench.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/review-workbench.md:1)
+6. [review-submission-ledger.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/review-submission-ledger.md:1)
 
 Workflow-specific guides:
 
