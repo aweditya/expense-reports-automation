@@ -17,7 +17,7 @@ The workbench is the first concrete backend realization of the `FA Review Workbe
 - packet summary with filing readiness and confidence
 - issue queue with jump links into the copy surface
 - Oracle-ordered copy cards with one-click copy buttons
-- evidence index grouped by source document or system origin
+- evidence index grouped into uploaded evidence, system-derived logic, and user input, with clickable usage links back to filing fields
 - attachment checklist per projected transaction line
 
 ## Commands

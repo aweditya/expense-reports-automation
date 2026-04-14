@@ -4,13 +4,31 @@ use crate::draft::EvidenceReference;
 use crate::review_packet::{CopyField, FilingStatus, ReviewPacket};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+struct EvidenceUsage {
+    label: String,
+    target: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct EvidenceRecord {
     id: String,
+    category: String,
     bucket: String,
     title: String,
-    meta: String,
+    kind_label: String,
+    page_label: Option<String>,
+    source_label: Option<String>,
+    origin_label: Option<String>,
     quote: Option<String>,
-    used_by: Vec<String>,
+    used_by: Vec<EvidenceUsage>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct EvidenceSummary {
+    uploaded_count: usize,
+    system_count: usize,
+    user_input_count: usize,
+    total_count: usize,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -243,7 +261,13 @@ fn render_copy_field(html: &mut String, field: &CopyField, index: &WorkbenchInde
     if let Some(evidence_id) = index.field_to_evidence.get(&field.path) {
         html.push_str("<a class=\"evidence-link\" href=\"#");
         html.push_str(&escape_html(evidence_id));
-        html.push_str("\">Evidence</a>");
+        html.push_str("\">");
+        if field.evidence.len() > 1 {
+            html.push_str(&escape_html(&format!("Evidence ({})", field.evidence.len())));
+        } else {
+            html.push_str("Evidence");
+        }
+        html.push_str("</a>");
     }
     html.push_str("</div>\n</div>\n");
     html.push_str("</article>\n");
@@ -255,38 +279,90 @@ fn render_evidence_panel(html: &mut String, index: &WorkbenchIndex) {
     if index.evidence_records.is_empty() {
         html.push_str("<p class=\"empty-state\">No evidence references available.</p>\n");
     } else {
+        let summary = summarize_evidence(index);
+        html.push_str("<div class=\"evidence-guide\">");
+        html.push_str("<p class=\"evidence-guide-copy\">Each card shows what the evidence is, where it came from, and which filing fields depend on it.</p>");
+        html.push_str("<div class=\"evidence-summary\">");
+        render_evidence_summary_card(html, "Uploaded", summary.uploaded_count);
+        render_evidence_summary_card(html, "System", summary.system_count);
+        render_evidence_summary_card(html, "User Input", summary.user_input_count);
+        render_evidence_summary_card(html, "Total", summary.total_count);
+        html.push_str("</div></div>\n");
+
+        let mut current_category = String::new();
         let mut current_bucket = String::new();
         for record in &index.evidence_records {
+            if record.category != current_category {
+                if !current_bucket.is_empty() {
+                    html.push_str("</div>\n");
+                    current_bucket.clear();
+                }
+                if !current_category.is_empty() {
+                    html.push_str("</section>\n");
+                }
+                current_category = record.category.clone();
+                html.push_str("<section class=\"evidence-category\">\n<div class=\"evidence-category-head\"><h3>");
+                html.push_str(&escape_html(&current_category));
+                html.push_str("</h3><p class=\"evidence-category-copy\">");
+                html.push_str(&escape_html(evidence_category_description(&current_category)));
+                html.push_str("</p></div>\n");
+            }
             if record.bucket != current_bucket {
                 if !current_bucket.is_empty() {
                     html.push_str("</div>\n");
                 }
                 current_bucket = record.bucket.clone();
-                html.push_str("<div class=\"evidence-group\">\n<h3>");
+                html.push_str("<div class=\"evidence-group\">\n<h4 class=\"evidence-group-title\">");
                 html.push_str(&escape_html(&current_bucket));
-                html.push_str("</h3>\n");
+                html.push_str("</h4>\n");
             }
             html.push_str("<article class=\"evidence-card\" id=\"");
             html.push_str(&escape_html(&record.id));
-            html.push_str("\">\n<h4>");
+            html.push_str("\">\n");
+            html.push_str("<div class=\"evidence-topline\">");
+            badge(html, &record.kind_label);
+            if let Some(page_label) = record.page_label.as_deref() {
+                badge(html, page_label);
+            }
+            badge(html, &format!("{} field(s)", record.used_by.len()));
+            html.push_str("</div>\n");
+            html.push_str("<h5>");
             html.push_str(&escape_html(&record.title));
-            html.push_str("</h4>\n<p class=\"evidence-meta\">");
-            html.push_str(&escape_html(&record.meta));
-            html.push_str("</p>\n");
+            html.push_str("</h5>\n");
+            if let Some(source_label) = record.source_label.as_deref() {
+                html.push_str("<p class=\"evidence-detail\"><span class=\"evidence-detail-label\">Source</span>");
+                html.push_str(&escape_html(source_label));
+                html.push_str("</p>\n");
+            }
+            if let Some(origin_label) = record.origin_label.as_deref() {
+                html.push_str("<p class=\"evidence-detail\"><span class=\"evidence-detail-label\">Origin</span>");
+                html.push_str(&escape_html(origin_label));
+                html.push_str("</p>\n");
+            }
             if let Some(quote) = record.quote.as_deref() {
+                html.push_str("<p class=\"evidence-quote-label\">Excerpt</p>\n");
                 html.push_str("<blockquote>");
                 html.push_str(&escape_html(quote));
                 html.push_str("</blockquote>\n");
             }
             if !record.used_by.is_empty() {
-                html.push_str("<p class=\"evidence-usage\">Used by: ");
-                html.push_str(&escape_html(&record.used_by.join(", ")));
-                html.push_str("</p>\n");
+                html.push_str("<p class=\"evidence-usage-heading\">Referenced by</p>\n<ul class=\"evidence-usage-list\">");
+                for usage in &record.used_by {
+                    html.push_str("<li><a class=\"evidence-usage-link\" href=\"#");
+                    html.push_str(&escape_html(&usage.target));
+                    html.push_str("\">");
+                    html.push_str(&escape_html(&usage.label));
+                    html.push_str("</a></li>");
+                }
+                html.push_str("</ul>\n");
             }
             html.push_str("</article>\n");
         }
         if !current_bucket.is_empty() {
             html.push_str("</div>\n");
+        }
+        if !current_category.is_empty() {
+            html.push_str("</section>\n");
         }
     }
     html.push_str("</aside>\n");
@@ -351,15 +427,22 @@ fn build_workbench_index(packet: &ReviewPacket) -> WorkbenchIndex {
                             .entry(key.clone())
                             .or_insert_with(|| EvidenceRecord {
                                 id: anchor_id("evidence", &key),
+                                category: evidence_category(evidence).to_owned(),
                                 bucket: evidence_bucket(evidence),
                                 title: evidence_title(evidence),
-                                meta: evidence_meta(evidence),
+                                kind_label: evidence_kind_display(evidence).to_owned(),
+                                page_label: evidence.page.map(|page| format!("page {page}")),
+                                source_label: evidence_source_label(evidence),
+                                origin_label: evidence.origin.clone(),
                                 quote: evidence.quote.clone(),
                                 used_by: Vec::new(),
                             });
                     let usage = format!("{} · {}", instance.label, field.label);
-                    if !record.used_by.contains(&usage) {
-                        record.used_by.push(usage);
+                    if !record.used_by.iter().any(|existing| existing.label == usage) {
+                        record.used_by.push(EvidenceUsage {
+                            label: usage,
+                            target: field_id.clone(),
+                        });
                     }
                     index
                         .field_to_evidence
@@ -371,7 +454,35 @@ fn build_workbench_index(packet: &ReviewPacket) -> WorkbenchIndex {
     }
 
     index.evidence_records = evidence_map.into_values().collect();
+    index.evidence_records.sort_by(|left, right| {
+        left.category
+            .cmp(&right.category)
+            .then(left.bucket.cmp(&right.bucket))
+            .then(left.title.cmp(&right.title))
+    });
     index
+}
+
+fn summarize_evidence(index: &WorkbenchIndex) -> EvidenceSummary {
+    let mut summary = EvidenceSummary::default();
+    for record in &index.evidence_records {
+        summary.total_count += 1;
+        match record.category.as_str() {
+            "Uploaded Evidence" => summary.uploaded_count += 1,
+            "System-Derived Logic" => summary.system_count += 1,
+            "User Input" => summary.user_input_count += 1,
+            _ => {}
+        }
+    }
+    summary
+}
+
+fn render_evidence_summary_card(html: &mut String, label: &str, count: usize) {
+    html.push_str("<article class=\"evidence-summary-card\"><p class=\"summary-label\">");
+    html.push_str(&escape_html(label));
+    html.push_str("</p><p class=\"summary-value\">");
+    html.push_str(&count.to_string());
+    html.push_str("</p></article>");
 }
 
 fn issue_target(path: &str, index: &WorkbenchIndex) -> Option<String> {
@@ -443,32 +554,34 @@ fn evidence_key(evidence: &EvidenceReference) -> String {
 }
 
 fn evidence_bucket(evidence: &EvidenceReference) -> String {
-    evidence
-        .filename
-        .clone()
-        .or_else(|| evidence.document_id.clone())
-        .or_else(|| evidence.origin.clone())
-        .unwrap_or_else(|| "other".to_owned())
+    match evidence.kind {
+        crate::draft::EvidenceKind::Document | crate::draft::EvidenceKind::DocumentSpan => evidence
+            .filename
+            .clone()
+            .or_else(|| evidence.document_id.clone())
+            .unwrap_or_else(|| "Document evidence".to_owned()),
+        crate::draft::EvidenceKind::SystemGenerated => "System generated logic".to_owned(),
+        crate::draft::EvidenceKind::UserInput => "User input confirmations".to_owned(),
+    }
 }
 
 fn evidence_title(evidence: &EvidenceReference) -> String {
-    evidence
-        .filename
-        .clone()
-        .or_else(|| evidence.document_id.clone())
-        .or_else(|| evidence.origin.clone())
-        .unwrap_or_else(|| evidence_kind_name(evidence).to_owned())
-}
-
-fn evidence_meta(evidence: &EvidenceReference) -> String {
-    let mut parts = vec![evidence_kind_name(evidence).to_owned()];
-    if let Some(page) = evidence.page {
-        parts.push(format!("page {page}"));
+    match evidence.kind {
+        crate::draft::EvidenceKind::DocumentSpan => evidence
+            .page
+            .map(|page| format!("Page {page} excerpt"))
+            .unwrap_or_else(|| "Document excerpt".to_owned()),
+        crate::draft::EvidenceKind::Document => evidence
+            .page
+            .map(|page| format!("Page {page}"))
+            .unwrap_or_else(|| "Full document".to_owned()),
+        crate::draft::EvidenceKind::SystemGenerated => evidence
+            .origin
+            .as_deref()
+            .map(short_origin_label)
+            .unwrap_or_else(|| "Derived value".to_owned()),
+        crate::draft::EvidenceKind::UserInput => "User-provided value".to_owned(),
     }
-    if let Some(origin) = evidence.origin.as_deref() {
-        parts.push(origin.to_owned());
-    }
-    parts.join(" · ")
 }
 
 fn evidence_kind_name(evidence: &EvidenceReference) -> &'static str {
@@ -478,6 +591,75 @@ fn evidence_kind_name(evidence: &EvidenceReference) -> &'static str {
         crate::draft::EvidenceKind::SystemGenerated => "system_generated",
         crate::draft::EvidenceKind::UserInput => "user_input",
     }
+}
+
+fn evidence_kind_display(evidence: &EvidenceReference) -> &'static str {
+    match evidence.kind {
+        crate::draft::EvidenceKind::Document => "document",
+        crate::draft::EvidenceKind::DocumentSpan => "excerpt",
+        crate::draft::EvidenceKind::SystemGenerated => "system-derived",
+        crate::draft::EvidenceKind::UserInput => "user-input",
+    }
+}
+
+fn evidence_category(evidence: &EvidenceReference) -> &'static str {
+    match evidence.kind {
+        crate::draft::EvidenceKind::Document | crate::draft::EvidenceKind::DocumentSpan => {
+            "Uploaded Evidence"
+        }
+        crate::draft::EvidenceKind::SystemGenerated => "System-Derived Logic",
+        crate::draft::EvidenceKind::UserInput => "User Input",
+    }
+}
+
+fn evidence_category_description(category: &str) -> &'static str {
+    match category {
+        "Uploaded Evidence" => "Original uploaded files and OCR excerpts that support filed values.",
+        "System-Derived Logic" => {
+            "Deterministic rules, defaults, and synthesis steps used to fill or normalize fields."
+        }
+        "User Input" => "Values that were explicitly supplied or confirmed by a human reviewer.",
+        _ => "Supporting references for this packet.",
+    }
+}
+
+fn evidence_source_label(evidence: &EvidenceReference) -> Option<String> {
+    match evidence.kind {
+        crate::draft::EvidenceKind::Document | crate::draft::EvidenceKind::DocumentSpan => {
+            evidence
+                .filename
+                .clone()
+                .or_else(|| evidence.document_id.clone())
+        }
+        crate::draft::EvidenceKind::SystemGenerated => evidence.document_id.clone(),
+        crate::draft::EvidenceKind::UserInput => evidence
+            .filename
+            .clone()
+            .or_else(|| evidence.document_id.clone()),
+    }
+}
+
+fn short_origin_label(origin: &str) -> String {
+    humanize_machine_label(origin.rsplit('.').next().unwrap_or(origin))
+}
+
+fn humanize_machine_label(value: &str) -> String {
+    value.split('_')
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let mut chars = part.chars();
+            match chars.next() {
+                Some(first) => {
+                    let mut word = String::new();
+                    word.push(first.to_ascii_uppercase());
+                    word.extend(chars);
+                    word
+                }
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn anchor_id(prefix: &str, value: &str) -> String {
@@ -559,6 +741,9 @@ mod tests {
         assert!(rendered.contains("copyFieldValue(this)"));
         assert!(rendered.contains("synthetic_flight_itinerary_baseline.md"));
         assert!(rendered.contains("Business meal during travel in Singapore"));
+        assert!(rendered.contains("Uploaded Evidence"));
+        assert!(rendered.contains("System-Derived Logic"));
+        assert!(rendered.contains("Referenced by"));
     }
 
     #[test]
@@ -612,5 +797,23 @@ mod tests {
         assert!(rendered.contains(
             "<a class=\"issue-link\" href=\"#section-general-information\">Jump to field</a>"
         ));
+    }
+
+    #[test]
+    fn evidence_panel_renders_usage_links_and_summary_cards() {
+        let provider = StaticFxRateProvider::demo();
+        let projection = synthesize_bundle_projection_with_fx(&synthetic_documents(), &provider);
+        let packet = build_review_packet(
+            &projection.bundle,
+            &projection.draft,
+            &projection.validation,
+        )
+        .expect("review packet should build");
+        let rendered = render_review_workbench_html(&packet);
+
+        assert!(rendered.contains("Each card shows what the evidence is"));
+        assert!(rendered.contains("evidence-summary-card"));
+        assert!(rendered.contains("Page 1 excerpt"));
+        assert!(rendered.contains("class=\"evidence-usage-link\""));
     }
 }
