@@ -17,6 +17,7 @@ That OCR path now applies a small deterministic markdown normalization pass afte
 
 - [docs/README.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/README.md:1): documentation index
 - [docs/getting-up-to-speed.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/getting-up-to-speed.md:1): onboarding guide for new readers
+- [docs/demo-playbook.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/demo-playbook.md:1): runnable demo instructions for each completed deliverable
 - [docs/system-architecture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/system-architecture.md:1): full system design
 - [docs/real-document-ingestion.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/real-document-ingestion.md:1): OCR and ingestion CLI details
 - [docs/ingestion-workspace.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/ingestion-workspace.md:1): managed bundle workspace and rerunnable upload flow

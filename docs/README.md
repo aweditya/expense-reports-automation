@@ -13,6 +13,7 @@ Suggested reading order for a new reader:
 
 Workflow-specific guides:
 
+- [demo-playbook.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/demo-playbook.md:1)
 - [real-document-ingestion.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/real-document-ingestion.md:1)
 - [ingestion-workspace.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/ingestion-workspace.md:1)
 - [local-app.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/local-app.md:1)
