@@ -63,6 +63,8 @@ def build_prompt(filename: str, mime_type: str) -> str:
         "- Keep one `pages[]` entry per source page when page boundaries are visible; otherwise use a single page.\n"
         "- Keep the top heading faithful to the source document.\n"
         "- If the source is clearly a flight itinerary, hotel folio, or merchant/card receipt, normalize the layout so headings and labels stay easy to parse downstream.\n"
+        "- For receipts, prefer `# Merchant Receipt` when the source has no clear title, and prefer sections like `## Purchase Summary`, `## Line Items`, and `## Totals` when they are visually evident.\n"
+        "- For receipts, keep merchant name, date, subtotal, tax, tip, total, card, and authorization values on the same logical line as their labels whenever possible.\n"
         f"Filename: {filename}\n"
         f"Mime type: {mime_type}\n"
     )
@@ -147,6 +149,18 @@ def normalize_extractor_markdown(text: str) -> str:
             index += 2
             continue
 
+        merged_label_value = merge_split_receipt_label_value(line, lines, index)
+        if merged_label_value is not None:
+            normalized.append(merged_label_value)
+            index += 2
+            continue
+
+        merged_item_amount = merge_split_receipt_item_amount(line, lines, index)
+        if merged_item_amount is not None:
+            normalized.append(merged_item_amount)
+            index += 2
+            continue
+
         normalized.append(line)
         index += 1
 
@@ -165,6 +179,50 @@ def normalize_extractor_markdown(text: str) -> str:
         collapsed.pop()
 
     return "\n".join(collapsed)
+
+
+def merge_split_receipt_label_value(line: str, lines: list[str], index: int) -> str | None:
+    if index + 1 >= len(lines):
+        return None
+
+    current = normalize_bullet_prefix(line)
+    next_line = normalize_bullet_prefix(lines[index + 1])
+    if not current or not next_line:
+        return None
+    if is_section_heading(line) or is_section_heading(lines[index + 1]):
+        return None
+    if looks_like_label_value_line(next_line):
+        return None
+
+    label = canonical_receipt_label(current)
+    if not label:
+        return None
+    if not looks_like_receipt_value(next_line):
+        return None
+
+    return rebuild_line_with_prefix(line, f"{label}: {next_line}")
+
+
+def merge_split_receipt_item_amount(line: str, lines: list[str], index: int) -> str | None:
+    if index + 1 >= len(lines):
+        return None
+
+    current = normalize_bullet_prefix(line)
+    next_line = normalize_bullet_prefix(lines[index + 1])
+    if not current or not next_line:
+        return None
+    if is_section_heading(line) or is_section_heading(lines[index + 1]):
+        return None
+    if "|" in current or ":" in current:
+        return None
+    if canonical_receipt_label(current):
+        return None
+    if not looks_like_money_value(next_line):
+        return None
+    if not any(character.isalpha() for character in current):
+        return None
+
+    return rebuild_line_with_prefix(line, f"{current} | {next_line}")
 
 
 def is_section_heading(line: str) -> bool:
@@ -186,6 +244,82 @@ def is_pipe_row_continuation_line(line: str) -> bool:
 
 def normalize_bullet_prefix(line: str) -> str:
     return line.lstrip().lstrip("-").lstrip("*").strip()
+
+
+def rebuild_line_with_prefix(original_line: str, normalized_content: str) -> str:
+    stripped = original_line.lstrip()
+    indent = original_line[: len(original_line) - len(stripped)]
+    if stripped.startswith("- "):
+        return f"{indent}- {normalized_content}"
+    if stripped.startswith("* "):
+        return f"{indent}* {normalized_content}"
+    return f"{indent}{normalized_content}"
+
+
+def canonical_receipt_label(line: str) -> str | None:
+    stripped = line.rstrip(":").strip()
+    normalized = normalize_receipt_key(stripped)
+    labels = {
+        "merchant": "Merchant",
+        "merchant name": "Merchant Name",
+        "merchant location": "Merchant Location",
+        "location": "Location",
+        "transaction date": "Transaction Date",
+        "date": "Date",
+        "subtotal": "Subtotal",
+        "tax": "Tax",
+        "gst": "GST",
+        "vat": "VAT",
+        "tip": "Tip",
+        "total": "Total",
+        "total paid": "Total Paid",
+        "amount paid": "Amount Paid",
+        "card": "Card",
+        "authorization code": "Authorization Code",
+        "terminal id": "Terminal ID",
+    }
+    return labels.get(normalized)
+
+
+def looks_like_label_value_line(line: str) -> bool:
+    return ":" in line and canonical_receipt_label(line.split(":", 1)[0]) is not None
+
+
+def looks_like_receipt_value(line: str) -> bool:
+    if looks_like_money_value(line):
+        return True
+    if any(character.isdigit() for character in line):
+        return True
+    return any(character.isalpha() for character in line)
+
+
+def looks_like_money_value(line: str) -> bool:
+    tokens = line.replace("$", " $ ").split()
+    if not tokens:
+        return False
+
+    last_token = tokens[-1].replace(",", "")
+    if last_token.count(".") != 1:
+        return False
+    whole, fraction = last_token.split(".", 1)
+    if not whole.isdigit() or not fraction.isdigit():
+        return False
+
+    if len(tokens) == 1:
+        return True
+    if tokens[0] == "$":
+        return True
+    return tokens[0].isalpha() and len(tokens[0]) == 3
+
+
+def normalize_receipt_key(value: str) -> str:
+    return " ".join(
+        value.lower()
+        .replace("/", " ")
+        .replace("-", " ")
+        .replace("_", " ")
+        .split()
+    )
 
 
 def main() -> int:

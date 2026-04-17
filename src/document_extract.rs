@@ -96,6 +96,10 @@ fn classify_document(document: &TranscribedDocument, lines: &[LineRef]) -> Docum
         );
     }
 
+    if let Some(classification) = fallback_receipt_classification(document, lines) {
+        return classification;
+    }
+
     if let Some(line) = lines.first() {
         let mut classification =
             classification_from_line(document, DocumentKind::Unknown, line, ConfidenceLevel::Low);
@@ -111,6 +115,41 @@ fn classify_document(document: &TranscribedDocument, lines: &[LineRef]) -> Docum
             flags: vec!["empty_document".to_owned()],
         }
     }
+}
+
+fn fallback_receipt_classification(
+    document: &TranscribedDocument,
+    lines: &[LineRef],
+) -> Option<DocumentClassification> {
+    let total_line = lines.iter().find(|line| {
+        strip_label_value(&line.raw, &["total", "total paid", "amount paid"], !line.is_heading)
+            .is_some()
+    })?;
+
+    let has_supporting_signal = lines.iter().any(|line| {
+        strip_label_value(&line.raw, &["subtotal", "tax", "gst", "vat", "tip"], !line.is_heading)
+            .is_some()
+            || strip_label_value(&line.raw, &["transaction date", "date"], !line.is_heading)
+                .is_some()
+            || strip_label_value(
+                &line.raw,
+                &["card", "authorization code", "terminal id"],
+                !line.is_heading,
+            )
+            .is_some()
+            || looks_like_receipt_item_line(line)
+    });
+
+    if !has_supporting_signal {
+        return None;
+    }
+
+    Some(classification_from_line(
+        document,
+        DocumentKind::Receipt,
+        total_line,
+        ConfidenceLevel::Medium,
+    ))
 }
 
 fn extract_flight_itinerary(
@@ -392,13 +431,21 @@ fn extract_receipt(
         ConfidenceLevel::High,
     )
     .or_else(|| infer_receipt_total(subtotal.as_ref(), tax_amount.as_ref(), tip_amount.as_ref()));
-    let line_items = collect_section_rows(
+    let section_rows = collect_section_rows(
         lines,
         &["line items", "items", "purchased items", "items purchased"],
-    )
-    .into_iter()
-    .filter_map(|line| parse_receipt_line_item(document, line))
-    .collect::<Vec<_>>();
+    );
+    let line_items = if section_rows.is_empty() {
+        lines.iter()
+            .filter(|line| looks_like_receipt_item_line(line))
+            .filter_map(|line| parse_receipt_line_item(document, line))
+            .collect::<Vec<_>>()
+    } else {
+        section_rows
+            .into_iter()
+            .filter_map(|line| parse_receipt_line_item(document, line))
+            .collect::<Vec<_>>()
+    };
 
     let mut issues = Vec::new();
     if merchant_name.is_none() {
@@ -680,7 +727,44 @@ fn parse_receipt_line_item(
     };
 
     let description_key = normalize_key(&description);
-    let summary_labels = [
+    if is_receipt_summary_label(&description_key) {
+        return None;
+    }
+
+    Some(ReceiptLineItemFacts {
+        description: observed_from_line(line, description, ConfidenceLevel::High, document),
+        amount: observed_from_line(line, amount, ConfidenceLevel::High, document),
+    })
+}
+
+fn looks_like_receipt_item_line(line: &LineRef) -> bool {
+    let content = normalize_bullet_content(&line.raw);
+    let description = if content.contains('|') {
+        let mut parts = content.split('|').map(str::trim);
+        let description = match parts.next() {
+            Some(value) => value,
+            None => return false,
+        };
+        let amount = match parts.next() {
+            Some(value) => value,
+            None => return false,
+        };
+        if parse_money(amount).is_none() {
+            return false;
+        }
+        description.to_owned()
+    } else {
+        match split_description_and_money(&content) {
+            Some((description, _)) => description,
+            None => return false,
+        }
+    };
+
+    !is_receipt_summary_label(&normalize_key(&description))
+}
+
+fn is_receipt_summary_label(description_key: &str) -> bool {
+    [
         "subtotal",
         "tax",
         "gst",
@@ -689,18 +773,9 @@ fn parse_receipt_line_item(
         "total",
         "total paid",
         "amount paid",
-    ];
-    if summary_labels
-        .iter()
-        .any(|label| description_key == normalize_key(label))
-    {
-        return None;
-    }
-
-    Some(ReceiptLineItemFacts {
-        description: observed_from_line(line, description, ConfidenceLevel::High, document),
-        amount: observed_from_line(line, amount, ConfidenceLevel::High, document),
-    })
+    ]
+    .iter()
+    .any(|label| description_key == normalize_key(label))
 }
 
 fn infer_trip_window_from_segments(segments: &[FlightSegmentFacts]) -> Option<Observed<DateRange>> {
@@ -1558,6 +1633,46 @@ mod tests {
                 assert_eq!(total_paid.value.amount, "35.02");
                 assert_eq!(total_paid.value.currency.as_deref(), Some("SGD"));
                 assert_eq!(total_paid.confidence, ConfidenceLevel::Medium);
+            }
+            other => panic!("unexpected payload: {other:?}"),
+        }
+
+        remove_fixture_dir(&path);
+    }
+
+    #[test]
+    fn receipt_fallback_classification_handles_unlabeled_realistic_receipt_layout() {
+        let markdown = "\
+# EAST BAY BISTRO
+
+- Date: 2025-04-24
+- Card: VISA 4242
+- Laksa Lunch | SGD 18.00
+- Iced Tea | SGD 6.00
+- Subtotal: SGD 24.00
+- Tax: SGD 2.16
+- Tip: SGD 3.00
+- Total: SGD 29.16
+";
+        let path = write_fixture(markdown, "realistic_receipt.md");
+        let actual = extract_document_facts_path(&path).expect("fixture should transcribe");
+
+        assert_eq!(actual.classification.kind, DocumentKind::Receipt);
+        assert_eq!(actual.classification.confidence, ConfidenceLevel::Medium);
+
+        match actual.facts {
+            DocumentFactsPayload::Receipt(facts) => {
+                assert_eq!(
+                    facts.merchant_name.as_ref().map(|value| value.value.as_str()),
+                    Some("EAST BAY BISTRO")
+                );
+                assert_eq!(
+                    facts.total_paid
+                        .as_ref()
+                        .map(|value| value.value.amount.as_str()),
+                    Some("29.16")
+                );
+                assert_eq!(facts.line_items.len(), 2);
             }
             other => panic!("unexpected payload: {other:?}"),
         }

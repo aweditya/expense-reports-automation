@@ -110,6 +110,42 @@ class TranscribeWithGoogleGenAiTests(unittest.TestCase):
             "# Receipt\n\n## Totals\n\n- Subtotal: USD 10.00\n\n- Tax: USD 0.80",
         )
 
+    def test_normalize_extractor_markdown_merges_split_receipt_label_and_value(self):
+        input_text = (
+            "# Merchant Receipt\n\n"
+            "## Totals\n"
+            "- Subtotal\n"
+            "- SGD 28.00\n"
+            "- Tax\n"
+            "- SGD 2.52\n"
+            "- Total\n"
+            "- SGD 30.52\n"
+        )
+
+        normalized = transcribe.normalize_extractor_markdown(input_text)
+
+        self.assertEqual(
+            normalized,
+            "# Merchant Receipt\n\n## Totals\n- Subtotal: SGD 28.00\n- Tax: SGD 2.52\n- Total: SGD 30.52",
+        )
+
+    def test_normalize_extractor_markdown_merges_split_receipt_item_amount(self):
+        input_text = (
+            "# Merchant Receipt\n\n"
+            "## Line Items\n"
+            "- Laksa Lunch\n"
+            "- SGD 18.00\n"
+            "- Iced Tea\n"
+            "- SGD 6.00\n"
+        )
+
+        normalized = transcribe.normalize_extractor_markdown(input_text)
+
+        self.assertEqual(
+            normalized,
+            "# Merchant Receipt\n\n## Line Items\n- Laksa Lunch | SGD 18.00\n- Iced Tea | SGD 6.00",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
