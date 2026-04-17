@@ -162,6 +162,65 @@ def compare_markdown(source_path: Path, transcribed_path: Path) -> dict:
     }
 
 
+def normalize_field_value(value):
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return str(value)
+    return " ".join(str(value).strip().split()).lower()
+
+
+def facts_value_for_expected_field(facts_payload: dict, field_name: str):
+    if field_name == "classification_kind":
+        return facts_payload.get("classification", {}).get("kind")
+    if field_name == "line_item_count":
+        receipt = facts_payload.get("facts", {}).get("receipt") or {}
+        return len(receipt.get("line_items") or [])
+
+    receipt = facts_payload.get("facts", {}).get("receipt") or {}
+
+    if field_name == "merchant_name":
+        return (((receipt.get("merchant_name") or {}).get("value")))
+    if field_name == "transaction_date":
+        return (((receipt.get("transaction_date") or {}).get("value")))
+    if field_name == "total_paid":
+        return ((((receipt.get("total_paid") or {}).get("value") or {}).get("amount")))
+    if field_name == "total_paid_currency":
+        return ((((receipt.get("total_paid") or {}).get("value") or {}).get("currency")))
+    if field_name == "subtotal":
+        return ((((receipt.get("subtotal") or {}).get("value") or {}).get("amount")))
+    if field_name == "tax_amount":
+        return ((((receipt.get("tax_amount") or {}).get("value") or {}).get("amount")))
+    if field_name == "tip_amount":
+        return ((((receipt.get("tip_amount") or {}).get("value") or {}).get("amount")))
+    return None
+
+
+def compare_expected_fields(expected_fields: dict, facts_path: Path) -> dict:
+    facts_payload = read_json(facts_path)
+    field_results = []
+    match_count = 0
+
+    for field_name, expected_value in expected_fields.items():
+        actual_value = facts_value_for_expected_field(facts_payload, field_name)
+        matched = normalize_field_value(expected_value) == normalize_field_value(actual_value)
+        match_count += int(matched)
+        field_results.append(
+            {
+                "field": field_name,
+                "expected": expected_value,
+                "actual": actual_value,
+                "matched": matched,
+            }
+        )
+
+    return {
+        "expected_field_count": len(field_results),
+        "matched_field_count": match_count,
+        "fields": field_results,
+    }
+
+
 def summarize_readiness(readiness_payload: dict) -> dict:
     counts = Counter(issue["class"] for issue in readiness_payload.get("issues") or [])
     return {
@@ -259,6 +318,7 @@ def build_synthetic_corpus_spec(
                     "kind": document["kind"],
                     "input_path": str(input_path),
                     "ground_truth_markdown_path": str(source_path),
+                    "expected_fields": document.get("expected_fields") or {},
                     "transcription_stem": source_path.stem,
                 }
             )
@@ -302,6 +362,7 @@ def build_manifest_corpus_spec(manifest_path: Path) -> dict:
                     )
                     if ground_truth_markdown_path
                     else None,
+                    "expected_fields": document.get("expected_fields") or {},
                     "transcription_stem": transcription_stem,
                 }
             )
@@ -360,6 +421,8 @@ def evaluate_model(
     relaxed_match_count = 0
     content_match_count = 0
     comparable_document_count = 0
+    expected_field_count = 0
+    matched_field_count = 0
     filing_status_counts: Counter[str] = Counter()
     ledger_state_counts: Counter[str] = Counter()
     document_count = 0
@@ -389,6 +452,9 @@ def evaluate_model(
                 / "transcriptions"
                 / f"{document['transcription_stem']}.transcribed.json"
             )
+            facts_path = (
+                packet_ingestion_dir / "facts" / f"{document['transcription_stem']}.facts.json"
+            )
             ground_truth_markdown_path = document.get("ground_truth_markdown_path")
             comparison = None
             if ground_truth_markdown_path:
@@ -400,6 +466,12 @@ def evaluate_model(
                 relaxed_match_count += int(comparison["relaxed_match"])
                 content_match_count += int(comparison["content_match"])
                 comparable_document_count += 1
+            expected_fields = document.get("expected_fields") or {}
+            field_comparison = None
+            if expected_fields:
+                field_comparison = compare_expected_fields(expected_fields, facts_path)
+                expected_field_count += field_comparison["expected_field_count"]
+                matched_field_count += field_comparison["matched_field_count"]
             document_count += 1
 
             packet_document_results.append(
@@ -408,9 +480,11 @@ def evaluate_model(
                     "source_markdown": ground_truth_markdown_path,
                     "input_document": document["input_path"],
                     "transcription_json": str(transcription_path),
+                    "facts_json": str(facts_path),
                     "exact_match": comparison["exact_match"] if comparison else None,
                     "relaxed_match": comparison["relaxed_match"] if comparison else None,
                     "content_match": comparison["content_match"] if comparison else None,
+                    "expected_fields": field_comparison,
                 }
             )
 
@@ -437,6 +511,8 @@ def evaluate_model(
             "packet_count": len(packet_results),
             "document_count": document_count,
             "comparable_document_count": comparable_document_count,
+            "expected_field_count": expected_field_count,
+            "matched_field_count": matched_field_count,
             "model": model,
             "model_key": model_key,
             "location": args.location,
@@ -466,6 +542,8 @@ def summarize_comparison(model_reports: list[dict]) -> dict:
                 ),
                 "packet_count": report["summary"]["packet_count"],
                 "document_count": report["summary"]["document_count"],
+                "expected_field_count": report["summary"].get("expected_field_count", 0),
+                "matched_field_count": report["summary"].get("matched_field_count", 0),
                 "exact_match_count": report["summary"]["exact_match_count"],
                 "relaxed_match_count": report["summary"]["relaxed_match_count"],
                 "content_match_count": report["summary"]["content_match_count"],
@@ -496,6 +574,8 @@ def failed_model_report(model: str, location: str, error: str) -> dict:
             "packet_count": 0,
             "document_count": 0,
             "comparable_document_count": 0,
+            "expected_field_count": 0,
+            "matched_field_count": 0,
             "exact_match_count": 0,
             "relaxed_match_count": 0,
             "content_match_count": 0,
@@ -515,6 +595,8 @@ def render_model_report_markdown(report: dict) -> str:
         f"- packets: {report['summary']['packet_count']}",
         f"- documents: {report['summary']['document_count']}",
         f"- comparable documents: {report['summary'].get('comparable_document_count', report['summary']['document_count'])}",
+        f"- expected receipt fields: {report['summary'].get('expected_field_count', 0)}",
+        f"- matched receipt fields: {report['summary'].get('matched_field_count', 0)}",
         f"- model: {report['summary']['model']}",
         f"- exact markdown matches: {report['summary']['exact_match_count']}",
         f"- relaxed markdown matches: {report['summary']['relaxed_match_count']}",
@@ -560,6 +642,7 @@ def render_comparison_markdown(comparison: dict) -> str:
             continue
         lines.append(
             f"- {model['model']}: documents={model['document_count']}, "
+            f"fields={model.get('matched_field_count', 0)}/{model.get('expected_field_count', 0)}, "
             f"exact={model['exact_match_count']}, "
             f"relaxed={model['relaxed_match_count']}, "
             f"content={model['content_match_count']}"

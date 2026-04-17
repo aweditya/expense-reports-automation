@@ -9,9 +9,11 @@ Contents:
 - `ER5524788_Redacted.pdf`
 - `reducing-fa-overhead-at-stanford.pdf`
 - `expense-reports-filing.mp4`
+- `receipt_corpus/`
 
 Notes:
 
 - The `ER*.pdf` files are accepted Stanford expense reports and are useful as reference material only.
 - They are not the intended OCR benchmark set for the extractor pipeline.
 - The production-style OCR evaluation uses the synthetic corpus and rendered synthetic source documents instead.
+- `receipt_corpus/` is the scaffold for fixed, manifest-backed receipt OCR corpora sourced from licensed public datasets.
