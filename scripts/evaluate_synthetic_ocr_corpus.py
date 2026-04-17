@@ -52,6 +52,13 @@ def parse_args() -> argparse.Namespace:
         help="Number of synthetic packets to evaluate",
     )
     parser.add_argument(
+        "--corpus-manifest",
+        help=(
+            "Optional path to a fixed OCR corpus manifest. When set, the evaluator "
+            "uses those input documents instead of generating a synthetic corpus."
+        ),
+    )
+    parser.add_argument(
         "--sdk-python",
         help="Python interpreter to use for the Gemini SDK helper path",
     )
@@ -202,7 +209,9 @@ def prepare_source_corpus(source_dir: Path, packet_count: int) -> dict:
     return read_json(source_dir / "manifest.json")
 
 
-def render_corpus_documents(manifest: dict, source_dir: Path, rendered_dir: Path) -> dict[str, list[Path]]:
+def render_corpus_documents(
+    manifest: dict, source_dir: Path, rendered_dir: Path
+) -> dict[str, list[Path]]:
     rendered_paths_by_packet = {}
 
     for packet in manifest["packets"]:
@@ -222,9 +231,91 @@ def render_corpus_documents(manifest: dict, source_dir: Path, rendered_dir: Path
     return rendered_paths_by_packet
 
 
+def resolve_manifest_path(manifest_root: Path, value: str) -> Path:
+    path = Path(value)
+    return path if path.is_absolute() else (manifest_root / path).resolve()
+
+
+def build_synthetic_corpus_spec(
+    manifest: dict,
+    source_dir: Path,
+    rendered_paths_by_packet: dict[str, list[Path]],
+) -> dict:
+    packets = []
+    for packet in manifest["packets"]:
+        packet_id = packet["packet_id"]
+        packet_source_dir = source_dir / packet_id
+        documents = []
+        for document in packet["documents"]:
+            source_path = packet_source_dir / document["filename"]
+            input_path = next(
+                path
+                for path in rendered_paths_by_packet[packet_id]
+                if path.stem == source_path.stem
+            )
+            documents.append(
+                {
+                    "document_id": source_path.stem,
+                    "kind": document["kind"],
+                    "input_path": str(input_path),
+                    "ground_truth_markdown_path": str(source_path),
+                    "transcription_stem": source_path.stem,
+                }
+            )
+        packets.append({"packet_id": packet_id, "documents": documents})
+
+    return {
+        "corpus_name": manifest.get("corpus_name", "synthetic_receipt_corpus"),
+        "packets": packets,
+    }
+
+
+def build_manifest_corpus_spec(manifest_path: Path) -> dict:
+    manifest_root = manifest_path.parent.resolve()
+    manifest = read_json(manifest_path)
+    packets = []
+
+    if "packets" in manifest:
+        packet_entries = manifest["packets"]
+    elif "documents" in manifest:
+        packet_entries = [
+            {"packet_id": document.get("packet_id") or document["document_id"], "documents": [document]}
+            for document in manifest["documents"]
+        ]
+    else:
+        raise SystemExit("corpus manifest must contain either top-level packets or documents")
+
+    for packet in packet_entries:
+        packet_id = packet["packet_id"]
+        documents = []
+        for document in packet["documents"]:
+            input_path = resolve_manifest_path(manifest_root, document["input_path"])
+            ground_truth_markdown_path = document.get("ground_truth_markdown_path")
+            transcription_stem = document.get("transcription_stem") or input_path.stem
+            documents.append(
+                {
+                    "document_id": document.get("document_id") or transcription_stem,
+                    "kind": document.get("kind", "receipt"),
+                    "input_path": str(input_path),
+                    "ground_truth_markdown_path": str(
+                        resolve_manifest_path(manifest_root, ground_truth_markdown_path)
+                    )
+                    if ground_truth_markdown_path
+                    else None,
+                    "transcription_stem": transcription_stem,
+                }
+            )
+        packets.append({"packet_id": packet_id, "documents": documents})
+
+    return {
+        "corpus_name": manifest.get("corpus_name", manifest_path.stem),
+        "packets": packets,
+    }
+
+
 def ingest_packet(
     packet_id: str,
-    rendered_paths: list[Path],
+    input_paths: list[Path],
     output_dir: Path,
     args: argparse.Namespace,
     model: str,
@@ -254,15 +345,13 @@ def ingest_packet(
     ]
     if args.project:
         command.extend(["--project", args.project])
-    command.extend(str(path) for path in rendered_paths)
+    command.extend(str(path) for path in input_paths)
     run_command(command, cwd=repo_root())
 
 
 def evaluate_model(
-    manifest: dict,
-    source_dir: Path,
+    corpus_spec: dict,
     ingestion_root: Path,
-    rendered_paths_by_packet: dict[str, list[Path]],
     args: argparse.Namespace,
     model: str,
 ) -> dict:
@@ -270,20 +359,20 @@ def evaluate_model(
     exact_match_count = 0
     relaxed_match_count = 0
     content_match_count = 0
+    comparable_document_count = 0
     filing_status_counts: Counter[str] = Counter()
     ledger_state_counts: Counter[str] = Counter()
     document_count = 0
     model_key = sanitize_identifier(model)
 
-    for packet in manifest["packets"]:
+    for packet in corpus_spec["packets"]:
         packet_id = packet["packet_id"]
-        packet_source_dir = source_dir / packet_id
         packet_ingestion_dir = ingestion_root / model_key / packet_id
         packet_ingestion_dir.mkdir(parents=True, exist_ok=True)
 
         ingest_packet(
             packet_id,
-            rendered_paths_by_packet[packet_id],
+            [Path(document["input_path"]) for document in packet["documents"]],
             packet_ingestion_dir,
             args,
             model,
@@ -295,30 +384,33 @@ def evaluate_model(
 
         packet_document_results = []
         for document in packet["documents"]:
-            source_path = packet_source_dir / document["filename"]
             transcription_path = (
                 packet_ingestion_dir
                 / "transcriptions"
-                / f"{source_path.stem}.transcribed.json"
+                / f"{document['transcription_stem']}.transcribed.json"
             )
-            comparison = compare_markdown(source_path, transcription_path)
-            exact_match_count += int(comparison["exact_match"])
-            relaxed_match_count += int(comparison["relaxed_match"])
-            content_match_count += int(comparison["content_match"])
+            ground_truth_markdown_path = document.get("ground_truth_markdown_path")
+            comparison = None
+            if ground_truth_markdown_path:
+                comparison = compare_markdown(
+                    Path(ground_truth_markdown_path),
+                    transcription_path,
+                )
+                exact_match_count += int(comparison["exact_match"])
+                relaxed_match_count += int(comparison["relaxed_match"])
+                content_match_count += int(comparison["content_match"])
+                comparable_document_count += 1
             document_count += 1
 
-            rendered_path = next(
-                path
-                for path in rendered_paths_by_packet[packet_id]
-                if path.stem == source_path.stem
-            )
             packet_document_results.append(
                 {
                     "kind": document["kind"],
-                    "source_markdown": str(source_path),
-                    "rendered_document": str(rendered_path),
+                    "source_markdown": ground_truth_markdown_path,
+                    "input_document": document["input_path"],
                     "transcription_json": str(transcription_path),
-                    **comparison,
+                    "exact_match": comparison["exact_match"] if comparison else None,
+                    "relaxed_match": comparison["relaxed_match"] if comparison else None,
+                    "content_match": comparison["content_match"] if comparison else None,
                 }
             )
 
@@ -341,8 +433,10 @@ def evaluate_model(
 
     return {
         "summary": {
+            "corpus_name": corpus_spec.get("corpus_name"),
             "packet_count": len(packet_results),
             "document_count": document_count,
+            "comparable_document_count": comparable_document_count,
             "model": model,
             "model_key": model_key,
             "location": args.location,
@@ -401,6 +495,7 @@ def failed_model_report(model: str, location: str, error: str) -> dict:
             "error_summary": condense_error_message(error),
             "packet_count": 0,
             "document_count": 0,
+            "comparable_document_count": 0,
             "exact_match_count": 0,
             "relaxed_match_count": 0,
             "content_match_count": 0,
@@ -413,11 +508,13 @@ def failed_model_report(model: str, location: str, error: str) -> dict:
 
 def render_model_report_markdown(report: dict) -> str:
     lines = [
-        "# Synthetic OCR Evaluation",
+        "# OCR Evaluation",
         "",
         f"- status: {report['summary'].get('status', 'ok')}",
+        f"- corpus: {report['summary'].get('corpus_name') or 'unnamed'}",
         f"- packets: {report['summary']['packet_count']}",
         f"- documents: {report['summary']['document_count']}",
+        f"- comparable documents: {report['summary'].get('comparable_document_count', report['summary']['document_count'])}",
         f"- model: {report['summary']['model']}",
         f"- exact markdown matches: {report['summary']['exact_match_count']}",
         f"- relaxed markdown matches: {report['summary']['relaxed_match_count']}",
@@ -450,7 +547,7 @@ def render_model_report_markdown(report: dict) -> str:
 
 def render_comparison_markdown(comparison: dict) -> str:
     lines = [
-        "# Synthetic OCR Model Comparison",
+        "# OCR Model Comparison",
         "",
         "## Summary",
     ]
@@ -521,17 +618,24 @@ def main() -> int:
     ingestion_dir = output_dir / "ingestion"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    manifest = prepare_source_corpus(source_dir, args.packets)
-    rendered_paths_by_packet = render_corpus_documents(manifest, source_dir, rendered_dir)
+    if args.corpus_manifest:
+        corpus_spec = build_manifest_corpus_spec(Path(args.corpus_manifest))
+    else:
+        manifest = prepare_source_corpus(source_dir, args.packets)
+        rendered_paths_by_packet = render_corpus_documents(manifest, source_dir, rendered_dir)
+        corpus_spec = build_synthetic_corpus_spec(
+            manifest,
+            source_dir,
+            rendered_paths_by_packet,
+        )
+
     model_reports = []
     for model in models:
         try:
             model_reports.append(
                 evaluate_model(
-                    manifest,
-                    source_dir,
+                    corpus_spec,
                     ingestion_dir,
-                    rendered_paths_by_packet,
                     args,
                     model,
                 )

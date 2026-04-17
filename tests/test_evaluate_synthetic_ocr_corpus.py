@@ -24,6 +24,45 @@ ocr_eval = load_module()
 
 
 class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
+    def test_build_manifest_corpus_spec_from_flat_documents(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            receipt_path = temp_path / "receipt.pdf"
+            markdown_path = temp_path / "receipt.md"
+            manifest_path = temp_path / "manifest.json"
+
+            receipt_path.write_bytes(b"%PDF-1.4")
+            markdown_path.write_text("# Merchant Receipt\n- Total: USD 12.40\n")
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "corpus_name": "real_receipt_seed",
+                        "documents": [
+                            {
+                                "document_id": "receipt_a",
+                                "kind": "receipt",
+                                "input_path": "receipt.pdf",
+                                "ground_truth_markdown_path": "receipt.md",
+                            }
+                        ],
+                    }
+                )
+            )
+
+            corpus_spec = ocr_eval.build_manifest_corpus_spec(manifest_path)
+
+            self.assertEqual(corpus_spec["corpus_name"], "real_receipt_seed")
+            self.assertEqual(len(corpus_spec["packets"]), 1)
+            packet = corpus_spec["packets"][0]
+            self.assertEqual(packet["packet_id"], "receipt_a")
+            self.assertEqual(packet["documents"][0]["kind"], "receipt")
+            self.assertEqual(packet["documents"][0]["input_path"], str(receipt_path.resolve()))
+            self.assertEqual(
+                packet["documents"][0]["ground_truth_markdown_path"],
+                str(markdown_path.resolve()),
+            )
+            self.assertEqual(packet["documents"][0]["transcription_stem"], "receipt")
+
     def test_compare_markdown_distinguishes_exact_relaxed_and_content(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
