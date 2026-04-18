@@ -27,9 +27,19 @@ def build_manifest(bundle_id: str, *, updated_at_epoch_ms: int = 1000) -> dict:
         "latest_run_id": "demo_run",
         "documents": [
             {
+                "document_id": "doc_receipt",
+                "content_sha256": "abc123",
+                "original_filenames": ["receipt.png"],
                 "stored_filename": "receipt.png",
+                "raw_path": "uploads/doc_receipt/receipt.png",
                 "media_type": "image/png",
                 "byte_count": 42,
+                "uploaded_at_epoch_ms": 1000,
+                "normalized": {
+                    "page_count": 1,
+                    "page_image_paths": [],
+                    "native_text_path": None,
+                },
             }
         ],
         "runs": [
@@ -47,7 +57,10 @@ def build_manifest(bundle_id: str, *, updated_at_epoch_ms: int = 1000) -> dict:
 def write_bundle_fixture(workspace_root: Path, bundle_id: str, *, with_workbench: bool = True) -> None:
     bundle_root = workspace_root / "bundles" / bundle_id
     artifacts_dir = bundle_root / "runs" / "demo_run" / "artifacts"
+    uploads_dir = bundle_root / "uploads" / "doc_receipt"
     artifacts_dir.mkdir(parents=True, exist_ok=True)
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    (uploads_dir / "receipt.png").write_bytes(b"fixture-receipt")
     (bundle_root / "bundle_manifest.json").write_text(
         json.dumps(build_manifest(bundle_id), indent=2)
     )
@@ -242,6 +255,7 @@ class LocalAppTests(unittest.TestCase):
 
             self.assertIn("Workbench unavailable", page)
             self.assertNotIn("<iframe", page)
+            self.assertIn("/bundle/demo_bundle/document/doc_receipt/receipt.png", page)
 
     def test_render_index_page_includes_pending_upload_accumulator(self):
         config = local_app.LocalAppConfig(
@@ -366,6 +380,13 @@ class LocalAppHttpTests(unittest.TestCase):
             status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/workbench")
             self.assertEqual(status, 200)
             self.assertIn(b"Workbench", payload)
+
+            status, response_headers, payload = self.request(
+                config, "GET", "/bundle/demo_bundle/document/doc_receipt/receipt.png"
+            )
+            self.assertEqual(status, 200)
+            self.assertEqual(response_headers["Content-Type"], "image/png")
+            self.assertEqual(payload, b"fixture-receipt")
 
     def test_http_upload_redirects_after_successful_submission(self):
         original = local_app.handle_upload_submission

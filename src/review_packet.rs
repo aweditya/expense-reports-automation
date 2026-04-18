@@ -64,6 +64,7 @@ pub struct ReviewIssueEntry {
 pub struct CopyField {
     pub path: String,
     pub label: String,
+    pub control: String,
     pub value: Option<String>,
     pub present: bool,
     pub needs_review: bool,
@@ -146,6 +147,7 @@ struct UiSection {
 struct UiField {
     path: String,
     label: String,
+    control: String,
     source: Option<String>,
     entry_mode: String,
     required: bool,
@@ -458,6 +460,7 @@ fn build_copy_field(
     Some(CopyField {
         path: resolved_path.clone(),
         label: field.label.clone(),
+        control: field.control.clone(),
         value: value.and_then(report_value_to_string),
         present,
         needs_review: metadata.is_some_and(|value| value.needs_review),

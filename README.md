@@ -25,6 +25,7 @@ That OCR path now applies a small deterministic markdown normalization pass afte
 - [docs/document-facts.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/document-facts.md:1): typed per-document extraction contract
 - [docs/bundle-synthesis.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/bundle-synthesis.md:1): cross-document synthesis and draft projection
 - [docs/review-workbench.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/review-workbench.md:1): FA-facing output surface
+- [docs/ui-workbench-redesign.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/ui-workbench-redesign.md:1): current redesign plan for the interactive review UI
 - [docs/review-submission-ledger.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/review-submission-ledger.md:1): versioned review and submission tracking
 - [reference/README.md](/Users/adityasriram/Labs/stanford/research/expense-reports/reference/README.md:1): reference artifacts and non-code assets
 
@@ -38,11 +39,11 @@ That OCR path now applies a small deterministic markdown normalization pass afte
 For live Gemini OCR, the helper script uses the Google Gen AI SDK. A local venv like this is the simplest setup:
 
 ```bash
-python3 -m venv /tmp/expense_report_genai_venv
-/tmp/expense_report_genai_venv/bin/pip install google-genai google-auth pillow
+python3 -m venv .venv
+.venv/bin/pip install google-genai google-auth pillow
 ```
 
-The code automatically uses `/tmp/expense_report_genai_venv/bin/python` if it exists. You can override that with `--sdk-python` or `VERTEX_GEMINI_SDK_PYTHON`.
+The OCR helper scripts accept `--sdk-python .venv/bin/python`, and the checked-in wrappers in `scripts/` assume a repo-local `.venv` by default.
 
 ## Quick Start
 

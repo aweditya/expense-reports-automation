@@ -10,14 +10,17 @@ The relevant code lives in:
 - [src/bin/build_review_workbench_from_facts.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/bin/build_review_workbench_from_facts.rs:1)
 - [src/bin/verify_workbench_regressions.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/bin/verify_workbench_regressions.rs:1)
 
-The workbench is the first concrete backend realization of the `FA Review Workbench` stage from [system-architecture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/system-architecture.md:297). It is still static HTML, but it already exposes the stable information architecture a richer UI can build on.
+The workbench is the first concrete backend realization of the `FA Review Workbench` stage from [system-architecture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/system-architecture.md:297). It is still static HTML, but it now behaves like a lightweight review workstation rather than a passive report page.
 
 ## What it renders
 
 - packet summary with filing readiness and confidence
 - issue queue with jump links into the copy surface
-- Oracle-ordered copy cards with one-click copy buttons
-- evidence index grouped into uploaded evidence, system-derived logic, and user input, with clickable usage links back to filing fields
+- Oracle-ordered field cards with inline editable controls
+- missing required fields rendered as blank inputs instead of literal `[missing]`
+- machine-filled values editable in place, with copy buttons reading the current control value
+- inline expandable evidence per field, including raw-document links
+- in-page document preview modal for uploaded source files
 - attachment checklist per projected transaction line
 
 ## Commands

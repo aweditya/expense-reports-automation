@@ -3,41 +3,11 @@ use std::collections::BTreeMap;
 use crate::draft::EvidenceReference;
 use crate::review_packet::{CopyField, FilingStatus, ReviewPacket};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct EvidenceUsage {
-    label: String,
-    target: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct EvidenceRecord {
-    id: String,
-    category: String,
-    bucket: String,
-    title: String,
-    kind_label: String,
-    page_label: Option<String>,
-    source_label: Option<String>,
-    origin_label: Option<String>,
-    quote: Option<String>,
-    used_by: Vec<EvidenceUsage>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-struct EvidenceSummary {
-    uploaded_count: usize,
-    system_count: usize,
-    user_input_count: usize,
-    total_count: usize,
-}
-
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct WorkbenchIndex {
     field_targets: BTreeMap<String, String>,
     instance_targets: BTreeMap<String, String>,
     section_targets: BTreeMap<String, String>,
-    field_to_evidence: BTreeMap<String, String>,
-    evidence_records: Vec<EvidenceRecord>,
 }
 
 pub fn render_review_workbench_html(packet: &ReviewPacket) -> String {
@@ -52,7 +22,7 @@ pub fn render_review_workbench_html(packet: &ReviewPacket) -> String {
     html.push_str(include_str!("review_workbench.css"));
     html.push_str("\n</style>\n");
     html.push_str(
-        "<script>\nfunction copyFieldValue(button){const value=button.getAttribute('data-copy');if(!value){return;}navigator.clipboard.writeText(value);button.textContent='Copied';setTimeout(()=>{button.textContent='Copy';},900);}\n</script>\n",
+        "<script>\nfunction fieldInputForButton(button){const card=button.closest('.field-card');if(!card){return null;}return card.querySelector('.field-input');}\nfunction copyFieldValue(button){const input=fieldInputForButton(button);if(!input){return;}const value=('value' in input)?input.value:'';if(!value){return;}navigator.clipboard.writeText(value);button.textContent='Copied';setTimeout(()=>{button.textContent='Copy';},900);}\nfunction jumpToField(event,targetId){const target=document.getElementById(targetId);if(!target){return;}event.preventDefault();target.scrollIntoView({behavior:'smooth',block:'center'});window.location.hash=targetId;const input=target.querySelector('.field-input');if(input){input.focus();if(input.select){input.select();}}}\nfunction openDocumentPreview(url,title){const modal=document.getElementById('document-preview-modal');const frame=document.getElementById('document-preview-frame');const label=document.getElementById('document-preview-title');if(!modal||!frame||!label){return;}frame.src=url;label.textContent=title||'Source document';modal.hidden=false;document.body.classList.add('modal-open');}\nfunction closeDocumentPreview(){const modal=document.getElementById('document-preview-modal');const frame=document.getElementById('document-preview-frame');if(!modal||!frame){return;}modal.hidden=true;frame.src='about:blank';document.body.classList.remove('modal-open');}\ndocument.addEventListener('click',function(event){const link=event.target.closest('a[data-document-preview]');if(!link){return;}if(event.metaKey||event.ctrlKey||event.shiftKey||event.altKey){return;}event.preventDefault();openDocumentPreview(link.href,link.getAttribute('data-document-title')||link.textContent||'Source document');});\ndocument.addEventListener('keydown',function(event){if(event.key==='Escape'){closeDocumentPreview();}});\n</script>\n",
     );
     html.push_str("</head>\n<body>\n<div class=\"shell\">\n");
 
@@ -60,9 +30,9 @@ pub fn render_review_workbench_html(packet: &ReviewPacket) -> String {
     html.push_str("<main class=\"workbench-grid\">\n");
     render_issues_panel(&mut html, packet, &index);
     render_copy_panel(&mut html, packet, &index);
-    render_evidence_panel(&mut html, &index);
     html.push_str("</main>\n");
     render_attachments_panel(&mut html, packet);
+    render_document_preview_modal(&mut html);
     html.push_str("</div>\n</body>\n</html>\n");
     html
 }
@@ -173,7 +143,9 @@ fn render_issues_panel(html: &mut String, packet: &ReviewPacket, index: &Workben
             if let Some(target) = issue_target(issue.path.as_str(), index) {
                 html.push_str("<a class=\"issue-link\" href=\"#");
                 html.push_str(&escape_html(&target));
-                html.push_str("\">Jump to field</a>\n");
+                html.push_str("\" onclick=\"jumpToField(event, '");
+                html.push_str(&escape_html_attribute(&target));
+                html.push_str("')\">Jump to field</a>\n");
             }
             html.push_str("</li>\n");
         }
@@ -220,12 +192,18 @@ fn render_copy_field(html: &mut String, field: &CopyField, index: &WorkbenchInde
         .get(&field.path)
         .cloned()
         .unwrap_or_else(|| anchor_id("field", &field.path));
+    let input_id = format!("{field_id}-input");
     html.push_str("<article class=\"field-card");
     if field.needs_review {
         html.push_str(" needs-review");
     }
     if !field.present {
         html.push_str(" missing");
+    }
+    if field_is_readonly(field) {
+        html.push_str(" readonly");
+    } else {
+        html.push_str(" editable");
     }
     html.push_str("\" id=\"");
     html.push_str(&escape_html(&field_id));
@@ -249,123 +227,162 @@ fn render_copy_field(html: &mut String, field: &CopyField, index: &WorkbenchInde
     }
     html.push_str("</div>\n</div>\n");
     html.push_str("<div class=\"field-body\">\n");
-    html.push_str("<div class=\"field-value\">");
-    html.push_str(&escape_html(field.value.as_deref().unwrap_or("[missing]")));
-    html.push_str("</div>\n");
+    render_field_editor(html, field, &input_id);
     html.push_str("<div class=\"field-actions\">");
-    if let Some(value) = field.value.as_deref() {
-        html.push_str("<button class=\"copy-button\" type=\"button\" onclick=\"copyFieldValue(this)\" data-copy=\"");
-        html.push_str(&escape_html_attribute(value));
-        html.push_str("\">Copy</button>");
-    }
-    if let Some(evidence_id) = index.field_to_evidence.get(&field.path) {
-        html.push_str("<a class=\"evidence-link\" href=\"#");
-        html.push_str(&escape_html(evidence_id));
-        html.push_str("\">");
-        if field.evidence.len() > 1 {
-            html.push_str(&escape_html(&format!("Evidence ({})", field.evidence.len())));
-        } else {
-            html.push_str("Evidence");
-        }
-        html.push_str("</a>");
-    }
+    html.push_str("<button class=\"copy-button\" type=\"button\" onclick=\"copyFieldValue(this)\">Copy</button>");
     html.push_str("</div>\n</div>\n");
+    html.push_str("<p class=\"field-guidance\">");
+    html.push_str(&escape_html(field_guidance(field)));
+    html.push_str("</p>\n");
+    render_inline_evidence(html, field);
     html.push_str("</article>\n");
 }
 
-fn render_evidence_panel(html: &mut String, index: &WorkbenchIndex) {
-    html.push_str("<aside class=\"panel evidence-panel\">\n");
-    html.push_str("<div class=\"panel-heading\"><p class=\"eyebrow\">Evidence</p><h2>Reference Index</h2></div>\n");
-    if index.evidence_records.is_empty() {
-        html.push_str("<p class=\"empty-state\">No evidence references available.</p>\n");
+fn render_field_editor(html: &mut String, field: &CopyField, input_id: &str) {
+    let value = field.value.as_deref().unwrap_or("");
+    let placeholder = if field.present {
+        ""
     } else {
-        let summary = summarize_evidence(index);
-        html.push_str("<div class=\"evidence-guide\">");
-        html.push_str("<p class=\"evidence-guide-copy\">Each card shows what the evidence is, where it came from, and which filing fields depend on it.</p>");
-        html.push_str("<div class=\"evidence-summary\">");
-        render_evidence_summary_card(html, "Uploaded", summary.uploaded_count);
-        render_evidence_summary_card(html, "System", summary.system_count);
-        render_evidence_summary_card(html, "User Input", summary.user_input_count);
-        render_evidence_summary_card(html, "Total", summary.total_count);
-        html.push_str("</div></div>\n");
+        field_placeholder(field)
+    };
+    let readonly = if field_is_readonly(field) {
+        " readonly"
+    } else {
+        ""
+    };
 
-        let mut current_category = String::new();
-        let mut current_bucket = String::new();
-        for record in &index.evidence_records {
-            if record.category != current_category {
-                if !current_bucket.is_empty() {
-                    html.push_str("</div>\n");
-                    current_bucket.clear();
-                }
-                if !current_category.is_empty() {
-                    html.push_str("</section>\n");
-                }
-                current_category = record.category.clone();
-                html.push_str("<section class=\"evidence-category\">\n<div class=\"evidence-category-head\"><h3>");
-                html.push_str(&escape_html(&current_category));
-                html.push_str("</h3><p class=\"evidence-category-copy\">");
-                html.push_str(&escape_html(evidence_category_description(&current_category)));
-                html.push_str("</p></div>\n");
-            }
-            if record.bucket != current_bucket {
-                if !current_bucket.is_empty() {
-                    html.push_str("</div>\n");
-                }
-                current_bucket = record.bucket.clone();
-                html.push_str("<div class=\"evidence-group\">\n<h4 class=\"evidence-group-title\">");
-                html.push_str(&escape_html(&current_bucket));
-                html.push_str("</h4>\n");
-            }
-            html.push_str("<article class=\"evidence-card\" id=\"");
-            html.push_str(&escape_html(&record.id));
-            html.push_str("\">\n");
-            html.push_str("<div class=\"evidence-topline\">");
-            badge(html, &record.kind_label);
-            if let Some(page_label) = record.page_label.as_deref() {
-                badge(html, page_label);
-            }
-            badge(html, &format!("{} field(s)", record.used_by.len()));
-            html.push_str("</div>\n");
-            html.push_str("<h5>");
-            html.push_str(&escape_html(&record.title));
-            html.push_str("</h5>\n");
-            if let Some(source_label) = record.source_label.as_deref() {
-                html.push_str("<p class=\"evidence-detail\"><span class=\"evidence-detail-label\">Source</span>");
-                html.push_str(&escape_html(source_label));
-                html.push_str("</p>\n");
-            }
-            if let Some(origin_label) = record.origin_label.as_deref() {
-                html.push_str("<p class=\"evidence-detail\"><span class=\"evidence-detail-label\">Origin</span>");
-                html.push_str(&escape_html(origin_label));
-                html.push_str("</p>\n");
-            }
-            if let Some(quote) = record.quote.as_deref() {
-                html.push_str("<p class=\"evidence-quote-label\">Excerpt</p>\n");
-                html.push_str("<blockquote>");
-                html.push_str(&escape_html(quote));
-                html.push_str("</blockquote>\n");
-            }
-            if !record.used_by.is_empty() {
-                html.push_str("<p class=\"evidence-usage-heading\">Referenced by</p>\n<ul class=\"evidence-usage-list\">");
-                for usage in &record.used_by {
-                    html.push_str("<li><a class=\"evidence-usage-link\" href=\"#");
-                    html.push_str(&escape_html(&usage.target));
-                    html.push_str("\">");
-                    html.push_str(&escape_html(&usage.label));
-                    html.push_str("</a></li>");
-                }
-                html.push_str("</ul>\n");
-            }
-            html.push_str("</article>\n");
-        }
-        if !current_bucket.is_empty() {
-            html.push_str("</div>\n");
-        }
-        if !current_category.is_empty() {
-            html.push_str("</section>\n");
-        }
+    html.push_str("<div class=\"field-editor\">");
+    html.push_str("<label class=\"field-editor-label\" for=\"");
+    html.push_str(&escape_html(input_id));
+    html.push_str("\">");
+    html.push_str(if field.present {
+        "Review or edit value"
+    } else {
+        "Enter missing value"
+    });
+    html.push_str("</label>");
+
+    if field.control == "textarea" {
+        html.push_str("<textarea class=\"field-input\" id=\"");
+        html.push_str(&escape_html(input_id));
+        html.push_str("\" data-field-path=\"");
+        html.push_str(&escape_html_attribute(&field.path));
+        html.push_str("\" placeholder=\"");
+        html.push_str(&escape_html_attribute(placeholder));
+        html.push_str("\"");
+        html.push_str(readonly);
+        html.push_str(">");
+        html.push_str(&escape_html(value));
+        html.push_str("</textarea>");
+    } else {
+        html.push_str("<input class=\"field-input\" id=\"");
+        html.push_str(&escape_html(input_id));
+        html.push_str("\" type=\"text\" data-field-path=\"");
+        html.push_str(&escape_html_attribute(&field.path));
+        html.push_str("\" value=\"");
+        html.push_str(&escape_html_attribute(value));
+        html.push_str("\" placeholder=\"");
+        html.push_str(&escape_html_attribute(placeholder));
+        html.push_str("\"");
+        html.push_str(readonly);
+        html.push_str(">");
     }
-    html.push_str("</aside>\n");
+    html.push_str("</div>");
+}
+
+fn render_inline_evidence(html: &mut String, field: &CopyField) {
+    if field.evidence.is_empty() {
+        return;
+    }
+
+    html.push_str("<details class=\"field-evidence\"><summary>");
+    html.push_str(&escape_html(&format!("Evidence ({})", field.evidence.len())));
+    html.push_str("</summary><div class=\"field-evidence-list\">");
+    for evidence in &field.evidence {
+        html.push_str("<article class=\"evidence-inline-card\">");
+        html.push_str("<div class=\"evidence-topline\">");
+        badge(html, evidence_kind_display(evidence));
+        if let Some(page_label) = evidence.page.map(|page| format!("page {page}")) {
+            badge(html, &page_label);
+        }
+        html.push_str("</div>");
+        html.push_str("<h4>");
+        html.push_str(&escape_html(&evidence_title(evidence)));
+        html.push_str("</h4>");
+        if let Some(source_label) = evidence_source_label(evidence).as_deref() {
+            html.push_str("<p class=\"evidence-detail\"><span class=\"evidence-detail-label\">Source</span>");
+            html.push_str(&escape_html(source_label));
+            html.push_str("</p>");
+        }
+        if let Some(origin_label) = evidence.origin.as_deref() {
+            html.push_str("<p class=\"evidence-detail\"><span class=\"evidence-detail-label\">Origin</span>");
+            html.push_str(&escape_html(origin_label));
+            html.push_str("</p>");
+        }
+        if let Some(quote) = evidence.quote.as_deref() {
+            html.push_str("<p class=\"evidence-quote-label\">Excerpt</p>");
+            html.push_str("<blockquote>");
+            html.push_str(&escape_html(quote));
+            html.push_str("</blockquote>");
+        }
+        if let Some(document_href) = evidence_document_href(evidence) {
+            let title = evidence
+                .filename
+                .as_deref()
+                .or(evidence.document_id.as_deref())
+                .unwrap_or("Source document");
+            html.push_str("<div class=\"evidence-document-actions\">");
+            html.push_str("<a class=\"document-link\" href=\"");
+            html.push_str(&escape_html_attribute(&document_href));
+            html.push_str("\" data-document-preview=\"true\" data-document-title=\"");
+            html.push_str(&escape_html_attribute(title));
+            html.push_str("\">Open source document</a>");
+            html.push_str("</div>");
+        }
+        html.push_str("</article>");
+    }
+    html.push_str("</div></details>");
+}
+
+fn render_document_preview_modal(html: &mut String) {
+    html.push_str("<div class=\"document-modal\" id=\"document-preview-modal\" hidden>");
+    html.push_str("<div class=\"document-modal-backdrop\" onclick=\"closeDocumentPreview()\"></div>");
+    html.push_str("<div class=\"document-modal-dialog\" role=\"dialog\" aria-modal=\"true\" aria-labelledby=\"document-preview-title\">");
+    html.push_str("<div class=\"document-modal-head\"><div><p class=\"eyebrow\">Source Document</p><h2 id=\"document-preview-title\">Source document</h2></div>");
+    html.push_str("<button class=\"document-modal-close\" type=\"button\" onclick=\"closeDocumentPreview()\">Close</button></div>");
+    html.push_str("<iframe id=\"document-preview-frame\" title=\"Source document preview\" loading=\"lazy\"></iframe>");
+    html.push_str("</div></div>");
+}
+
+fn field_is_readonly(field: &CopyField) -> bool {
+    field.entry_mode == "computed_readonly"
+}
+
+fn field_guidance(field: &CopyField) -> &'static str {
+    if field_is_readonly(field) {
+        "System-computed field. Review the supporting evidence, but edit this only if the downstream filing flow requires a manual override."
+    } else if field.present {
+        "Machine-filled value. Adjust it directly here if the parsed value is incomplete or incorrect."
+    } else {
+        "This field is currently missing. Enter the value here so the FA can continue the filing workflow."
+    }
+}
+
+fn field_placeholder(field: &CopyField) -> &str {
+    if field.required {
+        "Required value"
+    } else {
+        "Optional value"
+    }
+}
+
+fn evidence_document_href(evidence: &EvidenceReference) -> Option<String> {
+    let document_id = evidence.document_id.as_deref()?;
+    let filename = evidence
+        .filename
+        .as_deref()
+        .or(evidence.document_id.as_deref())?;
+    Some(format!("../document/{document_id}/{filename}"))
 }
 
 fn render_attachments_panel(html: &mut String, packet: &ReviewPacket) {
@@ -405,7 +422,6 @@ fn render_attachments_panel(html: &mut String, packet: &ReviewPacket) {
 
 fn build_workbench_index(packet: &ReviewPacket) -> WorkbenchIndex {
     let mut index = WorkbenchIndex::default();
-    let mut evidence_map = BTreeMap::<String, EvidenceRecord>::new();
 
     for section in &packet.copy_sections {
         index
@@ -420,69 +436,10 @@ fn build_workbench_index(packet: &ReviewPacket) -> WorkbenchIndex {
                 index
                     .field_targets
                     .insert(field.path.clone(), field_id.clone());
-                for evidence in &field.evidence {
-                    let key = evidence_key(evidence);
-                    let record =
-                        evidence_map
-                            .entry(key.clone())
-                            .or_insert_with(|| EvidenceRecord {
-                                id: anchor_id("evidence", &key),
-                                category: evidence_category(evidence).to_owned(),
-                                bucket: evidence_bucket(evidence),
-                                title: evidence_title(evidence),
-                                kind_label: evidence_kind_display(evidence).to_owned(),
-                                page_label: evidence.page.map(|page| format!("page {page}")),
-                                source_label: evidence_source_label(evidence),
-                                origin_label: evidence.origin.clone(),
-                                quote: evidence.quote.clone(),
-                                used_by: Vec::new(),
-                            });
-                    let usage = format!("{} · {}", instance.label, field.label);
-                    if !record.used_by.iter().any(|existing| existing.label == usage) {
-                        record.used_by.push(EvidenceUsage {
-                            label: usage,
-                            target: field_id.clone(),
-                        });
-                    }
-                    index
-                        .field_to_evidence
-                        .entry(field.path.clone())
-                        .or_insert_with(|| record.id.clone());
-                }
             }
         }
     }
-
-    index.evidence_records = evidence_map.into_values().collect();
-    index.evidence_records.sort_by(|left, right| {
-        left.category
-            .cmp(&right.category)
-            .then(left.bucket.cmp(&right.bucket))
-            .then(left.title.cmp(&right.title))
-    });
     index
-}
-
-fn summarize_evidence(index: &WorkbenchIndex) -> EvidenceSummary {
-    let mut summary = EvidenceSummary::default();
-    for record in &index.evidence_records {
-        summary.total_count += 1;
-        match record.category.as_str() {
-            "Uploaded Evidence" => summary.uploaded_count += 1,
-            "System-Derived Logic" => summary.system_count += 1,
-            "User Input" => summary.user_input_count += 1,
-            _ => {}
-        }
-    }
-    summary
-}
-
-fn render_evidence_summary_card(html: &mut String, label: &str, count: usize) {
-    html.push_str("<article class=\"evidence-summary-card\"><p class=\"summary-label\">");
-    html.push_str(&escape_html(label));
-    html.push_str("</p><p class=\"summary-value\">");
-    html.push_str(&count.to_string());
-    html.push_str("</p></article>");
 }
 
 fn issue_target(path: &str, index: &WorkbenchIndex) -> Option<String> {
@@ -537,34 +494,6 @@ fn badge(html: &mut String, value: &str) {
     html.push_str("</span>");
 }
 
-fn evidence_key(evidence: &EvidenceReference) -> String {
-    format!(
-        "{}|{}|{}|{}|{}|{}",
-        evidence_kind_name(evidence),
-        evidence.document_id.as_deref().unwrap_or(""),
-        evidence.filename.as_deref().unwrap_or(""),
-        evidence
-            .page
-            .map(|value| value.to_string())
-            .as_deref()
-            .unwrap_or(""),
-        evidence.quote.as_deref().unwrap_or(""),
-        evidence.origin.as_deref().unwrap_or("")
-    )
-}
-
-fn evidence_bucket(evidence: &EvidenceReference) -> String {
-    match evidence.kind {
-        crate::draft::EvidenceKind::Document | crate::draft::EvidenceKind::DocumentSpan => evidence
-            .filename
-            .clone()
-            .or_else(|| evidence.document_id.clone())
-            .unwrap_or_else(|| "Document evidence".to_owned()),
-        crate::draft::EvidenceKind::SystemGenerated => "System generated logic".to_owned(),
-        crate::draft::EvidenceKind::UserInput => "User input confirmations".to_owned(),
-    }
-}
-
 fn evidence_title(evidence: &EvidenceReference) -> String {
     match evidence.kind {
         crate::draft::EvidenceKind::DocumentSpan => evidence
@@ -584,42 +513,12 @@ fn evidence_title(evidence: &EvidenceReference) -> String {
     }
 }
 
-fn evidence_kind_name(evidence: &EvidenceReference) -> &'static str {
-    match evidence.kind {
-        crate::draft::EvidenceKind::Document => "document",
-        crate::draft::EvidenceKind::DocumentSpan => "document_span",
-        crate::draft::EvidenceKind::SystemGenerated => "system_generated",
-        crate::draft::EvidenceKind::UserInput => "user_input",
-    }
-}
-
 fn evidence_kind_display(evidence: &EvidenceReference) -> &'static str {
     match evidence.kind {
         crate::draft::EvidenceKind::Document => "document",
         crate::draft::EvidenceKind::DocumentSpan => "excerpt",
         crate::draft::EvidenceKind::SystemGenerated => "system-derived",
         crate::draft::EvidenceKind::UserInput => "user-input",
-    }
-}
-
-fn evidence_category(evidence: &EvidenceReference) -> &'static str {
-    match evidence.kind {
-        crate::draft::EvidenceKind::Document | crate::draft::EvidenceKind::DocumentSpan => {
-            "Uploaded Evidence"
-        }
-        crate::draft::EvidenceKind::SystemGenerated => "System-Derived Logic",
-        crate::draft::EvidenceKind::UserInput => "User Input",
-    }
-}
-
-fn evidence_category_description(category: &str) -> &'static str {
-    match category {
-        "Uploaded Evidence" => "Original uploaded files and OCR excerpts that support filed values.",
-        "System-Derived Logic" => {
-            "Deterministic rules, defaults, and synthesis steps used to fill or normalize fields."
-        }
-        "User Input" => "Values that were explicitly supplied or confirmed by a human reviewer.",
-        _ => "Supporting references for this packet.",
     }
 }
 
@@ -724,7 +623,7 @@ mod tests {
     }
 
     #[test]
-    fn renders_fa_workbench_with_issue_links_and_copy_buttons() {
+    fn renders_fa_workbench_with_issue_links_and_editable_controls() {
         let provider = StaticFxRateProvider::demo();
         let projection = synthesize_bundle_projection_with_fx(&synthetic_documents(), &provider);
         let packet = build_review_packet(
@@ -739,11 +638,12 @@ mod tests {
         assert!(rendered.contains("FA Workbench"));
         assert!(rendered.contains("Jump to field"));
         assert!(rendered.contains("copyFieldValue(this)"));
+        assert!(rendered.contains("class=\"field-input\""));
+        assert!(rendered.contains("Enter missing value"));
         assert!(rendered.contains("synthetic_flight_itinerary_baseline.md"));
         assert!(rendered.contains("Business meal during travel in Singapore"));
-        assert!(rendered.contains("Uploaded Evidence"));
-        assert!(rendered.contains("System-Derived Logic"));
-        assert!(rendered.contains("Referenced by"));
+        assert!(rendered.contains("Open source document"));
+        assert!(rendered.contains("document-preview-modal"));
     }
 
     #[test]
@@ -791,16 +691,13 @@ mod tests {
         .expect("review packet should build");
         let rendered = render_review_workbench_html(&packet);
 
-        assert!(rendered.contains(
-            "<a class=\"issue-link\" href=\"#section-transaction-lines\">Jump to field</a>"
-        ));
-        assert!(rendered.contains(
-            "<a class=\"issue-link\" href=\"#section-general-information\">Jump to field</a>"
-        ));
+        assert!(rendered.contains("href=\"#section-transaction-lines\""));
+        assert!(rendered.contains("href=\"#section-general-information\""));
+        assert!(rendered.contains("jumpToField(event"));
     }
 
     #[test]
-    fn evidence_panel_renders_usage_links_and_summary_cards() {
+    fn workbench_renders_inline_evidence_in_field_cards() {
         let provider = StaticFxRateProvider::demo();
         let projection = synthesize_bundle_projection_with_fx(&synthetic_documents(), &provider);
         let packet = build_review_packet(
@@ -811,9 +708,9 @@ mod tests {
         .expect("review packet should build");
         let rendered = render_review_workbench_html(&packet);
 
-        assert!(rendered.contains("Each card shows what the evidence is"));
-        assert!(rendered.contains("evidence-summary-card"));
+        assert!(rendered.contains("class=\"field-evidence\""));
+        assert!(rendered.contains("Evidence ("));
         assert!(rendered.contains("Page 1 excerpt"));
-        assert!(rendered.contains("class=\"evidence-usage-link\""));
+        assert!(rendered.contains("Open source document"));
     }
 }

@@ -15,6 +15,7 @@ It sits on top of the managed workspace flow rather than replacing it. The app i
 - shows recent bundles and their current stages
 - opens the latest generated `review_workbench.html` inside a bundle page
 - exposes the bundle manifest JSON for inspection
+- serves raw uploaded bundle documents so workbench evidence links can open them
 
 ## Run it
 

@@ -149,6 +149,42 @@ def latest_workbench_path(workspace_root: Path, bundle_id: str) -> Path | None:
     return path if path.exists() else None
 
 
+def bundle_document_href(bundle_id: str, document_id: str, stored_filename: str) -> str:
+    return "/bundle/{bundle_id}/document/{document_id}/{filename}".format(
+        bundle_id=urllib.parse.quote(bundle_id),
+        document_id=urllib.parse.quote(document_id),
+        filename=urllib.parse.quote(stored_filename),
+    )
+
+
+def bundle_document_path(
+    workspace_root: Path, bundle_id: str, document_id: str, stored_filename: str
+) -> Path:
+    bundle_id = ensure_safe_bundle_id(bundle_id)
+    manifest = load_bundle_manifest(workspace_root, bundle_id)
+    bundle_root = workspace_root / "bundles" / bundle_id
+    document = next(
+        (
+            item
+            for item in manifest.get("documents") or []
+            if item.get("document_id") == document_id
+            and item.get("stored_filename") == stored_filename
+        ),
+        None,
+    )
+    if not document:
+        raise LocalAppError(f"document not found in bundle: {document_id}")
+
+    candidate = (bundle_root / document["raw_path"]).resolve()
+    try:
+        candidate.relative_to(bundle_root.resolve())
+    except ValueError as err:
+        raise LocalAppError("document path escaped bundle root") from err
+    if not candidate.exists():
+        raise LocalAppError(f"document file missing for {document_id}")
+    return candidate
+
+
 def parse_multipart_request(
     content_type: str, body: bytes, encoding: str = "utf-8"
 ) -> UploadRequest:
@@ -516,7 +552,14 @@ def render_bundle_page(config: LocalAppConfig, bundle_manifest: dict) -> str:
     manifest_href = f"/bundle/{urllib.parse.quote(bundle_id)}/manifest"
     workbench_available = latest_workbench_path(config.workspace_root, bundle_id) is not None
     docs = "\n".join(
-        "<li>{name} · {media} · {size} bytes</li>".format(
+        "<li><a href=\"{href}\" target=\"_blank\" rel=\"noreferrer\">{name}</a> · {media} · {size} bytes</li>".format(
+            href=html.escape(
+                bundle_document_href(
+                    bundle_id,
+                    document["document_id"],
+                    document["stored_filename"],
+                )
+            ),
             name=html.escape(document["stored_filename"]),
             media=html.escape(document["media_type"]),
             size=document["byte_count"],
@@ -686,6 +729,17 @@ class LocalAppHandler(http.server.BaseHTTPRequestHandler):
             if not path:
                 raise LocalAppError(f"bundle {bundle_id} does not have a review workbench yet")
             self.respond_file(path, "text/html; charset=utf-8")
+            return
+        if len(segments) == 5 and segments[2] == "document":
+            document_id = urllib.parse.unquote(segments[3])
+            stored_filename = urllib.parse.unquote(segments[4])
+            path = bundle_document_path(
+                self.config.workspace_root,
+                bundle_id,
+                document_id,
+                stored_filename,
+            )
+            self.respond_file(path)
             return
         self.send_error(404, "Not found")
 

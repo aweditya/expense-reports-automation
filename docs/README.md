@@ -10,6 +10,7 @@ Suggested reading order for a new reader:
 4. [bundle-synthesis.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/bundle-synthesis.md:1)
 5. [review-workbench.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/review-workbench.md:1)
 6. [review-submission-ledger.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/review-submission-ledger.md:1)
+7. [ui-workbench-redesign.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/ui-workbench-redesign.md:1)
 
 Workflow-specific guides:
 
@@ -22,3 +23,4 @@ Workflow-specific guides:
 - [schema-artifacts.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/schema-artifacts.md:1)
 - [feedback-capture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/feedback-capture.md:1)
 - [review-packet.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/review-packet.md:1)
+- [ui-workbench-redesign.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/ui-workbench-redesign.md:1)

@@ -93,6 +93,7 @@
             {
               "path": "expense_report.general_information.category",
               "label": "Category",
+              "control": "select",
               "value": "expenses_foreign",
               "present": true,
               "needs_review": false,
@@ -129,6 +130,7 @@
             {
               "path": "expense_report.general_information.payee.name",
               "label": "Name",
+              "control": "text",
               "value": "Olivia Park",
               "present": true,
               "needs_review": false,
@@ -149,6 +151,7 @@
             {
               "path": "expense_report.general_information.payee.affiliation",
               "label": "Affiliation",
+              "control": "select",
               "value": null,
               "present": false,
               "needs_review": false,
@@ -160,6 +163,7 @@
             {
               "path": "expense_report.general_information.rush_processing",
               "label": "Rush Processing",
+              "control": "select",
               "value": "no",
               "present": true,
               "needs_review": false,
@@ -180,6 +184,7 @@
             {
               "path": "expense_report.general_information.payment_method",
               "label": "Payment Method",
+              "control": "text",
               "value": "electronic",
               "present": true,
               "needs_review": false,
@@ -200,6 +205,7 @@
             {
               "path": "expense_report.general_information.business_purpose.who",
               "label": "Who",
+              "control": "textarea",
               "value": "Olivia Park",
               "present": true,
               "needs_review": false,
@@ -220,6 +226,7 @@
             {
               "path": "expense_report.general_information.business_purpose.what",
               "label": "What",
+              "control": "textarea",
               "value": "Business travel to Singapore",
               "present": true,
               "needs_review": true,
@@ -248,6 +255,7 @@
             {
               "path": "expense_report.general_information.business_purpose.when",
               "label": "When",
+              "control": "textarea",
               "value": "2025-04-21 to 2025-04-29",
               "present": true,
               "needs_review": false,
@@ -292,6 +300,7 @@
             {
               "path": "expense_report.general_information.business_purpose.where",
               "label": "Where",
+              "control": "textarea",
               "value": "Singapore",
               "present": true,
               "needs_review": false,
@@ -320,6 +329,7 @@
             {
               "path": "expense_report.general_information.business_purpose.why",
               "label": "Why",
+              "control": "textarea",
               "value": "Travel and related business expenses for work in Singapore",
               "present": true,
               "needs_review": true,
@@ -348,6 +358,7 @@
             {
               "path": "expense_report.general_information.business_purpose.key_30char",
               "label": "Key 30char",
+              "control": "textarea",
               "value": "OLIVIAPARKBUSINESSTRAVEXPENSES",
               "present": true,
               "needs_review": true,
@@ -416,6 +427,7 @@
             {
               "path": "expense_report.general_information.event_name",
               "label": "Event Name",
+              "control": "text",
               "value": "Foreign Expenses",
               "present": true,
               "needs_review": true,
@@ -460,6 +472,7 @@
             {
               "path": "expense_report.general_information.authorized_by",
               "label": "Authorized By",
+              "control": "text",
               "value": null,
               "present": false,
               "needs_review": false,
@@ -484,6 +497,7 @@
             {
               "path": "expense_report.transaction_summary.transaction_type",
               "label": "Transaction Type",
+              "control": "select",
               "value": "foreign",
               "present": true,
               "needs_review": false,
@@ -528,6 +542,7 @@
             {
               "path": "expense_report.transaction_summary.transaction_date",
               "label": "Transaction Date",
+              "control": "date",
               "value": "2025-04-29",
               "present": true,
               "needs_review": false,
@@ -572,6 +587,7 @@
             {
               "path": "expense_report.transaction_summary.total_usd",
               "label": "Total Usd",
+              "control": "currency",
               "value": "1889.66",
               "present": true,
               "needs_review": false,
@@ -685,6 +701,7 @@
             {
               "path": "expense_report.transaction_lines[0].common.date",
               "label": "Date",
+              "control": "date",
               "value": "2025-04-10",
               "present": true,
               "needs_review": false,
@@ -705,6 +722,7 @@
             {
               "path": "expense_report.transaction_lines[0].common.line_amount_usd",
               "label": "Line Amount Usd",
+              "control": "currency",
               "value": "1287.44",
               "present": true,
               "needs_review": false,
@@ -733,6 +751,7 @@
             {
               "path": "expense_report.transaction_lines[0].common.original_currency",
               "label": "Original Currency",
+              "control": "text",
               "value": "USD",
               "present": true,
               "needs_review": false,
@@ -761,6 +780,7 @@
             {
               "path": "expense_report.transaction_lines[0].common.original_amount",
               "label": "Original Amount",
+              "control": "currency",
               "value": "1287.44",
               "present": true,
               "needs_review": false,
@@ -789,6 +809,7 @@
             {
               "path": "expense_report.transaction_lines[0].common.exchange_rate",
               "label": "Exchange Rate",
+              "control": "currency",
               "value": "1.00",
               "present": true,
               "needs_review": false,
@@ -817,6 +838,7 @@
             {
               "path": "expense_report.transaction_lines[0].common.expense_type",
               "label": "Expense Type",
+              "control": "select",
               "value": "airfare_foreign",
               "present": true,
               "needs_review": false,
@@ -853,6 +875,7 @@
             {
               "path": "expense_report.transaction_lines[0].common.remarks",
               "label": "Remarks",
+              "control": "textarea",
               "value": "Airfare SFO to SFO",
               "present": true,
               "needs_review": false,
@@ -881,6 +904,7 @@
             {
               "path": "expense_report.transaction_lines[0].common.country_of_activity",
               "label": "Country Of Activity",
+              "control": "text",
               "value": "Singapore",
               "present": true,
               "needs_review": false,
@@ -909,6 +933,7 @@
             {
               "path": "expense_report.transaction_lines[0].common.foreign_activity_type",
               "label": "Foreign Activity Type",
+              "control": "select",
               "value": "other",
               "present": true,
               "needs_review": true,
@@ -945,6 +970,7 @@
             {
               "path": "expense_report.transaction_lines[0].common.source_documents[0].filename",
               "label": "Filename",
+              "control": "text",
               "value": "airline_itinerary_classic.md",
               "present": true,
               "needs_review": false,
@@ -965,6 +991,7 @@
             {
               "path": "expense_report.transaction_lines[0].common.source_documents[0].document_type",
               "label": "Document Type",
+              "control": "select",
               "value": "booking_confirmation",
               "present": true,
               "needs_review": false,
@@ -993,6 +1020,7 @@
             {
               "path": "expense_report.transaction_lines[0].airfare_details.travelers_name",
               "label": "Travelers Name",
+              "control": "text",
               "value": "Olivia Park",
               "present": true,
               "needs_review": false,
@@ -1013,6 +1041,7 @@
             {
               "path": "expense_report.transaction_lines[0].airfare_details.ticket_number",
               "label": "Ticket Number",
+              "control": "text",
               "value": "0162459135784",
               "present": true,
               "needs_review": false,
@@ -1033,6 +1062,7 @@
             {
               "path": "expense_report.transaction_lines[0].airfare_details.ticket_amount",
               "label": "Ticket Amount",
+              "control": "currency",
               "value": "1287.44",
               "present": true,
               "needs_review": false,
@@ -1061,6 +1091,7 @@
             {
               "path": "expense_report.transaction_lines[0].airfare_details.booking_method",
               "label": "Booking Method",
+              "control": "select",
               "value": "other",
               "present": true,
               "needs_review": false,
@@ -1081,6 +1112,7 @@
             {
               "path": "expense_report.transaction_lines[0].airfare_details.airline",
               "label": "Airline",
+              "control": "text",
               "value": "ANA",
               "present": true,
               "needs_review": false,
@@ -1101,6 +1133,7 @@
             {
               "path": "expense_report.transaction_lines[0].airfare_details.class_of_ticket",
               "label": "Class Of Ticket",
+              "control": "select",
               "value": "coach",
               "present": true,
               "needs_review": false,
@@ -1129,6 +1162,7 @@
             {
               "path": "expense_report.transaction_lines[0].airfare_details.departure_airport",
               "label": "Departure Airport",
+              "control": "text",
               "value": "SFO",
               "present": true,
               "needs_review": false,
@@ -1157,6 +1191,7 @@
             {
               "path": "expense_report.transaction_lines[0].airfare_details.destination_airport",
               "label": "Destination Airport",
+              "control": "text",
               "value": "SIN",
               "present": true,
               "needs_review": false,
@@ -1185,6 +1220,7 @@
             {
               "path": "expense_report.transaction_lines[0].airfare_details.round_trip",
               "label": "Round Trip",
+              "control": "checkbox",
               "value": "true",
               "present": true,
               "needs_review": false,
@@ -1227,6 +1263,7 @@
             {
               "path": "expense_report.transaction_lines[1].common.date",
               "label": "Date",
+              "control": "date",
               "value": "2025-04-24",
               "present": true,
               "needs_review": false,
@@ -1271,6 +1308,7 @@
             {
               "path": "expense_report.transaction_lines[1].common.line_amount_usd",
               "label": "Line Amount Usd",
+              "control": "currency",
               "value": "576.31",
               "present": true,
               "needs_review": false,
@@ -1315,6 +1353,7 @@
             {
               "path": "expense_report.transaction_lines[1].common.original_currency",
               "label": "Original Currency",
+              "control": "text",
               "value": "SGD",
               "present": true,
               "needs_review": false,
@@ -1343,6 +1382,7 @@
             {
               "path": "expense_report.transaction_lines[1].common.original_amount",
               "label": "Original Amount",
+              "control": "currency",
               "value": "778.80",
               "present": true,
               "needs_review": false,
@@ -1371,6 +1411,7 @@
             {
               "path": "expense_report.transaction_lines[1].common.exchange_rate",
               "label": "Exchange Rate",
+              "control": "currency",
               "value": "0.74",
               "present": true,
               "needs_review": false,
@@ -1415,6 +1456,7 @@
             {
               "path": "expense_report.transaction_lines[1].common.expense_type",
               "label": "Expense Type",
+              "control": "select",
               "value": "lodging_foreign",
               "present": true,
               "needs_review": false,
@@ -1451,6 +1493,7 @@
             {
               "path": "expense_report.transaction_lines[1].common.remarks",
               "label": "Remarks",
+              "control": "textarea",
               "value": "Lodging at MARINA BAY GRAND HOTEL",
               "present": true,
               "needs_review": false,
@@ -1479,6 +1522,7 @@
             {
               "path": "expense_report.transaction_lines[1].common.country_of_activity",
               "label": "Country Of Activity",
+              "control": "text",
               "value": "Singapore",
               "present": true,
               "needs_review": false,
@@ -1507,6 +1551,7 @@
             {
               "path": "expense_report.transaction_lines[1].common.foreign_activity_type",
               "label": "Foreign Activity Type",
+              "control": "select",
               "value": "other",
               "present": true,
               "needs_review": true,
@@ -1543,6 +1588,7 @@
             {
               "path": "expense_report.transaction_lines[1].common.source_documents[0].filename",
               "label": "Filename",
+              "control": "text",
               "value": "hotel_folio_guest_bill.md",
               "present": true,
               "needs_review": false,
@@ -1563,6 +1609,7 @@
             {
               "path": "expense_report.transaction_lines[1].common.source_documents[0].document_type",
               "label": "Document Type",
+              "control": "select",
               "value": "receipt",
               "present": true,
               "needs_review": false,
@@ -1591,6 +1638,7 @@
             {
               "path": "expense_report.transaction_lines[1].lodging_details.hotel_name",
               "label": "Hotel Name",
+              "control": "text",
               "value": "MARINA BAY GRAND HOTEL",
               "present": true,
               "needs_review": false,
@@ -1611,6 +1659,7 @@
             {
               "path": "expense_report.transaction_lines[1].lodging_details.location",
               "label": "Location",
+              "control": "text",
               "value": "Singapore",
               "present": true,
               "needs_review": false,
@@ -1639,6 +1688,7 @@
             {
               "path": "expense_report.transaction_lines[1].lodging_details.check_in_date",
               "label": "Check In Date",
+              "control": "date",
               "value": "2025-04-21",
               "present": true,
               "needs_review": false,
@@ -1683,6 +1733,7 @@
             {
               "path": "expense_report.transaction_lines[1].lodging_details.check_out_date",
               "label": "Check Out Date",
+              "control": "date",
               "value": "2025-04-24",
               "present": true,
               "needs_review": false,
@@ -1727,6 +1778,7 @@
             {
               "path": "expense_report.transaction_lines[1].lodging_details.number_of_nights",
               "label": "Number Of Nights",
+              "control": "number",
               "value": "3",
               "present": true,
               "needs_review": false,
@@ -1771,6 +1823,7 @@
             {
               "path": "expense_report.transaction_lines[1].lodging_details.daily_rate",
               "label": "Daily Rate",
+              "control": "currency",
               "value": "220.00",
               "present": true,
               "needs_review": false,
@@ -1815,6 +1868,7 @@
             {
               "path": "expense_report.transaction_lines[1].lodging_details.booking_method",
               "label": "Booking Method",
+              "control": "select",
               "value": "other",
               "present": true,
               "needs_review": false,
@@ -1835,6 +1889,7 @@
             {
               "path": "expense_report.transaction_lines[1].lodging_details.is_shared_lodging",
               "label": "Is Shared Lodging",
+              "control": "checkbox",
               "value": "false",
               "present": true,
               "needs_review": false,
@@ -1869,6 +1924,7 @@
             {
               "path": "expense_report.transaction_lines[2].common.date",
               "label": "Date",
+              "control": "date",
               "value": "2025-04-24",
               "present": true,
               "needs_review": false,
@@ -1889,6 +1945,7 @@
             {
               "path": "expense_report.transaction_lines[2].common.line_amount_usd",
               "label": "Line Amount Usd",
+              "control": "currency",
               "value": "25.91",
               "present": true,
               "needs_review": false,
@@ -1933,6 +1990,7 @@
             {
               "path": "expense_report.transaction_lines[2].common.original_currency",
               "label": "Original Currency",
+              "control": "text",
               "value": "SGD",
               "present": true,
               "needs_review": false,
@@ -1961,6 +2019,7 @@
             {
               "path": "expense_report.transaction_lines[2].common.original_amount",
               "label": "Original Amount",
+              "control": "currency",
               "value": "35.02",
               "present": true,
               "needs_review": false,
@@ -1989,6 +2048,7 @@
             {
               "path": "expense_report.transaction_lines[2].common.exchange_rate",
               "label": "Exchange Rate",
+              "control": "currency",
               "value": "0.74",
               "present": true,
               "needs_review": false,
@@ -2033,6 +2093,7 @@
             {
               "path": "expense_report.transaction_lines[2].common.expense_type",
               "label": "Expense Type",
+              "control": "select",
               "value": "business_meal",
               "present": true,
               "needs_review": true,
@@ -2061,6 +2122,7 @@
             {
               "path": "expense_report.transaction_lines[2].common.remarks",
               "label": "Remarks",
+              "control": "textarea",
               "value": "Meal at EAST BAY BISTRO",
               "present": true,
               "needs_review": true,
@@ -2089,6 +2151,7 @@
             {
               "path": "expense_report.transaction_lines[2].common.country_of_activity",
               "label": "Country Of Activity",
+              "control": "text",
               "value": "Singapore",
               "present": true,
               "needs_review": false,
@@ -2117,6 +2180,7 @@
             {
               "path": "expense_report.transaction_lines[2].common.foreign_activity_type",
               "label": "Foreign Activity Type",
+              "control": "select",
               "value": "other",
               "present": true,
               "needs_review": true,
@@ -2153,6 +2217,7 @@
             {
               "path": "expense_report.transaction_lines[2].common.source_documents[0].filename",
               "label": "Filename",
+              "control": "text",
               "value": "receipt_card_dotted.md",
               "present": true,
               "needs_review": false,
@@ -2173,6 +2238,7 @@
             {
               "path": "expense_report.transaction_lines[2].common.source_documents[0].document_type",
               "label": "Document Type",
+              "control": "select",
               "value": "receipt",
               "present": true,
               "needs_review": false,
@@ -2201,6 +2267,7 @@
             {
               "path": "expense_report.transaction_lines[2].meal_details.venue_name",
               "label": "Venue Name",
+              "control": "text",
               "value": "EAST BAY BISTRO",
               "present": true,
               "needs_review": false,
@@ -2221,6 +2288,7 @@
             {
               "path": "expense_report.transaction_lines[2].meal_details.meal_purpose",
               "label": "Meal Purpose",
+              "control": "textarea",
               "value": "Business meal during travel in Singapore",
               "present": true,
               "needs_review": true,
@@ -2257,6 +2325,7 @@
             {
               "path": "expense_report.transaction_lines[2].meal_details.tip_amount",
               "label": "Tip Amount",
+              "control": "currency",
               "value": "4.50",
               "present": true,
               "needs_review": false,
@@ -2285,6 +2354,7 @@
             {
               "path": "expense_report.transaction_lines[2].meal_details.has_alcohol_on_receipt",
               "label": "Has Alcohol On Receipt",
+              "control": "checkbox",
               "value": "false",
               "present": true,
               "needs_review": false,
@@ -2342,6 +2412,7 @@
             {
               "path": "expense_report.allocation_and_approvers.other_beneficiaries",
               "label": "Other Beneficiaries",
+              "control": "checkbox",
               "value": "false",
               "present": true,
               "needs_review": true,
