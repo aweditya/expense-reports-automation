@@ -88,28 +88,29 @@ The workbench should use relative links so the static HTML still works when serv
 
 ## Phase 2
 
-After phase 1 is stable, the next step is persistence and feedback capture:
+Phase 2 adds persistence and typed review-save behavior:
 
 - submit edited values back into a typed corrected-draft artifact
 - mark queue items resolved when values are supplied or confirmed
 - record edit deltas into the feedback/ledger system
+- rewrite `draft.yaml`, `validation.json`, `readiness.json`, `review_packet.json`, `review_workbench.html`, and `ledger.json` to the latest reviewed version
 
 ## Phase 3
 
-Longer-term enhancements:
+Phase 3 turns the page into a fuller workstation:
 
-- side-by-side raw document viewer with page targeting
-- OCR excerpt highlighting / bbox overlays
+- side-by-side raw document viewer with page-aware preview
 - richer field widgets for enums, booleans, and structured lists
-- live readiness recomputation after edits
-- final handoff/export from the edited review state
+- save-and-recompute review loop
+- export links for the edited current state
+- versioned review-session persistence via the bundle workspace
 
-## Acceptance Criteria For Phase 1
+## Status
 
-Phase 1 is complete when:
+All three phases in this redesign are now implemented in the repo.
 
-- the workbench has a two-column queue + form layout
-- missing and machine-filled values render as controls
-- evidence is inline per field
-- evidence links can open raw bundle documents
-- regression tests cover the new renderer and document-serving routes
+Remaining future work is mainly beyond this redesign scope:
+
+- OCR bbox overlays once the evidence contract carries bounding boxes everywhere
+- richer multi-user collaboration semantics
+- a more polished production web frontend on top of the same review-session contract

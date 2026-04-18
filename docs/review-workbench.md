@@ -10,18 +10,22 @@ The relevant code lives in:
 - [src/bin/build_review_workbench_from_facts.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/bin/build_review_workbench_from_facts.rs:1)
 - [src/bin/verify_workbench_regressions.rs](/Users/adityasriram/Labs/stanford/research/expense-reports/src/bin/verify_workbench_regressions.rs:1)
 
-The workbench is the first concrete backend realization of the `FA Review Workbench` stage from [system-architecture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/system-architecture.md:297). It is still static HTML, but it now behaves like a lightweight review workstation rather than a passive report page.
+The workbench is the first concrete backend realization of the `FA Review Workbench` stage from [system-architecture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/system-architecture.md:297). It is still generated HTML, but it now behaves like a lightweight review workstation rather than a passive report page.
 
 ## What it renders
 
 - packet summary with filing readiness and confidence
 - issue queue with jump links into the copy surface
+- save/recompute toolbar with export links for the current reviewed state
 - Oracle-ordered field cards with inline editable controls
 - missing required fields rendered as blank inputs instead of literal `[missing]`
 - machine-filled values editable in place, with copy buttons reading the current control value
+- richer controls for enums, booleans, dates, and structured repeated lists
+- per-field review controls for confirmations, correction reasons, and notes
 - inline expandable evidence per field, including raw-document links
-- in-page document preview modal for uploaded source files
+- side-by-side document preview drawer for uploaded source files
 - attachment checklist per projected transaction line
+- typed review-save round trips through the ledger and latest-artifact aliases
 
 ## Commands
 
@@ -55,4 +59,4 @@ That split lets us:
 - regression-test the packet as structured data
 - regression-test the FA surface as stable HTML
 - change styling and layout without changing synthesis or validation logic
-- eventually swap the static renderer for a richer UI without losing the packet boundary
+- preserve a stable review-session boundary even as the renderer becomes more interactive

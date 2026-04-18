@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
@@ -65,6 +66,9 @@ pub struct CopyField {
     pub path: String,
     pub label: String,
     pub control: String,
+    pub allowed_values: Vec<String>,
+    pub collection_columns: Vec<CopyCollectionColumn>,
+    pub collection_rows: Vec<CopyCollectionRow>,
     pub value: Option<String>,
     pub present: bool,
     pub needs_review: bool,
@@ -72,6 +76,19 @@ pub struct CopyField {
     pub source: Option<String>,
     pub entry_mode: String,
     pub evidence: Vec<EvidenceReference>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CopyCollectionColumn {
+    pub key: String,
+    pub label: String,
+    pub control: String,
+    pub allowed_values: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CopyCollectionRow {
+    pub values: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -151,6 +168,17 @@ struct UiField {
     source: Option<String>,
     entry_mode: String,
     required: bool,
+    allowed_values: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CollectionHelperSpec {
+    parent_path: String,
+    label: String,
+    source: Option<String>,
+    entry_mode: String,
+    required: bool,
+    columns: Vec<CopyCollectionColumn>,
 }
 
 static UI_FIELD_MAP: OnceLock<Result<UiFieldMap, String>> = OnceLock::new();
@@ -174,7 +202,7 @@ pub fn build_review_packet_with_readiness(
     Ok(ReviewPacket {
         summary: build_packet_summary(bundle, draft, readiness),
         issues_queue: build_issue_queue(draft, readiness, ui_map),
-        copy_sections: build_copy_sections(draft, ui_map),
+        copy_sections: build_copy_sections(draft, readiness, ui_map),
         attachment_checklist: build_attachment_checklist(bundle),
     })
 }
@@ -384,12 +412,16 @@ fn build_issue_queue(
     issues
 }
 
-fn build_copy_sections(draft: &DraftReport, ui_map: &UiFieldMap) -> Vec<CopySection> {
+fn build_copy_sections(
+    draft: &DraftReport,
+    readiness: &ReadinessReport,
+    ui_map: &UiFieldMap,
+) -> Vec<CopySection> {
     ui_map
         .sections
         .iter()
         .filter_map(|section| {
-            let instances = build_section_instances(draft, section);
+            let instances = build_section_instances(draft, readiness, section);
             if instances.is_empty() {
                 None
             } else {
@@ -404,30 +436,49 @@ fn build_copy_sections(draft: &DraftReport, ui_map: &UiFieldMap) -> Vec<CopySect
         .collect()
 }
 
-fn build_section_instances(draft: &DraftReport, section: &UiSection) -> Vec<CopySectionInstance> {
+fn build_section_instances(
+    draft: &DraftReport,
+    readiness: &ReadinessReport,
+    section: &UiSection,
+) -> Vec<CopySectionInstance> {
     if section.repeated {
         let line_count = actual_line_count(draft, &section.path);
         (0..line_count)
             .map(|index| {
                 let resolved_section_path = section.path.replace("[]", &format!("[{index}]"));
+                let mut fields = section
+                    .fields
+                    .iter()
+                    .filter(|field| !is_nested_collection_child(&field.path))
+                    .filter_map(|field| build_copy_field(draft, field, Some(index)))
+                    .collect::<Vec<_>>();
+                fields.extend(build_collection_helper_fields(
+                    draft,
+                    readiness,
+                    section,
+                    Some(index),
+                ));
                 CopySectionInstance {
                     path: resolved_section_path,
                     label: format!("{} {}", section.label, index + 1),
-                    fields: section
-                        .fields
-                        .iter()
-                        .filter_map(|field| build_copy_field(draft, field, Some(index)))
-                        .collect(),
+                    fields,
                 }
             })
             .filter(|instance: &CopySectionInstance| !instance.fields.is_empty())
             .collect()
     } else {
-        let fields = section
+        let mut fields = section
             .fields
             .iter()
+            .filter(|field| !is_nested_collection_child(&field.path))
             .filter_map(|field| build_copy_field(draft, field, None))
             .collect::<Vec<_>>();
+        fields.extend(build_collection_helper_fields(
+            draft,
+            readiness,
+            section,
+            None,
+        ));
         if fields.is_empty() {
             Vec::new()
         } else {
@@ -461,6 +512,9 @@ fn build_copy_field(
         path: resolved_path.clone(),
         label: field.label.clone(),
         control: field.control.clone(),
+        allowed_values: field.allowed_values.clone(),
+        collection_columns: Vec::new(),
+        collection_rows: Vec::new(),
         value: value.and_then(report_value_to_string),
         present,
         needs_review: metadata.is_some_and(|value| value.needs_review),
@@ -469,6 +523,120 @@ fn build_copy_field(
         entry_mode: field.entry_mode.clone(),
         evidence: metadata.map_or_else(Vec::new, |value| value.evidence.clone()),
     })
+}
+
+fn build_collection_helper_fields(
+    draft: &DraftReport,
+    readiness: &ReadinessReport,
+    section: &UiSection,
+    line_index: Option<usize>,
+) -> Vec<CopyField> {
+    collect_collection_helper_specs(section)
+        .into_iter()
+        .filter_map(|spec| {
+            let resolved_path = resolve_ui_field_path(&spec.parent_path, line_index);
+            let issue = readiness
+                .issues
+                .iter()
+                .find(|issue| issue.path == resolved_path);
+            let rows = collection_rows_at(&draft.report, &resolved_path, &spec.columns);
+            let present_non_empty = !rows.is_empty();
+            if !present_non_empty && issue.is_none() {
+                return None;
+            }
+
+            Some(CopyField {
+                path: resolved_path,
+                label: spec.label,
+                control: "structured_list".to_owned(),
+                allowed_values: Vec::new(),
+                collection_columns: spec.columns,
+                collection_rows: rows,
+                value: None,
+                present: present_non_empty,
+                needs_review: issue.is_some_and(|issue| issue.class == ReadinessIssueClass::ManualReview),
+                required: spec.required || issue.is_some(),
+                source: spec.source,
+                entry_mode: spec.entry_mode,
+                evidence: Vec::new(),
+            })
+        })
+        .collect()
+}
+
+fn collect_collection_helper_specs(section: &UiSection) -> Vec<CollectionHelperSpec> {
+    let mut grouped = std::collections::BTreeMap::<String, CollectionHelperSpec>::new();
+
+    for field in &section.fields {
+        let Some((parent_path, child_key)) = collection_parent_and_key(&field.path) else {
+            continue;
+        };
+        let parent_label = title_case_label(&humanize_path_tail(&parent_path));
+        let entry = grouped
+            .entry(parent_path.clone())
+            .or_insert_with(|| CollectionHelperSpec {
+                parent_path,
+                label: parent_label,
+                source: field.source.clone(),
+                entry_mode: field.entry_mode.clone(),
+                required: field.required,
+                columns: Vec::new(),
+            });
+        entry.required |= field.required;
+        if !entry.columns.iter().any(|column| column.key == child_key) {
+            entry.columns.push(CopyCollectionColumn {
+                key: child_key.to_owned(),
+                label: field.label.clone(),
+                control: field.control.clone(),
+                allowed_values: field.allowed_values.clone(),
+            });
+        }
+    }
+
+    grouped
+        .into_values()
+        .filter(|spec| !spec.columns.is_empty())
+        .collect()
+}
+
+fn collection_parent_and_key(path: &str) -> Option<(String, String)> {
+    let marker_index = path.rfind("[]")?;
+    let parent = path[..marker_index].to_owned();
+    let child = path[marker_index + 2..].strip_prefix('.')?;
+    if child.is_empty() || child.contains('.') || child.contains('[') {
+        return None;
+    }
+    Some((parent, child.to_owned()))
+}
+
+fn is_nested_collection_child(path: &str) -> bool {
+    path.matches("[]").count() > 1
+}
+
+fn collection_rows_at(
+    report: &ReportValue,
+    path: &str,
+    columns: &[CopyCollectionColumn],
+) -> Vec<CopyCollectionRow> {
+    value_at(report, path)
+        .and_then(ReportValue::as_array)
+        .map(|items| {
+            items.iter()
+                .filter_map(|item| {
+                    let object = item.as_object()?;
+                    let mut values = BTreeMap::new();
+                    for column in columns {
+                        let value = object
+                            .get(&column.key)
+                            .and_then(report_value_to_string)
+                            .unwrap_or_default();
+                        values.insert(column.key.clone(), value);
+                    }
+                    Some(CopyCollectionRow { values })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn build_attachment_checklist(bundle: &CanonicalExpenseBundle) -> Vec<AttachmentChecklistItem> {
@@ -647,6 +815,19 @@ fn humanize_path_tail(path: &str) -> String {
     path.rsplit('.').next().unwrap_or(path).replace('_', " ")
 }
 
+fn title_case_label(value: &str) -> String {
+    value.split_whitespace()
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                Some(first) => first.to_ascii_uppercase().to_string() + chars.as_str(),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 fn issue_class_rank(class: ReadinessIssueClass) -> u8 {
     match class {
         ReadinessIssueClass::AutomationGap => 0,
@@ -753,8 +934,14 @@ mod tests {
             .fields
             .iter()
             .any(|field| field.path
-                == "expense_report.transaction_lines[0].common.source_documents[0].filename"
-                && field.value.as_deref() == Some("synthetic_flight_itinerary_baseline.md")));
+                == "expense_report.transaction_lines[0].common.source_documents"
+                && field.control == "structured_list"
+                && field.collection_rows.len() == 1
+                && field.collection_rows[0]
+                    .values
+                    .get("filename")
+                    .map(String::as_str)
+                    == Some("synthetic_flight_itinerary_baseline.md")));
         assert!(!transaction_lines.instances[0]
             .fields
             .iter()
@@ -767,6 +954,14 @@ mod tests {
                 == "expense_report.transaction_lines[2].meal_details.meal_purpose"
                 && field.value.as_deref() == Some("Business meal during travel in Singapore")
                 && field.needs_review));
+        assert!(transaction_lines.instances[2]
+            .fields
+            .iter()
+            .any(|field| field.path
+                == "expense_report.transaction_lines[2].meal_details.attendees"
+                && field.control == "structured_list"
+                && field.required
+                && field.collection_columns.len() == 2));
     }
 
     #[test]
