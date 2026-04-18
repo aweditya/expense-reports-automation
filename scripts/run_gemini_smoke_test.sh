@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 default_key="$repo_root/soe-agile-agents-7581b31cd4d2.json"
-default_sdk_python="/tmp/expense_report_genai_venv/bin/python"
+default_sdk_python="$repo_root/.venv/bin/python"
 
 key_path="${KEY_PATH:-${VERTEX_SERVICE_ACCOUNT_KEY:-$default_key}}"
 sdk_python="${SDK_PY:-${VERTEX_GEMINI_SDK_PYTHON:-$default_sdk_python}}"

@@ -476,7 +476,7 @@ def render_index_page(config: LocalAppConfig, bundles: list[BundleListEntry], me
               <input name="service_account_key" placeholder="/abs/path/to/service-account.json">
             </label>
             <label>SDK Python
-              <input name="sdk_python" placeholder="/tmp/expense_report_genai_venv/bin/python">
+              <input name="sdk_python" placeholder="./.venv/bin/python">
             </label>
           </div>
           <label>Documents

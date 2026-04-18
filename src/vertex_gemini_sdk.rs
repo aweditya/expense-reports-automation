@@ -183,7 +183,7 @@ fn parse_sdk_transcribed_document(text: &str) -> Result<TranscribedDocument, Ver
 }
 
 fn default_python_path() -> PathBuf {
-    let venv_python = PathBuf::from("/tmp/expense_report_genai_venv/bin/python");
+    let venv_python = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".venv/bin/python");
     if venv_python.exists() {
         venv_python
     } else {

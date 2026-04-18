@@ -90,7 +90,7 @@ def default_sdk_python() -> str:
     env_value = os.environ.get("VERTEX_GEMINI_SDK_PYTHON")
     if env_value:
         return env_value
-    venv_python = Path("/tmp/expense_report_genai_venv/bin/python")
+    venv_python = repo_root() / ".venv" / "bin" / "python"
     if venv_python.exists():
         return str(venv_python)
     return "python3"

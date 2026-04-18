@@ -73,7 +73,7 @@ def default_sdk_python() -> str:
     env_value = os.environ.get("VERTEX_GEMINI_SDK_PYTHON")
     if env_value:
         return env_value
-    venv_python = Path("/tmp/expense_report_genai_venv/bin/python")
+    venv_python = repo_root() / ".venv" / "bin" / "python"
     if venv_python.exists():
         return str(venv_python)
     return "python3"
@@ -292,7 +292,16 @@ def render_corpus_documents(
 
 def resolve_manifest_path(manifest_root: Path, value: str) -> Path:
     path = Path(value)
-    return path if path.is_absolute() else (manifest_root / path).resolve()
+    if path.is_absolute():
+        return path
+
+    direct = (manifest_root / path).resolve()
+    if direct.exists():
+        return direct
+
+    corpus_root_candidate = manifest_root.parent
+    fallback = (corpus_root_candidate / path).resolve()
+    return fallback
 
 
 def build_synthetic_corpus_spec(

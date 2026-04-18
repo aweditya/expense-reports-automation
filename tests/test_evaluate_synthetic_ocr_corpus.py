@@ -64,9 +64,12 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
     def test_build_manifest_corpus_spec_from_flat_documents(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
-            receipt_path = temp_path / "receipt.pdf"
-            markdown_path = temp_path / "receipt.md"
-            manifest_path = temp_path / "manifest.json"
+            corpus_root = temp_path / "receipt_corpus"
+            manifest_dir = corpus_root / "manifests"
+            manifest_dir.mkdir(parents=True)
+            receipt_path = corpus_root / "receipt.pdf"
+            markdown_path = corpus_root / "receipt.md"
+            manifest_path = manifest_dir / "manifest.json"
 
             receipt_path.write_bytes(b"%PDF-1.4")
             markdown_path.write_text("# Merchant Receipt\n- Total: USD 12.40\n")

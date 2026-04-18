@@ -122,8 +122,20 @@ fn fallback_receipt_classification(
     lines: &[LineRef],
 ) -> Option<DocumentClassification> {
     let total_line = lines.iter().find(|line| {
-        strip_label_value(&line.raw, &["total", "total paid", "amount paid"], !line.is_heading)
-            .is_some()
+        strip_label_value(
+            &line.raw,
+            &[
+                "final total",
+                "rounded total",
+                "total rounded",
+                "total paid",
+                "amount paid",
+                "total",
+                "total amt",
+            ],
+            !line.is_heading,
+        )
+        .is_some()
     })?;
 
     let has_supporting_signal = lines.iter().any(|line| {
@@ -403,14 +415,14 @@ fn extract_receipt(
         &["merchant name", "merchant"],
         ConfidenceLevel::High,
     )
-    .or_else(|| infer_heading_value(document, lines, &["merchant receipt", "card receipt"]));
+    .or_else(|| infer_receipt_merchant_name(document, lines));
     let merchant_location = observed_location(
         document,
         lines,
         &["merchant location", "location"],
         ConfidenceLevel::High,
     );
-    let transaction_date = observed_string(
+    let transaction_date = observed_receipt_date(
         document,
         lines,
         &["transaction date", "date"],
@@ -424,12 +436,7 @@ fn extract_receipt(
         ConfidenceLevel::High,
     );
     let tip_amount = observed_money(document, lines, &["tip"], ConfidenceLevel::High);
-    let total_paid = observed_money(
-        document,
-        lines,
-        &["total paid", "total", "amount paid"],
-        ConfidenceLevel::High,
-    )
+    let total_paid = observed_receipt_total(document, lines, ConfidenceLevel::High)
     .or_else(|| infer_receipt_total(subtotal.as_ref(), tax_amount.as_ref(), tip_amount.as_ref()));
     let section_rows = collect_section_rows(
         lines,
@@ -739,6 +746,9 @@ fn parse_receipt_line_item(
 
 fn looks_like_receipt_item_line(line: &LineRef) -> bool {
     let content = normalize_bullet_content(&line.raw);
+    if content.contains(':') && !content.contains('|') {
+        return false;
+    }
     let description = if content.contains('|') {
         let mut parts = content.split('|').map(str::trim);
         let description = match parts.next() {
@@ -913,6 +923,17 @@ fn observed_string(
     Some(observed_from_line(line, value, confidence, document))
 }
 
+fn observed_receipt_date(
+    document: &TranscribedDocument,
+    lines: &[LineRef],
+    labels: &[&str],
+    confidence: ConfidenceLevel,
+) -> Option<Observed<String>> {
+    let (line, value) = find_label_value(lines, labels)?;
+    let value = normalize_receipt_date_value(&value);
+    Some(observed_from_line(line, value, confidence, document))
+}
+
 fn observed_money(
     document: &TranscribedDocument,
     lines: &[LineRef],
@@ -922,6 +943,46 @@ fn observed_money(
     let (line, value) = find_label_value(lines, labels)?;
     let money = parse_money(&value)?;
     Some(observed_from_line(line, money, confidence, document))
+}
+
+fn observed_money_strict(
+    document: &TranscribedDocument,
+    lines: &[LineRef],
+    labels: &[&str],
+    confidence: ConfidenceLevel,
+) -> Option<Observed<MoneyAmount>> {
+    for line in lines {
+        let Some(value) = strip_label_value_strict(&line.raw, labels) else {
+            continue;
+        };
+        let Some(money) = parse_money(&value) else {
+            continue;
+        };
+        return Some(observed_from_line(line, money, confidence, document));
+    }
+
+    None
+}
+
+fn observed_receipt_total(
+    document: &TranscribedDocument,
+    lines: &[LineRef],
+    confidence: ConfidenceLevel,
+) -> Option<Observed<MoneyAmount>> {
+    let preferred_label_sets = [
+        &["final total", "rounded total", "total rounded"][..],
+        &["total paid", "amount paid"][..],
+        &["total"][..],
+        &["total amt"][..],
+    ];
+
+    for labels in preferred_label_sets {
+        if let Some(value) = observed_money_strict(document, lines, labels, confidence) {
+            return Some(value);
+        }
+    }
+
+    None
 }
 
 fn observed_location(
@@ -1144,6 +1205,14 @@ fn strip_label_value(line: &str, labels: &[&str], allow_loose_prefix: bool) -> O
                 continue;
             }
 
+            let next_token_key = normalize_key(raw_tokens[prefix_len]);
+            if matches!(
+                next_token_key.as_str(),
+                "amt" | "amount" | "paid" | "due" | "rounded" | "rounding" | "adj"
+            ) {
+                continue;
+            }
+
             let value = raw_tokens[prefix_len..].join(" ");
             let value = value
                 .trim_start_matches(|ch: char| ch == ':' || ch == '-' || ch == '#')
@@ -1153,6 +1222,70 @@ fn strip_label_value(line: &str, labels: &[&str], allow_loose_prefix: bool) -> O
             }
         }
     }
+    None
+}
+
+fn strip_label_value_strict(line: &str, labels: &[&str]) -> Option<String> {
+    let content = normalize_bullet_content(line);
+    let lhs_rhs = content.split_once(':');
+    for label in labels {
+        let label_key = normalize_key(label);
+        if let Some((lhs, rhs)) = lhs_rhs {
+            if normalize_key(lhs) == label_key {
+                return Some(rhs.trim().to_owned());
+            }
+        }
+
+        let raw_tokens = content.split_whitespace().collect::<Vec<_>>();
+        let mut matched_prefix_len = None;
+        let mut normalized_prefix = String::new();
+
+        for (index, raw_token) in raw_tokens.iter().enumerate() {
+            let token_key = normalize_key(raw_token);
+            if token_key.is_empty() {
+                continue;
+            }
+
+            if normalized_prefix.is_empty() {
+                normalized_prefix = token_key;
+            } else {
+                normalized_prefix.push(' ');
+                normalized_prefix.push_str(&token_key);
+            }
+
+            if normalized_prefix == label_key {
+                matched_prefix_len = Some(index + 1);
+                break;
+            }
+
+            if !label_key.starts_with(&normalized_prefix) {
+                break;
+            }
+        }
+
+        if let Some(prefix_len) = matched_prefix_len {
+            if raw_tokens.len() <= prefix_len {
+                continue;
+            }
+
+            let next_token_key = normalize_key(raw_tokens[prefix_len]);
+            if matches!(
+                next_token_key.as_str(),
+                "amt" | "amount" | "paid" | "due" | "rounded" | "rounding" | "adj"
+            ) {
+                continue;
+            }
+
+            let value = raw_tokens[prefix_len..].join(" ");
+            let value = value
+                .trim_start_matches(|ch: char| ch == ':' || ch == '-' || ch == '#')
+                .trim();
+            if !value.is_empty() {
+                return Some(value.to_owned());
+            }
+        }
+    }
+
     None
 }
 
@@ -1406,6 +1539,27 @@ fn split_description_and_money(value: &str) -> Option<(String, MoneyAmount)> {
     Some((description.to_owned(), MoneyAmount { amount, currency }))
 }
 
+fn normalize_receipt_date_value(value: &str) -> String {
+    let trimmed = value.trim();
+    let first_token = trimmed.split_whitespace().next().unwrap_or(trimmed);
+    if looks_like_date_token(first_token) {
+        first_token.to_owned()
+    } else {
+        trimmed.to_owned()
+    }
+}
+
+fn looks_like_date_token(value: &str) -> bool {
+    let separators = ['/', '-'];
+    separators.iter().any(|separator| {
+        let parts = value.split(*separator).collect::<Vec<_>>();
+        parts.len() == 3
+            && parts
+                .iter()
+                .all(|part| !part.is_empty() && part.chars().all(|ch| ch.is_ascii_digit()))
+    })
+}
+
 fn infer_heading_value(
     document: &TranscribedDocument,
     lines: &[LineRef],
@@ -1427,6 +1581,93 @@ fn infer_heading_value(
                 document,
             )
         })
+}
+
+fn infer_receipt_merchant_name(
+    document: &TranscribedDocument,
+    lines: &[LineRef],
+) -> Option<Observed<String>> {
+    lines.iter()
+        .filter(|line| line.is_heading)
+        .filter(|line| !is_generic_receipt_heading(&line.normalized))
+        .max_by_key(|line| receipt_heading_score(&line.raw))
+        .map(|line| {
+            observed_from_line(
+                line,
+                normalize_bullet_content(&line.raw),
+                ConfidenceLevel::Medium,
+                document,
+            )
+        })
+}
+
+fn is_generic_receipt_heading(value: &str) -> bool {
+    let normalized = normalize_key(value);
+    [
+        "merchant receipt",
+        "card receipt",
+        "receipt",
+        "purchase summary",
+        "line items",
+        "items",
+        "totals",
+        "footer",
+        "merchant details",
+        "receipt information",
+    ]
+    .iter()
+    .any(|heading| normalized == normalize_key(heading))
+}
+
+fn receipt_heading_score(value: &str) -> i32 {
+    let content = normalize_bullet_content(value);
+    let normalized = normalize_key(&content);
+    let business_keywords = [
+        "sdn",
+        "bhd",
+        "inc",
+        "llc",
+        "shop",
+        "store",
+        "gift",
+        "home",
+        "deco",
+        "restaurant",
+        "bistro",
+        "cafe",
+        "coffee",
+        "diy",
+        "mart",
+        "market",
+        "trading",
+        "enterprise",
+    ];
+
+    let mut score = 0i32;
+    if business_keywords
+        .iter()
+        .any(|keyword| normalized.contains(&normalize_key(keyword)))
+    {
+        score += 10;
+    }
+    if content.contains('&') || content.contains('(') {
+        score += 2;
+    }
+
+    let alphabetic = content.chars().filter(|ch| ch.is_ascii_alphabetic()).count() as i32;
+    let uppercase = content
+        .chars()
+        .filter(|ch| ch.is_ascii_uppercase())
+        .count() as i32;
+    if alphabetic > 0 && uppercase * 10 >= alphabetic * 6 {
+        score += 5;
+    }
+
+    if content.split_whitespace().count() <= 3 && score == 0 {
+        score -= 3;
+    }
+
+    score
 }
 
 fn amount_to_cents(amount: &str) -> Option<i64> {
@@ -1673,6 +1914,101 @@ mod tests {
                     Some("29.16")
                 );
                 assert_eq!(facts.line_items.len(), 2);
+            }
+            other => panic!("unexpected payload: {other:?}"),
+        }
+
+        remove_fixture_dir(&path);
+    }
+
+    #[test]
+    fn receipt_extractor_prefers_final_or_rounded_total_over_intermediate_total() {
+        let markdown = "\
+# INDAH GIFT & HOME DECO
+
+- Date: 19/10/2018
+- TOTAL AMT: RM 60.31
+- ROUNDING ADJ: -0.01
+- Final Total: RM 60.30
+- CASH: RM 70.30
+";
+        let path = write_fixture(markdown, "receipt_final_total.md");
+        let actual = extract_document_facts_path(&path).expect("fixture should transcribe");
+
+        match actual.facts {
+            DocumentFactsPayload::Receipt(facts) => {
+                assert_eq!(
+                    facts.total_paid
+                        .as_ref()
+                        .and_then(|value| value.value.currency.as_deref()),
+                    Some("RM")
+                );
+                assert_eq!(
+                    facts.total_paid
+                        .as_ref()
+                        .map(|value| value.value.amount.as_str()),
+                    Some("60.30")
+                );
+            }
+            other => panic!("unexpected payload: {other:?}"),
+        }
+
+        remove_fixture_dir(&path);
+    }
+
+    #[test]
+    fn receipt_extractor_normalizes_datetime_value_to_date_token() {
+        let markdown = "\
+# BOOK TALK (TAMAN DAYA) SDN BHD
+
+- Date: 25/12/2018 8:13:39 PM
+- Total: 9.00
+";
+        let path = write_fixture(markdown, "receipt_datetime.md");
+        let actual = extract_document_facts_path(&path).expect("fixture should transcribe");
+
+        match actual.facts {
+            DocumentFactsPayload::Receipt(facts) => {
+                assert_eq!(
+                    facts.transaction_date
+                        .as_ref()
+                        .map(|value| value.value.as_str()),
+                    Some("25/12/2018")
+                );
+            }
+            other => panic!("unexpected payload: {other:?}"),
+        }
+
+        remove_fixture_dir(&path);
+    }
+
+    #[test]
+    fn receipt_extractor_prefers_business_heading_over_customer_name_heading() {
+        let markdown = "\
+# tan woon yann
+
+## INDAH GIFT & HOME DECO
+- Date: 19/10/2018
+- TOTAL AMT: RM 60.31
+- TOTAL: RM 60.30
+";
+        let path = write_fixture(markdown, "receipt_heading_priority.md");
+        let actual = extract_document_facts_path(&path).expect("fixture should transcribe");
+
+        match actual.facts {
+            DocumentFactsPayload::Receipt(facts) => {
+                assert_eq!(
+                    facts.merchant_name
+                        .as_ref()
+                        .map(|value| value.value.as_str()),
+                    Some("INDAH GIFT & HOME DECO")
+                );
+                assert_eq!(
+                    facts.total_paid
+                        .as_ref()
+                        .map(|value| value.value.amount.as_str()),
+                    Some("60.30")
+                );
             }
             other => panic!("unexpected payload: {other:?}"),
         }
