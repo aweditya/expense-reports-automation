@@ -63,6 +63,14 @@ class LocalAppConfig:
     workspace_root: Path
     host: str
     port: int
+    default_engine: str
+    default_fx: str
+    default_project: str | None
+    default_location: str
+    default_model: str
+    default_service_account_key: str | None
+    default_sdk_python: str | None
+    show_advanced_config: bool
 
 
 class LocalAppError(RuntimeError):
@@ -78,6 +86,7 @@ def ensure_safe_bundle_id(bundle_id: str) -> str:
 
 
 def parse_args() -> argparse.Namespace:
+    env = os.environ
     parser = argparse.ArgumentParser(
         description="Run a tiny local upload app for the expense report ingestion workspace."
     )
@@ -96,6 +105,53 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=DEFAULT_PORT,
         help="Port to bind; defaults to 8765",
+    )
+    parser.add_argument(
+        "--default-engine",
+        choices=["builtin", "vertex-gemini-sdk"],
+        default=env.get("EXPENSE_LOCAL_APP_DEFAULT_ENGINE") or (
+            "vertex-gemini-sdk"
+            if env.get("EXPENSE_LOCAL_APP_SERVICE_ACCOUNT_KEY")
+            else "builtin"
+        ),
+        help="Server-side default ingestion engine for uploads",
+    )
+    parser.add_argument(
+        "--default-fx",
+        choices=["demo", "none"],
+        default=env.get("EXPENSE_LOCAL_APP_DEFAULT_FX", "demo"),
+        help="Server-side default FX mode",
+    )
+    parser.add_argument(
+        "--default-project",
+        default=env.get("EXPENSE_LOCAL_APP_PROJECT"),
+        help="Optional default Vertex project",
+    )
+    parser.add_argument(
+        "--default-location",
+        default=env.get("EXPENSE_LOCAL_APP_LOCATION", DEFAULT_LOCATION),
+        help="Default Vertex location for OCR",
+    )
+    parser.add_argument(
+        "--default-model",
+        default=env.get("EXPENSE_LOCAL_APP_MODEL", DEFAULT_MODEL),
+        help="Default Gemini model for OCR",
+    )
+    parser.add_argument(
+        "--default-service-account-key",
+        default=env.get("EXPENSE_LOCAL_APP_SERVICE_ACCOUNT_KEY"),
+        help="Default Vertex service account key path",
+    )
+    parser.add_argument(
+        "--default-sdk-python",
+        default=env.get("EXPENSE_LOCAL_APP_SDK_PYTHON"),
+        help="Default Python interpreter with google-genai installed",
+    )
+    parser.add_argument(
+        "--show-advanced-config",
+        action="store_true",
+        default=(env.get("EXPENSE_LOCAL_APP_SHOW_ADVANCED_CONFIG") == "1"),
+        help="Expose technical ingestion overrides in the upload form",
     )
     return parser.parse_args()
 
@@ -349,21 +405,20 @@ def resolve_review_cli_command(repo_root: Path) -> list[str]:
 
 
 def build_ingest_command(
-    repo_root: Path,
-    workspace_root: Path,
+    config: LocalAppConfig,
     form_fields: dict[str, str],
     input_paths: list[Path],
 ) -> list[str]:
     bundle_id = sanitize_identifier(form_fields.get("bundle_id") or default_bundle_id(input_paths))
-    engine = form_fields.get("engine") or "builtin"
-    command = resolve_cli_command(repo_root) + [
+    engine = form_fields.get("engine") or config.default_engine
+    command = resolve_cli_command(config.repo_root) + [
         "stage-and-run",
         "--workspace-root",
-        str(workspace_root),
+        str(config.workspace_root),
         "--bundle-id",
         bundle_id,
         "--fx",
-        form_fields.get("fx", "demo"),
+        form_fields.get("fx") or config.default_fx,
         "--engine",
         engine,
     ]
@@ -375,17 +430,22 @@ def build_ingest_command(
         command.extend(
             [
                 "--location",
-                form_fields.get("location", DEFAULT_LOCATION),
+                form_fields.get("location") or config.default_location,
                 "--model",
-                form_fields.get("model", DEFAULT_MODEL),
+                form_fields.get("model") or config.default_model,
             ]
         )
-        if form_fields.get("project"):
-            command.extend(["--project", form_fields["project"]])
-        if form_fields.get("service_account_key"):
-            command.extend(["--service-account-key", form_fields["service_account_key"]])
-        if form_fields.get("sdk_python"):
-            command.extend(["--sdk-python", form_fields["sdk_python"]])
+        project = form_fields.get("project") or config.default_project
+        service_account_key = (
+            form_fields.get("service_account_key") or config.default_service_account_key
+        )
+        sdk_python = form_fields.get("sdk_python") or config.default_sdk_python
+        if project:
+            command.extend(["--project", project])
+        if service_account_key:
+            command.extend(["--service-account-key", service_account_key])
+        if sdk_python:
+            command.extend(["--sdk-python", sdk_python])
     command.extend(str(path) for path in input_paths)
     return command
 
@@ -412,8 +472,7 @@ def build_review_save_command(
 
 
 def handle_upload_submission(
-    repo_root: Path,
-    workspace_root: Path,
+    config: LocalAppConfig,
     request: UploadRequest,
     command_runner: Callable[[list[str], Path], subprocess.CompletedProcess[str]] = run_pipeline_command,
 ) -> str:
@@ -423,8 +482,8 @@ def handle_upload_submission(
     with tempfile.TemporaryDirectory(prefix="expense_local_app_") as temp_dir_str:
         temp_dir = Path(temp_dir_str)
         input_paths = save_uploaded_files(temp_dir, request.files)
-        command = build_ingest_command(repo_root, workspace_root, request.fields, input_paths)
-        completed = command_runner(command, repo_root)
+        command = build_ingest_command(config, request.fields, input_paths)
+        completed = command_runner(command, config.repo_root)
         if completed.returncode != 0:
             raise LocalAppError((completed.stderr or completed.stdout).strip() or "pipeline failed")
         return request.fields.get("bundle_id") or default_bundle_id(input_paths)
@@ -510,6 +569,12 @@ def time_now_epoch_ms() -> int:
     return int(time.time() * 1000)
 
 
+def configured_ingestion_label(config: LocalAppConfig) -> str:
+    if config.default_engine == "vertex-gemini-sdk":
+        return f"Live Gemini OCR · {config.default_model} · {config.default_location}"
+    return "Builtin text/PDF ingestion"
+
+
 def render_index_page(config: LocalAppConfig, bundles: list[BundleListEntry], message: str | None = None) -> str:
     items = []
     for bundle in bundles[:30]:
@@ -526,6 +591,45 @@ def render_index_page(config: LocalAppConfig, bundles: list[BundleListEntry], me
     notice = (
         f"<p class=\"notice\">{html.escape(message)}</p>\n" if message else ""
     )
+    advanced_config = ""
+    if config.show_advanced_config:
+        advanced_config = f"""
+          <details class="advanced-config">
+            <summary>Technical overrides</summary>
+            <div class="grid">
+              <label>Run Label
+                <input name="run_id" placeholder="optional_run_id (leave blank to auto-generate)">
+              </label>
+              <label>FX Mode
+                <select name="fx">
+                  <option value="demo" {"selected" if config.default_fx == "demo" else ""}>demo</option>
+                  <option value="none" {"selected" if config.default_fx == "none" else ""}>none</option>
+                </select>
+              </label>
+              <label>Engine
+                <select name="engine">
+                  <option value="builtin" {"selected" if config.default_engine == "builtin" else ""}>builtin</option>
+                  <option value="vertex-gemini-sdk" {"selected" if config.default_engine == "vertex-gemini-sdk" else ""}>vertex-gemini-sdk</option>
+                </select>
+              </label>
+              <label>Project
+                <input name="project" value="{html.escape(config.default_project or '')}" placeholder="optional Vertex project">
+              </label>
+              <label>Location
+                <input name="location" value="{html.escape(config.default_location)}">
+              </label>
+              <label>Model
+                <input name="model" value="{html.escape(config.default_model)}">
+              </label>
+              <label>Service Account Key
+                <input name="service_account_key" value="{html.escape(config.default_service_account_key or '')}" placeholder="/abs/path/to/service-account.json">
+              </label>
+              <label>SDK Python
+                <input name="sdk_python" value="{html.escape(config.default_sdk_python or '')}" placeholder="./.venv/bin/python">
+              </label>
+            </div>
+          </details>
+        """
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -556,6 +660,10 @@ def render_index_page(config: LocalAppConfig, bundles: list[BundleListEntry], me
     .pending-uploads li {{ display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 8px; }}
     .pending-file-name {{ overflow-wrap: anywhere; }}
     .error-text {{ color: #8d2c21; font-weight: 600; }}
+    .ingestion-chip {{ display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 999px; border: 1px solid #d4c4ac; background: #f7f1e5; color: #5d5349; font-size: 0.94rem; }}
+    .advanced-config {{ padding: 12px 14px; border: 1px solid #dbcdb7; border-radius: 14px; background: rgba(247, 241, 229, 0.72); }}
+    .advanced-config summary {{ cursor: pointer; font-weight: 700; }}
+    .advanced-config .grid {{ margin-top: 12px; }}
     @media (max-width: 920px) {{ .hero, .grid {{ grid-template-columns: 1fr; }} }}
   </style>
   <script>
@@ -655,45 +763,16 @@ def render_index_page(config: LocalAppConfig, bundles: list[BundleListEntry], me
       <div class="card">
         <p class="meta">Expense Reports Automation</p>
         <h1>Local FA Intake App</h1>
-        <p>This app uploads documents into the managed bundle workspace, runs the ingestion pipeline, and then opens the generated FA workbench for copy-and-paste filing.</p>
+        <p>This app uploads documents into the managed bundle workspace, runs the ingestion pipeline, and then opens the editable FA workbench for review and filing.</p>
+        <p class="ingestion-chip">Configured ingestion: {html.escape(configured_ingestion_label(config))}</p>
         {notice}
         <form id="upload-form" method="post" action="/upload" enctype="multipart/form-data">
           <div class="grid">
-            <label>Bundle ID
+            <label>Expense Packet ID
               <input name="bundle_id" placeholder="optional_bundle_id">
             </label>
-            <label>User ID
+            <label>Requester / FA ID
               <input name="user_id" placeholder="fa_or_requester_id">
-            </label>
-            <label>Run ID
-              <input name="run_id" placeholder="optional_run_id (leave blank to auto-generate)">
-            </label>
-            <label>FX Mode
-              <select name="fx">
-                <option value="demo">demo</option>
-                <option value="none">none</option>
-              </select>
-            </label>
-            <label>Engine
-              <select name="engine">
-                <option value="builtin">builtin</option>
-                <option value="vertex-gemini-sdk">vertex-gemini-sdk</option>
-              </select>
-            </label>
-            <label>Project
-              <input name="project" placeholder="optional Vertex project">
-            </label>
-            <label>Location
-              <input name="location" value="{html.escape(DEFAULT_LOCATION)}">
-            </label>
-            <label>Model
-              <input name="model" value="{html.escape(DEFAULT_MODEL)}">
-            </label>
-            <label>Service Account Key
-              <input name="service_account_key" placeholder="/abs/path/to/service-account.json">
-            </label>
-            <label>SDK Python
-              <input name="sdk_python" placeholder="./.venv/bin/python">
             </label>
           </div>
           <label>Documents
@@ -704,6 +783,7 @@ def render_index_page(config: LocalAppConfig, bundles: list[BundleListEntry], me
             <ul id="pending-documents"><li>No documents selected yet.</li></ul>
             <p id="document-error" class="error-text" hidden></p>
           </div>
+          {advanced_config}
           <button type="submit">Run Intake Pipeline</button>
         </form>
       </div>
@@ -730,6 +810,7 @@ def render_bundle_page(config: LocalAppConfig, bundle_manifest: dict) -> str:
         None,
     )
     workbench_href = f"/bundle/{urllib.parse.quote(bundle_id)}/workbench"
+    overview_href = f"/bundle/{urllib.parse.quote(bundle_id)}/overview"
     manifest_href = f"/bundle/{urllib.parse.quote(bundle_id)}/manifest"
     session_href = f"/bundle/{urllib.parse.quote(bundle_id)}/review-session"
     draft_href = f"/bundle/{urllib.parse.quote(bundle_id)}/artifact/draft.yaml"
@@ -762,17 +843,6 @@ def render_bundle_page(config: LocalAppConfig, bundle_manifest: dict) -> str:
         else "<p><strong>Latest run:</strong> none</p>"
     )
 
-    workbench_panel = (
-        f'<iframe title="FA review workbench" src="{workbench_href}"></iframe>'
-        if workbench_available
-        else (
-            '<div class="panel">'
-            "<p><strong>Workbench unavailable.</strong></p>"
-            "<p>This bundle has not produced a review workbench yet. Run the ingestion pipeline and refresh this page.</p>"
-            "</div>"
-        )
-    )
-
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -784,10 +854,11 @@ def render_bundle_page(config: LocalAppConfig, bundle_manifest: dict) -> str:
     .shell {{ max-width: 1200px; margin: 0 auto; padding: 24px; }}
     .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 20px; }}
     .panel {{ background: white; border: 1px solid #e4dac9; border-radius: 18px; padding: 18px; box-shadow: 0 10px 20px rgba(0,0,0,0.04); }}
-    .grid {{ display: grid; grid-template-columns: 320px 1fr; gap: 18px; }}
+    .grid {{ display: grid; grid-template-columns: 360px 1fr; gap: 18px; }}
     ul {{ padding-left: 18px; }}
-    iframe {{ width: 100%; min-height: 88vh; border: 1px solid #d8ccb8; border-radius: 18px; background: white; }}
     a {{ color: #204c63; }}
+    .primary-link {{ display: inline-flex; margin-top: 10px; padding: 10px 14px; border-radius: 999px; background: #2f5b53; color: white; text-decoration: none; font-weight: 700; }}
+    .meta-grid {{ display: grid; gap: 12px; }}
     @media (max-width: 920px) {{ .grid {{ grid-template-columns: 1fr; }} }}
   </style>
 </head>
@@ -804,7 +875,8 @@ def render_bundle_page(config: LocalAppConfig, bundle_manifest: dict) -> str:
       <aside class="panel">
         <p><strong>Current stage:</strong> {html.escape(bundle_manifest['current_stage'])}</p>
         {run_summary}
-        <p><a href="{workbench_href}">Open workbench only</a></p>
+        <p><a class="primary-link" href="{workbench_href}">Open editable workbench</a></p>
+        <p><a href="{overview_href}">Refresh this overview</a></p>
         <p><a href="{manifest_href}">Bundle manifest JSON</a></p>
         <p><a href="{session_href}">Review session JSON</a></p>
         <p><a href="{draft_href}">Export current draft YAML</a></p>
@@ -813,8 +885,27 @@ def render_bundle_page(config: LocalAppConfig, bundle_manifest: dict) -> str:
         <h2>Documents</h2>
         <ul>{docs}</ul>
       </aside>
-      <section>
-        {workbench_panel}
+      <section class="panel meta-grid">
+        <div>
+          <p style="margin: 0; color: #6b6156;">Default landing behavior</p>
+          <h2 style="margin: 0 0 12px;">Bundles now open straight into the editable workbench</h2>
+          <p>Use this overview page when you want bundle metadata, export links, or a full list of uploaded source documents.</p>
+        </div>
+        <div>
+          <p><strong>Configured ingestion:</strong> {html.escape(configured_ingestion_label(config))}</p>
+          <p><strong>Workbench availability:</strong> {"ready" if workbench_available else "not yet generated"}</p>
+          <p><strong>Document count:</strong> {len(bundle_manifest.get("documents", []))}</p>
+          <p><strong>Run count:</strong> {len(bundle_manifest.get("runs", []))}</p>
+        </div>
+        <div>
+          <p style="margin: 0 0 6px;"><strong>Recommended flow</strong></p>
+          <ol style="margin: 0; padding-left: 18px;">
+            <li>Open the editable workbench.</li>
+            <li>Review missing or low-confidence fields from the left queue.</li>
+            <li>Save edits to create a reviewed draft version.</li>
+            <li>Use the export links or inline evidence/source-doc links as needed.</li>
+          </ol>
+        </div>
       </section>
     </div>
   </div>
@@ -881,8 +972,7 @@ class LocalAppHandler(http.server.BaseHTTPRequestHandler):
                     body,
                 )
                 bundle_id = handle_upload_submission(
-                    self.config.repo_root,
-                    self.config.workspace_root,
+                    self.config,
                     request,
                 )
                 self.send_response(303)
@@ -928,6 +1018,17 @@ class LocalAppHandler(http.server.BaseHTTPRequestHandler):
             return
         bundle_id = ensure_safe_bundle_id(urllib.parse.unquote(segments[1]))
         if len(segments) == 2:
+            if latest_workbench_path(self.config.workspace_root, bundle_id):
+                self.send_response(303)
+                self.send_header(
+                    "Location", f"/bundle/{urllib.parse.quote(bundle_id)}/workbench"
+                )
+                self.end_headers()
+            else:
+                manifest = load_bundle_manifest(self.config.workspace_root, bundle_id)
+                self.respond_html(render_bundle_page(self.config, manifest))
+            return
+        if len(segments) == 3 and segments[2] == "overview":
             manifest = load_bundle_manifest(self.config.workspace_root, bundle_id)
             self.respond_html(render_bundle_page(self.config, manifest))
             return
@@ -1014,6 +1115,14 @@ def main() -> int:
         workspace_root=Path(args.workspace_root),
         host=args.host,
         port=args.port,
+        default_engine=args.default_engine,
+        default_fx=args.default_fx,
+        default_project=args.default_project,
+        default_location=args.default_location,
+        default_model=args.default_model,
+        default_service_account_key=args.default_service_account_key,
+        default_sdk_python=args.default_sdk_python,
+        show_advanced_config=args.show_advanced_config,
     )
     try:
         run_server(config)

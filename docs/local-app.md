@@ -13,7 +13,8 @@ It sits on top of the managed workspace flow rather than replacing it. The app i
 - stores documents in the managed bundle workspace
 - runs `ingest_bundle_workspace stage-and-run`
 - shows recent bundles and their current stages
-- opens the latest generated `review_workbench.html` inside a bundle page
+- opens bundles directly into the editable review workbench by default
+- keeps a separate bundle overview page for exports, metadata, and uploaded document inventory
 - lets the FA save edits back into a typed reviewed draft version
 - persists latest reviewed artifacts and versioned review snapshots inside the bundle run
 - exposes the bundle manifest JSON for inspection
@@ -25,6 +26,9 @@ It sits on top of the managed workspace flow rather than replacing it. The app i
 ```bash
 python3 scripts/local_app.py \
   --workspace-root /tmp/expense_local_app_workspace \
+  --default-engine vertex-gemini-sdk \
+  --default-service-account-key /abs/path/to/service-account.json \
+  --default-sdk-python ./.venv/bin/python \
   --host 127.0.0.1 \
   --port 8765
 ```
@@ -42,20 +46,37 @@ The app supports:
 
 Notes:
 
-- If you leave `Run ID` blank, the workspace generates a unique run id automatically.
-- That avoids overwriting the prior run directory when you submit the same bundle again.
 - You can also reopen the file picker multiple times before submit; the pending upload list will accumulate those selections.
+- By default, technical ingestion settings are hidden from the upload form and supplied server-side through the app configuration.
+- If you want those overrides visible for engineering/debugging, start the app with `--show-advanced-config`.
+- If you leave `Run Label` blank in the advanced section, the workspace generates a unique run id automatically.
 
 ## Vertex-backed usage
 
-To use live Gemini OCR from the app, fill in:
+For an FA-facing deployment, the recommended setup is to configure Gemini server-side when you start the app:
 
-- `Engine`: `vertex-gemini-sdk`
-- `Project`: optional if the service-account JSON already contains `project_id`
-- `Location`: usually `global`
-- `Model`: for example `gemini-3-flash-preview`
-- `Service Account Key`: absolute path to the Vertex service-account JSON key
-- `SDK Python`: optional path to the Python interpreter that has `google-genai`
+```bash
+python3 scripts/local_app.py \
+  --workspace-root /tmp/expense_local_app_workspace \
+  --default-engine vertex-gemini-sdk \
+  --default-service-account-key /abs/path/to/service-account.json \
+  --default-sdk-python ./.venv/bin/python \
+  --default-location global \
+  --default-model gemini-3-flash-preview
+```
+
+That gives the FA a simpler upload form with no engine/model/credential fields.
+
+If you explicitly enable `--show-advanced-config`, the form can still override:
+
+- `Engine`
+- `Project`
+- `Location`
+- `Model`
+- `Service Account Key`
+- `SDK Python`
+- `FX Mode`
+- `Run Label`
 
 The app passes those values through to:
 

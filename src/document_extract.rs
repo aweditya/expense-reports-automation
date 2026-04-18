@@ -1789,14 +1789,18 @@ mod tests {
         generate_synthetic_document, generate_synthetic_packet, SyntheticVariant,
     };
     use std::fs;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    static FIXTURE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
     fn write_fixture(markdown: &str, filename: &str) -> std::path::PathBuf {
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system time should be valid")
             .as_nanos();
-        let dir = std::env::temp_dir().join(format!("expense_report_schema_{unique}"));
+        let serial = FIXTURE_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!("expense_report_schema_{unique}_{serial}"));
         fs::create_dir_all(&dir).expect("temp dir should be creatable");
         let path = dir.join(filename);
         fs::write(&path, markdown).expect("fixture should be writable");

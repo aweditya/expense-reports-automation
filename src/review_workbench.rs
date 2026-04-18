@@ -120,6 +120,7 @@ fn render_toolbar(html: &mut String) {
     html.push_str("<p class=\"toolbar-count\" id=\"pending-change-count\">0 changes pending</p>");
     html.push_str("</div>");
     html.push_str("<div class=\"toolbar-links\">");
+    html.push_str("<a href=\"overview\">Bundle Overview</a>");
     html.push_str("<a href=\"artifact/draft.yaml\" target=\"_blank\" rel=\"noreferrer\">Draft YAML</a>");
     html.push_str("<a href=\"artifact/review_packet.json\" target=\"_blank\" rel=\"noreferrer\">Review Packet JSON</a>");
     html.push_str("<a href=\"artifact/ledger.json\" target=\"_blank\" rel=\"noreferrer\">Ledger JSON</a>");

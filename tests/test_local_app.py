@@ -106,6 +106,33 @@ def write_bundle_fixture(workspace_root: Path, bundle_id: str, *, with_workbench
     )
 
 
+def build_config(
+    repo_root: Path,
+    workspace_root: Path,
+    *,
+    show_advanced_config: bool = False,
+    default_engine: str = "builtin",
+) -> "local_app.LocalAppConfig":
+    return local_app.LocalAppConfig(
+        repo_root=repo_root,
+        workspace_root=workspace_root,
+        host="127.0.0.1",
+        port=8765,
+        default_engine=default_engine,
+        default_fx="demo",
+        default_project=None,
+        default_location="global",
+        default_model="gemini-3-flash-preview",
+        default_service_account_key="/abs/path/to/key.json"
+        if default_engine == "vertex-gemini-sdk"
+        else None,
+        default_sdk_python="./.venv/bin/python"
+        if default_engine == "vertex-gemini-sdk"
+        else None,
+        show_advanced_config=show_advanced_config,
+    )
+
+
 class LocalAppTests(unittest.TestCase):
     def test_parse_multipart_request_extracts_fields_and_files(self):
         boundary = "----expense-boundary"
@@ -155,10 +182,10 @@ class LocalAppTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as workspace_dir:
             input_path = Path(workspace_dir) / "receipt.png"
             input_path.write_bytes(b"stub")
+            config = build_config(Path(repo_dir), Path(workspace_dir))
 
             command = local_app.build_ingest_command(
-                Path(repo_dir),
-                Path(workspace_dir),
+                config,
                 {"engine": "builtin", "fx": "demo"},
                 [input_path],
             )
@@ -173,16 +200,22 @@ class LocalAppTests(unittest.TestCase):
     def test_build_ingest_command_prefers_built_binary_and_vertex_fields(self):
         with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as workspace_dir:
             repo_root = Path(repo_dir)
+            workspace_root = Path(workspace_dir)
             binary = repo_root / "target" / "debug" / "ingest_bundle_workspace"
             binary.parent.mkdir(parents=True, exist_ok=True)
             binary.write_text("#!/bin/sh\nexit 0\n")
             binary.chmod(0o755)
-            input_path = Path(workspace_dir) / "folio.pdf"
+            input_path = workspace_root / "folio.pdf"
             input_path.write_bytes(b"stub")
+            config = build_config(
+                repo_root,
+                workspace_root,
+                default_engine="vertex-gemini-sdk",
+                show_advanced_config=True,
+            )
 
             command = local_app.build_ingest_command(
-                repo_root,
-                Path(workspace_dir),
+                config,
                 {
                     "bundle_id": "Demo Bundle",
                     "run_id": "Gemini Flash",
@@ -205,6 +238,29 @@ class LocalAppTests(unittest.TestCase):
             self.assertIn("/tmp/key.json", command)
             self.assertIn("--run-id", command)
             self.assertIn("gemini_flash", command)
+
+    def test_build_ingest_command_uses_server_side_vertex_defaults(self):
+        with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as workspace_dir:
+            config = build_config(
+                Path(repo_dir),
+                Path(workspace_dir),
+                default_engine="vertex-gemini-sdk",
+            )
+            input_path = Path(workspace_dir) / "receipt.png"
+            input_path.write_bytes(b"stub")
+
+            command = local_app.build_ingest_command(
+                config,
+                {"bundle_id": "demo_bundle"},
+                [input_path],
+            )
+
+            self.assertIn("--engine", command)
+            self.assertIn("vertex-gemini-sdk", command)
+            self.assertIn("--service-account-key", command)
+            self.assertIn("/abs/path/to/key.json", command)
+            self.assertIn("--sdk-python", command)
+            self.assertIn("./.venv/bin/python", command)
 
     def test_build_review_save_command_supports_base_version(self):
         with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as artifacts_dir:
@@ -267,9 +323,9 @@ class LocalAppTests(unittest.TestCase):
         )
 
         with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as workspace_dir:
+            config = build_config(Path(repo_dir), Path(workspace_dir))
             bundle_id = local_app.handle_upload_submission(
-                Path(repo_dir),
-                Path(workspace_dir),
+                config,
                 request,
                 command_runner=runner,
             )
@@ -281,11 +337,10 @@ class LocalAppTests(unittest.TestCase):
 
     def test_handle_upload_submission_rejects_empty_upload(self):
         request = local_app.UploadRequest(fields={}, files=[])
-        with tempfile.TemporaryDirectory() as temp_dir:
+        with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as workspace_dir:
             with self.assertRaises(local_app.LocalAppError):
                 local_app.handle_upload_submission(
-                    Path(temp_dir),
-                    Path(temp_dir),
+                    build_config(Path(repo_dir), Path(workspace_dir)),
                     request,
                 )
 
@@ -293,20 +348,15 @@ class LocalAppTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             write_bundle_fixture(workspace_root, "demo_bundle", with_workbench=False)
-            config = local_app.LocalAppConfig(
-                repo_root=Path(temp_dir),
-                workspace_root=workspace_root,
-                host="127.0.0.1",
-                port=8765,
-            )
+            config = build_config(Path(temp_dir), workspace_root)
 
             page = local_app.render_bundle_page(
                 config,
                 local_app.load_bundle_manifest(workspace_root, "demo_bundle"),
             )
 
-            self.assertIn("Workbench unavailable", page)
-            self.assertNotIn("<iframe", page)
+            self.assertIn("Workbench availability:</strong> not yet generated", page)
+            self.assertIn("/bundle/demo_bundle/overview", page)
             self.assertIn("/bundle/demo_bundle/document/doc_receipt/receipt.png", page)
             self.assertIn("/bundle/demo_bundle/review-session", page)
             self.assertIn("/bundle/demo_bundle/artifact/ledger.json", page)
@@ -359,12 +409,7 @@ class LocalAppTests(unittest.TestCase):
             self.assertEqual(manifest["runs"][0]["filing_status"], "ready_to_file")
 
     def test_render_index_page_includes_pending_upload_accumulator(self):
-        config = local_app.LocalAppConfig(
-            repo_root=Path("/tmp/repo"),
-            workspace_root=Path("/tmp/workspace"),
-            host="127.0.0.1",
-            port=8765,
-        )
+        config = build_config(Path("/tmp/repo"), Path("/tmp/workspace"))
 
         page = local_app.render_index_page(config, [])
 
@@ -373,6 +418,21 @@ class LocalAppTests(unittest.TestCase):
         self.assertIn('id="pending-documents"', page)
         self.assertIn("pendingFiles", page)
         self.assertIn("DataTransfer()", page)
+        self.assertNotIn("Service Account Key", page)
+        self.assertIn("Configured ingestion", page)
+
+    def test_render_index_page_can_show_advanced_config_overrides(self):
+        config = build_config(
+            Path("/tmp/repo"),
+            Path("/tmp/workspace"),
+            show_advanced_config=True,
+            default_engine="vertex-gemini-sdk",
+        )
+
+        page = local_app.render_index_page(config, [])
+
+        self.assertIn("Technical overrides", page)
+        self.assertIn("Service Account Key", page)
 
     def test_ensure_safe_bundle_id_rejects_path_traversal(self):
         with self.assertRaises(local_app.LocalAppError):
@@ -386,6 +446,14 @@ class LocalAppTests(unittest.TestCase):
             workspace_root = "/tmp/local-app-test"
             host = "127.0.0.1"
             port = 8765
+            default_engine = "builtin"
+            default_fx = "demo"
+            default_project = None
+            default_location = "global"
+            default_model = "gemini-3-flash-preview"
+            default_service_account_key = None
+            default_sdk_python = None
+            show_advanced_config = False
 
         local_app.parse_args = lambda: Args()
         local_app.run_server = lambda config: (_ for _ in ()).throw(KeyboardInterrupt())
@@ -398,12 +466,8 @@ class LocalAppTests(unittest.TestCase):
 
 class LocalAppHttpTests(unittest.TestCase):
     def make_config(self, workspace_root: Path):
-        config = local_app.LocalAppConfig(
-            repo_root=Path(__file__).resolve().parent.parent,
-            workspace_root=workspace_root,
-            host="127.0.0.1",
-            port=0,
-        )
+        config = build_config(Path(__file__).resolve().parent.parent, workspace_root)
+        config.port = 0
         return config
 
     def request(
@@ -469,7 +533,12 @@ class LocalAppHttpTests(unittest.TestCase):
             self.assertEqual(status, 200)
             self.assertIn(b"Local FA Intake App", payload)
 
-            status, _, payload = self.request(config, "GET", "/bundle/demo_bundle")
+            status, response_headers, payload = self.request(config, "GET", "/bundle/demo_bundle")
+            self.assertEqual(status, 303)
+            self.assertEqual(response_headers["Location"], "/bundle/demo_bundle/workbench")
+            self.assertEqual(payload, b"")
+
+            status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/overview")
             self.assertEqual(status, 200)
             self.assertIn(b"Managed bundle", payload)
 
@@ -504,7 +573,7 @@ class LocalAppHttpTests(unittest.TestCase):
     def test_http_upload_redirects_after_successful_submission(self):
         original = local_app.handle_upload_submission
 
-        def fake_handle_upload_submission(repo_root, workspace_root, request, command_runner=local_app.run_pipeline_command):
+        def fake_handle_upload_submission(config, request, command_runner=local_app.run_pipeline_command):
             self.assertEqual(request.fields["engine"], "builtin")
             self.assertEqual(len(request.files), 1)
             return "demo_bundle"

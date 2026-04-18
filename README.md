@@ -64,11 +64,14 @@ Run the tiny local upload app:
 ```bash
 python3 scripts/local_app.py \
   --workspace-root /tmp/expense_local_app_workspace \
+  --default-engine vertex-gemini-sdk \
+  --default-service-account-key /abs/path/to/service-account.json \
+  --default-sdk-python ./.venv/bin/python \
   --port 8765
 ```
 
-Then open `http://127.0.0.1:8765` in a browser. The app stages uploads into the managed workspace, runs the pipeline, and redirects to the generated FA workbench for the bundle.
-The file picker can be reopened multiple times before submit, and if `Run ID` is left blank the app lets the workspace generate a unique run id automatically.
+Then open `http://127.0.0.1:8765` in a browser. The app stages uploads into the managed workspace, runs the pipeline, and opens bundles directly in the editable FA workbench.
+The file picker can be reopened multiple times before submit. Technical ingestion settings are hidden by default and can be re-exposed with `--show-advanced-config` if you need engineering overrides.
 
 Generate a synthetic corpus for inspection:
 
