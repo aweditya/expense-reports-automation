@@ -150,6 +150,84 @@ body.document-open .shell {
   margin-bottom: 18px;
 }
 
+.document-snapshot-panel {
+  margin-bottom: 18px;
+}
+
+.document-snapshot-copy {
+  margin: 0 0 16px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.document-snapshot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.document-snapshot-card {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.document-snapshot-topline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.document-snapshot-card h3 {
+  margin: 12px 0 8px;
+  font-family: var(--font-display);
+  font-size: 24px;
+}
+
+.document-snapshot-status {
+  margin: 0 0 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.document-snapshot-fields {
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.document-snapshot-field {
+  display: grid;
+  gap: 4px;
+}
+
+.document-snapshot-field dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.document-snapshot-field dd {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.document-snapshot-issues {
+  margin: 14px 0 0;
+  padding-left: 18px;
+  color: var(--accent);
+  display: grid;
+  gap: 6px;
+}
+
+.document-snapshot-actions {
+  margin-top: 14px;
+}
+
 .toolbar-main,
 .toolbar-subrow,
 .toolbar-links {

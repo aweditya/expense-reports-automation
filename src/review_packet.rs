@@ -1,9 +1,10 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
 use crate::bundle_synthesis::CanonicalExpenseBundle;
+use crate::document_facts::{DocumentFactsPayload, DocumentKind, ExtractionStatus};
 use crate::draft::{ConfidenceLevel, DraftReport, EvidenceReference};
 use crate::readiness::{
     summarize_validation_readiness, ReadinessIssue, ReadinessIssueClass, ReadinessReport,
@@ -116,11 +117,32 @@ pub struct AttachmentChecklistItem {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DocumentSnapshotField {
+    pub label: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DocumentSnapshotCard {
+    pub document_id: String,
+    pub filename: String,
+    pub kind: String,
+    pub extraction_status: String,
+    pub used_in_bundle: bool,
+    pub projected_to_filing: bool,
+    pub status_label: String,
+    pub summary_fields: Vec<DocumentSnapshotField>,
+    pub issue_messages: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReviewPacket {
     pub summary: PacketSummary,
     pub issues_queue: Vec<ReviewIssueEntry>,
     pub copy_sections: Vec<CopySection>,
     pub attachment_checklist: Vec<AttachmentChecklistItem>,
+    #[serde(default)]
+    pub document_snapshots: Vec<DocumentSnapshotCard>,
 }
 
 #[derive(Debug)]
@@ -204,6 +226,7 @@ pub fn build_review_packet_with_readiness(
         issues_queue: build_issue_queue(draft, readiness, ui_map),
         copy_sections: build_copy_sections(draft, readiness, ui_map),
         attachment_checklist: build_attachment_checklist(bundle),
+        document_snapshots: build_document_snapshots(bundle),
     })
 }
 
@@ -305,6 +328,25 @@ pub fn render_review_packet_markdown(packet: &ReviewPacket) -> String {
                     field.value.as_deref().unwrap_or("[missing]"),
                     if field.needs_review { " [review]" } else { "" }
                 ));
+            }
+        }
+    }
+    lines.push(String::new());
+
+    lines.push("## Source Documents".to_owned());
+    if packet.document_snapshots.is_empty() {
+        lines.push("- None".to_owned());
+    } else {
+        for document in &packet.document_snapshots {
+            lines.push(format!(
+                "- {} ({}) [{}]",
+                document.filename, document.kind, document.status_label
+            ));
+            for field in &document.summary_fields {
+                lines.push(format!("  - {}: {}", field.label, field.value));
+            }
+            for issue in &document.issue_messages {
+                lines.push(format!("  - Issue: {}", issue));
             }
         }
     }
@@ -663,6 +705,288 @@ fn build_attachment_checklist(bundle: &CanonicalExpenseBundle) -> Vec<Attachment
         .collect()
 }
 
+fn build_document_snapshots(bundle: &CanonicalExpenseBundle) -> Vec<DocumentSnapshotCard> {
+    let mut used_document_ids = BTreeSet::new();
+    let mut projected_document_ids = BTreeSet::new();
+
+    for line in &bundle.expense_lines {
+        for source_document in &line.source_documents {
+            used_document_ids.insert(source_document.document_id.clone());
+            if line.projection_supported {
+                projected_document_ids.insert(source_document.document_id.clone());
+            }
+        }
+    }
+
+    bundle
+        .documents
+        .iter()
+        .map(|document| {
+            let used_in_bundle = used_document_ids.contains(&document.document_id);
+            let projected_to_filing = projected_document_ids.contains(&document.document_id);
+            let status_label = if projected_to_filing {
+                "projected into filing".to_owned()
+            } else if used_in_bundle {
+                "parsed for bundle context only".to_owned()
+            } else if matches!(document.extraction_status, ExtractionStatus::Unsupported)
+                || matches!(document.classification.kind, DocumentKind::Unknown)
+            {
+                "ocr captured, not yet supported".to_owned()
+            } else {
+                "ocr captured, not projected".to_owned()
+            };
+
+            let mut issue_messages = BTreeSet::new();
+            for issue in &document.issues {
+                issue_messages.insert(issue.message.clone());
+            }
+            for issue in &bundle.issues {
+                if issue.document_ids.iter().any(|value| value == &document.document_id) {
+                    issue_messages.insert(issue.message.clone());
+                }
+            }
+
+            DocumentSnapshotCard {
+                document_id: document.document_id.clone(),
+                filename: document.filename.clone(),
+                kind: document.classification.kind.as_str().to_owned(),
+                extraction_status: extraction_status_label(document.extraction_status).to_owned(),
+                used_in_bundle,
+                projected_to_filing,
+                status_label,
+                summary_fields: document_snapshot_fields(document),
+                issue_messages: issue_messages.into_iter().collect(),
+            }
+        })
+        .collect()
+}
+
+fn document_snapshot_fields(
+    document: &crate::ExtractedDocumentFacts,
+) -> Vec<DocumentSnapshotField> {
+    match &document.facts {
+        DocumentFactsPayload::Receipt(facts) => {
+            let mut fields = Vec::new();
+            push_snapshot_field(
+                &mut fields,
+                "Merchant",
+                facts.merchant_name.as_ref().map(|value| value.value.clone()),
+            );
+            push_snapshot_field(
+                &mut fields,
+                "Date",
+                facts.transaction_date.as_ref().map(|value| value.value.clone()),
+            );
+            push_snapshot_field(
+                &mut fields,
+                "Total",
+                facts.total_paid.as_ref().map(observed_money_amount_display),
+            );
+            if !facts.line_items.is_empty() {
+                push_snapshot_field(
+                    &mut fields,
+                    "Line items",
+                    Some(facts.line_items.len().to_string()),
+                );
+            }
+            fields
+        }
+        DocumentFactsPayload::HotelFolio(facts) => {
+            let mut fields = Vec::new();
+            push_snapshot_field(
+                &mut fields,
+                "Property",
+                facts.property_name.as_ref().map(|value| value.value.clone()),
+            );
+            push_snapshot_field(
+                &mut fields,
+                "Stay window",
+                facts.stay_window.as_ref().map(|value| {
+                    format!(
+                        "{} to {}",
+                        value.value.start_date, value.value.end_date
+                    )
+                }),
+            );
+            push_snapshot_field(
+                &mut fields,
+                "Total",
+                facts.total_paid.as_ref().map(observed_money_amount_display),
+            );
+            fields
+        }
+        DocumentFactsPayload::FlightItinerary(facts) => {
+            let mut fields = Vec::new();
+            push_snapshot_field(
+                &mut fields,
+                "Traveler",
+                facts.traveler_names.first().map(|value| value.value.clone()),
+            );
+            push_snapshot_field(
+                &mut fields,
+                "Trip window",
+                facts.trip_window.as_ref().map(|value| {
+                    format!(
+                        "{} to {}",
+                        value.value.start_date, value.value.end_date
+                    )
+                }),
+            );
+            push_snapshot_field(
+                &mut fields,
+                "Total",
+                facts.total_paid.as_ref().map(observed_money_amount_display),
+            );
+            if !facts.segments.is_empty() {
+                push_snapshot_field(
+                    &mut fields,
+                    "Segments",
+                    Some(facts.segments.len().to_string()),
+                );
+            }
+            fields
+        }
+        DocumentFactsPayload::ConferenceRegistration(facts) => {
+            let mut fields = Vec::new();
+            push_snapshot_field(
+                &mut fields,
+                "Attendee",
+                facts.attendee_name.as_ref().map(|value| value.value.clone()),
+            );
+            push_snapshot_field(
+                &mut fields,
+                "Event",
+                facts.event_name.as_ref().map(|value| value.value.clone()),
+            );
+            push_snapshot_field(
+                &mut fields,
+                "Total",
+                facts.total_paid.as_ref().map(observed_money_amount_display),
+            );
+            fields
+        }
+        DocumentFactsPayload::ConferenceProgram(facts) => {
+            let mut fields = Vec::new();
+            push_snapshot_field(
+                &mut fields,
+                "Event",
+                facts.event_name.as_ref().map(|value| value.value.clone()),
+            );
+            if !facts.presentations.is_empty() {
+                push_snapshot_field(
+                    &mut fields,
+                    "Presentations",
+                    Some(facts.presentations.len().to_string()),
+                );
+            }
+            fields
+        }
+        DocumentFactsPayload::CurrencyConversion(facts) => {
+            let mut fields = Vec::new();
+            push_snapshot_field(
+                &mut fields,
+                "Provider",
+                facts.provider_name.as_ref().map(|value| value.value.clone()),
+            );
+            push_snapshot_field(
+                &mut fields,
+                "Exchange rate",
+                facts.exchange_rate.as_ref().map(|value| value.value.clone()),
+            );
+            fields
+        }
+        DocumentFactsPayload::AirfarePriceComparison(facts) => {
+            let mut fields = Vec::new();
+            push_snapshot_field(
+                &mut fields,
+                "Selected fare",
+                facts.selected_fare.as_ref().map(observed_money_amount_display),
+            );
+            push_snapshot_field(
+                &mut fields,
+                "Lowest logical fare",
+                facts.lowest_logical_fare
+                    .as_ref()
+                    .map(observed_money_amount_display),
+            );
+            fields
+        }
+        DocumentFactsPayload::MissingReceiptDeclaration(facts) => {
+            let mut fields = Vec::new();
+            push_snapshot_field(
+                &mut fields,
+                "Merchant",
+                facts.merchant_name.as_ref().map(|value| value.value.clone()),
+            );
+            push_snapshot_field(
+                &mut fields,
+                "Amount",
+                facts.amount.as_ref().map(observed_money_amount_display),
+            );
+            fields
+        }
+        DocumentFactsPayload::StanfordExpenseSummary(facts) => {
+            let mut fields = Vec::new();
+            push_snapshot_field(
+                &mut fields,
+                "Payee",
+                facts.payee_name.as_ref().map(|value| value.value.clone()),
+            );
+            push_snapshot_field(
+                &mut fields,
+                "Event",
+                facts.event_name.as_ref().map(|value| value.value.clone()),
+            );
+            push_snapshot_field(
+                &mut fields,
+                "Reimbursement",
+                facts.reimbursement_amount
+                    .as_ref()
+                    .map(observed_money_amount_display),
+            );
+            fields
+        }
+        DocumentFactsPayload::Unknown(facts) => {
+            let mut fields = Vec::new();
+            push_snapshot_field(
+                &mut fields,
+                "Title hint",
+                facts.title_hint.as_ref().map(|value| value.value.clone()),
+            );
+            push_snapshot_field(
+                &mut fields,
+                "Text summary",
+                facts.text_summary.as_ref().map(|value| value.value.clone()),
+            );
+            fields
+        }
+    }
+}
+
+fn push_snapshot_field(
+    fields: &mut Vec<DocumentSnapshotField>,
+    label: &str,
+    value: Option<String>,
+) {
+    if let Some(value) = value {
+        fields.push(DocumentSnapshotField {
+            label: label.to_owned(),
+            value,
+        });
+    }
+}
+
+fn money_amount_display(amount: &crate::MoneyAmount) -> String {
+    match amount.currency.as_deref() {
+        Some(currency) if !currency.is_empty() => format!("{currency} {}", amount.amount),
+        _ => amount.amount.clone(),
+    }
+}
+
+fn observed_money_amount_display(amount: &crate::Observed<crate::MoneyAmount>) -> String {
+    money_amount_display(&amount.value)
+}
+
 fn filing_status_from_readiness(readiness: &ReadinessReport) -> FilingStatus {
     if readiness.automation_gap_count() > 0 {
         FilingStatus::AutomationBlocked
@@ -855,6 +1179,15 @@ fn readiness_class_label(class: ReadinessIssueClass) -> &'static str {
     }
 }
 
+fn extraction_status_label(status: ExtractionStatus) -> &'static str {
+    match status {
+        ExtractionStatus::Complete => "complete",
+        ExtractionStatus::Partial => "partial",
+        ExtractionStatus::NeedsReview => "needs_review",
+        ExtractionStatus::Unsupported => "unsupported",
+    }
+}
+
 fn push_optional_line(lines: &mut Vec<String>, prefix: &str, value: Option<&str>) {
     lines.push(format!("{}{}", prefix, value.unwrap_or("[missing]")));
 }
@@ -863,8 +1196,14 @@ fn push_optional_line(lines: &mut Vec<String>, prefix: &str, value: Option<&str>
 mod tests {
     use super::{build_review_packet, render_review_packet_markdown, FilingStatus};
     use crate::bundle_synthesis::{
-        synthesize_bundle_projection, synthesize_bundle_projection_with_fx, StaticFxRateProvider,
+        synthesize_bundle, synthesize_bundle_projection, synthesize_bundle_projection_with_fx,
+        CanonicalExpenseKind, StaticFxRateProvider,
     };
+    use crate::document_facts::{
+        DocumentClassification, DocumentFactsPayload, ExtractedDocumentFacts, ExtractionStatus,
+        IssueSeverity, MoneyAmount, ReceiptFacts,
+    };
+    use crate::draft::{ConfidenceLevel, EvidenceKind, EvidenceReference};
     use crate::synthetic_documents::{generate_synthetic_packet, SyntheticVariant};
 
     fn synthetic_documents() -> Vec<crate::ExtractedDocumentFacts> {
@@ -872,6 +1211,17 @@ mod tests {
             .into_iter()
             .map(|fixture| fixture.expected_facts)
             .collect()
+    }
+
+    fn sample_evidence(document_id: &str, filename: &str, quote: &str) -> Vec<EvidenceReference> {
+        vec![EvidenceReference {
+            kind: EvidenceKind::DocumentSpan,
+            document_id: Some(document_id.to_owned()),
+            filename: Some(filename.to_owned()),
+            page: Some(1),
+            quote: Some(quote.to_owned()),
+            origin: None,
+        }]
     }
 
     #[test]
@@ -911,6 +1261,7 @@ mod tests {
             .iter()
             .any(|section| section.key == "allocation_and_approvers"));
         assert_eq!(packet.attachment_checklist.len(), 3);
+        assert_eq!(packet.document_snapshots.len(), 3);
     }
 
     #[test]
@@ -999,7 +1350,85 @@ mod tests {
         assert!(rendered.contains("## Packet Summary"));
         assert!(rendered.contains("## Issues Queue"));
         assert!(rendered.contains("## Oracle Copy View"));
+        assert!(rendered.contains("## Source Documents"));
         assert!(rendered.contains("## Attachment Checklist"));
         assert!(rendered.contains("user_input_required"));
+    }
+
+    #[test]
+    fn review_packet_surfaces_unprojected_receipt_snapshots() {
+        let document_id = "receipt_book_talk";
+        let filename = "book_talk_receipt.png";
+        let receipt = ExtractedDocumentFacts {
+            document_id: document_id.to_owned(),
+            filename: filename.to_owned(),
+            classification: DocumentClassification {
+                kind: crate::DocumentKind::Receipt,
+                confidence: ConfidenceLevel::Medium,
+                evidence: sample_evidence(document_id, filename, "BOOK TALK"),
+                flags: Vec::new(),
+            },
+            extraction_status: ExtractionStatus::Partial,
+            facts: DocumentFactsPayload::Receipt(ReceiptFacts {
+                merchant_name: Some(crate::Observed::new(
+                    "BOOK TALK".to_owned(),
+                    ConfidenceLevel::Medium,
+                    sample_evidence(document_id, filename, "BOOK TALK"),
+                )),
+                merchant_location: None,
+                transaction_date: Some(crate::Observed::new(
+                    "2019-01-11".to_owned(),
+                    ConfidenceLevel::Medium,
+                    sample_evidence(document_id, filename, "Date: 11/01/2019"),
+                )),
+                total_paid: Some(crate::Observed::new(
+                    MoneyAmount {
+                        amount: "80.90".to_owned(),
+                        currency: Some("SGD".to_owned()),
+                    },
+                    ConfidenceLevel::Medium,
+                    sample_evidence(document_id, filename, "Grand Total SGD 80.90"),
+                )),
+                subtotal: None,
+                tax_amount: None,
+                tip_amount: None,
+                line_items: Vec::new(),
+            }),
+            issues: vec![crate::DocumentExtractionIssue {
+                severity: IssueSeverity::Warning,
+                code: "missing_line_items".to_owned(),
+                message: "Receipt line items were not recovered".to_owned(),
+                evidence: Vec::new(),
+            }],
+        };
+
+        let bundle = synthesize_bundle(&[receipt]);
+        assert!(bundle
+            .expense_lines
+            .iter()
+            .any(|line| line.kind == CanonicalExpenseKind::GenericReceipt && !line.projection_supported));
+        let projection = synthesize_bundle_projection(&bundle.documents);
+        let packet = build_review_packet(
+            &projection.bundle,
+            &projection.draft,
+            &projection.validation,
+        )
+        .expect("review packet should build");
+
+        assert_eq!(packet.document_snapshots.len(), 1);
+        assert_eq!(packet.document_snapshots[0].filename, filename);
+        assert!(!packet.document_snapshots[0].projected_to_filing);
+        assert_eq!(
+            packet.document_snapshots[0].status_label,
+            "parsed for bundle context only"
+        );
+        assert!(packet.document_snapshots[0]
+            .summary_fields
+            .iter()
+            .any(|field| field.label == "Merchant" && field.value == "BOOK TALK"));
+        assert!(packet.document_snapshots[0]
+            .issue_messages
+            .iter()
+            .any(|message| message.contains("not yet projected") || message.contains("not projected")));
     }
 }

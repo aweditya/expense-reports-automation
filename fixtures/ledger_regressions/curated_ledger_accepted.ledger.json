@@ -7351,6 +7351,88 @@
               "receipt"
             ]
           }
+        ],
+        "document_snapshots": [
+          {
+            "document_id": "airline_itinerary_classic",
+            "filename": "airline_itinerary_classic.md",
+            "kind": "flight_itinerary",
+            "extraction_status": "complete",
+            "used_in_bundle": true,
+            "projected_to_filing": true,
+            "status_label": "projected into filing",
+            "summary_fields": [
+              {
+                "label": "Traveler",
+                "value": "Olivia Park"
+              },
+              {
+                "label": "Trip window",
+                "value": "2025-04-21 to 2025-04-29"
+              },
+              {
+                "label": "Total",
+                "value": "USD 1287.44"
+              },
+              {
+                "label": "Segments",
+                "value": "2"
+              }
+            ],
+            "issue_messages": []
+          },
+          {
+            "document_id": "hotel_folio_guest_bill",
+            "filename": "hotel_folio_guest_bill.md",
+            "kind": "hotel_folio",
+            "extraction_status": "complete",
+            "used_in_bundle": true,
+            "projected_to_filing": true,
+            "status_label": "projected into filing",
+            "summary_fields": [
+              {
+                "label": "Property",
+                "value": "MARINA BAY GRAND HOTEL"
+              },
+              {
+                "label": "Stay window",
+                "value": "2025-04-21 to 2025-04-24"
+              },
+              {
+                "label": "Total",
+                "value": "SGD 778.80"
+              }
+            ],
+            "issue_messages": []
+          },
+          {
+            "document_id": "receipt_card_dotted",
+            "filename": "receipt_card_dotted.md",
+            "kind": "receipt",
+            "extraction_status": "complete",
+            "used_in_bundle": true,
+            "projected_to_filing": true,
+            "status_label": "projected into filing",
+            "summary_fields": [
+              {
+                "label": "Merchant",
+                "value": "EAST BAY BISTRO"
+              },
+              {
+                "label": "Date",
+                "value": "2025-04-24"
+              },
+              {
+                "label": "Total",
+                "value": "SGD 35.02"
+              },
+              {
+                "label": "Line items",
+                "value": "3"
+              }
+            ],
+            "issue_messages": []
+          }
         ]
       },
       "feedback_from_parent": null,
@@ -12242,6 +12324,88 @@
             "document_types": [
               "receipt"
             ]
+          }
+        ],
+        "document_snapshots": [
+          {
+            "document_id": "airline_itinerary_classic",
+            "filename": "airline_itinerary_classic.md",
+            "kind": "flight_itinerary",
+            "extraction_status": "complete",
+            "used_in_bundle": true,
+            "projected_to_filing": true,
+            "status_label": "projected into filing",
+            "summary_fields": [
+              {
+                "label": "Traveler",
+                "value": "Olivia Park"
+              },
+              {
+                "label": "Trip window",
+                "value": "2025-04-21 to 2025-04-29"
+              },
+              {
+                "label": "Total",
+                "value": "USD 1287.44"
+              },
+              {
+                "label": "Segments",
+                "value": "2"
+              }
+            ],
+            "issue_messages": []
+          },
+          {
+            "document_id": "hotel_folio_guest_bill",
+            "filename": "hotel_folio_guest_bill.md",
+            "kind": "hotel_folio",
+            "extraction_status": "complete",
+            "used_in_bundle": true,
+            "projected_to_filing": true,
+            "status_label": "projected into filing",
+            "summary_fields": [
+              {
+                "label": "Property",
+                "value": "MARINA BAY GRAND HOTEL"
+              },
+              {
+                "label": "Stay window",
+                "value": "2025-04-21 to 2025-04-24"
+              },
+              {
+                "label": "Total",
+                "value": "SGD 778.80"
+              }
+            ],
+            "issue_messages": []
+          },
+          {
+            "document_id": "receipt_card_dotted",
+            "filename": "receipt_card_dotted.md",
+            "kind": "receipt",
+            "extraction_status": "complete",
+            "used_in_bundle": true,
+            "projected_to_filing": true,
+            "status_label": "projected into filing",
+            "summary_fields": [
+              {
+                "label": "Merchant",
+                "value": "EAST BAY BISTRO"
+              },
+              {
+                "label": "Date",
+                "value": "2025-04-24"
+              },
+              {
+                "label": "Total",
+                "value": "SGD 35.02"
+              },
+              {
+                "label": "Line items",
+                "value": "3"
+              }
+            ],
+            "issue_messages": []
           }
         ]
       },
