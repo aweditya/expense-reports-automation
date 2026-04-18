@@ -2,11 +2,13 @@
 
 import argparse
 import json
+import time
 from pathlib import Path
 
 
 DEFAULT_MODEL = "gemini-3-flash-preview"
 CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
+DEFAULT_GENERATE_RETRIES = 3
 
 
 def parse_args() -> argparse.Namespace:
@@ -322,6 +324,32 @@ def normalize_receipt_key(value: str) -> str:
     )
 
 
+def generate_content_with_retries(
+    client,
+    *,
+    model: str,
+    contents,
+    config,
+    max_attempts: int = DEFAULT_GENERATE_RETRIES,
+    sleep_fn=time.sleep,
+):
+    last_error = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return client.models.generate_content(
+                model=model,
+                contents=contents,
+                config=config,
+            )
+        except Exception as exc:
+            last_error = exc
+            if attempt == max_attempts:
+                raise
+            sleep_fn(min(2 ** (attempt - 1), 4))
+
+    raise last_error  # pragma: no cover
+
+
 def main() -> int:
     from google import genai
     from google.genai import types
@@ -353,7 +381,8 @@ def main() -> int:
     prompt = build_prompt(document_path.name, mime_type)
     file_bytes = document_path.read_bytes()
 
-    response = client.models.generate_content(
+    response = generate_content_with_retries(
+        client,
         model=args.model,
         contents=[
             prompt,

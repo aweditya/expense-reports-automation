@@ -170,6 +170,41 @@ def normalize_field_value(value):
     return " ".join(str(value).strip().split()).lower()
 
 
+def normalize_merchant_name(value):
+    normalized = normalize_field_value(value)
+    if normalized is None:
+        return None
+    tokens = normalized.replace(".", " ").replace(",", " ").split()
+    if tokens and tokens[-1].startswith("(") and any(ch.isdigit() for ch in tokens[-1]):
+        tokens = tokens[:-1]
+    normalized = " ".join(tokens)
+    normalized = (
+        normalized.replace("(", " ")
+        .replace(")", " ")
+        .replace("&", " and ")
+    )
+    return " ".join(normalized.split())
+
+
+def normalize_date_value(value):
+    normalized = normalize_field_value(value)
+    if normalized is None:
+        return None
+    for token in normalized.split():
+        token = token.strip(",;()")
+        if looks_like_date_token(token):
+            return token
+    return normalized
+
+
+def looks_like_date_token(value):
+    for separator in ("/", "-"):
+        parts = value.split(separator)
+        if len(parts) == 3 and all(part.isdigit() for part in parts):
+            return True
+    return False
+
+
 def facts_value_for_expected_field(facts_payload: dict, field_name: str):
     if field_name == "classification_kind":
         return facts_payload.get("classification", {}).get("kind")
@@ -203,7 +238,14 @@ def compare_expected_fields(expected_fields: dict, facts_path: Path) -> dict:
 
     for field_name, expected_value in expected_fields.items():
         actual_value = facts_value_for_expected_field(facts_payload, field_name)
-        matched = normalize_field_value(expected_value) == normalize_field_value(actual_value)
+        if field_name == "merchant_name":
+            matched = normalize_merchant_name(expected_value) == normalize_merchant_name(
+                actual_value
+            )
+        elif field_name == "transaction_date":
+            matched = normalize_date_value(expected_value) == normalize_date_value(actual_value)
+        else:
+            matched = normalize_field_value(expected_value) == normalize_field_value(actual_value)
         match_count += int(matched)
         field_results.append(
             {

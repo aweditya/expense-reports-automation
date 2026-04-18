@@ -20,6 +20,36 @@ transcribe = load_module()
 
 
 class TranscribeWithGoogleGenAiTests(unittest.TestCase):
+    def test_generate_content_with_retries_recovers_from_transient_failure(self):
+        class FakeModels:
+            def __init__(self):
+                self.calls = 0
+
+            def generate_content(self, **kwargs):
+                self.calls += 1
+                if self.calls == 1:
+                    raise RuntimeError("connection reset by peer")
+                return {"ok": True, "kwargs": kwargs}
+
+        class FakeClient:
+            def __init__(self):
+                self.models = FakeModels()
+
+        sleeps = []
+        client = FakeClient()
+
+        response = transcribe.generate_content_with_retries(
+            client,
+            model="gemini-3-flash-preview",
+            contents=["prompt"],
+            config={"temperature": 0},
+            sleep_fn=sleeps.append,
+        )
+
+        self.assertEqual(client.models.calls, 2)
+        self.assertEqual(sleeps, [1])
+        self.assertEqual(response["ok"], True)
+
     def test_normalize_pages_accepts_top_level_markdown_fallback(self):
         pages = transcribe.normalize_pages(
             {

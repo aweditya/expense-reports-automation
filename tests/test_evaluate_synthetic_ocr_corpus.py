@@ -61,6 +61,37 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
             self.assertEqual(comparison["expected_field_count"], 6)
             self.assertEqual(comparison["matched_field_count"], 6)
 
+    def test_compare_expected_fields_normalizes_merchant_name_and_date(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            facts_path = temp_path / "receipt.facts.json"
+            facts_path.write_text(
+                json.dumps(
+                    {
+                        "classification": {"kind": "receipt"},
+                        "facts": {
+                            "receipt": {
+                                "merchant_name": {
+                                    "value": "Gerbang Alaf Restaurants Sdn Bhd (65351-M)"
+                                },
+                                "transaction_date": {"value": "Friday, 29-12-2017"},
+                            }
+                        },
+                    }
+                )
+            )
+
+            comparison = ocr_eval.compare_expected_fields(
+                {
+                    "merchant_name": "GERBANG ALAF RESTAURANTS SDN BHD",
+                    "transaction_date": "29-12-2017",
+                },
+                facts_path,
+            )
+
+            self.assertEqual(comparison["expected_field_count"], 2)
+            self.assertEqual(comparison["matched_field_count"], 2)
+
     def test_build_manifest_corpus_spec_from_flat_documents(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)

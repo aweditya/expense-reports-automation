@@ -128,8 +128,11 @@ fn fallback_receipt_classification(
                 "final total",
                 "rounded total",
                 "total rounded",
+                "grand total",
+                "net total",
                 "total paid",
                 "amount paid",
+                "total sales",
                 "total",
                 "total amt",
             ],
@@ -143,12 +146,14 @@ fn fallback_receipt_classification(
             .is_some()
             || strip_label_value(&line.raw, &["transaction date", "date"], !line.is_heading)
                 .is_some()
+            || find_pipe_value(line, &["transaction date", "date"]).is_some()
             || strip_label_value(
                 &line.raw,
                 &["card", "authorization code", "terminal id"],
                 !line.is_heading,
             )
             .is_some()
+            || find_pipe_value(line, &["card", "authorization code", "terminal id"]).is_some()
             || looks_like_receipt_item_line(line)
     });
 
@@ -929,7 +934,7 @@ fn observed_receipt_date(
     labels: &[&str],
     confidence: ConfidenceLevel,
 ) -> Option<Observed<String>> {
-    let (line, value) = find_label_value(lines, labels)?;
+    let (line, value) = find_label_or_pipe_value(lines, labels)?;
     let value = normalize_receipt_date_value(&value);
     Some(observed_from_line(line, value, confidence, document))
 }
@@ -970,8 +975,10 @@ fn observed_receipt_total(
     confidence: ConfidenceLevel,
 ) -> Option<Observed<MoneyAmount>> {
     let preferred_label_sets = [
+        &["grand total", "net total"][..],
         &["final total", "rounded total", "total rounded"][..],
         &["total paid", "amount paid"][..],
+        &["total sales"][..],
         &["total"][..],
         &["total amt"][..],
     ];
@@ -1158,6 +1165,21 @@ fn find_label_value<'a>(lines: &'a [LineRef], labels: &[&str]) -> Option<(&'a Li
     None
 }
 
+fn find_label_or_pipe_value<'a>(
+    lines: &'a [LineRef],
+    labels: &[&str],
+) -> Option<(&'a LineRef, String)> {
+    for line in lines {
+        if let Some(value) = strip_label_value(&line.raw, labels, !line.is_heading) {
+            return Some((line, value));
+        }
+        if let Some(value) = find_pipe_value(line, labels) {
+            return Some((line, value));
+        }
+    }
+    None
+}
+
 fn strip_label_value(line: &str, labels: &[&str], allow_loose_prefix: bool) -> Option<String> {
     let content = normalize_bullet_content(line);
     let lhs_rhs = content.split_once(':');
@@ -1208,7 +1230,18 @@ fn strip_label_value(line: &str, labels: &[&str], allow_loose_prefix: bool) -> O
             let next_token_key = normalize_key(raw_tokens[prefix_len]);
             if matches!(
                 next_token_key.as_str(),
-                "amt" | "amount" | "paid" | "due" | "rounded" | "rounding" | "adj"
+                "amt"
+                    | "amount"
+                    | "paid"
+                    | "due"
+                    | "rounded"
+                    | "rounding"
+                    | "adj"
+                    | "qty"
+                    | "quantity"
+                    | "gst"
+                    | "tax"
+                    | "sales"
             ) {
                 continue;
             }
@@ -1271,7 +1304,18 @@ fn strip_label_value_strict(line: &str, labels: &[&str]) -> Option<String> {
             let next_token_key = normalize_key(raw_tokens[prefix_len]);
             if matches!(
                 next_token_key.as_str(),
-                "amt" | "amount" | "paid" | "due" | "rounded" | "rounding" | "adj"
+                "amt"
+                    | "amount"
+                    | "paid"
+                    | "due"
+                    | "rounded"
+                    | "rounding"
+                    | "adj"
+                    | "qty"
+                    | "quantity"
+                    | "gst"
+                    | "tax"
+                    | "sales"
             ) {
                 continue;
             }
@@ -1541,12 +1585,14 @@ fn split_description_and_money(value: &str) -> Option<(String, MoneyAmount)> {
 
 fn normalize_receipt_date_value(value: &str) -> String {
     let trimmed = value.trim();
-    let first_token = trimmed.split_whitespace().next().unwrap_or(trimmed);
-    if looks_like_date_token(first_token) {
-        first_token.to_owned()
-    } else {
-        trimmed.to_owned()
+    for token in trimmed.split_whitespace() {
+        let token = token.trim_matches(|ch: char| matches!(ch, ',' | ';' | '(' | ')'));
+        if looks_like_date_token(token) {
+            return token.to_owned();
+        }
     }
+
+    trimmed.to_owned()
 }
 
 fn looks_like_date_token(value: &str) -> bool {
@@ -1588,10 +1634,11 @@ fn infer_receipt_merchant_name(
     lines: &[LineRef],
 ) -> Option<Observed<String>> {
     lines.iter()
-        .filter(|line| line.is_heading)
-        .filter(|line| !is_generic_receipt_heading(&line.normalized))
-        .max_by_key(|line| receipt_heading_score(&line.raw))
-        .map(|line| {
+        .enumerate()
+        .filter(|(_, line)| line.is_heading)
+        .filter(|(_, line)| !is_generic_receipt_heading(&line.normalized))
+        .max_by_key(|(index, line)| receipt_heading_score(&line.raw) * 1000 - *index as i32)
+        .map(|(_, line)| {
             observed_from_line(
                 line,
                 normalize_bullet_content(&line.raw),
@@ -1614,6 +1661,10 @@ fn is_generic_receipt_heading(value: &str) -> bool {
         "footer",
         "merchant details",
         "receipt information",
+        "thank you",
+        "thank you for shopping",
+        "goods sold are not returnable",
+        "goods sold are not returnable thank you",
     ]
     .iter()
     .any(|heading| normalized == normalize_key(heading))
@@ -1641,6 +1692,9 @@ fn receipt_heading_score(value: &str) -> i32 {
         "market",
         "trading",
         "enterprise",
+        "perniagaan",
+        "motor",
+        "machinery",
     ];
 
     let mut score = 0i32;
@@ -2008,6 +2062,137 @@ mod tests {
                         .as_ref()
                         .map(|value| value.value.amount.as_str()),
                     Some("60.30")
+                );
+            }
+            other => panic!("unexpected payload: {other:?}"),
+        }
+
+        remove_fixture_dir(&path);
+    }
+
+    #[test]
+    fn receipt_extractor_ignores_boilerplate_heading_candidates() {
+        let markdown = "\
+# SAM SAM TRADING CO
+(742016-W)
+
+- TOTAL: RM 14.10
+- Date: Friday, 29-12-2017
+
+THANK YOU FOR SHOPPING
+GOODS SOLD ARE NOT RETURNABLE.
+";
+        let path = write_fixture(markdown, "receipt_boilerplate_heading.md");
+        let actual = extract_document_facts_path(&path).expect("fixture should transcribe");
+
+        match actual.facts {
+            DocumentFactsPayload::Receipt(facts) => {
+                assert_eq!(
+                    facts.merchant_name
+                        .as_ref()
+                        .map(|value| value.value.as_str()),
+                    Some("SAM SAM TRADING CO")
+                );
+                assert_eq!(
+                    facts.transaction_date
+                        .as_ref()
+                        .map(|value| value.value.as_str()),
+                    Some("29-12-2017")
+                );
+            }
+            other => panic!("unexpected payload: {other:?}"),
+        }
+
+        remove_fixture_dir(&path);
+    }
+
+    #[test]
+    fn receipt_extractor_extracts_date_from_pipe_summary_lines() {
+        let markdown = "\
+# SOON HUAT MACHINERY ENTERPRISE
+
+- Doc No.: CS00004040 | Date: 11/01/2019
+- Total Sales: 327.00
+";
+        let path = write_fixture(markdown, "receipt_pipe_date.md");
+        let actual = extract_document_facts_path(&path).expect("fixture should transcribe");
+
+        match actual.facts {
+            DocumentFactsPayload::Receipt(facts) => {
+                assert_eq!(
+                    facts.transaction_date
+                        .as_ref()
+                        .map(|value| value.value.as_str()),
+                    Some("11/01/2019")
+                );
+                assert_eq!(
+                    facts.total_paid
+                        .as_ref()
+                        .map(|value| value.value.amount.as_str()),
+                    Some("327.00")
+                );
+            }
+            other => panic!("unexpected payload: {other:?}"),
+        }
+
+        remove_fixture_dir(&path);
+    }
+
+    #[test]
+    fn receipt_extractor_prefers_general_total_over_total_gst_and_total_qty() {
+        let markdown = "\
+# PERNIAGAAN ZHENG HUI
+
+- Total Qty: 9 | 327.00
+- Total GST (RM): 6.37
+- Total (RM): 112.45
+- Date: 12/02/2018
+";
+        let path = write_fixture(markdown, "receipt_total_disambiguation.md");
+        let actual = extract_document_facts_path(&path).expect("fixture should transcribe");
+
+        match actual.facts {
+            DocumentFactsPayload::Receipt(facts) => {
+                assert_eq!(
+                    facts.total_paid
+                        .as_ref()
+                        .map(|value| value.value.amount.as_str()),
+                    Some("112.45")
+                );
+            }
+            other => panic!("unexpected payload: {other:?}"),
+        }
+
+        remove_fixture_dir(&path);
+    }
+
+    #[test]
+    fn receipt_fallback_classification_accepts_grand_total_layouts() {
+        let markdown = "\
+# S.H.H. MOTOR ( SUNGAI RENGIT ) SDN. BHD.
+
+- Date: 23-01-2019 13:14:15 PM
+- Grand Total: 20.00
+- Cash: 20.00
+";
+        let path = write_fixture(markdown, "receipt_grand_total.md");
+        let actual = extract_document_facts_path(&path).expect("fixture should transcribe");
+
+        assert_eq!(actual.classification.kind, DocumentKind::Receipt);
+
+        match actual.facts {
+            DocumentFactsPayload::Receipt(facts) => {
+                assert_eq!(
+                    facts.total_paid
+                        .as_ref()
+                        .map(|value| value.value.amount.as_str()),
+                    Some("20.00")
+                );
+                assert_eq!(
+                    facts.transaction_date
+                        .as_ref()
+                        .map(|value| value.value.as_str()),
+                    Some("23-01-2019")
                 );
             }
             other => panic!("unexpected payload: {other:?}"),
