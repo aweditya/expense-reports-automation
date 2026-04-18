@@ -97,7 +97,7 @@ def write_bundle_fixture(workspace_root: Path, bundle_id: str, *, with_workbench
     )
     if with_workbench:
         (artifacts_dir / "review_workbench.html").write_text(
-            "<!DOCTYPE html><html><body><h1>Workbench</h1></body></html>"
+            "<!DOCTYPE html><html><body><h1>Stale Saved Workbench</h1></body></html>"
         )
     (artifacts_dir / "ledger.json").write_text(json.dumps(build_ledger_fixture(), indent=2))
     (artifacts_dir / "draft.yaml").write_text("expense_report:\n  general_information: {}\n")
@@ -278,6 +278,47 @@ class LocalAppTests(unittest.TestCase):
             self.assertIn("--base-version", command)
             self.assertIn("7", command)
 
+    def test_build_render_workbench_command_supports_cargo_fallback(self):
+        with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as artifacts_dir:
+            command = local_app.build_render_workbench_command(
+                Path(repo_dir),
+                Path(artifacts_dir),
+            )
+
+            self.assertEqual(
+                command[:4],
+                ["cargo", "run", "--bin", "render_current_review_workbench"],
+            )
+            self.assertIn("--artifacts-dir", command)
+
+    def test_render_current_workbench_html_invokes_renderer_cli(self):
+        captured = {}
+
+        def runner(command, cwd):
+            captured["command"] = command
+            captured["cwd"] = cwd
+            return CompletedProcess(
+                command,
+                0,
+                stdout="<!DOCTYPE html><html><body><h1>Dynamic Workbench</h1></body></html>",
+                stderr="",
+            )
+
+        with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as workspace_dir:
+            workspace_root = Path(workspace_dir)
+            write_bundle_fixture(workspace_root, "demo_bundle", with_workbench=True)
+
+            rendered = local_app.render_current_workbench_html(
+                Path(repo_dir),
+                workspace_root,
+                "demo_bundle",
+                command_runner=runner,
+            )
+
+            self.assertIn("Dynamic Workbench", rendered)
+            self.assertEqual(captured["cwd"], Path(repo_dir))
+            self.assertIn("--artifacts-dir", captured["command"])
+
     def test_list_bundles_sorts_by_latest_update(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
@@ -344,7 +385,7 @@ class LocalAppTests(unittest.TestCase):
                     request,
                 )
 
-    def test_render_bundle_page_handles_missing_workbench(self):
+    def test_render_bundle_page_handles_missing_saved_workbench_when_ledger_exists(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
             write_bundle_fixture(workspace_root, "demo_bundle", with_workbench=False)
@@ -355,7 +396,7 @@ class LocalAppTests(unittest.TestCase):
                 local_app.load_bundle_manifest(workspace_root, "demo_bundle"),
             )
 
-            self.assertIn("Workbench availability:</strong> not yet generated", page)
+            self.assertIn("Workbench availability:</strong> ready", page)
             self.assertIn("/bundle/demo_bundle/overview", page)
             self.assertIn("/bundle/demo_bundle/document/doc_receipt/receipt.png", page)
             self.assertIn("/bundle/demo_bundle/review-session", page)
@@ -528,47 +569,61 @@ class LocalAppHttpTests(unittest.TestCase):
             workspace_root = Path(temp_dir)
             write_bundle_fixture(workspace_root, "demo_bundle", with_workbench=True)
             config = self.make_config(workspace_root)
-
-            status, _, payload = self.request(config, "GET", "/")
-            self.assertEqual(status, 200)
-            self.assertIn(b"Local FA Intake App", payload)
-
-            status, response_headers, payload = self.request(config, "GET", "/bundle/demo_bundle")
-            self.assertEqual(status, 303)
-            self.assertEqual(response_headers["Location"], "/bundle/demo_bundle/workbench")
-            self.assertEqual(payload, b"")
-
-            status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/overview")
-            self.assertEqual(status, 200)
-            self.assertIn(b"Managed bundle", payload)
-
-            status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/manifest")
-            self.assertEqual(status, 200)
-            manifest = json.loads(payload)
-            self.assertEqual(manifest["bundle_id"], "demo_bundle")
-
-            status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/workbench")
-            self.assertEqual(status, 200)
-            self.assertIn(b"Workbench", payload)
-
-            status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/review-session")
-            self.assertEqual(status, 200)
-            review_session = json.loads(payload)
-            self.assertEqual(review_session["current_draft_version_id"], 2)
-
-            status, response_headers, payload = self.request(
-                config, "GET", "/bundle/demo_bundle/artifact/ledger.json"
+            original_render = local_app.render_current_workbench_html
+            local_app.render_current_workbench_html = (
+                lambda repo_root, workspace_root, bundle_id, command_runner=local_app.run_pipeline_command: "<!DOCTYPE html><html><body><h1>Dynamic Workbench</h1><input class='field-control'></body></html>"
             )
-            self.assertEqual(status, 200)
-            self.assertEqual(response_headers["Content-Type"], "application/json")
-            self.assertEqual(json.loads(payload)["summary"]["current_draft_version_id"], 2)
 
-            status, response_headers, payload = self.request(
-                config, "GET", "/bundle/demo_bundle/document/doc_receipt/receipt.png"
-            )
-            self.assertEqual(status, 200)
-            self.assertEqual(response_headers["Content-Type"], "image/png")
-            self.assertEqual(payload, b"fixture-receipt")
+            try:
+                status, _, payload = self.request(config, "GET", "/")
+                self.assertEqual(status, 200)
+                self.assertIn(b"Local FA Intake App", payload)
+
+                status, response_headers, payload = self.request(config, "GET", "/bundle/demo_bundle")
+                self.assertEqual(status, 303)
+                self.assertEqual(response_headers["Location"], "/bundle/demo_bundle/workbench")
+                self.assertEqual(payload, b"")
+
+                status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/overview")
+                self.assertEqual(status, 200)
+                self.assertIn(b"Managed bundle", payload)
+
+                status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/manifest")
+                self.assertEqual(status, 200)
+                manifest = json.loads(payload)
+                self.assertEqual(manifest["bundle_id"], "demo_bundle")
+
+                status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/workbench")
+                self.assertEqual(status, 200)
+                self.assertIn(b"Dynamic Workbench", payload)
+                self.assertNotIn(b"Stale Saved Workbench", payload)
+
+                status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/review-session")
+                self.assertEqual(status, 200)
+                review_session = json.loads(payload)
+                self.assertEqual(review_session["current_draft_version_id"], 2)
+
+                status, response_headers, payload = self.request(
+                    config, "GET", "/bundle/demo_bundle/artifact/ledger.json"
+                )
+                self.assertEqual(status, 200)
+                self.assertEqual(response_headers["Content-Type"], "application/json")
+                self.assertEqual(json.loads(payload)["summary"]["current_draft_version_id"], 2)
+
+                status, _, payload = self.request(
+                    config, "GET", "/bundle/demo_bundle/artifact/review_workbench.html"
+                )
+                self.assertEqual(status, 200)
+                self.assertIn(b"Dynamic Workbench", payload)
+
+                status, response_headers, payload = self.request(
+                    config, "GET", "/bundle/demo_bundle/document/doc_receipt/receipt.png"
+                )
+                self.assertEqual(status, 200)
+                self.assertEqual(response_headers["Content-Type"], "image/png")
+                self.assertEqual(payload, b"fixture-receipt")
+            finally:
+                local_app.render_current_workbench_html = original_render
 
     def test_http_upload_redirects_after_successful_submission(self):
         original = local_app.handle_upload_submission

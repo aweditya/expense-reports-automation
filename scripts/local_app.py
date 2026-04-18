@@ -290,30 +290,31 @@ def load_review_session_state(workspace_root: Path, bundle_id: str) -> dict:
         )
     review_packet = current_version["review_packet"]
     readiness = current_version["readiness"]
+    readiness_issue_counts = {
+        "automation_gap_count": readiness["issues"] and sum(
+            1 for issue in readiness["issues"] if issue["class"] == "automation_gap"
+        )
+        or 0,
+        "user_input_gap_count": readiness["issues"] and sum(
+            1 for issue in readiness["issues"] if issue["class"] == "user_input_required"
+        )
+        or 0,
+        "manual_review_count": readiness["issues"] and sum(
+            1 for issue in readiness["issues"] if issue["class"] == "manual_review"
+        )
+        or 0,
+        "other_warning_count": readiness["issues"] and sum(
+            1 for issue in readiness["issues"] if issue["class"] == "other_warning"
+        )
+        or 0,
+    }
     return {
         "bundle_id": bundle_id,
         "current_state": ledger["summary"]["current_state"],
         "current_draft_version_id": current_version_id,
-        "filing_status": review_packet["summary"]["filing_status"],
+        "filing_status": filing_status_from_counts(readiness_issue_counts),
         "issue_count": len(review_packet.get("issues_queue") or []),
-        "readiness": {
-            "automation_gap_count": readiness["issues"] and sum(
-                1 for issue in readiness["issues"] if issue["class"] == "automation_gap"
-            )
-            or 0,
-            "user_input_gap_count": readiness["issues"] and sum(
-                1 for issue in readiness["issues"] if issue["class"] == "user_input_required"
-            )
-            or 0,
-            "manual_review_count": readiness["issues"] and sum(
-                1 for issue in readiness["issues"] if issue["class"] == "manual_review"
-            )
-            or 0,
-            "other_warning_count": readiness["issues"] and sum(
-                1 for issue in readiness["issues"] if issue["class"] == "other_warning"
-            )
-            or 0,
-        },
+        "readiness": readiness_issue_counts,
         "review_packet_summary": review_packet["summary"],
     }
 
@@ -404,6 +405,13 @@ def resolve_review_cli_command(repo_root: Path) -> list[str]:
     return ["cargo", "run", "--bin", "apply_review_revision_to_artifacts", "--"]
 
 
+def resolve_workbench_render_cli_command(repo_root: Path) -> list[str]:
+    candidate = repo_root / "target" / "debug" / "render_current_review_workbench"
+    if candidate.exists() and os.access(candidate, os.X_OK):
+        return [str(candidate)]
+    return ["cargo", "run", "--bin", "render_current_review_workbench", "--"]
+
+
 def build_ingest_command(
     config: LocalAppConfig,
     form_fields: dict[str, str],
@@ -471,6 +479,13 @@ def build_review_save_command(
     return command
 
 
+def build_render_workbench_command(repo_root: Path, artifacts_dir: Path) -> list[str]:
+    return resolve_workbench_render_cli_command(repo_root) + [
+        "--artifacts-dir",
+        str(artifacts_dir),
+    ]
+
+
 def handle_upload_submission(
     config: LocalAppConfig,
     request: UploadRequest,
@@ -531,6 +546,29 @@ def handle_review_save_submission(
     return result
 
 
+def render_current_workbench_html(
+    repo_root: Path,
+    workspace_root: Path,
+    bundle_id: str,
+    command_runner: Callable[[list[str], Path], subprocess.CompletedProcess[str]] = run_pipeline_command,
+) -> str:
+    bundle_id = ensure_safe_bundle_id(bundle_id)
+    artifacts_dir = latest_run_artifacts_dir(workspace_root, bundle_id)
+    if not artifacts_dir:
+        raise LocalAppError(f"bundle {bundle_id} does not have a run yet")
+    if not (artifacts_dir / "ledger.json").exists():
+        raise LocalAppError(f"bundle {bundle_id} does not have a ledger yet")
+
+    command = build_render_workbench_command(repo_root, artifacts_dir)
+    completed = command_runner(command, repo_root)
+    if completed.returncode != 0:
+        raise LocalAppError(
+            (completed.stderr or completed.stdout).strip()
+            or "failed to render current review workbench"
+        )
+    return completed.stdout
+
+
 def update_bundle_manifest_after_review_save(
     workspace_root: Path, bundle_id: str, result: dict
 ) -> None:
@@ -563,6 +601,16 @@ def ledger_state_to_workspace_stage(ledger_state: str) -> str:
         "rejected": "rejected",
     }
     return mapping.get(ledger_state, ledger_state)
+
+
+def filing_status_from_counts(readiness_counts: dict[str, int]) -> str:
+    if readiness_counts["automation_gap_count"] > 0:
+        return "automation_blocked"
+    if readiness_counts["user_input_gap_count"] > 0:
+        return "user_input_required"
+    if readiness_counts["manual_review_count"] > 0:
+        return "manual_review_required"
+    return "ready_to_file"
 
 
 def time_now_epoch_ms() -> int:
@@ -816,7 +864,7 @@ def render_bundle_page(config: LocalAppConfig, bundle_manifest: dict) -> str:
     draft_href = f"/bundle/{urllib.parse.quote(bundle_id)}/artifact/draft.yaml"
     packet_href = f"/bundle/{urllib.parse.quote(bundle_id)}/artifact/review_packet.json"
     ledger_href = f"/bundle/{urllib.parse.quote(bundle_id)}/artifact/ledger.json"
-    workbench_available = latest_workbench_path(config.workspace_root, bundle_id) is not None
+    workbench_available = latest_ledger_path(config.workspace_root, bundle_id) is not None
     docs = "\n".join(
         "<li><a href=\"{href}\" target=\"_blank\" rel=\"noreferrer\">{name}</a> · {media} · {size} bytes</li>".format(
             href=html.escape(
@@ -1018,7 +1066,7 @@ class LocalAppHandler(http.server.BaseHTTPRequestHandler):
             return
         bundle_id = ensure_safe_bundle_id(urllib.parse.unquote(segments[1]))
         if len(segments) == 2:
-            if latest_workbench_path(self.config.workspace_root, bundle_id):
+            if latest_ledger_path(self.config.workspace_root, bundle_id):
                 self.send_response(303)
                 self.send_header(
                     "Location", f"/bundle/{urllib.parse.quote(bundle_id)}/workbench"
@@ -1040,18 +1088,25 @@ class LocalAppHandler(http.server.BaseHTTPRequestHandler):
             self.respond_json(load_review_session_state(self.config.workspace_root, bundle_id))
             return
         if len(segments) == 3 and segments[2] == "workbench":
-            path = latest_workbench_path(self.config.workspace_root, bundle_id)
-            if not path:
-                raise LocalAppError(f"bundle {bundle_id} does not have a review workbench yet")
-            self.respond_file(path, "text/html; charset=utf-8")
+            body = render_current_workbench_html(
+                self.config.repo_root, self.config.workspace_root, bundle_id
+            )
+            self.respond_html(body)
             return
         if len(segments) == 4 and segments[2] == "artifact":
-            path = bundle_artifact_path(
-                self.config.workspace_root,
-                bundle_id,
-                urllib.parse.unquote(segments[3]),
-            )
-            self.respond_file(path)
+            artifact_name = urllib.parse.unquote(segments[3])
+            if artifact_name == "review_workbench.html":
+                body = render_current_workbench_html(
+                    self.config.repo_root, self.config.workspace_root, bundle_id
+                )
+                self.respond_html(body)
+            else:
+                path = bundle_artifact_path(
+                    self.config.workspace_root,
+                    bundle_id,
+                    artifact_name,
+                )
+                self.respond_file(path)
             return
         if len(segments) == 5 and segments[2] == "document":
             document_id = urllib.parse.unquote(segments[3])
