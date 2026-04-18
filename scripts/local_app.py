@@ -11,6 +11,7 @@ import shutil
 import socketserver
 import subprocess
 import tempfile
+import time
 import urllib.parse
 from dataclasses import dataclass
 from email.parser import BytesParser
@@ -23,6 +24,14 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 DEFAULT_MODEL = "gemini-3-flash-preview"
 DEFAULT_LOCATION = "global"
+EXPORTABLE_ARTIFACTS = {
+    "draft.yaml",
+    "validation.json",
+    "readiness.json",
+    "review_packet.json",
+    "review_workbench.html",
+    "ledger.json",
+}
 
 
 @dataclass
@@ -149,6 +158,14 @@ def latest_workbench_path(workspace_root: Path, bundle_id: str) -> Path | None:
     return path if path.exists() else None
 
 
+def latest_ledger_path(workspace_root: Path, bundle_id: str) -> Path | None:
+    artifacts_dir = latest_run_artifacts_dir(workspace_root, bundle_id)
+    if not artifacts_dir:
+        return None
+    path = artifacts_dir / "ledger.json"
+    return path if path.exists() else None
+
+
 def bundle_document_href(bundle_id: str, document_id: str, stored_filename: str) -> str:
     return "/bundle/{bundle_id}/document/{document_id}/{filename}".format(
         bundle_id=urllib.parse.quote(bundle_id),
@@ -183,6 +200,66 @@ def bundle_document_path(
     if not candidate.exists():
         raise LocalAppError(f"document file missing for {document_id}")
     return candidate
+
+
+def bundle_artifact_path(workspace_root: Path, bundle_id: str, artifact_name: str) -> Path:
+    if artifact_name not in EXPORTABLE_ARTIFACTS:
+        raise LocalAppError(f"artifact not available for export: {artifact_name}")
+    artifacts_dir = latest_run_artifacts_dir(workspace_root, bundle_id)
+    if not artifacts_dir:
+        raise LocalAppError(f"bundle {bundle_id} does not have a run yet")
+    path = artifacts_dir / artifact_name
+    if not path.exists():
+        raise LocalAppError(f"artifact not found: {artifact_name}")
+    return path
+
+
+def load_review_session_state(workspace_root: Path, bundle_id: str) -> dict:
+    ledger_path = latest_ledger_path(workspace_root, bundle_id)
+    if not ledger_path:
+        raise LocalAppError(f"bundle {bundle_id} does not have a ledger yet")
+    ledger = json.loads(ledger_path.read_text())
+    current_version_id = ledger["summary"]["current_draft_version_id"]
+    current_version = next(
+        (
+            version
+            for version in ledger.get("draft_versions", [])
+            if version["version_id"] == current_version_id
+        ),
+        None,
+    )
+    if not current_version:
+        raise LocalAppError(
+            f"bundle {bundle_id} is missing current draft version {current_version_id}"
+        )
+    review_packet = current_version["review_packet"]
+    readiness = current_version["readiness"]
+    return {
+        "bundle_id": bundle_id,
+        "current_state": ledger["summary"]["current_state"],
+        "current_draft_version_id": current_version_id,
+        "filing_status": review_packet["summary"]["filing_status"],
+        "issue_count": len(review_packet.get("issues_queue") or []),
+        "readiness": {
+            "automation_gap_count": readiness["issues"] and sum(
+                1 for issue in readiness["issues"] if issue["class"] == "automation_gap"
+            )
+            or 0,
+            "user_input_gap_count": readiness["issues"] and sum(
+                1 for issue in readiness["issues"] if issue["class"] == "user_input_required"
+            )
+            or 0,
+            "manual_review_count": readiness["issues"] and sum(
+                1 for issue in readiness["issues"] if issue["class"] == "manual_review"
+            )
+            or 0,
+            "other_warning_count": readiness["issues"] and sum(
+                1 for issue in readiness["issues"] if issue["class"] == "other_warning"
+            )
+            or 0,
+        },
+        "review_packet_summary": review_packet["summary"],
+    }
 
 
 def parse_multipart_request(
@@ -264,6 +341,13 @@ def resolve_cli_command(repo_root: Path) -> list[str]:
     return ["cargo", "run", "--bin", "ingest_bundle_workspace", "--"]
 
 
+def resolve_review_cli_command(repo_root: Path) -> list[str]:
+    candidate = repo_root / "target" / "debug" / "apply_review_revision_to_artifacts"
+    if candidate.exists() and os.access(candidate, os.X_OK):
+        return [str(candidate)]
+    return ["cargo", "run", "--bin", "apply_review_revision_to_artifacts", "--"]
+
+
 def build_ingest_command(
     repo_root: Path,
     workspace_root: Path,
@@ -310,6 +394,23 @@ def run_pipeline_command(command: list[str], cwd: Path) -> subprocess.CompletedP
     return subprocess.run(command, cwd=cwd, text=True, capture_output=True)
 
 
+def build_review_save_command(
+    repo_root: Path,
+    artifacts_dir: Path,
+    revision_json_path: Path,
+    base_version_id: int | None = None,
+) -> list[str]:
+    command = resolve_review_cli_command(repo_root) + [
+        "--artifacts-dir",
+        str(artifacts_dir),
+        "--revision-json",
+        str(revision_json_path),
+    ]
+    if base_version_id is not None:
+        command.extend(["--base-version", str(base_version_id)])
+    return command
+
+
 def handle_upload_submission(
     repo_root: Path,
     workspace_root: Path,
@@ -327,6 +428,86 @@ def handle_upload_submission(
         if completed.returncode != 0:
             raise LocalAppError((completed.stderr or completed.stdout).strip() or "pipeline failed")
         return request.fields.get("bundle_id") or default_bundle_id(input_paths)
+
+
+def handle_review_save_submission(
+    repo_root: Path,
+    workspace_root: Path,
+    bundle_id: str,
+    payload: dict,
+    command_runner: Callable[[list[str], Path], subprocess.CompletedProcess[str]] = run_pipeline_command,
+) -> dict:
+    bundle_id = ensure_safe_bundle_id(bundle_id)
+    artifacts_dir = latest_run_artifacts_dir(workspace_root, bundle_id)
+    if not artifacts_dir:
+        raise LocalAppError(f"bundle {bundle_id} does not have a run yet")
+
+    revision_payload = dict(payload)
+    base_version_id = revision_payload.pop("base_version_id", None)
+    if base_version_id is not None:
+        try:
+            base_version_id = int(base_version_id)
+        except (TypeError, ValueError) as err:
+            raise LocalAppError(f"invalid base version id: {base_version_id}") from err
+
+    with tempfile.TemporaryDirectory(prefix="expense_review_save_") as temp_dir_str:
+        temp_dir = Path(temp_dir_str)
+        revision_json_path = temp_dir / "review_revision.json"
+        revision_json_path.write_text(json.dumps(revision_payload, indent=2))
+        command = build_review_save_command(
+            repo_root,
+            artifacts_dir,
+            revision_json_path,
+            base_version_id=base_version_id,
+        )
+        completed = command_runner(command, repo_root)
+        if completed.returncode != 0:
+            raise LocalAppError((completed.stderr or completed.stdout).strip() or "review save failed")
+        try:
+            result = json.loads(completed.stdout)
+        except json.JSONDecodeError as err:
+            raise LocalAppError(f"review save produced invalid JSON: {err}") from err
+
+    update_bundle_manifest_after_review_save(workspace_root, bundle_id, result)
+    return result
+
+
+def update_bundle_manifest_after_review_save(
+    workspace_root: Path, bundle_id: str, result: dict
+) -> None:
+    bundle_id = ensure_safe_bundle_id(bundle_id)
+    manifest_path = workspace_root / "bundles" / bundle_id / "bundle_manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["updated_at_epoch_ms"] = int(time_now_epoch_ms())
+    manifest["current_stage"] = ledger_state_to_workspace_stage(result["ledger_state"])
+    latest_run_id = manifest.get("latest_run_id")
+    for run in manifest.get("runs") or []:
+        if run.get("run_id") == latest_run_id:
+            run["filing_status"] = result["filing_status"]
+            run["ledger_state"] = result["ledger_state"]
+    manifest_path.write_text(json.dumps(manifest, indent=2))
+
+
+def ledger_state_to_workspace_stage(ledger_state: str) -> str:
+    mapping = {
+        "automationblocked": "automation_blocked",
+        "automation_blocked": "automation_blocked",
+        "userinputrequired": "user_input_required",
+        "user_input_required": "user_input_required",
+        "manualreviewrequired": "manual_review_required",
+        "manual_review_required": "manual_review_required",
+        "readytofile": "ready_to_file",
+        "ready_to_file": "ready_to_file",
+        "submitted": "submitted",
+        "accepted": "accepted",
+        "returned": "returned",
+        "rejected": "rejected",
+    }
+    return mapping.get(ledger_state, ledger_state)
+
+
+def time_now_epoch_ms() -> int:
+    return int(time.time() * 1000)
 
 
 def render_index_page(config: LocalAppConfig, bundles: list[BundleListEntry], message: str | None = None) -> str:
@@ -550,6 +731,10 @@ def render_bundle_page(config: LocalAppConfig, bundle_manifest: dict) -> str:
     )
     workbench_href = f"/bundle/{urllib.parse.quote(bundle_id)}/workbench"
     manifest_href = f"/bundle/{urllib.parse.quote(bundle_id)}/manifest"
+    session_href = f"/bundle/{urllib.parse.quote(bundle_id)}/review-session"
+    draft_href = f"/bundle/{urllib.parse.quote(bundle_id)}/artifact/draft.yaml"
+    packet_href = f"/bundle/{urllib.parse.quote(bundle_id)}/artifact/review_packet.json"
+    ledger_href = f"/bundle/{urllib.parse.quote(bundle_id)}/artifact/ledger.json"
     workbench_available = latest_workbench_path(config.workspace_root, bundle_id) is not None
     docs = "\n".join(
         "<li><a href=\"{href}\" target=\"_blank\" rel=\"noreferrer\">{name}</a> · {media} · {size} bytes</li>".format(
@@ -621,6 +806,10 @@ def render_bundle_page(config: LocalAppConfig, bundle_manifest: dict) -> str:
         {run_summary}
         <p><a href="{workbench_href}">Open workbench only</a></p>
         <p><a href="{manifest_href}">Bundle manifest JSON</a></p>
+        <p><a href="{session_href}">Review session JSON</a></p>
+        <p><a href="{draft_href}">Export current draft YAML</a></p>
+        <p><a href="{packet_href}">Export current review packet JSON</a></p>
+        <p><a href="{ledger_href}">Export current ledger JSON</a></p>
         <h2>Documents</h2>
         <ul>{docs}</ul>
       </aside>
@@ -682,33 +871,55 @@ class LocalAppHandler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
-        if parsed.path != "/upload":
-            self.send_error(404, "Not found")
-            return
+        is_review_save = parsed.path.startswith("/bundle/") and parsed.path.endswith("/review-session/save")
         try:
-            content_length = int(self.headers.get("Content-Length", "0"))
-            body = self.rfile.read(content_length)
-            request = parse_multipart_request(
-                self.headers.get("Content-Type", ""),
-                body,
-            )
-            bundle_id = handle_upload_submission(
-                self.config.repo_root,
-                self.config.workspace_root,
-                request,
-            )
-            self.send_response(303)
-            self.send_header("Location", f"/bundle/{urllib.parse.quote(bundle_id)}")
-            self.end_headers()
+            if parsed.path == "/upload":
+                content_length = int(self.headers.get("Content-Length", "0"))
+                body = self.rfile.read(content_length)
+                request = parse_multipart_request(
+                    self.headers.get("Content-Type", ""),
+                    body,
+                )
+                bundle_id = handle_upload_submission(
+                    self.config.repo_root,
+                    self.config.workspace_root,
+                    request,
+                )
+                self.send_response(303)
+                self.send_header("Location", f"/bundle/{urllib.parse.quote(bundle_id)}")
+                self.end_headers()
+                return
+            if parsed.path.startswith("/bundle/") and parsed.path.endswith("/review-session/save"):
+                segments = [segment for segment in parsed.path.split("/") if segment]
+                if len(segments) != 4:
+                    self.send_error(404, "Not found")
+                    return
+                bundle_id = ensure_safe_bundle_id(urllib.parse.unquote(segments[1]))
+                content_length = int(self.headers.get("Content-Length", "0"))
+                payload = json.loads(self.rfile.read(content_length) or b"{}")
+                result = handle_review_save_submission(
+                    self.config.repo_root,
+                    self.config.workspace_root,
+                    bundle_id,
+                    payload,
+                )
+                self.respond_json(result)
+                return
+            self.send_error(404, "Not found")
         except LocalAppError as err:
-            self.respond_html(
-                render_index_page(
-                    self.config,
-                    list_bundles(self.config.workspace_root),
-                    message=str(err),
-                ),
-                status=400,
-            )
+            if is_review_save:
+                self.respond_json({"error": str(err)}, status=400)
+            else:
+                self.respond_html(
+                    render_index_page(
+                        self.config,
+                        list_bundles(self.config.workspace_root),
+                        message=str(err),
+                    ),
+                    status=400,
+                )
+        except json.JSONDecodeError as err:
+            self.respond_json({"error": f"invalid json: {err}"}, status=400)
 
     def handle_bundle_get(self, path: str) -> None:
         segments = [segment for segment in path.split("/") if segment]
@@ -724,11 +935,22 @@ class LocalAppHandler(http.server.BaseHTTPRequestHandler):
             manifest = load_bundle_manifest(self.config.workspace_root, bundle_id)
             self.respond_json(manifest)
             return
+        if len(segments) == 3 and segments[2] == "review-session":
+            self.respond_json(load_review_session_state(self.config.workspace_root, bundle_id))
+            return
         if len(segments) == 3 and segments[2] == "workbench":
             path = latest_workbench_path(self.config.workspace_root, bundle_id)
             if not path:
                 raise LocalAppError(f"bundle {bundle_id} does not have a review workbench yet")
             self.respond_file(path, "text/html; charset=utf-8")
+            return
+        if len(segments) == 4 and segments[2] == "artifact":
+            path = bundle_artifact_path(
+                self.config.workspace_root,
+                bundle_id,
+                urllib.parse.unquote(segments[3]),
+            )
+            self.respond_file(path)
             return
         if len(segments) == 5 and segments[2] == "document":
             document_id = urllib.parse.unquote(segments[3])
@@ -751,7 +973,7 @@ class LocalAppHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
-    def respond_json(self, payload: dict, status: int = 200) -> None:
+    def respond_json(self, payload, status: int = 200) -> None:
         encoded = json.dumps(payload, indent=2).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")

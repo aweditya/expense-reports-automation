@@ -14,7 +14,10 @@ It sits on top of the managed workspace flow rather than replacing it. The app i
 - runs `ingest_bundle_workspace stage-and-run`
 - shows recent bundles and their current stages
 - opens the latest generated `review_workbench.html` inside a bundle page
+- lets the FA save edits back into a typed reviewed draft version
+- persists latest reviewed artifacts and versioned review snapshots inside the bundle run
 - exposes the bundle manifest JSON for inspection
+- exposes current draft, packet, ledger, and review-session exports
 - serves raw uploaded bundle documents so workbench evidence links can open them
 
 ## Run it
@@ -81,3 +84,10 @@ The local app is covered by Python tests in [tests/test_local_app.py](/Users/adi
 - handler-level GET/POST routing via socket-pair HTTP simulation
 
 The handler tests avoid external ports so they stay stable in sandboxed environments while still exercising the real request code.
+
+The current tests also cover:
+
+- review-save command construction
+- review-session JSON export
+- reviewed-artifact export routes
+- JSON error responses for failed review saves

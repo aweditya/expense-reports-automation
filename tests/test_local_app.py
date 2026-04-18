@@ -54,6 +54,37 @@ def build_manifest(bundle_id: str, *, updated_at_epoch_ms: int = 1000) -> dict:
     }
 
 
+def build_ledger_fixture() -> dict:
+    return {
+        "summary": {
+            "current_state": "user_input_required",
+            "current_draft_version_id": 2,
+        },
+        "draft_versions": [
+            {
+                "version_id": 1,
+                "review_packet": {"summary": {"filing_status": "user_input_required"}},
+                "readiness": {
+                    "issues": [
+                        {"class": "manual_review"},
+                        {"class": "user_input_required"},
+                    ]
+                },
+            },
+            {
+                "version_id": 2,
+                "review_packet": {"summary": {"filing_status": "ready_to_file"}},
+                "readiness": {
+                    "issues": [
+                        {"class": "user_input_required"},
+                        {"class": "other_warning"},
+                    ]
+                },
+            },
+        ],
+    }
+
+
 def write_bundle_fixture(workspace_root: Path, bundle_id: str, *, with_workbench: bool = True) -> None:
     bundle_root = workspace_root / "bundles" / bundle_id
     artifacts_dir = bundle_root / "runs" / "demo_run" / "artifacts"
@@ -68,6 +99,11 @@ def write_bundle_fixture(workspace_root: Path, bundle_id: str, *, with_workbench
         (artifacts_dir / "review_workbench.html").write_text(
             "<!DOCTYPE html><html><body><h1>Workbench</h1></body></html>"
         )
+    (artifacts_dir / "ledger.json").write_text(json.dumps(build_ledger_fixture(), indent=2))
+    (artifacts_dir / "draft.yaml").write_text("expense_report:\n  general_information: {}\n")
+    (artifacts_dir / "review_packet.json").write_text(
+        json.dumps({"summary": {"filing_status": "ready_to_file"}}, indent=2)
+    )
 
 
 class LocalAppTests(unittest.TestCase):
@@ -170,6 +206,22 @@ class LocalAppTests(unittest.TestCase):
             self.assertIn("--run-id", command)
             self.assertIn("gemini_flash", command)
 
+    def test_build_review_save_command_supports_base_version(self):
+        with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as artifacts_dir:
+            command = local_app.build_review_save_command(
+                Path(repo_dir),
+                Path(artifacts_dir),
+                Path(artifacts_dir) / "revision.json",
+                base_version_id=7,
+            )
+
+            self.assertEqual(
+                command[:4],
+                ["cargo", "run", "--bin", "apply_review_revision_to_artifacts"],
+            )
+            self.assertIn("--base-version", command)
+            self.assertIn("7", command)
+
     def test_list_bundles_sorts_by_latest_update(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
@@ -256,6 +308,55 @@ class LocalAppTests(unittest.TestCase):
             self.assertIn("Workbench unavailable", page)
             self.assertNotIn("<iframe", page)
             self.assertIn("/bundle/demo_bundle/document/doc_receipt/receipt.png", page)
+            self.assertIn("/bundle/demo_bundle/review-session", page)
+            self.assertIn("/bundle/demo_bundle/artifact/ledger.json", page)
+
+    def test_handle_review_save_submission_updates_manifest_stage(self):
+        with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as workspace_dir:
+            workspace_root = Path(workspace_dir)
+            write_bundle_fixture(workspace_root, "demo_bundle", with_workbench=True)
+
+            def runner(command, cwd):
+                self.assertIn("--base-version", command)
+                self.assertIn("2", command)
+                self.assertEqual(cwd, Path(repo_dir))
+                return CompletedProcess(
+                    command,
+                    0,
+                    stdout=json.dumps(
+                        {
+                            "version_id": 3,
+                            "ledger_state": "ready_to_file",
+                            "filing_status": "ready_to_file",
+                            "automation_gap_count": 0,
+                            "user_input_gap_count": 0,
+                            "manual_review_count": 0,
+                            "other_warning_count": 0,
+                            "issue_count": 0,
+                        }
+                    ),
+                    stderr="",
+                )
+
+            result = local_app.handle_review_save_submission(
+                Path(repo_dir),
+                workspace_root,
+                "demo_bundle",
+                {
+                    "base_version_id": 2,
+                    "actor_role": "financial_administrator",
+                    "label": "FA saved revision",
+                    "field_edits": [],
+                    "confirmed_review_paths": [],
+                    "annotations": [],
+                },
+                command_runner=runner,
+            )
+
+            self.assertEqual(result["version_id"], 3)
+            manifest = local_app.load_bundle_manifest(workspace_root, "demo_bundle")
+            self.assertEqual(manifest["current_stage"], "ready_to_file")
+            self.assertEqual(manifest["runs"][0]["filing_status"], "ready_to_file")
 
     def test_render_index_page_includes_pending_upload_accumulator(self):
         config = local_app.LocalAppConfig(
@@ -381,6 +482,18 @@ class LocalAppHttpTests(unittest.TestCase):
             self.assertEqual(status, 200)
             self.assertIn(b"Workbench", payload)
 
+            status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/review-session")
+            self.assertEqual(status, 200)
+            review_session = json.loads(payload)
+            self.assertEqual(review_session["current_draft_version_id"], 2)
+
+            status, response_headers, payload = self.request(
+                config, "GET", "/bundle/demo_bundle/artifact/ledger.json"
+            )
+            self.assertEqual(status, 200)
+            self.assertEqual(response_headers["Content-Type"], "application/json")
+            self.assertEqual(json.loads(payload)["summary"]["current_draft_version_id"], 2)
+
             status, response_headers, payload = self.request(
                 config, "GET", "/bundle/demo_bundle/document/doc_receipt/receipt.png"
             )
@@ -428,6 +541,35 @@ class LocalAppHttpTests(unittest.TestCase):
                 self.assertEqual(payload, b"")
             finally:
                 local_app.handle_upload_submission = original
+
+    def test_http_review_save_returns_json_error(self):
+        original = local_app.handle_review_save_submission
+
+        def fake_handle_review_save_submission(*args, **kwargs):
+            raise local_app.LocalAppError("bad review payload")
+
+        local_app.handle_review_save_submission = fake_handle_review_save_submission
+        try:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                workspace_root = Path(temp_dir)
+                write_bundle_fixture(workspace_root, "demo_bundle", with_workbench=True)
+                config = self.make_config(workspace_root)
+                body = json.dumps({"field_edits": []}).encode("utf-8")
+                status, response_headers, payload = self.request(
+                    config,
+                    "POST",
+                    "/bundle/demo_bundle/review-session/save",
+                    body=body,
+                    headers={
+                        "Content-Type": "application/json",
+                        "Content-Length": str(len(body)),
+                    },
+                )
+                self.assertEqual(status, 400)
+                self.assertEqual(response_headers["Content-Type"], "application/json; charset=utf-8")
+                self.assertEqual(json.loads(payload)["error"], "bad review payload")
+        finally:
+            local_app.handle_review_save_submission = original
 
 
 if __name__ == "__main__":
