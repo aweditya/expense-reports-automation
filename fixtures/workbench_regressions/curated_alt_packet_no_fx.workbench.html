@@ -36,10 +36,6 @@ body {
   font-family: var(--font-body);
 }
 
-body.modal-open {
-  overflow: hidden;
-}
-
 body.document-open .shell {
   max-width: 1180px;
   margin-left: 24px;
@@ -767,13 +763,22 @@ select.field-input,
   text-decoration: none;
 }
 
+.document-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 180;
+  border: 0;
+  background: rgba(31, 27, 24, 0.18);
+  cursor: pointer;
+}
+
 .document-drawer {
   position: fixed;
   top: 18px;
   right: 18px;
   bottom: 18px;
   width: min(42vw, 620px);
-  z-index: 100;
+  z-index: 220;
   display: grid;
   grid-template-rows: auto auto 1fr;
   gap: 12px;
@@ -782,6 +787,8 @@ select.field-input,
   border-radius: 20px;
   background: rgba(255, 252, 247, 0.98);
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 .document-drawer-head {
@@ -789,11 +796,24 @@ select.field-input,
   justify-content: space-between;
   gap: 16px;
   align-items: start;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding-bottom: 4px;
+  background: linear-gradient(180deg, rgba(255, 252, 247, 0.98) 0%, rgba(255, 252, 247, 0.92) 100%);
 }
 
 .document-drawer-head h2 {
   margin: 0;
   font-size: 28px;
+}
+
+.document-drawer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: end;
+  align-items: center;
 }
 
 .document-drawer-meta,
@@ -814,6 +834,9 @@ select.field-input,
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--paper);
+  position: sticky;
+  top: 92px;
+  z-index: 1;
 }
 
 .document-drawer-summary blockquote {
@@ -822,9 +845,16 @@ select.field-input,
   padding-left: 12px;
 }
 
+.document-popout-link {
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+
 .document-drawer iframe {
   width: 100%;
   height: 100%;
+  min-height: 0;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: white;
@@ -942,8 +972,8 @@ function structuredRowsPayload(editor){if(!editor){return [];}const rows=[];for(
 function valueForCopy(card){const control=fieldControl(card);if(!control){return '';}if(control.classList.contains('structured-list-editor')){const rows=structuredRowsPayload(control);if(rows.length===0){return '';}return rows.map((row,index)=>`${index+1}. `+Object.entries(row).filter(([,value])=>value!==''&&value!==null).map(([key,value])=>`${key}: ${value}`).join(' | ')).join('\n');}if(control.tagName==='SELECT'){return control.value||'';}if('value' in control){return control.value||'';}return '';} 
 function copyFieldValue(button){const card=button.closest('.field-card');if(!card){return;}const value=valueForCopy(card);if(!value){return;}navigator.clipboard.writeText(value);flashCopy(button);} 
 function buildDocumentPreviewUrl(url,page){if(!page){return url;}if(/\.pdf(?:$|[?#])/i.test(url)){const separator=url.includes('#')?'&':'#';return `${url}${separator}page=${page}`;}return url;}
-function openDocumentPreview(url,title,page,quote,originLabel){const drawer=document.getElementById('document-preview-drawer');const frame=document.getElementById('document-preview-frame');const label=document.getElementById('document-preview-title');const meta=document.getElementById('document-preview-meta');const excerpt=document.getElementById('document-preview-excerpt');if(!drawer||!frame||!label||!meta||!excerpt){return;}frame.src=buildDocumentPreviewUrl(url,page);label.textContent=title||'Source document';meta.textContent=[page?`page ${page}`:null,originLabel||null].filter(Boolean).join(' · ');excerpt.textContent=quote||'No excerpt captured for this evidence reference.';drawer.hidden=false;document.body.classList.add('document-open');}
-function closeDocumentPreview(){const drawer=document.getElementById('document-preview-drawer');const frame=document.getElementById('document-preview-frame');if(!drawer||!frame){return;}drawer.hidden=true;frame.src='about:blank';document.body.classList.remove('document-open');}
+function openDocumentPreview(url,title,page,quote,originLabel){const backdrop=document.getElementById('document-preview-backdrop');const drawer=document.getElementById('document-preview-drawer');const frame=document.getElementById('document-preview-frame');const label=document.getElementById('document-preview-title');const meta=document.getElementById('document-preview-meta');const excerpt=document.getElementById('document-preview-excerpt');const popout=document.getElementById('document-preview-open');if(!drawer||!frame||!label||!meta||!excerpt){return;}const previewUrl=buildDocumentPreviewUrl(url,page);frame.src=previewUrl;label.textContent=title||'Source document';meta.textContent=[page?`page ${page}`:null,originLabel||null].filter(Boolean).join(' · ');excerpt.textContent=quote||'No excerpt captured for this evidence reference.';if(popout){popout.href=previewUrl;popout.hidden=false;}if(backdrop){backdrop.hidden=false;}drawer.hidden=false;drawer.setAttribute('aria-hidden','false');drawer.focus();if(typeof drawer.scrollTo==='function'){drawer.scrollTo({top:0,left:0,behavior:'auto'});}document.body.classList.add('document-open');}
+function closeDocumentPreview(){const backdrop=document.getElementById('document-preview-backdrop');const drawer=document.getElementById('document-preview-drawer');const frame=document.getElementById('document-preview-frame');const popout=document.getElementById('document-preview-open');if(!drawer||!frame){return;}drawer.hidden=true;drawer.setAttribute('aria-hidden','true');if(backdrop){backdrop.hidden=true;}frame.src='about:blank';if(popout){popout.href='#';popout.hidden=true;}document.body.classList.remove('document-open');}
 function parseJsonData(value,fallback){if(!value){return fallback;}try{return JSON.parse(value);}catch(_err){return fallback;}}
 function normalizeFieldValue(control){if(!control){return null;}if(control.classList.contains('structured-list-editor')){const columns=parseJsonData(control.dataset.columnsJson,'[]');const rows=structuredRowsPayload(control).map((row)=>{const obj={};for(const column of columns){const raw=row[column.key]??'';if(raw===''){continue;}if(column.control==='checkbox'){obj[column.key]=raw==='true';}else{obj[column.key]=raw;}}return obj;});return rows.length===0?[]:rows;}if(control.dataset.control==='checkbox'){if(control.value===''){return null;}return control.value==='true';}if('value' in control){return control.value===''?null:control.value;}return null;}
 function initialFieldValue(control){if(!control){return null;}const fallback=control.classList.contains('structured-list-editor')?[]:null;return parseJsonData(control.dataset.initialJson,fallback);} 
@@ -965,8 +995,8 @@ async function saveReviewChanges(){if(reviewSessionState.saveInFlight){return;}c
 function initializeReviewWorkbench(){for(const control of document.querySelectorAll('.field-control, .structured-row-input')){control.addEventListener('input',()=>syncCardStateFromEventTarget(control));control.addEventListener('change',()=>syncCardStateFromEventTarget(control));}
 for(const editor of document.querySelectorAll('.structured-list-editor')){const rows=editor.querySelector('.structured-list-rows');const initial=parseJsonData(editor.dataset.initialJson,[]);if(rows&&rows.children.length===0&&Array.isArray(initial)){for(const rowValues of initial){rows.appendChild(structuredRowTemplate(editor,rowValues));}}}
 for(const card of document.querySelectorAll('.field-card')){updateFieldDirtyState(card);}refreshDirtySummary();loadReviewSessionSummary();const flash=sessionStorage.getItem('reviewWorkbenchFlash');if(flash){setWorkbenchStatus(flash,'success');sessionStorage.removeItem('reviewWorkbenchFlash');}const saveButton=document.getElementById('save-review-button');const resetButton=document.getElementById('reset-review-button');const refreshButton=document.getElementById('reload-review-button');if(saveButton){saveButton.addEventListener('click',saveReviewChanges);}if(resetButton){resetButton.addEventListener('click',resetReviewForm);}if(refreshButton){refreshButton.addEventListener('click',()=>window.location.reload());}revealHashTarget();window.addEventListener('hashchange',revealHashTarget);}
-document.addEventListener('click',function(event){const link=event.target.closest('a[data-document-preview]');if(!link){return;}if(event.metaKey||event.ctrlKey||event.shiftKey||event.altKey){return;}event.preventDefault();openDocumentPreview(link.href,link.getAttribute('data-document-title')||link.textContent||'Source document',link.getAttribute('data-document-page'),link.getAttribute('data-document-quote')||'',link.getAttribute('data-document-origin')||'');});
-document.addEventListener('keydown',function(event){if(event.key==='Escape'){closeDocumentPreview();}});
+document.addEventListener('click',function(event){const closeTrigger=event.target.closest('[data-document-preview-close]');if(closeTrigger){event.preventDefault();closeDocumentPreview();return;}const link=event.target.closest('a[data-document-preview]');if(!link){return;}if(event.metaKey||event.ctrlKey||event.shiftKey||event.altKey){return;}event.preventDefault();openDocumentPreview(link.href,link.getAttribute('data-document-title')||link.textContent||'Source document',link.getAttribute('data-document-page'),link.getAttribute('data-document-quote')||'',link.getAttribute('data-document-origin')||'');});
+document.addEventListener('keydown',function(event){const drawer=document.getElementById('document-preview-drawer');if(event.key==='Escape'&&drawer&&!drawer.hidden){closeDocumentPreview();}});
 document.addEventListener('DOMContentLoaded',initializeReviewWorkbench);
 </script>
 </head>
@@ -1820,6 +1850,6 @@ document.addEventListener('DOMContentLoaded',initializeReviewWorkbench);
 </article>
 </div>
 </section>
-<aside class="document-drawer" id="document-preview-drawer" hidden><div class="document-drawer-head"><div><p class="eyebrow">Source Document</p><h2 id="document-preview-title">Source document</h2><p class="document-drawer-meta" id="document-preview-meta"></p></div><button class="document-modal-close" type="button" onclick="closeDocumentPreview()">Close</button></div><div class="document-drawer-summary"><p class="document-drawer-label">Captured Excerpt</p><blockquote id="document-preview-excerpt">No excerpt captured for this evidence reference.</blockquote></div><iframe id="document-preview-frame" title="Source document preview" loading="lazy"></iframe></aside></div>
+<button class="document-backdrop" id="document-preview-backdrop" type="button" hidden data-document-preview-close="backdrop" aria-label="Close source document preview"></button><aside class="document-drawer" id="document-preview-drawer" hidden tabindex="-1" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="document-preview-title" aria-describedby="document-preview-excerpt"><div class="document-drawer-head"><div><p class="eyebrow">Source Document</p><h2 id="document-preview-title">Source document</h2><p class="document-drawer-meta" id="document-preview-meta"></p></div><div class="document-drawer-actions"><a class="document-popout-link" id="document-preview-open" href="#" target="_blank" rel="noreferrer noopener" hidden>Open in new tab</a><button class="document-modal-close" type="button" data-document-preview-close="button">Close preview</button></div></div><div class="document-drawer-summary"><p class="document-drawer-label">Captured Excerpt</p><blockquote id="document-preview-excerpt">No excerpt captured for this evidence reference.</blockquote></div><iframe id="document-preview-frame" title="Source document preview" loading="lazy"></iframe></aside></div>
 </body>
 </html>

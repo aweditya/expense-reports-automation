@@ -29,10 +29,6 @@ body {
   font-family: var(--font-body);
 }
 
-body.modal-open {
-  overflow: hidden;
-}
-
 body.document-open .shell {
   max-width: 1180px;
   margin-left: 24px;
@@ -760,13 +756,22 @@ select.field-input,
   text-decoration: none;
 }
 
+.document-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 180;
+  border: 0;
+  background: rgba(31, 27, 24, 0.18);
+  cursor: pointer;
+}
+
 .document-drawer {
   position: fixed;
   top: 18px;
   right: 18px;
   bottom: 18px;
   width: min(42vw, 620px);
-  z-index: 100;
+  z-index: 220;
   display: grid;
   grid-template-rows: auto auto 1fr;
   gap: 12px;
@@ -775,6 +780,8 @@ select.field-input,
   border-radius: 20px;
   background: rgba(255, 252, 247, 0.98);
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 .document-drawer-head {
@@ -782,11 +789,24 @@ select.field-input,
   justify-content: space-between;
   gap: 16px;
   align-items: start;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding-bottom: 4px;
+  background: linear-gradient(180deg, rgba(255, 252, 247, 0.98) 0%, rgba(255, 252, 247, 0.92) 100%);
 }
 
 .document-drawer-head h2 {
   margin: 0;
   font-size: 28px;
+}
+
+.document-drawer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: end;
+  align-items: center;
 }
 
 .document-drawer-meta,
@@ -807,6 +827,9 @@ select.field-input,
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--paper);
+  position: sticky;
+  top: 92px;
+  z-index: 1;
 }
 
 .document-drawer-summary blockquote {
@@ -815,9 +838,16 @@ select.field-input,
   padding-left: 12px;
 }
 
+.document-popout-link {
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+
 .document-drawer iframe {
   width: 100%;
   height: 100%;
+  min-height: 0;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: white;
