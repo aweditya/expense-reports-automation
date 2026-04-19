@@ -575,8 +575,12 @@ class LocalAppHttpTests(unittest.TestCase):
             )
 
             try:
-                status, _, payload = self.request(config, "GET", "/")
+                status, response_headers, payload = self.request(config, "GET", "/")
                 self.assertEqual(status, 200)
+                self.assertEqual(
+                    response_headers["Cache-Control"],
+                    "no-store, no-cache, must-revalidate, max-age=0",
+                )
                 self.assertIn(b"Local FA Intake App", payload)
 
                 status, response_headers, payload = self.request(config, "GET", "/bundle/demo_bundle")
@@ -593,8 +597,14 @@ class LocalAppHttpTests(unittest.TestCase):
                 manifest = json.loads(payload)
                 self.assertEqual(manifest["bundle_id"], "demo_bundle")
 
-                status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/workbench")
+                status, response_headers, payload = self.request(
+                    config, "GET", "/bundle/demo_bundle/workbench"
+                )
                 self.assertEqual(status, 200)
+                self.assertEqual(
+                    response_headers["Cache-Control"],
+                    "no-store, no-cache, must-revalidate, max-age=0",
+                )
                 self.assertIn(b"Dynamic Workbench", payload)
                 self.assertNotIn(b"Stale Saved Workbench", payload)
 
