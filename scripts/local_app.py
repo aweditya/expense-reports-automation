@@ -399,16 +399,10 @@ def resolve_cli_command(repo_root: Path) -> list[str]:
 
 
 def resolve_review_cli_command(repo_root: Path) -> list[str]:
-    candidate = repo_root / "target" / "debug" / "apply_review_revision_to_artifacts"
-    if candidate.exists() and os.access(candidate, os.X_OK):
-        return [str(candidate)]
     return ["cargo", "run", "--bin", "apply_review_revision_to_artifacts", "--"]
 
 
 def resolve_workbench_render_cli_command(repo_root: Path) -> list[str]:
-    candidate = repo_root / "target" / "debug" / "render_current_review_workbench"
-    if candidate.exists() and os.access(candidate, os.X_OK):
-        return [str(candidate)]
     return ["cargo", "run", "--bin", "render_current_review_workbench", "--"]
 
 
