@@ -2015,7 +2015,9 @@ fn synthesize_total_usd(bundle: &CanonicalExpenseBundle) -> Option<Observed<Stri
         evidence.extend(amount.evidence.clone());
     }
 
-    let includes_unprojected = lines_for_total.iter().any(|line| !line.projection_supported);
+    let includes_unprojected = lines_for_total
+        .iter()
+        .any(|line| !line.projection_supported);
 
     Some(system_observed(
         cents_to_amount(total_cents),
@@ -2854,7 +2856,9 @@ fn format_iso_date(year: u32, month: u32, day: u32) -> Option<String> {
     Some(format!("{year:04}-{month:02}-{day:02}"))
 }
 
-fn infer_destination_from_currency(documents: &[ExtractedDocumentFacts]) -> Option<Observed<Location>> {
+fn infer_destination_from_currency(
+    documents: &[ExtractedDocumentFacts],
+) -> Option<Observed<Location>> {
     let mut inferred_countries = Vec::new();
     let mut evidence = Vec::new();
 
@@ -2990,11 +2994,11 @@ fn cents_to_amount(cents: i64) -> String {
 mod tests {
     use super::*;
     use crate::curated_corpus::curated_corpus_root;
-    use crate::{DocumentClassification, ExtractionStatus};
     use crate::document_facts::parse_document_facts_json_path;
     use crate::synthetic_documents::{generate_synthetic_document, SyntheticVariant};
     use crate::validator::{ValidationIssueKind, ValidationSeverity};
     use crate::DocumentKind;
+    use crate::{DocumentClassification, ExtractionStatus};
 
     fn synthetic_docs() -> Vec<ExtractedDocumentFacts> {
         vec![
@@ -3519,11 +3523,19 @@ mod tests {
         let bundle = synthesize_bundle(&sample_receipt_only_docs());
 
         assert_eq!(
-            bundle.trip.window.as_ref().map(|window| window.value.start_date.as_str()),
+            bundle
+                .trip
+                .window
+                .as_ref()
+                .map(|window| window.value.start_date.as_str()),
             Some("2018-12-25")
         );
         assert_eq!(
-            bundle.trip.window.as_ref().map(|window| window.value.end_date.as_str()),
+            bundle
+                .trip
+                .window
+                .as_ref()
+                .map(|window| window.value.end_date.as_str()),
             Some("2019-01-19")
         );
         assert_eq!(
@@ -3613,8 +3625,10 @@ mod tests {
     #[test]
     fn receipt_only_bundle_with_raw_dates_still_infers_destination_and_total_usd() {
         let provider = StaticFxRateProvider::demo();
-        let result =
-            synthesize_bundle_projection_with_fx(&sample_receipt_only_docs_with_raw_dates(), &provider);
+        let result = synthesize_bundle_projection_with_fx(
+            &sample_receipt_only_docs_with_raw_dates(),
+            &provider,
+        );
 
         assert_eq!(
             result

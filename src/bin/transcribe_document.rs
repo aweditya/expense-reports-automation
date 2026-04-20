@@ -5,7 +5,9 @@ use std::process::ExitCode;
 use expense_report_schema::{
     render_transcribed_document_json_pretty, render_transcribed_document_markdown,
     transcribe_document_path, transcribe_document_path_with_vertex,
-    transcribe_document_path_with_vertex_sdk, VertexGeminiConfig, VertexGeminiSdkConfig,
+    transcribe_document_path_with_vertex_sdk_profile, OcrPassKind, OcrPreprocessVariant,
+    VertexGeminiConfig, VertexGeminiSdkConfig,
+    VertexGeminiSdkPassProfile,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,6 +41,9 @@ fn run() -> Result<(), String> {
     let mut token_endpoint_override = None;
     let mut sdk_python = None;
     let mut sdk_script = None;
+    let mut pass_id = None;
+    let mut pass_kind = OcrPassKind::Primary;
+    let mut preprocess_variant = OcrPreprocessVariant::Original;
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -121,6 +126,45 @@ fn run() -> Result<(), String> {
                         .ok_or_else(|| "missing value for --sdk-script".to_owned())?,
                 );
             }
+            "--pass-id" => {
+                pass_id = Some(
+                    args.next()
+                        .ok_or_else(|| "missing value for --pass-id".to_owned())?,
+                );
+            }
+            "--pass-kind" => {
+                let value = args
+                    .next()
+                    .ok_or_else(|| "missing value for --pass-kind".to_owned())?;
+                pass_kind = match value.as_str() {
+                    "primary" => OcrPassKind::Primary,
+                    "verification" => OcrPassKind::Verification,
+                    "table_focused" => OcrPassKind::TableFocused,
+                    "geometry_assist" => OcrPassKind::GeometryAssist,
+                    _ => {
+                        return Err(format!(
+                            "unsupported pass kind {value:?}; expected primary, verification, table_focused, or geometry_assist"
+                        ))
+                    }
+                };
+            }
+            "--preprocess-variant" => {
+                let value = args
+                    .next()
+                    .ok_or_else(|| "missing value for --preprocess-variant".to_owned())?;
+                preprocess_variant = match value.as_str() {
+                    "original" => OcrPreprocessVariant::Original,
+                    "contrast_boosted" => OcrPreprocessVariant::ContrastBoosted,
+                    "grayscale" => OcrPreprocessVariant::Grayscale,
+                    "binarized" => OcrPreprocessVariant::Binarized,
+                    "deskewed" => OcrPreprocessVariant::Deskewed,
+                    _ => {
+                        return Err(format!(
+                            "unsupported preprocess variant {value:?}; expected original, contrast_boosted, grayscale, binarized, or deskewed"
+                        ))
+                    }
+                };
+            }
             _ if arg.starts_with("--") => {
                 return Err(format!("unknown flag {arg:?}"));
             }
@@ -133,7 +177,7 @@ fn run() -> Result<(), String> {
     }
 
     let Some(path) = path else {
-        return Err("usage: transcribe_document [--format markdown|json] [--output PATH] [--engine builtin|vertex-gemini|vertex-gemini-sdk] [--project PROJECT] [--location LOCATION] [--model MODEL] [--access-token TOKEN] [--service-account-key PATH] [--endpoint URL] [--token-endpoint URL] [--sdk-python PATH] [--sdk-script PATH] <document>".to_owned());
+        return Err("usage: transcribe_document [--format markdown|json] [--output PATH] [--engine builtin|vertex-gemini|vertex-gemini-sdk] [--project PROJECT] [--location LOCATION] [--model MODEL] [--access-token TOKEN] [--service-account-key PATH] [--endpoint URL] [--token-endpoint URL] [--sdk-python PATH] [--sdk-script PATH] [--pass-id ID] [--pass-kind primary|verification|table_focused|geometry_assist] [--preprocess-variant original|contrast_boosted|grayscale|binarized|deskewed] <document>".to_owned());
     };
 
     let document = match engine.as_str() {
@@ -162,8 +206,16 @@ fn run() -> Result<(), String> {
                 sdk_script.map(Into::into),
             )
             .map_err(|err| err.to_string())?;
-            transcribe_document_path_with_vertex_sdk(&path, &sdk_config)
-                .map_err(|err| err.to_string())?
+            transcribe_document_path_with_vertex_sdk_profile(
+                &path,
+                &sdk_config,
+                &VertexGeminiSdkPassProfile {
+                    pass_id,
+                    pass_kind,
+                    preprocess_variant,
+                },
+            )
+            .map_err(|err| err.to_string())?
         }
         _ => {
             return Err(

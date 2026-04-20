@@ -723,7 +723,9 @@ fn truncate_chars(value: &str, max_chars: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::transcribe::{TranscribedDocument, TranscribedPage, TranscriptionEngine};
+    use crate::transcribe::{
+        TranscribedDocument, TranscribedPage, TranscriptionEngine, TranscriptionMetadata,
+    };
     use crate::validator::validate_draft_report;
     use std::path::PathBuf;
 
@@ -734,9 +736,14 @@ mod tests {
             filename: "ER5499574_Redacted.pdf".to_owned(),
             source_path: PathBuf::from("ER5499574_Redacted.pdf"),
             engine: TranscriptionEngine::PdfToText,
-            pages: vec![TranscribedPage {
-                page_number: 1,
-                text: r#"
+            metadata: TranscriptionMetadata::primary_for_engine(
+                TranscriptionEngine::PdfToText,
+                "pdftotext",
+                None,
+            ),
+            pages: vec![TranscribedPage::text_only(
+                1,
+                r#"
                     Page 1 of 3 USD
                     Transaction Summary for Payee: Olivia Event Name: ICLR 2025 Report Total: 4,973.58
                     ER5499574 Expense Report Expenses (Foreign) Category:
@@ -753,7 +760,7 @@ mod tests {
                     Expense Authorized By: Olukotun, Oyekunle A. Affiliation: FACULTY
                 "#
                 .to_owned(),
-            }],
+            )],
         };
 
         let draft = extract_stanford_summary_document(&document).expect("summary should extract");

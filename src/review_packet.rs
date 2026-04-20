@@ -517,10 +517,7 @@ fn build_section_instances(
             .filter_map(|field| build_copy_field(draft, field, None))
             .collect::<Vec<_>>();
         fields.extend(build_collection_helper_fields(
-            draft,
-            readiness,
-            section,
-            None,
+            draft, readiness, section, None,
         ));
         if fields.is_empty() {
             Vec::new()
@@ -597,7 +594,8 @@ fn build_collection_helper_fields(
                 collection_rows: rows,
                 value: None,
                 present: present_non_empty,
-                needs_review: issue.is_some_and(|issue| issue.class == ReadinessIssueClass::ManualReview),
+                needs_review: issue
+                    .is_some_and(|issue| issue.class == ReadinessIssueClass::ManualReview),
                 required: spec.required || issue.is_some(),
                 source: spec.source,
                 entry_mode: spec.entry_mode,
@@ -664,7 +662,8 @@ fn collection_rows_at(
     value_at(report, path)
         .and_then(ReportValue::as_array)
         .map(|items| {
-            items.iter()
+            items
+                .iter()
                 .filter_map(|item| {
                     let object = item.as_object()?;
                     let mut values = BTreeMap::new();
@@ -742,7 +741,11 @@ fn build_document_snapshots(bundle: &CanonicalExpenseBundle) -> Vec<DocumentSnap
                 issue_messages.insert(issue.message.clone());
             }
             for issue in &bundle.issues {
-                if issue.document_ids.iter().any(|value| value == &document.document_id) {
+                if issue
+                    .document_ids
+                    .iter()
+                    .any(|value| value == &document.document_id)
+                {
                     issue_messages.insert(issue.message.clone());
                 }
             }
@@ -778,12 +781,18 @@ fn document_snapshot_fields(
             push_snapshot_field(
                 &mut fields,
                 "Merchant",
-                facts.merchant_name.as_ref().map(|value| value.value.clone()),
+                facts
+                    .merchant_name
+                    .as_ref()
+                    .map(|value| value.value.clone()),
             );
             push_snapshot_field(
                 &mut fields,
                 "Date",
-                facts.transaction_date.as_ref().map(|value| value.value.clone()),
+                facts
+                    .transaction_date
+                    .as_ref()
+                    .map(|value| value.value.clone()),
             );
             push_snapshot_field(
                 &mut fields,
@@ -802,17 +811,18 @@ fn document_snapshot_fields(
             push_snapshot_field(
                 &mut fields,
                 "Property",
-                facts.property_name.as_ref().map(|value| value.value.clone()),
+                facts
+                    .property_name
+                    .as_ref()
+                    .map(|value| value.value.clone()),
             );
             push_snapshot_field(
                 &mut fields,
                 "Stay window",
-                facts.stay_window.as_ref().map(|value| {
-                    format!(
-                        "{} to {}",
-                        value.value.start_date, value.value.end_date
-                    )
-                }),
+                facts
+                    .stay_window
+                    .as_ref()
+                    .map(|value| format!("{} to {}", value.value.start_date, value.value.end_date)),
             );
             push_snapshot_field(
                 &mut fields,
@@ -824,17 +834,18 @@ fn document_snapshot_fields(
             push_snapshot_field(
                 &mut fields,
                 "Traveler",
-                facts.traveler_names.first().map(|value| value.value.clone()),
+                facts
+                    .traveler_names
+                    .first()
+                    .map(|value| value.value.clone()),
             );
             push_snapshot_field(
                 &mut fields,
                 "Trip window",
-                facts.trip_window.as_ref().map(|value| {
-                    format!(
-                        "{} to {}",
-                        value.value.start_date, value.value.end_date
-                    )
-                }),
+                facts
+                    .trip_window
+                    .as_ref()
+                    .map(|value| format!("{} to {}", value.value.start_date, value.value.end_date)),
             );
             push_snapshot_field(
                 &mut fields,
@@ -853,7 +864,10 @@ fn document_snapshot_fields(
             push_snapshot_field(
                 &mut fields,
                 "Attendee",
-                facts.attendee_name.as_ref().map(|value| value.value.clone()),
+                facts
+                    .attendee_name
+                    .as_ref()
+                    .map(|value| value.value.clone()),
             );
             push_snapshot_field(
                 &mut fields,
@@ -884,24 +898,34 @@ fn document_snapshot_fields(
             push_snapshot_field(
                 &mut fields,
                 "Provider",
-                facts.provider_name.as_ref().map(|value| value.value.clone()),
+                facts
+                    .provider_name
+                    .as_ref()
+                    .map(|value| value.value.clone()),
             );
             push_snapshot_field(
                 &mut fields,
                 "Exchange rate",
-                facts.exchange_rate.as_ref().map(|value| value.value.clone()),
+                facts
+                    .exchange_rate
+                    .as_ref()
+                    .map(|value| value.value.clone()),
             );
         }
         DocumentFactsPayload::AirfarePriceComparison(facts) => {
             push_snapshot_field(
                 &mut fields,
                 "Selected fare",
-                facts.selected_fare.as_ref().map(observed_money_amount_display),
+                facts
+                    .selected_fare
+                    .as_ref()
+                    .map(observed_money_amount_display),
             );
             push_snapshot_field(
                 &mut fields,
                 "Lowest logical fare",
-                facts.lowest_logical_fare
+                facts
+                    .lowest_logical_fare
                     .as_ref()
                     .map(observed_money_amount_display),
             );
@@ -910,7 +934,10 @@ fn document_snapshot_fields(
             push_snapshot_field(
                 &mut fields,
                 "Merchant",
-                facts.merchant_name.as_ref().map(|value| value.value.clone()),
+                facts
+                    .merchant_name
+                    .as_ref()
+                    .map(|value| value.value.clone()),
             );
             push_snapshot_field(
                 &mut fields,
@@ -932,7 +959,8 @@ fn document_snapshot_fields(
             push_snapshot_field(
                 &mut fields,
                 "Reimbursement",
-                facts.reimbursement_amount
+                facts
+                    .reimbursement_amount
                     .as_ref()
                     .map(observed_money_amount_display),
             );
@@ -955,7 +983,9 @@ fn document_snapshot_fields(
         push_snapshot_field(
             &mut fields,
             "Total USD",
-            line.line_amount_usd.as_ref().map(|value| value.value.clone()),
+            line.line_amount_usd
+                .as_ref()
+                .map(|value| value.value.clone()),
         );
         push_snapshot_field(
             &mut fields,
@@ -1149,7 +1179,8 @@ fn humanize_path_tail(path: &str) -> String {
 }
 
 fn title_case_label(value: &str) -> String {
-    value.split_whitespace()
+    value
+        .split_whitespace()
         .map(|word| {
             let mut chars = word.chars();
             match chars.next() {
@@ -1213,8 +1244,8 @@ mod tests {
         IssueSeverity, MoneyAmount, ReceiptFacts,
     };
     use crate::draft::{ConfidenceLevel, EvidenceKind, EvidenceReference};
-    use crate::FieldControl;
     use crate::synthetic_documents::{generate_synthetic_packet, SyntheticVariant};
+    use crate::FieldControl;
 
     fn synthetic_documents() -> Vec<crate::ExtractedDocumentFacts> {
         generate_synthetic_packet(SyntheticVariant::Baseline)
@@ -1416,7 +1447,8 @@ mod tests {
         assert!(bundle
             .expense_lines
             .iter()
-            .any(|line| line.kind == CanonicalExpenseKind::GenericReceipt && !line.projection_supported));
+            .any(|line| line.kind == CanonicalExpenseKind::GenericReceipt
+                && !line.projection_supported));
         let projection = synthesize_bundle_projection(&bundle.documents);
         let packet = build_review_packet(
             &projection.bundle,
@@ -1439,7 +1471,8 @@ mod tests {
         assert!(packet.document_snapshots[0]
             .issue_messages
             .iter()
-            .any(|message| message.contains("not yet projected") || message.contains("not projected")));
+            .any(|message| message.contains("not yet projected")
+                || message.contains("not projected")));
     }
 
     #[test]

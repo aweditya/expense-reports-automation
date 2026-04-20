@@ -272,12 +272,13 @@ def bundle_document_path(
     if not document:
         raise LocalAppError(f"document not found in bundle: {document_id}")
 
-    candidate = (bundle_root / document["raw_path"]).resolve()
+    candidate = bundle_root / document["raw_path"]
+    resolved_candidate = candidate.resolve()
     try:
-        candidate.relative_to(bundle_root.resolve())
+        resolved_candidate.relative_to(bundle_root.resolve())
     except ValueError as err:
         raise LocalAppError("document path escaped bundle root") from err
-    if not candidate.exists():
+    if not resolved_candidate.exists():
         raise LocalAppError(f"document file missing for {document_id}")
     return candidate
 

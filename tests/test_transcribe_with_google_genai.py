@@ -1,4 +1,5 @@
 import importlib.util
+import io
 import unittest
 from pathlib import Path
 
@@ -63,6 +64,8 @@ class TranscribeWithGoogleGenAiTests(unittest.TestCase):
                 {
                     "page_number": 1,
                     "text": "## Receipt Summary\n- Merchant: Blue Bottle Coffee\n- Total: USD 12.40",
+                    "dimensions": None,
+                    "regions": [],
                 }
             ],
         )
@@ -107,6 +110,8 @@ class TranscribeWithGoogleGenAiTests(unittest.TestCase):
                 {
                     "page_number": 1,
                     "text": "## Nightly Charges\n- Date: 2025-04-21 | Description: Room",
+                    "dimensions": None,
+                    "regions": [],
                 }
             ],
         )
@@ -175,6 +180,43 @@ class TranscribeWithGoogleGenAiTests(unittest.TestCase):
             normalized,
             "# Merchant Receipt\n\n## Line Items\n- Laksa Lunch | SGD 18.00\n- Iced Tea | SGD 6.00",
         )
+
+    def test_build_prompt_adds_table_focused_hinting(self):
+        prompt = transcribe.build_prompt(
+            "receipt.png", "image/png", pass_kind="table_focused"
+        )
+        self.assertIn("Prioritize preserving table rows", prompt)
+
+    def test_preprocess_document_bytes_binarized_renders_png(self):
+        from PIL import Image
+
+        image = Image.new("RGB", (8, 8), color=(220, 220, 220))
+        image.putpixel((4, 4), (20, 20, 20))
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+
+        processed_bytes, processed_mime = transcribe.preprocess_document_bytes(
+            Path("receipt.png"),
+            buffer.getvalue(),
+            "image/png",
+            "binarized",
+        )
+
+        self.assertEqual(processed_mime, "image/png")
+        self.assertGreater(len(processed_bytes), 0)
+        self.assertNotEqual(processed_bytes, buffer.getvalue())
+
+    def test_preprocess_document_bytes_leaves_pdf_bytes_unchanged(self):
+        pdf_bytes = b"%PDF-1.4 mock"
+        processed_bytes, processed_mime = transcribe.preprocess_document_bytes(
+            Path("receipt.pdf"),
+            pdf_bytes,
+            "application/pdf",
+            "contrast_boosted",
+        )
+
+        self.assertEqual(processed_bytes, pdf_bytes)
+        self.assertEqual(processed_mime, "application/pdf")
 
 
 if __name__ == "__main__":

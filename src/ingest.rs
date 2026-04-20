@@ -48,7 +48,7 @@ pub struct IngestionConfig {
     pub fx_mode: IngestionFxMode,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct IngestionPipelineResult {
     pub bundle_id: String,
     pub transcriptions: Vec<TranscribedDocument>,

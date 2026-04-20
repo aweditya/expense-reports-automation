@@ -184,7 +184,8 @@ pub fn stage_bundle_uploads(
     fs::create_dir_all(bundle_root.join("normalized"))?;
     fs::create_dir_all(bundle_root.join("runs"))?;
 
-    let mut manifest = load_or_initialize_manifest(&bundle_root, &bundle_id, config.user_id.clone())?;
+    let mut manifest =
+        load_or_initialize_manifest(&bundle_root, &bundle_id, config.user_id.clone())?;
 
     for path in paths {
         let record = stage_document_into_bundle(&bundle_root, path, &manifest.documents)?;
@@ -276,7 +277,8 @@ pub fn load_bundle_workspace_manifest(
         return Err(WorkspaceError::BundleNotFound(bundle_id.to_owned()));
     }
     let manifest_path = bundle_root.join(MANIFEST_FILENAME);
-    let manifest = serde_json::from_str::<BundleWorkspaceManifest>(&fs::read_to_string(manifest_path)?)?;
+    let manifest =
+        serde_json::from_str::<BundleWorkspaceManifest>(&fs::read_to_string(manifest_path)?)?;
     Ok(manifest)
 }
 
@@ -326,7 +328,11 @@ fn stage_document_into_bundle(
     {
         let mut updated = existing.clone();
         let original_name = file_name_for_path(path);
-        if !updated.original_filenames.iter().any(|value| value == &original_name) {
+        if !updated
+            .original_filenames
+            .iter()
+            .any(|value| value == &original_name)
+        {
             updated.original_filenames.push(original_name);
             updated.original_filenames.sort();
             updated.original_filenames.dedup();
@@ -343,7 +349,8 @@ fn stage_document_into_bundle(
 
     let byte_count = fs::metadata(&stored_path)?.len();
     let media_type = detect_media_type(path)?.to_owned();
-    let normalized = normalize_stored_document(bundle_root, &document_id, &stored_path, &media_type)?;
+    let normalized =
+        normalize_stored_document(bundle_root, &document_id, &stored_path, &media_type)?;
 
     Ok(WorkspaceDocumentRecord {
         document_id,
@@ -395,7 +402,8 @@ fn normalize_stored_document(
         "pdf" => {
             render_pdf_pages_to_dir(stored_path, &pages_dir)?;
             page_image_paths = collect_page_image_paths(bundle_root, &pages_dir)?;
-            native_text_path = write_native_text_artifact(bundle_root, &normalized_dir, stored_path)?;
+            native_text_path =
+                write_native_text_artifact(bundle_root, &normalized_dir, stored_path)?;
         }
         "png" => {
             let output_path = pages_dir.join("page_0001.png");
@@ -410,13 +418,14 @@ fn normalize_stored_document(
             ));
         }
         "txt" | "md" | "markdown" => {
-            native_text_path = write_native_text_artifact(bundle_root, &normalized_dir, stored_path)?;
+            native_text_path =
+                write_native_text_artifact(bundle_root, &normalized_dir, stored_path)?;
         }
         _ => {
             return Err(WorkspaceError::UnsupportedFormat(format!(
-                "unsupported upload format {:?}; expected pdf, png, jpg, jpeg, txt, md, or markdown",
-                extension
-            )))
+            "unsupported upload format {:?}; expected pdf, png, jpg, jpeg, txt, md, or markdown",
+            extension
+        )))
         }
     }
 
@@ -430,7 +439,10 @@ fn normalize_stored_document(
         "native_text_path": native_text_path,
     });
     let manifest_path = normalized_dir.join("document_manifest.json");
-    fs::write(&manifest_path, serde_json::to_string_pretty(&manifest_payload)?)?;
+    fs::write(
+        &manifest_path,
+        serde_json::to_string_pretty(&manifest_payload)?,
+    )?;
 
     Ok(NormalizedDocumentArtifacts {
         document_manifest_path: relative_to_bundle_root(bundle_root, &manifest_path),
@@ -533,15 +545,12 @@ fn pdf_page_count(path: &Path) -> Result<u32, WorkspaceError> {
     let stdout = String::from_utf8_lossy(&output.stdout);
     for line in stdout.lines() {
         if let Some(value) = line.strip_prefix("Pages:") {
-            let page_count = value
-                .trim()
-                .parse::<u32>()
-                .map_err(|_| {
-                    WorkspaceError::InvalidCommandOutput(format!(
-                        "failed to parse pdf page count from {:?}",
-                        line
-                    ))
-                })?;
+            let page_count = value.trim().parse::<u32>().map_err(|_| {
+                WorkspaceError::InvalidCommandOutput(format!(
+                    "failed to parse pdf page count from {:?}",
+                    line
+                ))
+            })?;
             if page_count > 0 {
                 return Ok(page_count);
             }

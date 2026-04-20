@@ -13,8 +13,7 @@ fn main() -> ExitCode {
 }
 
 fn run() -> Result<(), String> {
-    let (artifacts_dir, revision_path, base_version_id) =
-        parse_args(std::env::args().skip(1))?;
+    let (artifacts_dir, revision_path, base_version_id) = parse_args(std::env::args().skip(1))?;
 
     let revision: DraftRevisionInput = serde_json::from_str(
         &std::fs::read_to_string(&revision_path)

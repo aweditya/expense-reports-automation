@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import io
 import json
 import time
 from pathlib import Path
@@ -33,6 +34,20 @@ def parse_args() -> argparse.Namespace:
         help="Gemini model id, for example gemini-3-flash-preview or gemini-3-pro-preview",
     )
     parser.add_argument(
+        "--pass-id",
+        help="Stable OCR pass identifier to include in the emitted artifact metadata",
+    )
+    parser.add_argument(
+        "--pass-kind",
+        default="primary",
+        help="OCR pass kind metadata, for example primary, verification, or table_focused",
+    )
+    parser.add_argument(
+        "--preprocess-variant",
+        default="original",
+        help="Preprocessing variant metadata, for example original, contrast_boosted, or binarized",
+    )
+    parser.add_argument(
         "--output",
         help="Optional output file for the rendered transcribed-document JSON",
     )
@@ -50,8 +65,8 @@ def detect_mime_type(path: Path) -> str:
     raise SystemExit(f"unsupported document format: {path.suffix}")
 
 
-def build_prompt(filename: str, mime_type: str) -> str:
-    return (
+def build_prompt(filename: str, mime_type: str, pass_kind: str) -> str:
+    prompt = (
         "Transcribe this financial document into extractor-friendly markdown and return only JSON.\n"
         "Use this schema exactly:\n"
         "{\"pages\":[{\"page_number\":1,\"text\":\"...markdown...\"}]}\n"
@@ -70,6 +85,58 @@ def build_prompt(filename: str, mime_type: str) -> str:
         f"Filename: {filename}\n"
         f"Mime type: {mime_type}\n"
     )
+    if pass_kind == "table_focused":
+        prompt += (
+            "Additional instructions for this OCR pass:\n"
+            "- Prioritize preserving table rows, aligned amounts, and totals exactly.\n"
+            "- Keep item descriptions attached to their amount columns whenever possible.\n"
+            "- Do not collapse nearby rows if they appear visually distinct.\n"
+        )
+    elif pass_kind == "verification":
+        prompt += (
+            "Additional instructions for this OCR pass:\n"
+            "- Prioritize exactness for merchant name, date, currency, and total.\n"
+            "- If text is faint or ambiguous, preserve the most faithful literal transcription.\n"
+        )
+    return prompt
+
+
+def preprocess_document_bytes(
+    document_path: Path, file_bytes: bytes, mime_type: str, preprocess_variant: str
+) -> tuple[bytes, str]:
+    if preprocess_variant == "original" or mime_type == "application/pdf":
+        return file_bytes, mime_type
+
+    if mime_type not in {"image/png", "image/jpeg"}:
+        return file_bytes, mime_type
+
+    try:
+        from PIL import Image, ImageEnhance
+    except ImportError as exc:  # pragma: no cover - dependency exists in repo venv
+        raise SystemExit(
+            f"Pillow is required for preprocess variant {preprocess_variant}: {exc}"
+        ) from exc
+
+    image = Image.open(io.BytesIO(file_bytes))
+    image.load()
+
+    if preprocess_variant == "contrast_boosted":
+        image = ImageEnhance.Contrast(image).enhance(1.8)
+    elif preprocess_variant == "grayscale":
+        image = image.convert("L")
+    elif preprocess_variant == "binarized":
+        grayscale = image.convert("L")
+        image = grayscale.point(lambda value: 255 if value >= 170 else 0, mode="1")
+    elif preprocess_variant == "deskewed":
+        # Real deskewing can be added later; keep this variant explicit in metadata now.
+        image = image
+    else:
+        raise SystemExit(f"unsupported preprocess variant: {preprocess_variant}")
+
+    output = io.BytesIO()
+    rendered = image.convert("L") if image.mode == "1" else image
+    rendered.save(output, format="PNG")
+    return output.getvalue(), "image/png"
 
 
 def sanitize_identifier(value: str) -> str:
@@ -118,6 +185,8 @@ def normalize_pages(payload: dict) -> list[dict]:
             {
                 "page_number": page.get("page_number") or index,
                 "text": normalize_extractor_markdown(page["text"]),
+                "dimensions": None,
+                "regions": [],
             }
         )
     return normalized
@@ -378,8 +447,14 @@ def main() -> int:
     )
 
     mime_type = detect_mime_type(document_path)
-    prompt = build_prompt(document_path.name, mime_type)
     file_bytes = document_path.read_bytes()
+    file_bytes, mime_type = preprocess_document_bytes(
+        document_path,
+        file_bytes,
+        mime_type,
+        args.preprocess_variant,
+    )
+    prompt = build_prompt(document_path.name, mime_type, args.pass_kind)
 
     response = generate_content_with_retries(
         client,
@@ -401,6 +476,16 @@ def main() -> int:
         "filename": document_path.name,
         "source_path": str(document_path),
         "engine": "vertex_gemini_sdk",
+        "metadata": {
+            "pass_id": args.pass_id
+            or f"{sanitize_identifier(document_path.stem)}_{args.pass_kind}_{args.preprocess_variant}",
+            "pass_kind": args.pass_kind,
+            "preprocess_variant": args.preprocess_variant,
+            "producer": "google_genai_sdk",
+            "model": args.model,
+            "geometry_source": "none",
+            "geometry_available": False,
+        },
         "pages": normalize_pages(payload),
     }
     rendered = json.dumps(result, indent=2)

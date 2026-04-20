@@ -124,10 +124,16 @@ fn render_toolbar(html: &mut String) {
     html.push_str("</div>");
     html.push_str("<div class=\"toolbar-links\">");
     html.push_str("<a href=\"overview\">Bundle Overview</a>");
-    html.push_str("<a href=\"artifact/draft.yaml\" target=\"_blank\" rel=\"noreferrer\">Draft YAML</a>");
+    html.push_str(
+        "<a href=\"artifact/draft.yaml\" target=\"_blank\" rel=\"noreferrer\">Draft YAML</a>",
+    );
     html.push_str("<a href=\"artifact/review_packet.json\" target=\"_blank\" rel=\"noreferrer\">Review Packet JSON</a>");
-    html.push_str("<a href=\"artifact/ledger.json\" target=\"_blank\" rel=\"noreferrer\">Ledger JSON</a>");
-    html.push_str("<a href=\"review-session\" target=\"_blank\" rel=\"noreferrer\">Session Summary</a>");
+    html.push_str(
+        "<a href=\"artifact/ledger.json\" target=\"_blank\" rel=\"noreferrer\">Ledger JSON</a>",
+    );
+    html.push_str(
+        "<a href=\"review-session\" target=\"_blank\" rel=\"noreferrer\">Session Summary</a>",
+    );
     html.push_str("<a href=\"manifest\" target=\"_blank\" rel=\"noreferrer\">Bundle Manifest</a>");
     html.push_str("</div>");
     html.push_str("</section>\n");
@@ -352,7 +358,9 @@ fn render_field_editor(html: &mut String, field: &CopyField, input_id: &str) {
         html.push_str("\" data-control=\"checkbox\" data-field-path=\"");
         html.push_str(&escape_html_attribute(&field.path));
         html.push_str("\" data-initial-json=\"");
-        html.push_str(&escape_html_attribute(&bool_initial_json(field.value.as_deref())));
+        html.push_str(&escape_html_attribute(&bool_initial_json(
+            field.value.as_deref(),
+        )));
         html.push_str("\"");
         html.push_str(disabled);
         html.push_str(">");
@@ -471,7 +479,9 @@ fn render_collection_column_control(
             html.push_str("</select>");
         }
         FieldControl::Checkbox => {
-            html.push_str("<select class=\"structured-row-input checkbox-select\" data-column-key=\"");
+            html.push_str(
+                "<select class=\"structured-row-input checkbox-select\" data-column-key=\"",
+            );
             html.push_str(&escape_html_attribute(&column.key));
             html.push_str("\" data-column-control=\"checkbox\">");
             render_checkbox_option(html, "", "Unset", value.is_empty());
@@ -544,7 +554,10 @@ fn render_inline_evidence(html: &mut String, field: &CopyField) {
     html.push_str("<details class=\"field-evidence\" id=\"");
     html.push_str(&escape_html(&details_id));
     html.push_str("\"><summary>");
-    html.push_str(&escape_html(&format!("Evidence ({})", field.evidence.len())));
+    html.push_str(&escape_html(&format!(
+        "Evidence ({})",
+        field.evidence.len()
+    )));
     html.push_str("</summary><div class=\"field-evidence-list\">");
     for evidence in &field.evidence {
         html.push_str("<article class=\"evidence-inline-card\" id=\"");
@@ -560,12 +573,16 @@ fn render_inline_evidence(html: &mut String, field: &CopyField) {
         html.push_str(&escape_html(&evidence_title(evidence)));
         html.push_str("</h4>");
         if let Some(source_label) = evidence_source_label(evidence).as_deref() {
-            html.push_str("<p class=\"evidence-detail\"><span class=\"evidence-detail-label\">Source</span>");
+            html.push_str(
+                "<p class=\"evidence-detail\"><span class=\"evidence-detail-label\">Source</span>",
+            );
             html.push_str(&escape_html(source_label));
             html.push_str("</p>");
         }
         if let Some(origin_label) = evidence.origin.as_deref() {
-            html.push_str("<p class=\"evidence-detail\"><span class=\"evidence-detail-label\">Origin</span>");
+            html.push_str(
+                "<p class=\"evidence-detail\"><span class=\"evidence-detail-label\">Origin</span>",
+            );
             html.push_str(&escape_html(origin_label));
             html.push_str("</p>");
         }
@@ -599,7 +616,9 @@ fn render_document_snapshot_panel(html: &mut String, packet: &ReviewPacket) {
     html.push_str("<div class=\"panel-heading\"><p class=\"eyebrow\">Source Documents</p><h2>OCR And Extraction Snapshot</h2></div>\n");
     html.push_str("<p class=\"document-snapshot-copy\">Each card shows what the system recovered from the uploaded source document, even when the document could not yet be projected into a filing line.</p>");
     if packet.document_snapshots.is_empty() {
-        html.push_str("<p class=\"empty-state\">No source-document extraction snapshot is available.</p>\n");
+        html.push_str(
+            "<p class=\"empty-state\">No source-document extraction snapshot is available.</p>\n",
+        );
     } else {
         html.push_str("<div class=\"document-snapshot-grid\">");
         for document in &packet.document_snapshots {
@@ -746,7 +765,10 @@ fn bool_initial_json(value: Option<&str>) -> String {
 fn correction_reason_options() -> &'static [(&'static str, &'static str)] {
     &[
         ("ocr_error", "OCR error"),
-        ("wrong_document_classification", "Wrong document classification"),
+        (
+            "wrong_document_classification",
+            "Wrong document classification",
+        ),
         (
             "wrong_expense_type_classification",
             "Wrong expense type classification",
@@ -759,7 +781,10 @@ fn correction_reason_options() -> &'static [(&'static str, &'static str)] {
             "stanford_site_workflow_mismatch",
             "Stanford site workflow mismatch",
         ),
-        ("unclear_or_undocumented_rule", "Unclear or undocumented rule"),
+        (
+            "unclear_or_undocumented_rule",
+            "Unclear or undocumented rule",
+        ),
         ("other", "Other"),
     ]
 }
@@ -903,12 +928,10 @@ fn evidence_kind_display(evidence: &EvidenceReference) -> &'static str {
 
 fn evidence_source_label(evidence: &EvidenceReference) -> Option<String> {
     match evidence.kind {
-        crate::draft::EvidenceKind::Document | crate::draft::EvidenceKind::DocumentSpan => {
-            evidence
-                .filename
-                .clone()
-                .or_else(|| evidence.document_id.clone())
-        }
+        crate::draft::EvidenceKind::Document | crate::draft::EvidenceKind::DocumentSpan => evidence
+            .filename
+            .clone()
+            .or_else(|| evidence.document_id.clone()),
         crate::draft::EvidenceKind::SystemGenerated => evidence.document_id.clone(),
         crate::draft::EvidenceKind::UserInput => evidence
             .filename
@@ -922,7 +945,8 @@ fn short_origin_label(origin: &str) -> String {
 }
 
 fn humanize_machine_label(value: &str) -> String {
-    value.split('_')
+    value
+        .split('_')
         .filter(|part| !part.is_empty())
         .map(|part| {
             let mut chars = part.chars();
@@ -1076,7 +1100,9 @@ mod tests {
         let rendered = render_review_workbench_html(&packet);
 
         assert!(rendered.contains("jumpToField(event"));
-        assert!(rendered.contains("href=\"#field-expense-report-general-information-authorized-by\""));
+        assert!(
+            rendered.contains("href=\"#field-expense-report-general-information-authorized-by\"")
+        );
     }
 
     #[test]

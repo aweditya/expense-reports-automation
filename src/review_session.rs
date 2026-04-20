@@ -9,8 +9,8 @@ use crate::ledger::{
     DraftVersionRecord, ReviewSubmissionLedger,
 };
 use crate::render::{render_draft_report_yaml, RenderDraftReportError};
-use crate::review_packet::FilingStatus;
 use crate::review_packet::render_review_packet_json_pretty;
+use crate::review_packet::FilingStatus;
 use crate::review_workbench::render_review_workbench_html;
 use crate::validator::render_validation_report_json_pretty;
 
@@ -43,7 +43,10 @@ impl fmt::Display for ReviewSessionError {
             Self::RenderDraft(err) => write!(f, "{err}"),
             Self::Ledger(message) => write!(f, "{message}"),
             Self::MissingCurrentVersion(version_id) => {
-                write!(f, "current draft version {version_id} was not found in ledger")
+                write!(
+                    f,
+                    "current draft version {version_id} was not found in ledger"
+                )
             }
         }
     }
@@ -113,7 +116,10 @@ fn write_review_version_artifacts(
     version: &DraftVersionRecord,
     ledger: &ReviewSubmissionLedger,
 ) -> Result<(), ReviewSessionError> {
-    fs::write(output_dir.join("draft.yaml"), render_draft_report_yaml(&version.draft)?)?;
+    fs::write(
+        output_dir.join("draft.yaml"),
+        render_draft_report_yaml(&version.draft)?,
+    )?;
     fs::write(
         output_dir.join("validation.json"),
         render_validation_report_json_pretty(&version.validation)?,
@@ -138,7 +144,9 @@ fn write_review_version_artifacts(
     Ok(())
 }
 
-fn current_version(ledger: &ReviewSubmissionLedger) -> Result<&DraftVersionRecord, ReviewSessionError> {
+fn current_version(
+    ledger: &ReviewSubmissionLedger,
+) -> Result<&DraftVersionRecord, ReviewSessionError> {
     ledger
         .draft_versions
         .iter()
@@ -197,7 +205,9 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use crate::bundle_synthesis::{synthesize_bundle_projection_with_fx, StaticFxRateProvider};
-    use crate::ledger::{initialize_review_submission_ledger, ActorRole, DraftRevisionInput, FieldEditInput};
+    use crate::ledger::{
+        initialize_review_submission_ledger, ActorRole, DraftRevisionInput, FieldEditInput,
+    };
     use crate::synthetic_documents::{generate_synthetic_packet, SyntheticVariant};
     use crate::value::ReportValue;
 
@@ -266,10 +276,13 @@ mod tests {
             .expect("revision should apply");
 
         assert_eq!(summary.version_id, 2);
-        let ledger_value: serde_json::Value =
-            serde_json::from_str(&std::fs::read_to_string(temp_dir.join("ledger.json")).expect("ledger should exist"))
-                .expect("ledger json should parse");
+        let ledger_value: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(temp_dir.join("ledger.json")).expect("ledger should exist"),
+        )
+        .expect("ledger json should parse");
         assert_eq!(ledger_value["summary"]["current_draft_version_id"], 2);
-        assert!(temp_dir.join("review_versions/v2/review_workbench.html").exists());
+        assert!(temp_dir
+            .join("review_versions/v2/review_workbench.html")
+            .exists());
     }
 }

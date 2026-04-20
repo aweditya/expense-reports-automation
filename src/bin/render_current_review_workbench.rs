@@ -20,13 +20,9 @@ fn run() -> Result<String, String> {
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--artifacts-dir" => {
-                artifacts_dir = Some(
-                    args.next()
-                        .ok_or_else(|| {
-                            "usage: render_current_review_workbench --artifacts-dir <dir>"
-                                .to_owned()
-                        })?,
-                );
+                artifacts_dir = Some(args.next().ok_or_else(|| {
+                    "usage: render_current_review_workbench --artifacts-dir <dir>".to_owned()
+                })?);
             }
             other => {
                 return Err(format!(
@@ -36,9 +32,8 @@ fn run() -> Result<String, String> {
         }
     }
 
-    let artifacts_dir = artifacts_dir.ok_or_else(|| {
-        "usage: render_current_review_workbench --artifacts-dir <dir>".to_owned()
-    })?;
+    let artifacts_dir = artifacts_dir
+        .ok_or_else(|| "usage: render_current_review_workbench --artifacts-dir <dir>".to_owned())?;
     let ledger_path = std::path::Path::new(&artifacts_dir).join("ledger.json");
     let ledger = load_review_submission_ledger_path(&ledger_path)
         .map_err(|err| format!("failed to load ledger {}: {err}", ledger_path.display()))?;

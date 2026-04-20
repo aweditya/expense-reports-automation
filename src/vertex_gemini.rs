@@ -8,7 +8,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::Deserialize;
 use serde_json::{json, Value as JsonValue};
 
-use crate::transcribe::{TranscribedDocument, TranscribedPage, TranscriptionEngine};
+use crate::transcribe::{
+    TranscribedDocument, TranscribedPage, TranscriptionEngine, TranscriptionMetadata,
+};
 
 const CLOUD_PLATFORM_SCOPE: &str = "https://www.googleapis.com/auth/cloud-platform";
 const DEFAULT_GEMINI_MODEL: &str = "gemini-3.1-flash-lite-preview";
@@ -226,6 +228,11 @@ where
         filename: file_name_for_path(path),
         source_path: path.to_path_buf(),
         engine: TranscriptionEngine::VertexGemini,
+        metadata: TranscriptionMetadata::primary_for_engine(
+            TranscriptionEngine::VertexGemini,
+            "vertex_gemini_rest",
+            Some(resolved_config.model.clone()),
+        ),
         pages,
     })
 }
@@ -265,10 +272,10 @@ where
         );
         let response = send_generate_content_request(config, &request)?;
         let page_text = coerce_single_page_text(parse_generate_content_response(&response)?);
-        pages.push(TranscribedPage {
-            page_number: rendered_page.page_number,
-            text: page_text,
-        });
+        pages.push(TranscribedPage::text_only(
+            rendered_page.page_number,
+            page_text,
+        ));
     }
 
     Ok(pages)
@@ -383,9 +390,8 @@ fn parse_generate_content_response(
     let normalized = pages
         .into_iter()
         .enumerate()
-        .map(|(index, page)| TranscribedPage {
-            page_number: page.page_number.unwrap_or(index as u32 + 1),
-            text: page.text,
+        .map(|(index, page)| {
+            TranscribedPage::text_only(page.page_number.unwrap_or(index as u32 + 1), page.text)
         })
         .collect::<Vec<_>>();
 

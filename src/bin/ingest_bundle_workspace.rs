@@ -141,8 +141,8 @@ fn run_status(args: Vec<String>) -> Result<(), String> {
         .clone()
         .ok_or_else(|| usage().to_owned())?;
     let bundle_id = parsed.bundle_id.clone().ok_or_else(|| usage().to_owned())?;
-    let manifest =
-        load_bundle_workspace_manifest(workspace_root, &bundle_id).map_err(|err| err.to_string())?;
+    let manifest = load_bundle_workspace_manifest(workspace_root, &bundle_id)
+        .map_err(|err| err.to_string())?;
 
     match parsed.output_format.as_deref().unwrap_or("summary") {
         "summary" => {
@@ -267,7 +267,8 @@ fn parse_args(args: &[String], parsed: &mut ParsedArgs) -> Result<(), String> {
             }
             "--service-account-key" => {
                 index += 1;
-                parsed.service_account_key_path = Some(required_value(args, index, arg)?.to_owned());
+                parsed.service_account_key_path =
+                    Some(required_value(args, index, arg)?.to_owned());
             }
             "--endpoint" => {
                 index += 1;

@@ -14,18 +14,169 @@ pub enum TranscriptionEngine {
     VertexGeminiSdk,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TranscribedPage {
-    pub page_number: u32,
-    pub text: String,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OcrPassKind {
+    Primary,
+    Verification,
+    TableFocused,
+    GeometryAssist,
+}
+
+impl OcrPassKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Primary => "primary",
+            Self::Verification => "verification",
+            Self::TableFocused => "table_focused",
+            Self::GeometryAssist => "geometry_assist",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OcrPreprocessVariant {
+    Original,
+    ContrastBoosted,
+    Grayscale,
+    Binarized,
+    Deskewed,
+}
+
+impl OcrPreprocessVariant {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Original => "original",
+            Self::ContrastBoosted => "contrast_boosted",
+            Self::Grayscale => "grayscale",
+            Self::Binarized => "binarized",
+            Self::Deskewed => "deskewed",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OcrGeometrySource {
+    None,
+    Gemini,
+    DocumentAi,
+    Hybrid,
+}
+
+impl OcrGeometrySource {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Gemini => "gemini",
+            Self::DocumentAi => "document_ai",
+            Self::Hybrid => "hybrid",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OcrRegionKind {
+    Block,
+    Line,
+    Token,
+    Table,
+    TableRow,
+    TableCell,
+    LabelCandidate,
+    ValueCandidate,
+}
+
+impl OcrRegionKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Block => "block",
+            Self::Line => "line",
+            Self::Token => "token",
+            Self::Table => "table",
+            Self::TableRow => "table_row",
+            Self::TableCell => "table_cell",
+            Self::LabelCandidate => "label_candidate",
+            Self::ValueCandidate => "value_candidate",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TranscriptionMetadata {
+    pub pass_id: String,
+    pub pass_kind: OcrPassKind,
+    pub preprocess_variant: OcrPreprocessVariant,
+    pub producer: String,
+    pub model: Option<String>,
+    pub geometry_source: OcrGeometrySource,
+    pub geometry_available: bool,
+}
+
+impl TranscriptionMetadata {
+    pub fn primary_for_engine(
+        engine: TranscriptionEngine,
+        producer: impl Into<String>,
+        model: Option<String>,
+    ) -> Self {
+        Self {
+            pass_id: format!("{}_primary_original", transcription_engine_name(engine)),
+            pass_kind: OcrPassKind::Primary,
+            preprocess_variant: OcrPreprocessVariant::Original,
+            producer: producer.into(),
+            model,
+            geometry_source: OcrGeometrySource::None,
+            geometry_available: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct OcrBoundingBox {
+    pub left: f32,
+    pub top: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PageDimensions {
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TranscribedRegion {
+    pub region_id: String,
+    pub kind: OcrRegionKind,
+    pub text: String,
+    pub bbox: Option<OcrBoundingBox>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TranscribedPage {
+    pub page_number: u32,
+    pub text: String,
+    pub dimensions: Option<PageDimensions>,
+    pub regions: Vec<TranscribedRegion>,
+}
+
+impl TranscribedPage {
+    pub fn text_only(page_number: u32, text: impl Into<String>) -> Self {
+        Self {
+            page_number,
+            text: text.into(),
+            dimensions: None,
+            regions: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct TranscribedDocument {
     pub document_id: String,
     pub filename: String,
     pub source_path: PathBuf,
     pub engine: TranscriptionEngine,
+    pub metadata: TranscriptionMetadata,
     pub pages: Vec<TranscribedPage>,
 }
 
@@ -103,6 +254,27 @@ pub fn render_transcribed_document_markdown(document: &TranscribedDocument) -> S
         "- engine: {}\n",
         transcription_engine_name(document.engine)
     ));
+    rendered.push_str(&format!("- pass_id: {}\n", document.metadata.pass_id));
+    rendered.push_str(&format!(
+        "- pass_kind: {}\n",
+        document.metadata.pass_kind.as_str()
+    ));
+    rendered.push_str(&format!(
+        "- preprocess_variant: {}\n",
+        document.metadata.preprocess_variant.as_str()
+    ));
+    rendered.push_str(&format!("- producer: {}\n", document.metadata.producer));
+    if let Some(model) = document.metadata.model.as_deref() {
+        rendered.push_str(&format!("- model: {}\n", model));
+    }
+    rendered.push_str(&format!(
+        "- geometry_source: {}\n",
+        document.metadata.geometry_source.as_str()
+    ));
+    rendered.push_str(&format!(
+        "- geometry_available: {}\n",
+        document.metadata.geometry_available
+    ));
 
     for page in &document.pages {
         rendered.push_str(&format!("\n## Page {}\n\n", page.page_number));
@@ -143,6 +315,40 @@ pub fn transcribed_document_to_json_value(document: &TranscribedDocument) -> Jso
         "engine".to_owned(),
         JsonValue::String(transcription_engine_name(document.engine).to_owned()),
     );
+    let mut metadata = JsonMap::new();
+    metadata.insert(
+        "pass_id".to_owned(),
+        JsonValue::String(document.metadata.pass_id.clone()),
+    );
+    metadata.insert(
+        "pass_kind".to_owned(),
+        JsonValue::String(document.metadata.pass_kind.as_str().to_owned()),
+    );
+    metadata.insert(
+        "preprocess_variant".to_owned(),
+        JsonValue::String(document.metadata.preprocess_variant.as_str().to_owned()),
+    );
+    metadata.insert(
+        "producer".to_owned(),
+        JsonValue::String(document.metadata.producer.clone()),
+    );
+    metadata.insert(
+        "model".to_owned(),
+        document
+            .metadata
+            .model
+            .as_ref()
+            .map_or(JsonValue::Null, |value| JsonValue::String(value.clone())),
+    );
+    metadata.insert(
+        "geometry_source".to_owned(),
+        JsonValue::String(document.metadata.geometry_source.as_str().to_owned()),
+    );
+    metadata.insert(
+        "geometry_available".to_owned(),
+        JsonValue::Bool(document.metadata.geometry_available),
+    );
+    root.insert("metadata".to_owned(), JsonValue::Object(metadata));
     root.insert(
         "pages".to_owned(),
         JsonValue::Array(
@@ -156,6 +362,68 @@ pub fn transcribed_document_to_json_value(document: &TranscribedDocument) -> Jso
                         JsonValue::Number(page.page_number.into()),
                     );
                     entry.insert("text".to_owned(), JsonValue::String(page.text.clone()));
+                    entry.insert(
+                        "dimensions".to_owned(),
+                        page.dimensions.map_or(JsonValue::Null, |dimensions| {
+                            let mut dimensions_json = JsonMap::new();
+                            dimensions_json.insert(
+                                "width".to_owned(),
+                                JsonValue::Number(dimensions.width.into()),
+                            );
+                            dimensions_json.insert(
+                                "height".to_owned(),
+                                JsonValue::Number(dimensions.height.into()),
+                            );
+                            JsonValue::Object(dimensions_json)
+                        }),
+                    );
+                    entry.insert(
+                        "regions".to_owned(),
+                        JsonValue::Array(
+                            page.regions
+                                .iter()
+                                .map(|region| {
+                                    let mut region_json = JsonMap::new();
+                                    region_json.insert(
+                                        "region_id".to_owned(),
+                                        JsonValue::String(region.region_id.clone()),
+                                    );
+                                    region_json.insert(
+                                        "kind".to_owned(),
+                                        JsonValue::String(region.kind.as_str().to_owned()),
+                                    );
+                                    region_json.insert(
+                                        "text".to_owned(),
+                                        JsonValue::String(region.text.clone()),
+                                    );
+                                    region_json.insert(
+                                        "bbox".to_owned(),
+                                        region.bbox.map_or(JsonValue::Null, |bbox| {
+                                            let mut bbox_json = JsonMap::new();
+                                            bbox_json.insert(
+                                                "left".to_owned(),
+                                                json_number_from_f32(bbox.left),
+                                            );
+                                            bbox_json.insert(
+                                                "top".to_owned(),
+                                                json_number_from_f32(bbox.top),
+                                            );
+                                            bbox_json.insert(
+                                                "width".to_owned(),
+                                                json_number_from_f32(bbox.width),
+                                            );
+                                            bbox_json.insert(
+                                                "height".to_owned(),
+                                                json_number_from_f32(bbox.height),
+                                            );
+                                            JsonValue::Object(bbox_json)
+                                        }),
+                                    );
+                                    JsonValue::Object(region_json)
+                                })
+                                .collect(),
+                        ),
+                    );
                     JsonValue::Object(entry)
                 })
                 .collect(),
@@ -185,6 +453,11 @@ fn transcribe_pdf(path: &Path) -> Result<TranscribedDocument, TranscriptionError
         filename: file_name_for_path(path),
         source_path: path.to_path_buf(),
         engine: TranscriptionEngine::PdfToText,
+        metadata: TranscriptionMetadata::primary_for_engine(
+            TranscriptionEngine::PdfToText,
+            "pdftotext",
+            None,
+        ),
         pages: split_pages(&text),
     })
 }
@@ -196,10 +469,12 @@ fn transcribe_plain_text(path: &Path) -> Result<TranscribedDocument, Transcripti
         filename: file_name_for_path(path),
         source_path: path.to_path_buf(),
         engine: TranscriptionEngine::PlainText,
-        pages: vec![TranscribedPage {
-            page_number: 1,
-            text,
-        }],
+        metadata: TranscriptionMetadata::primary_for_engine(
+            TranscriptionEngine::PlainText,
+            "plain_text",
+            None,
+        ),
+        pages: vec![TranscribedPage::text_only(1, text)],
     })
 }
 
@@ -222,11 +497,14 @@ fn split_pages(text: &str) -> Vec<TranscribedPage> {
         .into_iter()
         .map(str::trim)
         .enumerate()
-        .map(|(index, page)| TranscribedPage {
-            page_number: index as u32 + 1,
-            text: page.to_owned(),
-        })
+        .map(|(index, page)| TranscribedPage::text_only(index as u32 + 1, page.to_owned()))
         .collect()
+}
+
+fn json_number_from_f32(value: f32) -> JsonValue {
+    serde_json::Number::from_f64(value as f64)
+        .map(JsonValue::Number)
+        .unwrap_or(JsonValue::Null)
 }
 
 fn transcription_engine_name(value: TranscriptionEngine) -> &'static str {
@@ -278,6 +556,7 @@ fn sanitize_identifier(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::Value as JsonValue;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
@@ -306,15 +585,14 @@ mod tests {
             filename: "sample.pdf".to_owned(),
             source_path: PathBuf::from("/tmp/sample.pdf"),
             engine: TranscriptionEngine::VertexGemini,
+            metadata: TranscriptionMetadata::primary_for_engine(
+                TranscriptionEngine::VertexGemini,
+                "vertex_gemini",
+                Some("gemini-3-flash-preview".to_owned()),
+            ),
             pages: vec![
-                TranscribedPage {
-                    page_number: 1,
-                    text: "first page".to_owned(),
-                },
-                TranscribedPage {
-                    page_number: 2,
-                    text: "second page".to_owned(),
-                },
+                TranscribedPage::text_only(1, "first page"),
+                TranscribedPage::text_only(2, "second page"),
             ],
         };
 
@@ -322,7 +600,44 @@ mod tests {
         assert!(markdown.contains("# Transcribed Document"));
         assert!(markdown.contains("## Page 1"));
         assert!(markdown.contains("## Page 2"));
+        assert!(markdown.contains("- pass_kind: primary"));
+        assert!(markdown.contains("- preprocess_variant: original"));
         assert!(markdown.contains("```text\nfirst page\n```"));
+    }
+
+    #[test]
+    fn json_render_includes_metadata_and_empty_geometry_slots() {
+        let document = TranscribedDocument {
+            document_id: "sample".to_owned(),
+            filename: "sample.txt".to_owned(),
+            source_path: PathBuf::from("fixtures/sample.txt"),
+            engine: TranscriptionEngine::PlainText,
+            metadata: TranscriptionMetadata::primary_for_engine(
+                TranscriptionEngine::PlainText,
+                "plain_text",
+                None,
+            ),
+            pages: vec![TranscribedPage::text_only(1, "hello world")],
+        };
+
+        let rendered = transcribed_document_to_json_value(&document);
+        assert_eq!(
+            rendered
+                .get("metadata")
+                .and_then(|value| value.get("pass_kind"))
+                .and_then(JsonValue::as_str),
+            Some("primary")
+        );
+        assert_eq!(
+            rendered
+                .get("pages")
+                .and_then(JsonValue::as_array)
+                .and_then(|pages| pages.first())
+                .and_then(|page| page.get("regions"))
+                .and_then(JsonValue::as_array)
+                .map(Vec::len),
+            Some(0)
+        );
     }
 
     #[test]

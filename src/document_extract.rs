@@ -142,8 +142,12 @@ fn fallback_receipt_classification(
     })?;
 
     let has_supporting_signal = lines.iter().any(|line| {
-        strip_label_value(&line.raw, &["subtotal", "tax", "gst", "vat", "tip"], !line.is_heading)
-            .is_some()
+        strip_label_value(
+            &line.raw,
+            &["subtotal", "tax", "gst", "vat", "tip"],
+            !line.is_heading,
+        )
+        .is_some()
             || strip_label_value(&line.raw, &["transaction date", "date"], !line.is_heading)
                 .is_some()
             || find_pipe_value(line, &["transaction date", "date"]).is_some()
@@ -441,14 +445,16 @@ fn extract_receipt(
         ConfidenceLevel::High,
     );
     let tip_amount = observed_money(document, lines, &["tip"], ConfidenceLevel::High);
-    let total_paid = observed_receipt_total(document, lines, ConfidenceLevel::High)
-    .or_else(|| infer_receipt_total(subtotal.as_ref(), tax_amount.as_ref(), tip_amount.as_ref()));
+    let total_paid = observed_receipt_total(document, lines, ConfidenceLevel::High).or_else(|| {
+        infer_receipt_total(subtotal.as_ref(), tax_amount.as_ref(), tip_amount.as_ref())
+    });
     let section_rows = collect_section_rows(
         lines,
         &["line items", "items", "purchased items", "items purchased"],
     );
     let line_items = if section_rows.is_empty() {
-        lines.iter()
+        lines
+            .iter()
             .filter(|line| looks_like_receipt_item_line(line))
             .filter_map(|line| parse_receipt_line_item(document, line))
             .collect::<Vec<_>>()
@@ -1478,7 +1484,8 @@ fn normalize_currency_code(value: &str) -> String {
 }
 
 fn extract_currency_hint(value: &str) -> Option<String> {
-    value.split(|ch: char| !ch.is_ascii_alphanumeric())
+    value
+        .split(|ch: char| !ch.is_ascii_alphanumeric())
         .map(|token| token.trim())
         .find(|token| {
             matches!(
@@ -1660,7 +1667,8 @@ fn infer_receipt_merchant_name(
     document: &TranscribedDocument,
     lines: &[LineRef],
 ) -> Option<Observed<String>> {
-    lines.iter()
+    lines
+        .iter()
         .enumerate()
         .filter(|(_, line)| line.is_heading)
         .filter(|(_, line)| !is_generic_receipt_heading(&line.normalized))
@@ -1735,11 +1743,11 @@ fn receipt_heading_score(value: &str) -> i32 {
         score += 2;
     }
 
-    let alphabetic = content.chars().filter(|ch| ch.is_ascii_alphabetic()).count() as i32;
-    let uppercase = content
+    let alphabetic = content
         .chars()
-        .filter(|ch| ch.is_ascii_uppercase())
+        .filter(|ch| ch.is_ascii_alphabetic())
         .count() as i32;
+    let uppercase = content.chars().filter(|ch| ch.is_ascii_uppercase()).count() as i32;
     if alphabetic > 0 && uppercase * 10 >= alphabetic * 6 {
         score += 5;
     }
@@ -1989,11 +1997,15 @@ mod tests {
         match actual.facts {
             DocumentFactsPayload::Receipt(facts) => {
                 assert_eq!(
-                    facts.merchant_name.as_ref().map(|value| value.value.as_str()),
+                    facts
+                        .merchant_name
+                        .as_ref()
+                        .map(|value| value.value.as_str()),
                     Some("EAST BAY BISTRO")
                 );
                 assert_eq!(
-                    facts.total_paid
+                    facts
+                        .total_paid
                         .as_ref()
                         .map(|value| value.value.amount.as_str()),
                     Some("29.16")
@@ -2023,13 +2035,15 @@ mod tests {
         match actual.facts {
             DocumentFactsPayload::Receipt(facts) => {
                 assert_eq!(
-                    facts.total_paid
+                    facts
+                        .total_paid
                         .as_ref()
                         .and_then(|value| value.value.currency.as_deref()),
                     Some("MYR")
                 );
                 assert_eq!(
-                    facts.total_paid
+                    facts
+                        .total_paid
                         .as_ref()
                         .map(|value| value.value.amount.as_str()),
                     Some("60.30")
@@ -2055,7 +2069,8 @@ mod tests {
         match actual.facts {
             DocumentFactsPayload::Receipt(facts) => {
                 assert_eq!(
-                    facts.transaction_date
+                    facts
+                        .transaction_date
                         .as_ref()
                         .map(|value| value.value.as_str()),
                     Some("25/12/2018")
@@ -2081,13 +2096,15 @@ mod tests {
         match actual.facts {
             DocumentFactsPayload::Receipt(facts) => {
                 assert_eq!(
-                    facts.total_paid
+                    facts
+                        .total_paid
                         .as_ref()
                         .and_then(|value| value.value.currency.as_deref()),
                     Some("MYR")
                 );
                 assert_eq!(
-                    facts.total_paid
+                    facts
+                        .total_paid
                         .as_ref()
                         .map(|value| value.value.amount.as_str()),
                     Some("9.00")
@@ -2115,13 +2132,15 @@ mod tests {
         match actual.facts {
             DocumentFactsPayload::Receipt(facts) => {
                 assert_eq!(
-                    facts.merchant_name
+                    facts
+                        .merchant_name
                         .as_ref()
                         .map(|value| value.value.as_str()),
                     Some("INDAH GIFT & HOME DECO")
                 );
                 assert_eq!(
-                    facts.total_paid
+                    facts
+                        .total_paid
                         .as_ref()
                         .map(|value| value.value.amount.as_str()),
                     Some("60.30")
@@ -2151,13 +2170,15 @@ GOODS SOLD ARE NOT RETURNABLE.
         match actual.facts {
             DocumentFactsPayload::Receipt(facts) => {
                 assert_eq!(
-                    facts.merchant_name
+                    facts
+                        .merchant_name
                         .as_ref()
                         .map(|value| value.value.as_str()),
                     Some("SAM SAM TRADING CO")
                 );
                 assert_eq!(
-                    facts.transaction_date
+                    facts
+                        .transaction_date
                         .as_ref()
                         .map(|value| value.value.as_str()),
                     Some("29-12-2017")
@@ -2183,13 +2204,15 @@ GOODS SOLD ARE NOT RETURNABLE.
         match actual.facts {
             DocumentFactsPayload::Receipt(facts) => {
                 assert_eq!(
-                    facts.transaction_date
+                    facts
+                        .transaction_date
                         .as_ref()
                         .map(|value| value.value.as_str()),
                     Some("11/01/2019")
                 );
                 assert_eq!(
-                    facts.total_paid
+                    facts
+                        .total_paid
                         .as_ref()
                         .map(|value| value.value.amount.as_str()),
                     Some("327.00")
@@ -2217,7 +2240,8 @@ GOODS SOLD ARE NOT RETURNABLE.
         match actual.facts {
             DocumentFactsPayload::Receipt(facts) => {
                 assert_eq!(
-                    facts.total_paid
+                    facts
+                        .total_paid
                         .as_ref()
                         .map(|value| value.value.amount.as_str()),
                     Some("112.45")
@@ -2246,13 +2270,15 @@ GOODS SOLD ARE NOT RETURNABLE.
         match actual.facts {
             DocumentFactsPayload::Receipt(facts) => {
                 assert_eq!(
-                    facts.total_paid
+                    facts
+                        .total_paid
                         .as_ref()
                         .map(|value| value.value.amount.as_str()),
                     Some("20.00")
                 );
                 assert_eq!(
-                    facts.transaction_date
+                    facts
+                        .transaction_date
                         .as_ref()
                         .map(|value| value.value.as_str()),
                     Some("23-01-2019")

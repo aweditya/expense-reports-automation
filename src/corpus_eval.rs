@@ -448,10 +448,12 @@ fn fixture_to_transcribed_document(
         filename: fixture.filename.clone(),
         source_path: PathBuf::from(format!("{packet_id}/{}", fixture.filename)),
         engine: TranscriptionEngine::PlainText,
-        pages: vec![TranscribedPage {
-            page_number: 1,
-            text: fixture.markdown.clone(),
-        }],
+        metadata: crate::transcribe::TranscriptionMetadata::primary_for_engine(
+            TranscriptionEngine::PlainText,
+            "plain_text",
+            None,
+        ),
+        pages: vec![TranscribedPage::text_only(1, fixture.markdown.clone())],
     }
 }
 
