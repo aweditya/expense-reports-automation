@@ -203,6 +203,10 @@ impl StaticFxRateProvider {
 
         for (date, rates) in [
             (
+                "2018-10-01",
+                [("MYR", "0.24"), ("SGD", "0.73"), ("JPY", "0.0088")].as_slice(),
+            ),
+            (
                 "2018-12-01",
                 [("MYR", "0.24"), ("SGD", "0.73"), ("JPY", "0.0089")].as_slice(),
             ),
@@ -3087,6 +3091,67 @@ mod tests {
         documents
     }
 
+    fn sample_receipt_only_docs_live_sroie_style() -> Vec<ExtractedDocumentFacts> {
+        let mut documents = sample_receipt_only_docs_with_raw_dates();
+        let DocumentFactsPayload::Receipt(second_receipt) = &mut documents[1].facts else {
+            panic!("expected receipt facts");
+        };
+        second_receipt.transaction_date.as_mut().unwrap().value = "19/10/2018".to_owned();
+
+        let make_receipt = |document_id: &str,
+                            filename: &str,
+                            merchant: &str,
+                            date: &str,
+                            amount: &str,
+                            currency: &str| ExtractedDocumentFacts {
+            document_id: document_id.to_owned(),
+            filename: filename.to_owned(),
+            classification: DocumentClassification {
+                kind: DocumentKind::Receipt,
+                confidence: ConfidenceLevel::Medium,
+                evidence: vec![document_reference(document_id, filename)],
+                flags: Vec::new(),
+            },
+            extraction_status: ExtractionStatus::Complete,
+            facts: DocumentFactsPayload::Receipt(ReceiptFacts {
+                merchant_name: Some(Observed::new(
+                    merchant.to_owned(),
+                    ConfidenceLevel::Medium,
+                    vec![document_reference(document_id, filename)],
+                )),
+                merchant_location: None,
+                transaction_date: Some(Observed::new(
+                    date.to_owned(),
+                    ConfidenceLevel::Medium,
+                    vec![document_reference(document_id, filename)],
+                )),
+                total_paid: Some(Observed::new(
+                    MoneyAmount {
+                        amount: amount.to_owned(),
+                        currency: Some(currency.to_owned()),
+                    },
+                    ConfidenceLevel::Medium,
+                    vec![document_reference(document_id, filename)],
+                )),
+                subtotal: None,
+                tax_amount: None,
+                tip_amount: None,
+                line_items: Vec::new(),
+            }),
+            issues: Vec::new(),
+        };
+
+        documents.push(make_receipt(
+            "x00016469620",
+            "x00016469620.png",
+            "MR D.I.Y. (JOHOR) SDN BHD",
+            "12-01-19",
+            "33.90",
+            "MYR",
+        ));
+        documents
+    }
+
     fn get_path<'a>(value: &'a ReportValue, path: &str) -> Option<&'a ReportValue> {
         let mut current = value;
         for segment in path.split('.') {
@@ -3504,10 +3569,15 @@ mod tests {
         let second = provider
             .usd_rate_for("MYR", "12-01-19")
             .expect("two-digit hyphenated receipt date should resolve");
+        let third = provider
+            .usd_rate_for("MYR", "19/10/2018")
+            .expect("older slash-formatted date should resolve against earlier anchor");
         assert_eq!(first.usd_per_unit, "0.24");
         assert_eq!(first.date, "2018-12-01");
         assert_eq!(second.usd_per_unit, "0.24");
         assert_eq!(second.date, "2019-01-01");
+        assert_eq!(third.usd_per_unit, "0.24");
+        assert_eq!(third.date, "2018-10-01");
     }
 
     #[test]
@@ -3578,6 +3648,58 @@ mod tests {
                 .and_then(ReportValue::as_text),
             Some("16.63")
         );
+        assert!(result
+            .issues
+            .iter()
+            .all(|issue| issue.kind != BundleIssueKind::MissingDestination
+                && issue.kind != BundleIssueKind::MissingTransactionSummaryTotal));
+    }
+
+    #[test]
+    fn live_style_receipt_bundle_computes_total_usd_across_three_raw_receipts() {
+        let provider = StaticFxRateProvider::demo();
+        let result = synthesize_bundle_projection_with_fx(
+            &sample_receipt_only_docs_live_sroie_style(),
+            &provider,
+        );
+
+        assert_eq!(
+            result
+                .bundle
+                .trip
+                .destination
+                .as_ref()
+                .and_then(|destination| destination.value.country.as_deref()),
+            Some("Malaysia")
+        );
+        assert_eq!(
+            result
+                .bundle
+                .trip
+                .window
+                .as_ref()
+                .map(|window| window.value.start_date.as_str()),
+            Some("2018-10-19")
+        );
+        assert_eq!(
+            result
+                .bundle
+                .trip
+                .window
+                .as_ref()
+                .map(|window| window.value.end_date.as_str()),
+            Some("2019-01-12")
+        );
+        assert_eq!(
+            get_path(&result.draft.report, "transaction_summary.total_usd")
+                .and_then(ReportValue::as_text),
+            Some("24.77")
+        );
+        assert!(result
+            .bundle
+            .expense_lines
+            .iter()
+            .all(|line| line.line_amount_usd.is_some() && line.exchange_rate.is_some()));
         assert!(result
             .issues
             .iter()
