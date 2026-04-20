@@ -239,6 +239,7 @@ impl StaticFxRateProvider {
 impl FxRateProvider for StaticFxRateProvider {
     fn usd_rate_for(&self, currency: &str, date: &str) -> Option<FxRateQuote> {
         let currency = canonical_currency_code(currency);
+        let date = normalize_bundle_date(date).unwrap_or_else(|| date.to_owned());
         self.rates
             .get(&(currency.clone(), date.to_owned()))
             .cloned()
@@ -2770,20 +2771,83 @@ fn canonical_currency_code(value: &str) -> String {
 fn infer_trip_window_from_receipt_dates(
     receipt_dates: &[Observed<String>],
 ) -> Option<Observed<DateRange>> {
-    let start = receipt_dates.iter().min_by_key(|date| date.value.clone())?;
-    let end = receipt_dates.iter().max_by_key(|date| date.value.clone())?;
-    let mut evidence = start.evidence.clone();
-    evidence.extend(end.evidence.clone());
+    let normalized_dates = receipt_dates
+        .iter()
+        .filter_map(|date| normalize_bundle_date(&date.value).map(|normalized| (date, normalized)))
+        .collect::<Vec<_>>();
+    let start = normalized_dates
+        .iter()
+        .min_by_key(|(_, normalized)| normalized.clone())?;
+    let end = normalized_dates
+        .iter()
+        .max_by_key(|(_, normalized)| normalized.clone())?;
+    let mut evidence = start.0.evidence.clone();
+    evidence.extend(end.0.evidence.clone());
     Some(system_observed(
         DateRange {
-            start_date: start.value.clone(),
-            end_date: end.value.clone(),
+            start_date: start.1.clone(),
+            end_date: end.1.clone(),
         },
-        lowest_confidence([start.confidence, end.confidence, ConfidenceLevel::Low]),
+        lowest_confidence([start.0.confidence, end.0.confidence, ConfidenceLevel::Low]),
         evidence,
         "bundle_synthesis.infer_trip_window_from_receipt_dates",
         vec!["receipt_only_inference".to_owned()],
     ))
+}
+
+fn normalize_bundle_date(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    let separator = if trimmed.contains('/') {
+        '/'
+    } else if trimmed.contains('-') {
+        '-'
+    } else {
+        return None;
+    };
+    let parts = trimmed
+        .split(separator)
+        .map(|part| part.trim())
+        .collect::<Vec<_>>();
+    if parts.len() != 3 || parts.iter().any(|part| part.is_empty()) {
+        return None;
+    }
+
+    if parts[0].len() == 4 {
+        let year = parts[0].parse::<u32>().ok()?;
+        let month = parts[1].parse::<u32>().ok()?;
+        let day = parts[2].parse::<u32>().ok()?;
+        return format_iso_date(year, month, day);
+    }
+
+    let mut day = parts[0].parse::<u32>().ok()?;
+    let mut month = parts[1].parse::<u32>().ok()?;
+    let year = parse_bundle_year(parts[2])?;
+
+    if day <= 12 && month > 12 {
+        std::mem::swap(&mut day, &mut month);
+    }
+
+    format_iso_date(year, month, day)
+}
+
+fn parse_bundle_year(value: &str) -> Option<u32> {
+    let year = value.parse::<u32>().ok()?;
+    Some(if value.len() == 2 {
+        if year >= 70 {
+            1900 + year
+        } else {
+            2000 + year
+        }
+    } else {
+        year
+    })
+}
+
+fn format_iso_date(year: u32, month: u32, day: u32) -> Option<String> {
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+    }
+    Some(format!("{year:04}-{month:02}-{day:02}"))
 }
 
 fn infer_destination_from_currency(documents: &[ExtractedDocumentFacts]) -> Option<Observed<Location>> {
@@ -2796,9 +2860,16 @@ fn infer_destination_from_currency(documents: &[ExtractedDocumentFacts]) -> Opti
             DocumentFactsPayload::HotelFolio(facts) => facts.total_paid.as_ref(),
             DocumentFactsPayload::Receipt(facts) => facts.total_paid.as_ref(),
             _ => None,
-        }?;
-        let currency = amount.value.currency.as_deref()?;
-        let country = currency_implied_country(currency)?;
+        };
+        let Some(amount) = amount else {
+            continue;
+        };
+        let Some(currency) = amount.value.currency.as_deref() else {
+            continue;
+        };
+        let Some(country) = currency_implied_country(currency) else {
+            continue;
+        };
         inferred_countries.push(country);
         evidence.extend(amount.evidence.clone());
     }
@@ -2999,6 +3070,21 @@ mod tests {
                 "MYR",
             ),
         ]
+    }
+
+    fn sample_receipt_only_docs_with_raw_dates() -> Vec<ExtractedDocumentFacts> {
+        let mut documents = sample_receipt_only_docs();
+        let DocumentFactsPayload::Receipt(first_receipt) = &mut documents[0].facts else {
+            panic!("expected receipt facts");
+        };
+        first_receipt.transaction_date.as_mut().unwrap().value = "25/12/2018".to_owned();
+
+        let DocumentFactsPayload::Receipt(second_receipt) = &mut documents[1].facts else {
+            panic!("expected receipt facts");
+        };
+        second_receipt.transaction_date.as_mut().unwrap().value = "12-01-19".to_owned();
+
+        documents
     }
 
     fn get_path<'a>(value: &'a ReportValue, path: &str) -> Option<&'a ReportValue> {
@@ -3410,6 +3496,21 @@ mod tests {
     }
 
     #[test]
+    fn static_fx_provider_normalizes_non_iso_receipt_dates() {
+        let provider = StaticFxRateProvider::demo();
+        let first = provider
+            .usd_rate_for("MYR", "25/12/2018")
+            .expect("slash-formatted historical date should resolve");
+        let second = provider
+            .usd_rate_for("MYR", "12-01-19")
+            .expect("two-digit hyphenated receipt date should resolve");
+        assert_eq!(first.usd_per_unit, "0.24");
+        assert_eq!(first.date, "2018-12-01");
+        assert_eq!(second.usd_per_unit, "0.24");
+        assert_eq!(second.date, "2019-01-01");
+    }
+
+    #[test]
     fn fx_enrichment_computes_total_usd_for_receipt_only_bundle() {
         let provider = StaticFxRateProvider::demo();
         let result = synthesize_bundle_projection_with_fx(&sample_receipt_only_docs(), &provider);
@@ -3437,6 +3538,51 @@ mod tests {
             .issues
             .iter()
             .any(|issue| issue.kind == BundleIssueKind::MissingTransactionSummaryTotal));
+    }
+
+    #[test]
+    fn receipt_only_bundle_with_raw_dates_still_infers_destination_and_total_usd() {
+        let provider = StaticFxRateProvider::demo();
+        let result =
+            synthesize_bundle_projection_with_fx(&sample_receipt_only_docs_with_raw_dates(), &provider);
+
+        assert_eq!(
+            result
+                .bundle
+                .trip
+                .destination
+                .as_ref()
+                .and_then(|destination| destination.value.country.as_deref()),
+            Some("Malaysia")
+        );
+        assert_eq!(
+            result
+                .bundle
+                .trip
+                .window
+                .as_ref()
+                .map(|window| window.value.start_date.as_str()),
+            Some("2018-12-25")
+        );
+        assert_eq!(
+            result
+                .bundle
+                .trip
+                .window
+                .as_ref()
+                .map(|window| window.value.end_date.as_str()),
+            Some("2019-01-12")
+        );
+        assert_eq!(
+            get_path(&result.draft.report, "transaction_summary.total_usd")
+                .and_then(ReportValue::as_text),
+            Some("16.63")
+        );
+        assert!(result
+            .issues
+            .iter()
+            .all(|issue| issue.kind != BundleIssueKind::MissingDestination
+                && issue.kind != BundleIssueKind::MissingTransactionSummaryTotal));
     }
 
     #[test]

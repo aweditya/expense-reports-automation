@@ -946,7 +946,7 @@ fn observed_money(
     confidence: ConfidenceLevel,
 ) -> Option<Observed<MoneyAmount>> {
     let (line, value) = find_label_value(lines, labels)?;
-    let money = parse_money(&value)?;
+    let money = parse_money_with_line_context(&line.raw, &value)?;
     Some(observed_from_line(line, money, confidence, document))
 }
 
@@ -960,7 +960,7 @@ fn observed_money_strict(
         let Some(value) = strip_label_value_strict(&line.raw, labels) else {
             continue;
         };
-        let Some(money) = parse_money(&value) else {
+        let Some(money) = parse_money_with_line_context(&line.raw, &value) else {
             continue;
         };
         return Some(observed_from_line(line, money, confidence, document));
@@ -1449,6 +1449,14 @@ fn parse_money(value: &str) -> Option<MoneyAmount> {
     }
 }
 
+fn parse_money_with_line_context(line: &str, value: &str) -> Option<MoneyAmount> {
+    let mut money = parse_money(value)?;
+    if money.currency.is_none() {
+        money.currency = extract_currency_hint(line);
+    }
+    Some(money)
+}
+
 fn sanitize_amount(value: &str) -> Option<String> {
     let normalized = value
         .chars()
@@ -1467,6 +1475,18 @@ fn normalize_currency_code(value: &str) -> String {
         "RM" => "MYR".to_owned(),
         other => other.to_owned(),
     }
+}
+
+fn extract_currency_hint(value: &str) -> Option<String> {
+    value.split(|ch: char| !ch.is_ascii_alphanumeric())
+        .map(|token| token.trim())
+        .find(|token| {
+            matches!(
+                token.to_ascii_uppercase().as_str(),
+                "RM" | "MYR" | "USD" | "SGD" | "JPY" | "GBP" | "EUR" | "CAD" | "AUD"
+            )
+        })
+        .map(normalize_currency_code)
 }
 
 fn parse_date_range(value: &str) -> Option<DateRange> {
@@ -2039,6 +2059,38 @@ mod tests {
                         .as_ref()
                         .map(|value| value.value.as_str()),
                     Some("25/12/2018")
+                );
+            }
+            other => panic!("unexpected payload: {other:?}"),
+        }
+
+        remove_fixture_dir(&path);
+    }
+
+    #[test]
+    fn receipt_extractor_keeps_currency_from_label_context() {
+        let markdown = "\
+# BOOK TALK (TAMAN DAYA) SDN BHD
+
+- Date: 25/12/2018 8:13:39 PM
+- Rounded Total (RM): 9.00
+";
+        let path = write_fixture(markdown, "receipt_label_currency.md");
+        let actual = extract_document_facts_path(&path).expect("fixture should transcribe");
+
+        match actual.facts {
+            DocumentFactsPayload::Receipt(facts) => {
+                assert_eq!(
+                    facts.total_paid
+                        .as_ref()
+                        .and_then(|value| value.value.currency.as_deref()),
+                    Some("MYR")
+                );
+                assert_eq!(
+                    facts.total_paid
+                        .as_ref()
+                        .map(|value| value.value.amount.as_str()),
+                    Some("9.00")
                 );
             }
             other => panic!("unexpected payload: {other:?}"),
