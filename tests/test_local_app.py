@@ -364,7 +364,8 @@ class LocalAppTests(unittest.TestCase):
         )
 
         with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as workspace_dir:
-            config = build_config(Path(repo_dir), Path(workspace_dir))
+            repo_root = Path(repo_dir)
+            config = build_config(repo_root, Path(workspace_dir))
             bundle_id = local_app.handle_upload_submission(
                 config,
                 request,
@@ -372,9 +373,18 @@ class LocalAppTests(unittest.TestCase):
             )
 
             self.assertEqual(bundle_id, "demo_bundle")
-            self.assertEqual(captured["cwd"], Path(repo_dir))
+            self.assertEqual(captured["cwd"], repo_root)
             self.assertIn("--bundle-id", captured["command"])
             self.assertIn("demo_bundle", captured["command"])
+            staged_inputs = [
+                Path(value)
+                for value in captured["command"]
+                if value.endswith(".png")
+            ]
+            self.assertEqual(len(staged_inputs), 1)
+            self.assertTrue(
+                str(staged_inputs[0]).startswith(str(repo_root / ".local_runtime"))
+            )
 
     def test_handle_upload_submission_rejects_empty_upload(self):
         request = local_app.UploadRequest(fields={}, files=[])
@@ -402,12 +412,55 @@ class LocalAppTests(unittest.TestCase):
             self.assertIn("/bundle/demo_bundle/review-session", page)
             self.assertIn("/bundle/demo_bundle/artifact/ledger.json", page)
 
+    def test_bundle_document_path_accepts_extractor_style_document_ids(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            bundle_root = workspace_root / "bundles" / "demo_bundle"
+            uploads_dir = bundle_root / "uploads" / "x00016469619_cd69f9305a1c"
+            uploads_dir.mkdir(parents=True, exist_ok=True)
+            receipt_path = uploads_dir / "x00016469619.png"
+            receipt_path.write_bytes(b"real-receipt")
+            manifest = build_manifest("demo_bundle")
+            manifest["documents"] = [
+                {
+                    "document_id": "x00016469619_cd69f9305a1c",
+                    "content_sha256": "cd69f9305a1cfeedface00000000000000000000000000000000000000000000",
+                    "original_filenames": ["x00016469619.png"],
+                    "stored_filename": "x00016469619.png",
+                    "raw_path": "uploads/x00016469619_cd69f9305a1c/x00016469619.png",
+                    "media_type": "image/png",
+                    "byte_count": 12,
+                    "uploaded_at_epoch_ms": 1000,
+                    "normalized": {
+                        "page_count": 1,
+                        "page_image_paths": [],
+                        "native_text_path": None,
+                    },
+                }
+            ]
+            (bundle_root / "bundle_manifest.json").write_text(
+                json.dumps(manifest, indent=2)
+            )
+
+            resolved = local_app.bundle_document_path(
+                workspace_root,
+                "demo_bundle",
+                "x00016469619",
+                "x00016469619.png",
+            )
+
+            self.assertEqual(resolved, receipt_path)
+
     def test_handle_review_save_submission_updates_manifest_stage(self):
         with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as workspace_dir:
+            repo_root = Path(repo_dir)
             workspace_root = Path(workspace_dir)
             write_bundle_fixture(workspace_root, "demo_bundle", with_workbench=True)
+            captured = {}
 
             def runner(command, cwd):
+                captured["command"] = command
+                captured["cwd"] = cwd
                 self.assertIn("--base-version", command)
                 self.assertIn("2", command)
                 self.assertEqual(cwd, Path(repo_dir))
@@ -430,7 +483,7 @@ class LocalAppTests(unittest.TestCase):
                 )
 
             result = local_app.handle_review_save_submission(
-                Path(repo_dir),
+                repo_root,
                 workspace_root,
                 "demo_bundle",
                 {
@@ -445,6 +498,10 @@ class LocalAppTests(unittest.TestCase):
             )
 
             self.assertEqual(result["version_id"], 3)
+            revision_json = Path(captured["command"][captured["command"].index("--revision-json") + 1])
+            self.assertTrue(
+                str(revision_json).startswith(str(repo_root / ".local_runtime"))
+            )
             manifest = local_app.load_bundle_manifest(workspace_root, "demo_bundle")
             self.assertEqual(manifest["current_stage"], "ready_to_file")
             self.assertEqual(manifest["runs"][0]["filing_status"], "ready_to_file")

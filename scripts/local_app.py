@@ -92,8 +92,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--workspace-root",
-        default="/tmp/expense_reports_local_app_workspace",
-        help="Directory where bundle workspaces should be stored",
+        default=None,
+        help="Directory where bundle workspaces should be stored; defaults to a repo-local workspace",
     )
     parser.add_argument(
         "--host",
@@ -158,6 +158,16 @@ def parse_args() -> argparse.Namespace:
 
 def repo_root() -> Path:
     return Path(__file__).resolve().parent.parent
+
+
+def repo_runtime_root(repo_root: Path) -> Path:
+    return repo_root / ".local_runtime"
+
+
+def repo_scoped_tempdir(repo_root: Path, prefix: str) -> tempfile.TemporaryDirectory:
+    runtime_root = repo_runtime_root(repo_root)
+    runtime_root.mkdir(parents=True, exist_ok=True)
+    return tempfile.TemporaryDirectory(prefix=prefix, dir=runtime_root)
 
 
 def list_bundles(workspace_root: Path) -> list[BundleListEntry]:
@@ -246,6 +256,20 @@ def bundle_document_path(
         None,
     )
     if not document:
+        document = next(
+            (
+                item
+                for item in manifest.get("documents") or []
+                if item.get("stored_filename") == stored_filename
+                and document_id_matches_staged_upload(
+                    requested_document_id=document_id,
+                    staged_document_id=item.get("document_id", ""),
+                    stored_filename=stored_filename,
+                )
+            ),
+            None,
+        )
+    if not document:
         raise LocalAppError(f"document not found in bundle: {document_id}")
 
     candidate = (bundle_root / document["raw_path"]).resolve()
@@ -256,6 +280,21 @@ def bundle_document_path(
     if not candidate.exists():
         raise LocalAppError(f"document file missing for {document_id}")
     return candidate
+
+
+def document_id_matches_staged_upload(
+    *,
+    requested_document_id: str,
+    staged_document_id: str,
+    stored_filename: str,
+) -> bool:
+    if requested_document_id == staged_document_id:
+        return True
+    stem_id = sanitize_identifier(Path(stored_filename).stem)
+    return (
+        requested_document_id == stem_id
+        and staged_document_id.startswith(f"{stem_id}_")
+    )
 
 
 def bundle_artifact_path(workspace_root: Path, bundle_id: str, artifact_name: str) -> Path:
@@ -488,7 +527,7 @@ def handle_upload_submission(
     if not request.files:
         raise LocalAppError("at least one document upload is required")
 
-    with tempfile.TemporaryDirectory(prefix="expense_local_app_") as temp_dir_str:
+    with repo_scoped_tempdir(config.repo_root, "expense_local_app_") as temp_dir_str:
         temp_dir = Path(temp_dir_str)
         input_paths = save_uploaded_files(temp_dir, request.files)
         command = build_ingest_command(config, request.fields, input_paths)
@@ -518,7 +557,7 @@ def handle_review_save_submission(
         except (TypeError, ValueError) as err:
             raise LocalAppError(f"invalid base version id: {base_version_id}") from err
 
-    with tempfile.TemporaryDirectory(prefix="expense_review_save_") as temp_dir_str:
+    with repo_scoped_tempdir(repo_root, "expense_review_save_") as temp_dir_str:
         temp_dir = Path(temp_dir_str)
         revision_json_path = temp_dir / "review_revision.json"
         revision_json_path.write_text(json.dumps(revision_payload, indent=2))
@@ -1167,9 +1206,12 @@ def run_server(config: LocalAppConfig) -> None:
 
 def main() -> int:
     args = parse_args()
+    root = repo_root()
     config = LocalAppConfig(
-        repo_root=repo_root(),
-        workspace_root=Path(args.workspace_root),
+        repo_root=root,
+        workspace_root=Path(args.workspace_root)
+        if args.workspace_root
+        else root / ".local_app_workspace",
         host=args.host,
         port=args.port,
         default_engine=args.default_engine,
