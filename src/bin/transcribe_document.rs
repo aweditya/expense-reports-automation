@@ -6,8 +6,7 @@ use expense_report_schema::{
     render_transcribed_document_json_pretty, render_transcribed_document_markdown,
     transcribe_document_path, transcribe_document_path_with_vertex,
     transcribe_document_path_with_vertex_sdk_profile, OcrPassKind, OcrPreprocessVariant,
-    VertexGeminiConfig, VertexGeminiSdkConfig,
-    VertexGeminiSdkPassProfile,
+    VertexGeminiConfig, VertexGeminiSdkConfig, VertexGeminiSdkPassProfile,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

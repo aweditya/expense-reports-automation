@@ -289,7 +289,7 @@ fn coerce_single_page_text(pages: Vec<TranscribedPage>) -> String {
     pages
         .into_iter()
         .map(|page| page.text)
-        .filter(|text| !text.trim().is_empty())
+        .filter(|text: &String| !text.trim().is_empty())
         .collect::<Vec<_>>()
         .join("\n\n")
 }

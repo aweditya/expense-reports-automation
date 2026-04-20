@@ -141,18 +141,26 @@ pub fn ingest_expense_documents(
 
     for path in paths {
         let document = match &config.transcriber {
-            IngestionTranscriber::Builtin => transcribe_document_path(path)
-                .map_err(|err| transcription_error(path, err.to_string()))?,
+            IngestionTranscriber::Builtin => transcribe_document_path(path).map_err(
+                |err: crate::transcribe::TranscriptionError| {
+                    transcription_error(path, err.to_string())
+                },
+            )?,
             IngestionTranscriber::VertexGemini(_) => transcribe_document_path_with_vertex(
                 path,
                 resolved_vertex_config
                     .as_ref()
                     .expect("resolved vertex config should exist"),
             )
-            .map_err(|err| transcription_error(path, err.to_string()))?,
+            .map_err(|err: crate::vertex_gemini::VertexGeminiError| {
+                transcription_error(path, err.to_string())
+            })?,
             IngestionTranscriber::VertexGeminiSdk(sdk_config) => {
-                transcribe_document_path_with_vertex_sdk(path, sdk_config)
-                    .map_err(|err| transcription_error(path, err.to_string()))?
+                transcribe_document_path_with_vertex_sdk(path, sdk_config).map_err(
+                    |err: crate::vertex_gemini_sdk::VertexGeminiSdkError| {
+                        transcription_error(path, err.to_string())
+                    },
+                )?
             }
         };
         let facts = extract_document_facts(&document);

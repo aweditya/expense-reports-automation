@@ -41,7 +41,7 @@ fn collect_lines(document: &TranscribedDocument) -> Vec<LineRef> {
     let mut lines = Vec::new();
     for page in &document.pages {
         for raw_line in page.text.lines() {
-            let trimmed = raw_line.trim();
+            let trimmed: &str = raw_line.trim();
             if trimmed.is_empty() {
                 continue;
             }
