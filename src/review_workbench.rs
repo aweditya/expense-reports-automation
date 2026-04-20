@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::draft::EvidenceReference;
+use crate::field_conventions::{FieldControl, FieldEntryMode};
 use crate::review_packet::{
     CopyField, DocumentSnapshotCard, DocumentSnapshotField, FilingStatus, ReviewPacket,
 };
@@ -234,7 +235,7 @@ fn render_copy_field(html: &mut String, field: &CopyField, index: &WorkbenchInde
     } else {
         html.push_str(" editable");
     }
-    if field.control == "structured_list" {
+    if field.control == FieldControl::StructuredList {
         html.push_str(" structured");
     }
     html.push_str("\" id=\"");
@@ -253,7 +254,7 @@ fn render_copy_field(html: &mut String, field: &CopyField, index: &WorkbenchInde
     if let Some(source) = field.source.as_deref() {
         badge(html, source);
     }
-    badge(html, &field.entry_mode);
+    badge(html, field.entry_mode.as_str());
     if field.required {
         badge(html, "required");
     }
@@ -305,9 +306,9 @@ fn render_field_editor(html: &mut String, field: &CopyField, input_id: &str) {
     });
     html.push_str("</label>");
 
-    if field.control == "structured_list" {
+    if field.control == FieldControl::StructuredList {
         render_structured_list_editor(html, field, input_id);
-    } else if field.control == "textarea" {
+    } else if field.control == FieldControl::Textarea {
         html.push_str("<textarea class=\"field-input field-control\" id=\"");
         html.push_str(&escape_html(input_id));
         html.push_str("\" data-control=\"textarea\" data-initial-json=\"");
@@ -322,7 +323,7 @@ fn render_field_editor(html: &mut String, field: &CopyField, input_id: &str) {
         html.push_str(">");
         html.push_str(&escape_html(value));
         html.push_str("</textarea>");
-    } else if field.control == "select" {
+    } else if field.control == FieldControl::Select {
         html.push_str("<select class=\"field-input field-control\" id=\"");
         html.push_str(&escape_html(input_id));
         html.push_str("\" data-control=\"select\" data-field-path=\"");
@@ -345,7 +346,7 @@ fn render_field_editor(html: &mut String, field: &CopyField, input_id: &str) {
             html.push_str("</option>");
         }
         html.push_str("</select>");
-    } else if field.control == "checkbox" {
+    } else if field.control == FieldControl::Checkbox {
         html.push_str("<select class=\"field-input field-control checkbox-select\" id=\"");
         html.push_str(&escape_html(input_id));
         html.push_str("\" data-control=\"checkbox\" data-field-path=\"");
@@ -360,13 +361,17 @@ fn render_field_editor(html: &mut String, field: &CopyField, input_id: &str) {
         render_checkbox_option(html, "false", "No", value == "false");
         html.push_str("</select>");
     } else {
-        let input_type = if field.control == "date" { "date" } else { "text" };
+        let input_type = if field.control == FieldControl::Date {
+            "date"
+        } else {
+            "text"
+        };
         html.push_str("<input class=\"field-input field-control\" id=\"");
         html.push_str(&escape_html(input_id));
         html.push_str("\" type=\"");
         html.push_str(input_type);
         html.push_str("\" data-control=\"");
-        html.push_str(&escape_html_attribute(&field.control));
+        html.push_str(field.control.as_str());
         html.push_str("\" data-field-path=\"");
         html.push_str(&escape_html_attribute(&field.path));
         html.push_str("\" data-initial-json=\"");
@@ -376,7 +381,7 @@ fn render_field_editor(html: &mut String, field: &CopyField, input_id: &str) {
         html.push_str("\" placeholder=\"");
         html.push_str(&escape_html_attribute(placeholder));
         html.push_str("\"");
-        if field.control == "currency" || field.control == "number" {
+        if field.control.uses_decimal_input_mode() {
             html.push_str(" inputmode=\"decimal\"");
         }
         html.push_str(readonly);
@@ -446,8 +451,8 @@ fn render_collection_column_control(
     column: &crate::review_packet::CopyCollectionColumn,
     value: &str,
 ) {
-    match column.control.as_str() {
-        "select" => {
+    match column.control {
+        FieldControl::Select => {
             html.push_str("<select class=\"structured-row-input\" data-column-key=\"");
             html.push_str(&escape_html_attribute(&column.key));
             html.push_str("\" data-column-control=\"select\">");
@@ -465,7 +470,7 @@ fn render_collection_column_control(
             }
             html.push_str("</select>");
         }
-        "checkbox" => {
+        FieldControl::Checkbox => {
             html.push_str("<select class=\"structured-row-input checkbox-select\" data-column-key=\"");
             html.push_str(&escape_html_attribute(&column.key));
             html.push_str("\" data-column-control=\"checkbox\">");
@@ -474,7 +479,7 @@ fn render_collection_column_control(
             render_checkbox_option(html, "false", "No", value == "false");
             html.push_str("</select>");
         }
-        "date" => {
+        FieldControl::Date => {
             html.push_str("<input class=\"structured-row-input\" type=\"date\" data-column-key=\"");
             html.push_str(&escape_html_attribute(&column.key));
             html.push_str("\" data-column-control=\"date\" value=\"");
@@ -485,11 +490,11 @@ fn render_collection_column_control(
             html.push_str("<input class=\"structured-row-input\" type=\"text\" data-column-key=\"");
             html.push_str(&escape_html_attribute(&column.key));
             html.push_str("\" data-column-control=\"");
-            html.push_str(&escape_html_attribute(&column.control));
+            html.push_str(column.control.as_str());
             html.push_str("\" value=\"");
             html.push_str(&escape_html_attribute(value));
             html.push_str("\"");
-            if column.control == "currency" || column.control == "number" {
+            if column.control.uses_decimal_input_mode() {
                 html.push_str(" inputmode=\"decimal\"");
             }
             html.push_str(">");
@@ -661,7 +666,7 @@ fn render_document_snapshot_field(html: &mut String, field: &DocumentSnapshotFie
 }
 
 fn field_is_readonly(field: &CopyField) -> bool {
-    field.entry_mode == "computed_readonly"
+    field.entry_mode == FieldEntryMode::ComputedReadonly
 }
 
 fn field_guidance(field: &CopyField) -> &'static str {

@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::bundle_synthesis::CanonicalExpenseBundle;
 use crate::document_facts::{DocumentFactsPayload, DocumentKind, ExtractionStatus};
 use crate::draft::{ConfidenceLevel, DraftReport, EvidenceReference};
+use crate::field_conventions::{FieldControl, FieldEntryMode};
 use crate::readiness::{
     summarize_validation_readiness, ReadinessIssue, ReadinessIssueClass, ReadinessReport,
 };
@@ -66,7 +67,7 @@ pub struct ReviewIssueEntry {
 pub struct CopyField {
     pub path: String,
     pub label: String,
-    pub control: String,
+    pub control: FieldControl,
     pub allowed_values: Vec<String>,
     pub collection_columns: Vec<CopyCollectionColumn>,
     pub collection_rows: Vec<CopyCollectionRow>,
@@ -75,7 +76,7 @@ pub struct CopyField {
     pub needs_review: bool,
     pub required: bool,
     pub source: Option<String>,
-    pub entry_mode: String,
+    pub entry_mode: FieldEntryMode,
     pub evidence: Vec<EvidenceReference>,
 }
 
@@ -83,7 +84,7 @@ pub struct CopyField {
 pub struct CopyCollectionColumn {
     pub key: String,
     pub label: String,
-    pub control: String,
+    pub control: FieldControl,
     pub allowed_values: Vec<String>,
 }
 
@@ -186,9 +187,9 @@ struct UiSection {
 struct UiField {
     path: String,
     label: String,
-    control: String,
+    control: FieldControl,
     source: Option<String>,
-    entry_mode: String,
+    entry_mode: FieldEntryMode,
     required: bool,
     allowed_values: Vec<String>,
 }
@@ -198,7 +199,7 @@ struct CollectionHelperSpec {
     parent_path: String,
     label: String,
     source: Option<String>,
-    entry_mode: String,
+    entry_mode: FieldEntryMode,
     required: bool,
     columns: Vec<CopyCollectionColumn>,
 }
@@ -590,7 +591,7 @@ fn build_collection_helper_fields(
             Some(CopyField {
                 path: resolved_path,
                 label: spec.label,
-                control: "structured_list".to_owned(),
+                control: FieldControl::StructuredList,
                 allowed_values: Vec::new(),
                 collection_columns: spec.columns,
                 collection_rows: rows,
@@ -1212,6 +1213,7 @@ mod tests {
         IssueSeverity, MoneyAmount, ReceiptFacts,
     };
     use crate::draft::{ConfidenceLevel, EvidenceKind, EvidenceReference};
+    use crate::FieldControl;
     use crate::synthetic_documents::{generate_synthetic_packet, SyntheticVariant};
 
     fn synthetic_documents() -> Vec<crate::ExtractedDocumentFacts> {
@@ -1294,7 +1296,7 @@ mod tests {
             .iter()
             .any(|field| field.path
                 == "expense_report.transaction_lines[0].common.source_documents"
-                && field.control == "structured_list"
+                && field.control == FieldControl::StructuredList
                 && field.collection_rows.len() == 1
                 && field.collection_rows[0]
                     .values
@@ -1318,7 +1320,7 @@ mod tests {
             .iter()
             .any(|field| field.path
                 == "expense_report.transaction_lines[2].meal_details.attendees"
-                && field.control == "structured_list"
+                && field.control == FieldControl::StructuredList
                 && field.required
                 && field.collection_columns.len() == 2));
     }
