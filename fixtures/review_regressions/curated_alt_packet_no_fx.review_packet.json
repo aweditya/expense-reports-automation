@@ -2513,6 +2513,18 @@
         {
           "label": "Segments",
           "value": "2"
+        },
+        {
+          "label": "Total USD",
+          "value": "1287.44"
+        },
+        {
+          "label": "Exchange rate",
+          "value": "1.00"
+        },
+        {
+          "label": "Projected expense type",
+          "value": "airfare_foreign"
         }
       ],
       "issue_messages": []
@@ -2537,6 +2549,10 @@
         {
           "label": "Total",
           "value": "SGD 778.80"
+        },
+        {
+          "label": "Projected expense type",
+          "value": "lodging_foreign"
         }
       ],
       "issue_messages": [
@@ -2567,6 +2583,10 @@
         {
           "label": "Line items",
           "value": "3"
+        },
+        {
+          "label": "Projected expense type",
+          "value": "business_meal"
         }
       ],
       "issue_messages": [

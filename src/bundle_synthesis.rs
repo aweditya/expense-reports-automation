@@ -201,26 +201,35 @@ impl StaticFxRateProvider {
             origin: Some("bundle_synthesis.demo_fx_rate_provider".to_owned()),
         }];
 
-        for date in [
-            "2025-04-21",
-            "2025-04-22",
-            "2025-04-23",
-            "2025-04-24",
-            "2025-04-25",
-            "2025-04-26",
-            "2025-04-27",
-            "2025-04-28",
-            "2025-04-29",
+        for (date, rates) in [
+            (
+                "2018-12-01",
+                [("MYR", "0.24"), ("SGD", "0.73"), ("JPY", "0.0089")].as_slice(),
+            ),
+            (
+                "2019-01-01",
+                [("MYR", "0.24"), ("SGD", "0.74"), ("JPY", "0.0091")].as_slice(),
+            ),
+            (
+                "2019-10-01",
+                [("MYR", "0.24"), ("SGD", "0.73"), ("JPY", "0.0093")].as_slice(),
+            ),
+            (
+                "2025-04-01",
+                [
+                    ("SGD", "0.74"),
+                    ("MYR", "0.23"),
+                    ("JPY", "0.0067"),
+                    ("GBP", "1.25"),
+                    ("EUR", "1.08"),
+                    ("CAD", "0.73"),
+                    ("AUD", "0.66"),
+                ]
+                .as_slice(),
+            ),
         ] {
-            for (currency, rate) in [
-                ("SGD", "0.74"),
-                ("JPY", "0.0067"),
-                ("GBP", "1.25"),
-                ("EUR", "1.08"),
-                ("CAD", "0.73"),
-                ("AUD", "0.66"),
-            ] {
-                provider.insert_rate(currency, date, rate, demo_evidence.clone());
+            for (currency, rate) in rates {
+                provider.insert_rate(*currency, date, *rate, demo_evidence.clone());
             }
         }
         provider
@@ -229,9 +238,16 @@ impl StaticFxRateProvider {
 
 impl FxRateProvider for StaticFxRateProvider {
     fn usd_rate_for(&self, currency: &str, date: &str) -> Option<FxRateQuote> {
+        let currency = canonical_currency_code(currency);
         self.rates
-            .get(&(currency.to_ascii_uppercase(), date.to_owned()))
+            .get(&(currency.clone(), date.to_owned()))
             .cloned()
+            .or_else(|| {
+                self.rates
+                    .range((currency.clone(), String::new())..=(currency, date.to_owned()))
+                    .next_back()
+                    .map(|(_, quote)| quote.clone())
+            })
     }
 }
 
@@ -717,6 +733,7 @@ fn synthesize_trip_window(
 ) -> Option<Observed<DateRange>> {
     let mut flight_windows = Vec::new();
     let mut fallback_windows = Vec::new();
+    let mut receipt_dates = Vec::new();
 
     for document in documents {
         match &document.facts {
@@ -728,6 +745,10 @@ fn synthesize_trip_window(
                 stay_window: Some(window),
                 ..
             }) => fallback_windows.push((window.clone(), document.document_id.clone())),
+            DocumentFactsPayload::Receipt(ReceiptFacts {
+                transaction_date: Some(date),
+                ..
+            }) => receipt_dates.push(date.clone()),
             _ => {}
         }
     }
@@ -739,6 +760,9 @@ fn synthesize_trip_window(
     };
 
     let Some((chosen, _)) = candidates.first().cloned() else {
+        if let Some(receipt_window) = infer_trip_window_from_receipt_dates(&receipt_dates) {
+            return Some(receipt_window);
+        }
         issues.push(bundle_issue(
             BundleIssueSeverity::Warning,
             BundleIssueKind::MissingTripWindow,
@@ -795,6 +819,9 @@ fn synthesize_destination(
         .cloned()
         .or_else(|| candidates.first().cloned())
     else {
+        if let Some(inferred) = infer_destination_from_currency(documents) {
+            return Some(inferred);
+        }
         issues.push(bundle_issue(
             BundleIssueSeverity::Warning,
             BundleIssueKind::MissingDestination,
@@ -1961,8 +1988,14 @@ fn synthesize_total_usd(bundle: &CanonicalExpenseBundle) -> Option<Observed<Stri
         .filter(|line| line.projection_supported)
         .collect::<Vec<_>>();
 
-    if supported_lines.is_empty()
-        || supported_lines
+    let lines_for_total = if supported_lines.is_empty() {
+        bundle.expense_lines.iter().collect::<Vec<_>>()
+    } else {
+        supported_lines
+    };
+
+    if lines_for_total.is_empty()
+        || lines_for_total
             .iter()
             .any(|line| line.line_amount_usd.is_none())
     {
@@ -1971,18 +2004,32 @@ fn synthesize_total_usd(bundle: &CanonicalExpenseBundle) -> Option<Observed<Stri
 
     let mut evidence = Vec::new();
     let mut total_cents = 0i64;
-    for line in supported_lines {
+    for line in &lines_for_total {
         let amount = line.line_amount_usd.as_ref()?;
         total_cents += amount_to_cents(&amount.value)?;
         evidence.extend(amount.evidence.clone());
     }
 
+    let includes_unprojected = lines_for_total.iter().any(|line| !line.projection_supported);
+
     Some(system_observed(
         cents_to_amount(total_cents),
-        ConfidenceLevel::High,
+        if includes_unprojected {
+            ConfidenceLevel::Medium
+        } else {
+            ConfidenceLevel::High
+        },
         evidence,
-        "bundle_synthesis.compute_total_usd",
-        Vec::new(),
+        if includes_unprojected {
+            "bundle_synthesis.compute_total_usd_from_all_lines"
+        } else {
+            "bundle_synthesis.compute_total_usd"
+        },
+        if includes_unprojected {
+            vec!["includes_unprojected_documents".to_owned()]
+        } else {
+            Vec::new()
+        },
     ))
 }
 
@@ -2713,6 +2760,80 @@ fn normalize_text(value: &str) -> String {
         .join(" ")
 }
 
+fn canonical_currency_code(value: &str) -> String {
+    match value.to_ascii_uppercase().as_str() {
+        "RM" => "MYR".to_owned(),
+        other => other.to_owned(),
+    }
+}
+
+fn infer_trip_window_from_receipt_dates(
+    receipt_dates: &[Observed<String>],
+) -> Option<Observed<DateRange>> {
+    let start = receipt_dates.iter().min_by_key(|date| date.value.clone())?;
+    let end = receipt_dates.iter().max_by_key(|date| date.value.clone())?;
+    let mut evidence = start.evidence.clone();
+    evidence.extend(end.evidence.clone());
+    Some(system_observed(
+        DateRange {
+            start_date: start.value.clone(),
+            end_date: end.value.clone(),
+        },
+        lowest_confidence([start.confidence, end.confidence, ConfidenceLevel::Low]),
+        evidence,
+        "bundle_synthesis.infer_trip_window_from_receipt_dates",
+        vec!["receipt_only_inference".to_owned()],
+    ))
+}
+
+fn infer_destination_from_currency(documents: &[ExtractedDocumentFacts]) -> Option<Observed<Location>> {
+    let mut inferred_countries = Vec::new();
+    let mut evidence = Vec::new();
+
+    for document in documents {
+        let amount = match &document.facts {
+            DocumentFactsPayload::FlightItinerary(facts) => facts.total_paid.as_ref(),
+            DocumentFactsPayload::HotelFolio(facts) => facts.total_paid.as_ref(),
+            DocumentFactsPayload::Receipt(facts) => facts.total_paid.as_ref(),
+            _ => None,
+        }?;
+        let currency = amount.value.currency.as_deref()?;
+        let country = currency_implied_country(currency)?;
+        inferred_countries.push(country);
+        evidence.extend(amount.evidence.clone());
+    }
+
+    let first = inferred_countries.first()?;
+    if inferred_countries.iter().any(|country| country != first) {
+        return None;
+    }
+
+    Some(system_observed(
+        Location {
+            city: None,
+            region: None,
+            country: Some((*first).to_owned()),
+            airport_code: None,
+        },
+        ConfidenceLevel::Low,
+        evidence,
+        "bundle_synthesis.infer_destination_from_currency",
+        vec!["currency_only_destination".to_owned()],
+    ))
+}
+
+fn currency_implied_country(currency: &str) -> Option<&'static str> {
+    match canonical_currency_code(currency).as_str() {
+        "MYR" => Some("Malaysia"),
+        "SGD" => Some("Singapore"),
+        "JPY" => Some("Japan"),
+        "GBP" => Some("United Kingdom"),
+        "CAD" => Some("Canada"),
+        "AUD" => Some("Australia"),
+        _ => None,
+    }
+}
+
 fn compact_key_token(value: &str, max_chars: usize) -> String {
     truncate_chars(
         &value
@@ -2794,6 +2915,7 @@ fn cents_to_amount(cents: i64) -> String {
 mod tests {
     use super::*;
     use crate::curated_corpus::curated_corpus_root;
+    use crate::{DocumentClassification, ExtractionStatus};
     use crate::document_facts::parse_document_facts_json_path;
     use crate::synthetic_documents::{generate_synthetic_document, SyntheticVariant};
     use crate::validator::{ValidationIssueKind, ValidationSeverity};
@@ -2813,6 +2935,70 @@ mod tests {
     fn curated_sidecar(name: &str) -> ExtractedDocumentFacts {
         let path = curated_corpus_root().join(name);
         parse_document_facts_json_path(path).expect("curated sidecar should parse")
+    }
+
+    fn sample_receipt_only_docs() -> Vec<ExtractedDocumentFacts> {
+        let make_receipt = |document_id: &str,
+                            filename: &str,
+                            merchant: &str,
+                            date: &str,
+                            amount: &str,
+                            currency: &str| ExtractedDocumentFacts {
+            document_id: document_id.to_owned(),
+            filename: filename.to_owned(),
+            classification: DocumentClassification {
+                kind: DocumentKind::Receipt,
+                confidence: ConfidenceLevel::Medium,
+                evidence: vec![document_reference(document_id, filename)],
+                flags: Vec::new(),
+            },
+            extraction_status: ExtractionStatus::Complete,
+            facts: DocumentFactsPayload::Receipt(ReceiptFacts {
+                merchant_name: Some(Observed::new(
+                    merchant.to_owned(),
+                    ConfidenceLevel::Medium,
+                    vec![document_reference(document_id, filename)],
+                )),
+                merchant_location: None,
+                transaction_date: Some(Observed::new(
+                    date.to_owned(),
+                    ConfidenceLevel::Medium,
+                    vec![document_reference(document_id, filename)],
+                )),
+                total_paid: Some(Observed::new(
+                    MoneyAmount {
+                        amount: amount.to_owned(),
+                        currency: Some(currency.to_owned()),
+                    },
+                    ConfidenceLevel::Medium,
+                    vec![document_reference(document_id, filename)],
+                )),
+                subtotal: None,
+                tax_amount: None,
+                tip_amount: None,
+                line_items: Vec::new(),
+            }),
+            issues: Vec::new(),
+        };
+
+        vec![
+            make_receipt(
+                "x00016469612",
+                "x00016469612.png",
+                "BOOK TALK",
+                "2018-12-25",
+                "9.00",
+                "MYR",
+            ),
+            make_receipt(
+                "x00016469619",
+                "x00016469619.png",
+                "INDAH GIFT & HOME DECO",
+                "2019-01-19",
+                "60.30",
+                "MYR",
+            ),
+        ]
     }
 
     fn get_path<'a>(value: &'a ReportValue, path: &str) -> Option<&'a ReportValue> {
@@ -3175,6 +3361,82 @@ mod tests {
             .expense_lines
             .iter()
             .any(|line| line.kind == CanonicalExpenseKind::GenericReceipt));
+    }
+
+    #[test]
+    fn receipt_only_bundle_infers_trip_window_and_destination_from_receipt_context() {
+        let bundle = synthesize_bundle(&sample_receipt_only_docs());
+
+        assert_eq!(
+            bundle.trip.window.as_ref().map(|window| window.value.start_date.as_str()),
+            Some("2018-12-25")
+        );
+        assert_eq!(
+            bundle.trip.window.as_ref().map(|window| window.value.end_date.as_str()),
+            Some("2019-01-19")
+        );
+        assert_eq!(
+            bundle
+                .trip
+                .destination
+                .as_ref()
+                .and_then(|destination| destination.value.country.as_deref()),
+            Some("Malaysia")
+        );
+        assert_eq!(
+            bundle.trip.region.as_ref().map(|region| region.value),
+            Some(TravelRegion::Foreign)
+        );
+        assert!(bundle
+            .issues
+            .iter()
+            .all(|issue| issue.kind != BundleIssueKind::MissingDestination
+                && issue.kind != BundleIssueKind::MissingTripWindow));
+        assert!(bundle
+            .issues
+            .iter()
+            .any(|issue| issue.kind == BundleIssueKind::MissingPayeeName));
+    }
+
+    #[test]
+    fn static_fx_provider_uses_latest_prior_rate_for_historical_dates() {
+        let provider = StaticFxRateProvider::demo();
+        let quote = provider
+            .usd_rate_for("RM", "2018-12-25")
+            .expect("historical MYR rate should resolve from prior anchor");
+        assert_eq!(quote.currency, "MYR");
+        assert_eq!(quote.usd_per_unit, "0.24");
+        assert_eq!(quote.date, "2018-12-01");
+    }
+
+    #[test]
+    fn fx_enrichment_computes_total_usd_for_receipt_only_bundle() {
+        let provider = StaticFxRateProvider::demo();
+        let result = synthesize_bundle_projection_with_fx(&sample_receipt_only_docs(), &provider);
+
+        assert_eq!(
+            get_path(&result.draft.report, "transaction_summary.total_usd")
+                .and_then(ReportValue::as_text),
+            Some("16.63")
+        );
+        assert!(result
+            .bundle
+            .expense_lines
+            .iter()
+            .all(|line| line.line_amount_usd.is_some() && line.exchange_rate.is_some()));
+        assert!(result
+            .bundle
+            .expense_lines
+            .iter()
+            .all(|line| !line.projection_supported));
+        assert!(result
+            .issues
+            .iter()
+            .any(|issue| issue.kind == BundleIssueKind::UnprojectedDocument));
+        assert!(!result
+            .issues
+            .iter()
+            .any(|issue| issue.kind == BundleIssueKind::MissingTransactionSummaryTotal));
     }
 
     #[test]

@@ -754,7 +754,13 @@ fn build_document_snapshots(bundle: &CanonicalExpenseBundle) -> Vec<DocumentSnap
                 used_in_bundle,
                 projected_to_filing,
                 status_label,
-                summary_fields: document_snapshot_fields(document),
+                summary_fields: document_snapshot_fields(
+                    document,
+                    bundle
+                        .expense_lines
+                        .iter()
+                        .find(|line| line.document_id == document.document_id),
+                ),
                 issue_messages: issue_messages.into_iter().collect(),
             }
         })
@@ -763,10 +769,11 @@ fn build_document_snapshots(bundle: &CanonicalExpenseBundle) -> Vec<DocumentSnap
 
 fn document_snapshot_fields(
     document: &crate::ExtractedDocumentFacts,
+    line: Option<&crate::bundle_synthesis::CanonicalExpenseLine>,
 ) -> Vec<DocumentSnapshotField> {
+    let mut fields = Vec::new();
     match &document.facts {
         DocumentFactsPayload::Receipt(facts) => {
-            let mut fields = Vec::new();
             push_snapshot_field(
                 &mut fields,
                 "Merchant",
@@ -789,10 +796,8 @@ fn document_snapshot_fields(
                     Some(facts.line_items.len().to_string()),
                 );
             }
-            fields
         }
         DocumentFactsPayload::HotelFolio(facts) => {
-            let mut fields = Vec::new();
             push_snapshot_field(
                 &mut fields,
                 "Property",
@@ -813,10 +818,8 @@ fn document_snapshot_fields(
                 "Total",
                 facts.total_paid.as_ref().map(observed_money_amount_display),
             );
-            fields
         }
         DocumentFactsPayload::FlightItinerary(facts) => {
-            let mut fields = Vec::new();
             push_snapshot_field(
                 &mut fields,
                 "Traveler",
@@ -844,10 +847,8 @@ fn document_snapshot_fields(
                     Some(facts.segments.len().to_string()),
                 );
             }
-            fields
         }
         DocumentFactsPayload::ConferenceRegistration(facts) => {
-            let mut fields = Vec::new();
             push_snapshot_field(
                 &mut fields,
                 "Attendee",
@@ -863,10 +864,8 @@ fn document_snapshot_fields(
                 "Total",
                 facts.total_paid.as_ref().map(observed_money_amount_display),
             );
-            fields
         }
         DocumentFactsPayload::ConferenceProgram(facts) => {
-            let mut fields = Vec::new();
             push_snapshot_field(
                 &mut fields,
                 "Event",
@@ -879,10 +878,8 @@ fn document_snapshot_fields(
                     Some(facts.presentations.len().to_string()),
                 );
             }
-            fields
         }
         DocumentFactsPayload::CurrencyConversion(facts) => {
-            let mut fields = Vec::new();
             push_snapshot_field(
                 &mut fields,
                 "Provider",
@@ -893,10 +890,8 @@ fn document_snapshot_fields(
                 "Exchange rate",
                 facts.exchange_rate.as_ref().map(|value| value.value.clone()),
             );
-            fields
         }
         DocumentFactsPayload::AirfarePriceComparison(facts) => {
-            let mut fields = Vec::new();
             push_snapshot_field(
                 &mut fields,
                 "Selected fare",
@@ -909,10 +904,8 @@ fn document_snapshot_fields(
                     .as_ref()
                     .map(observed_money_amount_display),
             );
-            fields
         }
         DocumentFactsPayload::MissingReceiptDeclaration(facts) => {
-            let mut fields = Vec::new();
             push_snapshot_field(
                 &mut fields,
                 "Merchant",
@@ -923,10 +916,8 @@ fn document_snapshot_fields(
                 "Amount",
                 facts.amount.as_ref().map(observed_money_amount_display),
             );
-            fields
         }
         DocumentFactsPayload::StanfordExpenseSummary(facts) => {
-            let mut fields = Vec::new();
             push_snapshot_field(
                 &mut fields,
                 "Payee",
@@ -944,10 +935,8 @@ fn document_snapshot_fields(
                     .as_ref()
                     .map(observed_money_amount_display),
             );
-            fields
         }
         DocumentFactsPayload::Unknown(facts) => {
-            let mut fields = Vec::new();
             push_snapshot_field(
                 &mut fields,
                 "Title hint",
@@ -958,9 +947,28 @@ fn document_snapshot_fields(
                 "Text summary",
                 facts.text_summary.as_ref().map(|value| value.value.clone()),
             );
-            fields
         }
     }
+
+    if let Some(line) = line {
+        push_snapshot_field(
+            &mut fields,
+            "Total USD",
+            line.line_amount_usd.as_ref().map(|value| value.value.clone()),
+        );
+        push_snapshot_field(
+            &mut fields,
+            "Exchange rate",
+            line.exchange_rate.as_ref().map(|value| value.value.clone()),
+        );
+        push_snapshot_field(
+            &mut fields,
+            "Projected expense type",
+            line.expense_type.as_ref().map(|value| value.value.clone()),
+        );
+    }
+
+    fields
 }
 
 fn push_snapshot_field(
@@ -1430,5 +1438,72 @@ mod tests {
             .issue_messages
             .iter()
             .any(|message| message.contains("not yet projected") || message.contains("not projected")));
+    }
+
+    #[test]
+    fn review_packet_surfaces_fx_enriched_totals_for_unprojected_receipts() {
+        let document_id = "receipt_book_talk";
+        let filename = "book_talk_receipt.png";
+        let receipt = ExtractedDocumentFacts {
+            document_id: document_id.to_owned(),
+            filename: filename.to_owned(),
+            classification: DocumentClassification {
+                kind: crate::DocumentKind::Receipt,
+                confidence: ConfidenceLevel::Medium,
+                evidence: sample_evidence(document_id, filename, "BOOK TALK"),
+                flags: Vec::new(),
+            },
+            extraction_status: ExtractionStatus::Partial,
+            facts: DocumentFactsPayload::Receipt(ReceiptFacts {
+                merchant_name: Some(crate::Observed::new(
+                    "BOOK TALK".to_owned(),
+                    ConfidenceLevel::Medium,
+                    sample_evidence(document_id, filename, "BOOK TALK"),
+                )),
+                merchant_location: None,
+                transaction_date: Some(crate::Observed::new(
+                    "2019-01-11".to_owned(),
+                    ConfidenceLevel::Medium,
+                    sample_evidence(document_id, filename, "Date: 11/01/2019"),
+                )),
+                total_paid: Some(crate::Observed::new(
+                    MoneyAmount {
+                        amount: "80.90".to_owned(),
+                        currency: Some("MYR".to_owned()),
+                    },
+                    ConfidenceLevel::Medium,
+                    sample_evidence(document_id, filename, "Grand Total MYR 80.90"),
+                )),
+                subtotal: None,
+                tax_amount: None,
+                tip_amount: None,
+                line_items: Vec::new(),
+            }),
+            issues: vec![crate::DocumentExtractionIssue {
+                severity: IssueSeverity::Warning,
+                code: "missing_line_items".to_owned(),
+                message: "Receipt line items were not recovered".to_owned(),
+                evidence: Vec::new(),
+            }],
+        };
+
+        let provider = StaticFxRateProvider::demo();
+        let projection = synthesize_bundle_projection_with_fx(&[receipt], &provider);
+        let packet = build_review_packet(
+            &projection.bundle,
+            &projection.draft,
+            &projection.validation,
+        )
+        .expect("review packet should build");
+
+        assert_eq!(packet.summary.report_total_usd.as_deref(), Some("19.42"));
+        assert!(packet.document_snapshots[0]
+            .summary_fields
+            .iter()
+            .any(|field| field.label == "Total USD" && field.value == "19.42"));
+        assert!(packet.document_snapshots[0]
+            .summary_fields
+            .iter()
+            .any(|field| field.label == "Exchange rate" && field.value == "0.24"));
     }
 }

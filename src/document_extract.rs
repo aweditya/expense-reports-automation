@@ -1438,7 +1438,7 @@ fn parse_money(value: &str) -> Option<MoneyAmount> {
 
     if cleaned.len() >= 2 && cleaned[0].chars().all(|ch| ch.is_ascii_alphabetic()) {
         Some(MoneyAmount {
-            currency: Some(cleaned[0].to_ascii_uppercase()),
+            currency: Some(normalize_currency_code(cleaned[0])),
             amount: sanitize_amount(&cleaned[1..].join(" "))?,
         })
     } else {
@@ -1459,6 +1459,13 @@ fn sanitize_amount(value: &str) -> Option<String> {
         None
     } else {
         Some(normalized)
+    }
+}
+
+fn normalize_currency_code(value: &str) -> String {
+    match value.to_ascii_uppercase().as_str() {
+        "RM" => "MYR".to_owned(),
+        other => other.to_owned(),
     }
 }
 
@@ -1999,7 +2006,7 @@ mod tests {
                     facts.total_paid
                         .as_ref()
                         .and_then(|value| value.value.currency.as_deref()),
-                    Some("RM")
+                    Some("MYR")
                 );
                 assert_eq!(
                     facts.total_paid
