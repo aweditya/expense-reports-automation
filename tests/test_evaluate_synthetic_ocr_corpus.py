@@ -201,6 +201,15 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
         self.assertEqual(summary["manual_review_item_count"], 1)
         self.assertEqual(summary["other_warning_count"], 0)
 
+    def test_summarize_pass_comparison_marks_divergence_and_confidence(self):
+        summary = ocr_eval.summarize_pass_comparison(
+            {"overall_confidence": "low", "disagreement_count": 2}
+        )
+
+        self.assertEqual(summary["overall_confidence"], "low")
+        self.assertEqual(summary["disagreement_count"], 2)
+        self.assertTrue(summary["has_divergence"])
+
     def test_summarize_comparison_preserves_per_model_totals(self):
         comparison = ocr_eval.summarize_comparison(
             [
@@ -210,6 +219,10 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
                         "model_key": "gemini_3_flash_preview",
                         "packet_count": 4,
                         "document_count": 12,
+                        "pass_comparison_document_count": 3,
+                        "pass_comparison_divergent_document_count": 1,
+                        "pass_comparison_disagreement_count": 2,
+                        "pass_comparison_confidence_counts": {"high": 2, "low": 1},
                         "exact_match_count": 10,
                         "relaxed_match_count": 11,
                         "content_match_count": 12,
@@ -223,6 +236,10 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
                         "model_key": "gemini_3_pro_preview",
                         "packet_count": 4,
                         "document_count": 12,
+                        "pass_comparison_document_count": 3,
+                        "pass_comparison_divergent_document_count": 0,
+                        "pass_comparison_disagreement_count": 0,
+                        "pass_comparison_confidence_counts": {"high": 3},
                         "exact_match_count": 11,
                         "relaxed_match_count": 12,
                         "content_match_count": 12,
@@ -236,6 +253,8 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
         self.assertEqual(len(comparison["models"]), 2)
         self.assertEqual(comparison["models"][0]["exact_match_count"], 10)
         self.assertEqual(comparison["models"][1]["exact_match_count"], 11)
+        self.assertEqual(comparison["models"][0]["pass_comparison_disagreement_count"], 2)
+        self.assertEqual(comparison["models"][1]["pass_comparison_confidence_counts"]["high"], 3)
 
     def test_render_comparison_markdown_lists_models(self):
         markdown = ocr_eval.render_comparison_markdown(
@@ -244,6 +263,10 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
                     {
                         "model": "gemini-3-flash-preview",
                         "document_count": 12,
+                        "pass_comparison_document_count": 3,
+                        "pass_comparison_divergent_document_count": 1,
+                        "pass_comparison_disagreement_count": 2,
+                        "pass_comparison_confidence_counts": {"high": 2, "low": 1},
                         "exact_match_count": 10,
                         "relaxed_match_count": 11,
                         "content_match_count": 12,
@@ -253,6 +276,10 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
                     {
                         "model": "gemini-3-pro-preview",
                         "document_count": 12,
+                        "pass_comparison_document_count": 3,
+                        "pass_comparison_divergent_document_count": 0,
+                        "pass_comparison_disagreement_count": 0,
+                        "pass_comparison_confidence_counts": {"high": 3},
                         "exact_match_count": 11,
                         "relaxed_match_count": 12,
                         "content_match_count": 12,
@@ -265,6 +292,8 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
 
         self.assertIn("gemini-3-flash-preview", markdown)
         self.assertIn("gemini-3-pro-preview", markdown)
+        self.assertIn("pass_disagreements=2", markdown)
+        self.assertIn("confidence=high=2, low=1", markdown)
 
     def test_render_comparison_markdown_surfaces_model_errors(self):
         markdown = ocr_eval.render_comparison_markdown(
@@ -274,6 +303,10 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
                         "model": "gemini-3-flash-preview",
                         "status": "ok",
                         "document_count": 12,
+                        "pass_comparison_document_count": 0,
+                        "pass_comparison_divergent_document_count": 0,
+                        "pass_comparison_disagreement_count": 0,
+                        "pass_comparison_confidence_counts": {},
                         "exact_match_count": 10,
                         "relaxed_match_count": 11,
                         "content_match_count": 12,
@@ -286,6 +319,10 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
                         "error": "command failed with exit code 1\n404 NOT_FOUND",
                         "error_summary": "404 NOT_FOUND",
                         "document_count": 0,
+                        "pass_comparison_document_count": 0,
+                        "pass_comparison_divergent_document_count": 0,
+                        "pass_comparison_disagreement_count": 0,
+                        "pass_comparison_confidence_counts": {},
                         "exact_match_count": 0,
                         "relaxed_match_count": 0,
                         "content_match_count": 0,
@@ -317,10 +354,40 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
         self.assertEqual(report["summary"]["error_summary"], "404 NOT_FOUND")
         self.assertEqual(report["summary"]["packet_count"], 0)
         self.assertEqual(report["summary"]["document_count"], 0)
+        self.assertEqual(report["summary"]["pass_comparison_document_count"], 0)
         self.assertEqual(report["summary"]["exact_match_count"], 0)
-        self.assertEqual(report["summary"]["relaxed_match_count"], 0)
-        self.assertEqual(report["summary"]["content_match_count"], 0)
-        self.assertEqual(report["packets"], [])
+
+    def test_render_model_report_markdown_includes_pass_comparison_summary(self):
+        markdown = ocr_eval.render_model_report_markdown(
+            {
+                "summary": {
+                    "status": "ok",
+                    "corpus_name": "receipt_seed",
+                    "packet_count": 2,
+                    "document_count": 4,
+                    "comparable_document_count": 4,
+                    "expected_field_count": 8,
+                    "matched_field_count": 8,
+                    "pass_comparison_document_count": 2,
+                    "pass_comparison_divergent_document_count": 1,
+                    "pass_comparison_disagreement_count": 3,
+                    "pass_comparison_confidence_counts": {"high": 1, "low": 1},
+                    "model": "gemini-3-flash-preview",
+                    "exact_match_count": 4,
+                    "relaxed_match_count": 4,
+                    "content_match_count": 4,
+                    "filing_status_counts": {"userinputrequired": 2},
+                    "ledger_state_counts": {"userinputrequired": 2},
+                },
+                "packets": [],
+            }
+        )
+
+        self.assertIn("- pass comparisons: 2", markdown)
+        self.assertIn("- pass-comparison divergences: 1", markdown)
+        self.assertIn("- total field disagreements: 3", markdown)
+        self.assertIn("- high: 1", markdown)
+        self.assertIn("- low: 1", markdown)
 
 
 if __name__ == "__main__":

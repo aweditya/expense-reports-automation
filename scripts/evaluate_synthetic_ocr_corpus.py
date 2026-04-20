@@ -62,6 +62,14 @@ def parse_args() -> argparse.Namespace:
         "--sdk-python",
         help="Python interpreter to use for the Gemini SDK helper path",
     )
+    parser.add_argument(
+        "--compare-passes",
+        action="store_true",
+        help=(
+            "For receipt documents, run an additional table-focused OCR pass and "
+            "compare it against the primary ingestion transcription."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -461,6 +469,104 @@ def ingest_packet(
     run_command(command, cwd=repo_root())
 
 
+def compare_receipt_passes(
+    packet_id: str,
+    document: dict,
+    primary_transcription_path: Path,
+    packet_ingestion_dir: Path,
+    args: argparse.Namespace,
+    model: str,
+) -> dict:
+    compare_dir = (
+        packet_ingestion_dir
+        / "ocr_pass_comparisons"
+        / document["transcription_stem"]
+    )
+    compare_dir.mkdir(parents=True, exist_ok=True)
+    secondary_transcription_path = (
+        compare_dir / f"{document['transcription_stem']}.table_focused_binarized.json"
+    )
+    comparison_json_path = compare_dir / "comparison.json"
+    comparison_md_path = compare_dir / "comparison.md"
+
+    transcribe_command = [
+        "cargo",
+        "run",
+        "--bin",
+        "transcribe_document",
+        "--",
+        "--engine",
+        "vertex-gemini-sdk",
+        "--service-account-key",
+        args.service_account_key,
+        "--location",
+        args.location,
+        "--model",
+        model,
+        "--sdk-python",
+        args.sdk_python or default_sdk_python(),
+        "--format",
+        "json",
+        "--output",
+        str(secondary_transcription_path),
+        "--pass-kind",
+        "table_focused",
+        "--preprocess-variant",
+        "binarized",
+        "--pass-id",
+        f"{packet_id}_{document['transcription_stem']}_table_focused_binarized",
+    ]
+    if args.project:
+        transcribe_command.extend(["--project", args.project])
+    transcribe_command.append(document["input_path"])
+    run_command(transcribe_command, cwd=repo_root())
+
+    compare_command = [
+        "cargo",
+        "run",
+        "--bin",
+        "compare_ocr_passes",
+        "--",
+        "--format",
+        "json",
+        "--output",
+        str(comparison_json_path),
+        str(primary_transcription_path),
+        str(secondary_transcription_path),
+    ]
+    run_command(compare_command, cwd=repo_root())
+    compare_markdown_command = [
+        "cargo",
+        "run",
+        "--bin",
+        "compare_ocr_passes",
+        "--",
+        "--format",
+        "markdown",
+        "--output",
+        str(comparison_md_path),
+        str(primary_transcription_path),
+        str(secondary_transcription_path),
+    ]
+    run_command(compare_markdown_command, cwd=repo_root())
+
+    return {
+        "json_path": str(comparison_json_path),
+        "markdown_path": str(comparison_md_path),
+        "comparison": read_json(comparison_json_path),
+    }
+
+
+def summarize_pass_comparison(comparison: dict) -> dict:
+    confidence = comparison.get("overall_confidence") or "unknown"
+    disagreement_count = comparison.get("disagreement_count", 0)
+    return {
+        "overall_confidence": confidence,
+        "disagreement_count": disagreement_count,
+        "has_divergence": disagreement_count > 0,
+    }
+
+
 def evaluate_model(
     corpus_spec: dict,
     ingestion_root: Path,
@@ -474,6 +580,10 @@ def evaluate_model(
     comparable_document_count = 0
     expected_field_count = 0
     matched_field_count = 0
+    pass_comparison_document_count = 0
+    pass_comparison_divergent_document_count = 0
+    pass_comparison_disagreement_count = 0
+    pass_comparison_confidence_counts: Counter[str] = Counter()
     filing_status_counts: Counter[str] = Counter()
     ledger_state_counts: Counter[str] = Counter()
     document_count = 0
@@ -523,6 +633,23 @@ def evaluate_model(
                 field_comparison = compare_expected_fields(expected_fields, facts_path)
                 expected_field_count += field_comparison["expected_field_count"]
                 matched_field_count += field_comparison["matched_field_count"]
+            pass_comparison = None
+            if args.compare_passes and document["kind"] == "receipt":
+                pass_comparison = compare_receipt_passes(
+                    packet_id,
+                    document,
+                    transcription_path,
+                    packet_ingestion_dir,
+                    args,
+                    model,
+                )
+                pass_summary = summarize_pass_comparison(pass_comparison["comparison"])
+                pass_comparison_document_count += 1
+                pass_comparison_disagreement_count += pass_summary["disagreement_count"]
+                pass_comparison_divergent_document_count += int(
+                    pass_summary["has_divergence"]
+                )
+                pass_comparison_confidence_counts[pass_summary["overall_confidence"]] += 1
             document_count += 1
 
             packet_document_results.append(
@@ -536,6 +663,7 @@ def evaluate_model(
                     "relaxed_match": comparison["relaxed_match"] if comparison else None,
                     "content_match": comparison["content_match"] if comparison else None,
                     "expected_fields": field_comparison,
+                    "ocr_pass_comparison": pass_comparison,
                 }
             )
 
@@ -564,6 +692,10 @@ def evaluate_model(
             "comparable_document_count": comparable_document_count,
             "expected_field_count": expected_field_count,
             "matched_field_count": matched_field_count,
+            "pass_comparison_document_count": pass_comparison_document_count,
+            "pass_comparison_divergent_document_count": pass_comparison_divergent_document_count,
+            "pass_comparison_disagreement_count": pass_comparison_disagreement_count,
+            "pass_comparison_confidence_counts": dict(pass_comparison_confidence_counts),
             "model": model,
             "model_key": model_key,
             "location": args.location,
@@ -595,6 +727,18 @@ def summarize_comparison(model_reports: list[dict]) -> dict:
                 "document_count": report["summary"]["document_count"],
                 "expected_field_count": report["summary"].get("expected_field_count", 0),
                 "matched_field_count": report["summary"].get("matched_field_count", 0),
+                "pass_comparison_document_count": report["summary"].get(
+                    "pass_comparison_document_count", 0
+                ),
+                "pass_comparison_divergent_document_count": report["summary"].get(
+                    "pass_comparison_divergent_document_count", 0
+                ),
+                "pass_comparison_disagreement_count": report["summary"].get(
+                    "pass_comparison_disagreement_count", 0
+                ),
+                "pass_comparison_confidence_counts": report["summary"].get(
+                    "pass_comparison_confidence_counts", {}
+                ),
                 "exact_match_count": report["summary"]["exact_match_count"],
                 "relaxed_match_count": report["summary"]["relaxed_match_count"],
                 "content_match_count": report["summary"]["content_match_count"],
@@ -627,6 +771,10 @@ def failed_model_report(model: str, location: str, error: str) -> dict:
             "comparable_document_count": 0,
             "expected_field_count": 0,
             "matched_field_count": 0,
+            "pass_comparison_document_count": 0,
+            "pass_comparison_divergent_document_count": 0,
+            "pass_comparison_disagreement_count": 0,
+            "pass_comparison_confidence_counts": {},
             "exact_match_count": 0,
             "relaxed_match_count": 0,
             "content_match_count": 0,
@@ -648,6 +796,9 @@ def render_model_report_markdown(report: dict) -> str:
         f"- comparable documents: {report['summary'].get('comparable_document_count', report['summary']['document_count'])}",
         f"- expected receipt fields: {report['summary'].get('expected_field_count', 0)}",
         f"- matched receipt fields: {report['summary'].get('matched_field_count', 0)}",
+        f"- pass comparisons: {report['summary'].get('pass_comparison_document_count', 0)}",
+        f"- pass-comparison divergences: {report['summary'].get('pass_comparison_divergent_document_count', 0)}",
+        f"- pass-comparison field disagreements: {report['summary'].get('pass_comparison_disagreement_count', 0)}",
         f"- model: {report['summary']['model']}",
         f"- exact markdown matches: {report['summary']['exact_match_count']}",
         f"- relaxed markdown matches: {report['summary']['relaxed_match_count']}",
@@ -664,6 +815,21 @@ def render_model_report_markdown(report: dict) -> str:
     lines.append("## Ledger State Counts")
     for key, value in sorted(report["summary"]["ledger_state_counts"].items()):
         lines.append(f"- {key}: {value}")
+    lines.append("")
+    lines.append("## OCR Pass Comparison")
+    confidence_counts = report["summary"].get("pass_comparison_confidence_counts", {})
+    lines.append(
+        f"- compared receipt docs: {report['summary'].get('pass_comparison_document_count', 0)}"
+    )
+    lines.append(
+        f"- divergent receipt docs: {report['summary'].get('pass_comparison_divergent_document_count', 0)}"
+    )
+    lines.append(
+        f"- total field disagreements: {report['summary'].get('pass_comparison_disagreement_count', 0)}"
+    )
+    if confidence_counts:
+        for key, value in sorted(confidence_counts.items()):
+            lines.append(f"- {key}: {value}")
     lines.append("")
     lines.append("## Packet Results")
     for packet in report["packets"]:
@@ -694,9 +860,27 @@ def render_comparison_markdown(comparison: dict) -> str:
         lines.append(
             f"- {model['model']}: documents={model['document_count']}, "
             f"fields={model.get('matched_field_count', 0)}/{model.get('expected_field_count', 0)}, "
+            f"pass_disagreements={model.get('pass_comparison_disagreement_count', 0)}, "
             f"exact={model['exact_match_count']}, "
             f"relaxed={model['relaxed_match_count']}, "
             f"content={model['content_match_count']}"
+        )
+
+    lines.append("")
+    lines.append("## OCR Pass Comparison")
+    for model in comparison["models"]:
+        if model.get("status") == "error":
+            lines.append(f"- {model['model']}: unavailable")
+            continue
+        confidence_counts = ", ".join(
+            f"{key}={value}"
+            for key, value in sorted(model.get("pass_comparison_confidence_counts", {}).items())
+        )
+        lines.append(
+            f"- {model['model']}: compared_docs={model.get('pass_comparison_document_count', 0)}, "
+            f"divergent_docs={model.get('pass_comparison_divergent_document_count', 0)}, "
+            f"field_disagreements={model.get('pass_comparison_disagreement_count', 0)}, "
+            f"confidence={confidence_counts or 'none'}"
         )
 
     lines.append("")
