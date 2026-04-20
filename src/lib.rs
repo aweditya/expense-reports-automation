@@ -187,6 +187,7 @@ pub use ledger_regression::LedgerRegressionFailure;
 pub use ledger_regression::LedgerRegressionVerificationReport;
 pub use ocr_compare::compare_ocr_passes;
 pub use ocr_compare::compare_ocr_passes_json_paths;
+pub use ocr_compare::render_ocr_comparison_html;
 pub use ocr_compare::render_ocr_comparison_json_pretty;
 pub use ocr_compare::render_ocr_comparison_markdown;
 pub use ocr_compare::OcrComparisonError;

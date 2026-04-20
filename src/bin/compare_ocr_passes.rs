@@ -3,7 +3,7 @@ use std::fs;
 use std::process::ExitCode;
 
 use expense_report_schema::{
-    compare_ocr_passes_json_paths, render_ocr_comparison_json_pretty,
+    compare_ocr_passes_json_paths, render_ocr_comparison_html, render_ocr_comparison_json_pretty,
     render_ocr_comparison_markdown,
 };
 
@@ -11,6 +11,7 @@ use expense_report_schema::{
 enum OutputFormat {
     Json,
     Markdown,
+    Html,
 }
 
 impl OutputFormat {
@@ -18,8 +19,9 @@ impl OutputFormat {
         match value {
             "json" => Ok(Self::Json),
             "markdown" | "md" => Ok(Self::Markdown),
+            "html" => Ok(Self::Html),
             _ => Err(format!(
-                "unsupported format {value:?}; expected json or markdown"
+                "unsupported format {value:?}; expected json, markdown, or html"
             )),
         }
     }
@@ -75,6 +77,7 @@ fn run() -> Result<(), String> {
             render_ocr_comparison_json_pretty(&comparison).map_err(|err| err.to_string())?
         }
         OutputFormat::Markdown => render_ocr_comparison_markdown(&comparison),
+        OutputFormat::Html => render_ocr_comparison_html(&comparison),
     };
 
     if let Some(path) = output_path {
@@ -87,5 +90,27 @@ fn run() -> Result<(), String> {
 }
 
 fn usage() -> String {
-    "usage: compare_ocr_passes [--format json|markdown] [--output <path>] <pass-json> <pass-json> [more-pass-json ...]".to_owned()
+    "usage: compare_ocr_passes [--format json|markdown|html] [--output <path>] <pass-json> <pass-json> [more-pass-json ...]".to_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_supported_output_formats() {
+        assert_eq!(OutputFormat::parse("json").unwrap(), OutputFormat::Json);
+        assert_eq!(
+            OutputFormat::parse("markdown").unwrap(),
+            OutputFormat::Markdown
+        );
+        assert_eq!(OutputFormat::parse("md").unwrap(), OutputFormat::Markdown);
+        assert_eq!(OutputFormat::parse("html").unwrap(), OutputFormat::Html);
+    }
+
+    #[test]
+    fn rejects_unknown_output_format() {
+        let error = OutputFormat::parse("yaml").expect_err("yaml should be rejected");
+        assert!(error.contains("expected json, markdown, or html"));
+    }
 }

@@ -188,6 +188,7 @@ case "$subcommand" in
     table_json="$output_dir/${base_name}.table_focused_binarized.json"
     comparison_json="$output_dir/${base_name}.ocr_comparison.json"
     comparison_md="$output_dir/${base_name}.ocr_comparison.md"
+    comparison_html="$output_dir/${base_name}.ocr_comparison.html"
 
     primary_cmd=(
       cargo run --bin transcribe_document --
@@ -234,11 +235,17 @@ case "$subcommand" in
       --output "$comparison_md" \
       "$primary_json" \
       "$table_json"
+    run_cmd cargo run --bin compare_ocr_passes -- \
+      --format html \
+      --output "$comparison_html" \
+      "$primary_json" \
+      "$table_json"
     printf '\nOCR comparison artifacts:\n'
     printf '  %s\n' "$primary_json"
     printf '  %s\n' "$table_json"
     printf '  %s\n' "$comparison_json"
     printf '  %s\n' "$comparison_md"
+    printf '  %s\n' "$comparison_html"
     ;;
 
   corpus)

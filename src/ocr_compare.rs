@@ -156,6 +156,143 @@ pub fn render_ocr_comparison_json_pretty(
     serde_json::to_string_pretty(comparison)
 }
 
+pub fn render_ocr_comparison_html(comparison: &OcrComparisonResult) -> String {
+    let mut html = String::new();
+    html.push_str(
+        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">\
+         <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\
+         <title>OCR Pass Comparison</title><style>\
+         :root{color-scheme:light;font-family:ui-sans-serif,system-ui,sans-serif;}\
+         body{margin:0;background:#f7f3eb;color:#231f1a;}\
+         main{max-width:1100px;margin:0 auto;padding:32px 24px 48px;}\
+         h1,h2{margin:0 0 12px;}\
+         .summary,.section,.field{background:#fffdf9;border:1px solid #ddcfbb;border-radius:18px;box-shadow:0 8px 24px rgba(86,61,35,.08);}\
+         .summary,.section{padding:20px 22px;margin-bottom:18px;}\
+         .field{padding:18px 20px;margin-bottom:14px;}\
+         .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;}\
+         .metric{padding:12px 14px;border-radius:14px;background:#f3ece0;border:1px solid #e1d3bf;}\
+         .metric-label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8a5a2b;font-weight:700;}\
+         .metric-value{margin-top:6px;font-size:20px;font-weight:700;}\
+         .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;}\
+         .badge.high,.badge.consensus{background:#d8f0df;color:#195c31;}\
+         .badge.medium,.badge.partialconsensus{background:#fff0c9;color:#7d5700;}\
+         .badge.low,.badge.divergent,.badge.missing{background:#ffd7d2;color:#8f2414;}\
+         table{width:100%;border-collapse:collapse;margin-top:12px;}\
+         th,td{text-align:left;padding:10px 8px;border-top:1px solid #eadfce;vertical-align:top;}\
+         th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#8a5a2b;}\
+         code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;}\
+         .reason{margin-top:10px;padding:10px 12px;border-radius:12px;background:#f8ede7;color:#7b3426;}\
+         .candidate-list{margin:10px 0 0;padding:0;list-style:none;}\
+         .candidate-list li{padding:8px 0;border-top:1px solid #eadfce;}\
+         .candidate-list li:first-child{border-top:0;}\
+         .muted{color:#7b7064;}\
+         </style></head><body><main>",
+    );
+    html.push_str("<h1>OCR Pass Comparison</h1>");
+    html.push_str("<div class=\"summary\"><div class=\"grid\">");
+    html.push_str(&metric_card("document_id", &comparison.document_id));
+    html.push_str(&metric_card("filename", &comparison.filename));
+    html.push_str(&metric_card(
+        "overall_confidence",
+        confidence_label(comparison.overall_confidence),
+    ));
+    html.push_str(&metric_card(
+        "disagreement_count",
+        &comparison.disagreement_count.to_string(),
+    ));
+    html.push_str("</div></div>");
+
+    html.push_str("<section class=\"section\"><h2>Passes</h2><table><thead><tr>\
+                   <th>Pass</th><th>Kind</th><th>Preprocess</th><th>Classification</th>\
+                   <th>Status</th><th>Merchant</th><th>Date</th><th>Total</th><th>Currency</th><th>Line Items</th>\
+                   </tr></thead><tbody>");
+    for pass in &comparison.passes {
+        html.push_str("<tr>");
+        html.push_str(&format!(
+            "<td><code>{}</code></td>",
+            escape_html(&pass.pass_id)
+        ));
+        html.push_str(&format!(
+            "<td>{}</td>",
+            escape_html(pass.pass_kind.as_str())
+        ));
+        html.push_str(&format!(
+            "<td>{}</td>",
+            escape_html(pass.preprocess_variant.as_str())
+        ));
+        html.push_str(&format!(
+            "<td>{}</td>",
+            escape_html(pass.classification_kind.as_str())
+        ));
+        html.push_str(&format!("<td>{:?}</td>", pass.extraction_status));
+        html.push_str(&format!(
+            "<td>{}</td>",
+            escape_html(pass.merchant_name.as_deref().unwrap_or("[missing]"))
+        ));
+        html.push_str(&format!(
+            "<td>{}</td>",
+            escape_html(pass.transaction_date.as_deref().unwrap_or("[missing]"))
+        ));
+        html.push_str(&format!(
+            "<td>{}</td>",
+            escape_html(pass.total_paid.as_deref().unwrap_or("[missing]"))
+        ));
+        html.push_str(&format!(
+            "<td>{}</td>",
+            escape_html(pass.total_paid_currency.as_deref().unwrap_or("[missing]"))
+        ));
+        html.push_str(&format!("<td>{}</td>", pass.line_item_count));
+        html.push_str("</tr>");
+    }
+    html.push_str("</tbody></table></section>");
+
+    html.push_str("<section class=\"section\"><h2>Field Comparison</h2>");
+    for field in &comparison.fields {
+        html.push_str("<article class=\"field\">");
+        html.push_str(&format!(
+            "<h3><code>{}</code></h3>",
+            escape_html(&field.field)
+        ));
+        html.push_str(&format!(
+            "<span class=\"badge {}\">{}</span> ",
+            status_class(field.status),
+            escape_html(status_label(field.status))
+        ));
+        html.push_str(&format!(
+            "<span class=\"badge {}\">{}</span>",
+            confidence_label(field.confidence),
+            escape_html(confidence_label(field.confidence))
+        ));
+        html.push_str(&format!(
+            "<p><strong>Consensus:</strong> <span class=\"muted\">{}</span></p>",
+            escape_html(field.consensus_value.as_deref().unwrap_or("[missing]"))
+        ));
+        if let Some(reason) = field.disagreement_reason.as_deref() {
+            html.push_str(&format!(
+                "<div class=\"reason\"><strong>Reason:</strong> {}</div>",
+                escape_html(reason)
+            ));
+        }
+        html.push_str("<ul class=\"candidate-list\">");
+        for candidate in &field.candidates {
+            html.push_str(&format!(
+                "<li><code>{}</code> -> <strong>{}</strong> <span class=\"muted\">({})</span></li>",
+                escape_html(&candidate.pass_id),
+                escape_html(candidate.value.as_deref().unwrap_or("[missing]")),
+                escape_html(
+                    candidate
+                        .extractor_confidence
+                        .map(confidence_label)
+                        .unwrap_or("unknown")
+                )
+            ));
+        }
+        html.push_str("</ul></article>");
+    }
+    html.push_str("</section></main></body></html>");
+    html
+}
+
 pub fn render_ocr_comparison_markdown(comparison: &OcrComparisonResult) -> String {
     let mut lines = vec![
         "# OCR Pass Comparison".to_owned(),
@@ -520,6 +657,41 @@ fn confidence_label(value: ConfidenceLevel) -> &'static str {
     }
 }
 
+fn status_label(value: OcrComparisonStatus) -> &'static str {
+    match value {
+        OcrComparisonStatus::Consensus => "consensus",
+        OcrComparisonStatus::PartialConsensus => "partial consensus",
+        OcrComparisonStatus::Divergent => "divergent",
+        OcrComparisonStatus::Missing => "missing",
+    }
+}
+
+fn status_class(value: OcrComparisonStatus) -> &'static str {
+    match value {
+        OcrComparisonStatus::Consensus => "consensus",
+        OcrComparisonStatus::PartialConsensus => "partialconsensus",
+        OcrComparisonStatus::Divergent => "divergent",
+        OcrComparisonStatus::Missing => "missing",
+    }
+}
+
+fn metric_card(label: &str, value: &str) -> String {
+    format!(
+        "<div class=\"metric\"><div class=\"metric-label\">{}</div><div class=\"metric-value\">{}</div></div>",
+        escape_html(label),
+        escape_html(value)
+    )
+}
+
+fn escape_html(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -655,6 +827,31 @@ mod tests {
         assert!(markdown.contains("overall_confidence: high"));
         assert!(markdown.contains("receipt_primary_original"));
         assert!(markdown.contains("classification_kind"));
+    }
+
+    #[test]
+    fn html_render_lists_consensus_and_pass_details() {
+        let primary = receipt_document(
+            "receipt_primary_original",
+            OcrPassKind::Primary,
+            OcrPreprocessVariant::Original,
+            "# Merchant Receipt\n\n- Merchant Name: Book Talk\n- Date: 25/12/2018\n- Total: MYR 9.00\n",
+        );
+        let verification = receipt_document(
+            "receipt_table_focused_binarized",
+            OcrPassKind::TableFocused,
+            OcrPreprocessVariant::Binarized,
+            "# Merchant Receipt\n\n## Totals\n- Merchant Name: BOOK TALK\n- Date: 25/12/2018\n- Total: MYR 9.00\n",
+        );
+
+        let comparison = compare_ocr_passes(&[primary, verification]).expect("compare should work");
+        let html = render_ocr_comparison_html(&comparison);
+
+        assert!(html.contains("<!doctype html>"));
+        assert!(html.contains("OCR Pass Comparison"));
+        assert!(html.contains("receipt_primary_original"));
+        assert!(html.contains("consensus"));
+        assert!(html.contains("Book Talk"));
     }
 
     #[test]
