@@ -966,7 +966,8 @@ fn observed_money_strict(
         let Some(value) = strip_label_value_strict(&line.raw, labels) else {
             continue;
         };
-        let Some(money) = parse_money_with_line_context(&line.raw, &value) else {
+        let normalized_value = normalize_money_value_fragment(&value);
+        let Some(money) = parse_money_with_line_context(&line.raw, &normalized_value) else {
             continue;
         };
         return Some(observed_from_line(line, money, confidence, document));
@@ -983,6 +984,7 @@ fn observed_receipt_total(
     let preferred_label_sets = [
         &["grand total", "net total"][..],
         &["final total", "rounded total", "total rounded"][..],
+        &["total includes gst", "total including gst"][..],
         &["total paid", "amount paid"][..],
         &["total sales"][..],
         &["total"][..],
@@ -1461,6 +1463,20 @@ fn parse_money_with_line_context(line: &str, value: &str) -> Option<MoneyAmount>
         money.currency = extract_currency_hint(line);
     }
     Some(money)
+}
+
+fn normalize_money_value_fragment(value: &str) -> String {
+    let trimmed = value.trim();
+    if let Some((prefix, suffix)) = trimmed.rsplit_once(':') {
+        let prefix = prefix.trim();
+        let suffix = suffix.trim();
+        let prefix_is_annotation = prefix.ends_with('%')
+            || prefix.chars().all(|ch| ch.is_ascii_digit() || matches!(ch, '.' | '%' | ' '));
+        if prefix_is_annotation && sanitize_amount(suffix).is_some() {
+            return suffix.to_owned();
+        }
+    }
+    trimmed.to_owned()
 }
 
 fn sanitize_amount(value: &str) -> Option<String> {
@@ -2245,6 +2261,46 @@ GOODS SOLD ARE NOT RETURNABLE.
                         .as_ref()
                         .map(|value| value.value.amount.as_str()),
                     Some("112.45")
+                );
+            }
+            other => panic!("unexpected payload: {other:?}"),
+        }
+
+        remove_fixture_dir(&path);
+    }
+
+    #[test]
+    fn receipt_extractor_accepts_total_includes_gst_label() {
+        let markdown = "\
+# TAX INVOICE
+
+## Merchant Details
+- Merchant Name: FUYI MINI MARKET
+
+## Transaction Summary
+- Date: 25/01/2018 1:22:56PM
+
+## Totals
+- Total Includes GST 6%: 9.00
+";
+        let path = write_fixture(markdown, "receipt_total_includes_gst.md");
+        let actual = extract_document_facts_path(&path).expect("fixture should transcribe");
+
+        match actual.facts {
+            DocumentFactsPayload::Receipt(facts) => {
+                assert_eq!(
+                    facts
+                        .total_paid
+                        .as_ref()
+                        .map(|value| value.value.amount.as_str()),
+                    Some("9.00")
+                );
+                assert_eq!(
+                    facts
+                        .transaction_date
+                        .as_ref()
+                        .map(|value| value.value.as_str()),
+                    Some("25/01/2018")
                 );
             }
             other => panic!("unexpected payload: {other:?}"),

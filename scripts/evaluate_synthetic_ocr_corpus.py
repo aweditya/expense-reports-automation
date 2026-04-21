@@ -440,6 +440,12 @@ def first_numeric_token(value):
     return matches[0].replace(",", ".")
 
 
+def all_numeric_tokens(value):
+    if value is None:
+        return []
+    return [match.replace(",", ".") for match in re.findall(r"\d+(?:[.,]\d+)?", str(value))]
+
+
 def normalize_currency_token(value):
     normalized = normalize_field_value(value)
     if normalized is None:
@@ -470,8 +476,8 @@ def grounding_field_matches(field_name: str, expected_value, actual_text: str | 
         return expected is not None and actual is not None and expected == actual
     if field_name == "total_paid":
         expected = first_numeric_token(expected_value)
-        actual = first_numeric_token(actual_text)
-        return expected is not None and actual is not None and expected == actual
+        actual_tokens = all_numeric_tokens(actual_text)
+        return expected is not None and expected in actual_tokens
     if field_name == "total_paid_currency":
         expected = normalize_currency_token(expected_value)
         actual = normalize_currency_token(actual_text)

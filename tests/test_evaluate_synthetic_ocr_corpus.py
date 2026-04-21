@@ -284,6 +284,43 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
             self.assertIsNotNone(comparison)
             self.assertEqual(comparison["matched_field_count"], 1)
 
+    def test_compare_expected_grounding_matches_total_when_label_contains_other_numbers(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            transcription_path = temp_path / "receipt.transcribed.json"
+            transcription_path.write_text(
+                json.dumps(
+                    {
+                        "metadata": {
+                            "geometry_source": "gemini",
+                            "geometry_available": True,
+                        },
+                        "pages": [
+                            {
+                                "page_number": 1,
+                                "text": "Total Includes GST 6%: 9.00",
+                                "regions": [
+                                    {
+                                        "region_id": "total_paid",
+                                        "text": "Total Includes GST 6%: 9.00",
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                )
+            )
+
+            comparison = ocr_eval.compare_expected_grounding(
+                {
+                    "total_paid": "9.00",
+                },
+                transcription_path,
+            )
+
+            self.assertIsNotNone(comparison)
+            self.assertEqual(comparison["matched_field_count"], 1)
+
     def test_compare_expected_grounding_ignores_merchant_line_labels(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
