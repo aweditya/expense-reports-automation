@@ -21,6 +21,7 @@ use crate::ocr_compare::{
 use crate::ocr_grounding::{
     render_ocr_grounding_html, summarize_ocr_grounding, DocumentOcrGroundingSummary,
 };
+use crate::ocr_inspection::render_ocr_inspection_html;
 use crate::readiness::{summarize_validation_readiness, ReadinessReport};
 use crate::render::render_draft_report_yaml;
 use crate::review_packet::{
@@ -306,10 +307,12 @@ pub fn write_ingestion_artifacts(
     let facts_dir = output_dir.join("facts");
     let ocr_compare_dir = output_dir.join("ocr_pass_comparisons");
     let ocr_grounding_dir = output_dir.join("ocr_grounding");
+    let ocr_inspection_dir = output_dir.join("ocr_inspection");
     fs::create_dir_all(&transcriptions_dir)?;
     fs::create_dir_all(&facts_dir)?;
     fs::create_dir_all(&ocr_compare_dir)?;
     fs::create_dir_all(&ocr_grounding_dir)?;
+    fs::create_dir_all(&ocr_inspection_dir)?;
 
     for document in &result.transcriptions {
         let filename = format!("{}.transcribed.json", document.document_id);
@@ -385,6 +388,50 @@ pub fn write_ingestion_artifacts(
         )?;
     }
 
+    for document in &result.transcriptions {
+        let inspection_dir = ocr_inspection_dir.join(&document.document_id);
+        fs::create_dir_all(&inspection_dir)?;
+        let comparison_artifact = result
+            .ocr_pass_comparisons
+            .iter()
+            .find(|artifact| artifact.document_id == document.document_id);
+        let comparison = comparison_artifact.map(|artifact| &artifact.comparison);
+        let mut passes = vec![document];
+        if let Some(artifact) = comparison_artifact {
+            passes.push(&artifact.secondary_transcription);
+        }
+        let grounding = result
+            .ocr_groundings
+            .iter()
+            .find(|summary| summary.document_id == document.document_id);
+        let comparison_href = comparison.map(|_| {
+            format!(
+                "../../ocr_pass_comparisons/{}/comparison.html",
+                document.document_id
+            )
+        });
+        let grounding_href = grounding.map(|_| {
+            format!(
+                "../../ocr_grounding/{}/grounded_preview.html",
+                document.document_id
+            )
+        });
+        fs::write(
+            inspection_dir.join("inspection.html"),
+            render_ocr_inspection_html(
+                &passes,
+                comparison,
+                grounding,
+                Some(&format!(
+                    "../../../document/{}/{}",
+                    document.document_id, document.filename
+                )),
+                comparison_href.as_deref(),
+                grounding_href.as_deref(),
+            ),
+        )?;
+    }
+
     fs::write(
         output_dir.join("bundle.json"),
         render_canonical_bundle_json_pretty(&result.projection.bundle)?,
@@ -430,6 +477,7 @@ pub fn write_ingestion_artifacts(
         })).collect::<Vec<_>>(),
         "ocr_pass_comparison_count": result.ocr_pass_comparisons.len(),
         "ocr_grounding_count": result.ocr_groundings.len(),
+        "ocr_inspection_count": result.transcriptions.len(),
     });
     fs::write(
         output_dir.join("manifest.json"),
@@ -553,6 +601,16 @@ mod tests {
         assert!(output_dir.join("ledger.json").exists());
         assert!(output_dir.join("transcriptions").exists());
         assert!(output_dir.join("facts").exists());
+        assert!(output_dir.join("ocr_inspection").exists());
+        let receipt_inspection = output_dir
+            .join("ocr_inspection")
+            .join("synthetic_receipt_baseline")
+            .join("inspection.html");
+        assert!(receipt_inspection.exists());
+        let inspection_html =
+            fs::read_to_string(receipt_inspection).expect("inspection artifact should read");
+        assert!(inspection_html.contains("Developer OCR inspection"));
+        assert!(inspection_html.contains("Primary extraction"));
     }
 
     #[test]
