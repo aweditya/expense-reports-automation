@@ -1,0 +1,509 @@
+{
+  "corpus_name": "sroie_train_0_24",
+  "documents": [
+    {
+      "document_id": "x00016469612",
+      "packet_id": "x00016469612",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x00016469612.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "BOOK TA .K (TAMAN DAYA) SDN BHD",
+        "total_paid": "9.00",
+        "transaction_date": "25/12/2018"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    },
+    {
+      "document_id": "x00016469619",
+      "packet_id": "x00016469619",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x00016469619.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "INDAH GIFT & HOME DECO",
+        "total_paid": "60.30",
+        "transaction_date": "19/10/2018"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    },
+    {
+      "document_id": "x00016469620",
+      "packet_id": "x00016469620",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x00016469620.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "MR D.I.Y. (JOHOR) SDN BHD",
+        "total_paid": "33.90",
+        "transaction_date": "12-01-19"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    },
+    {
+      "document_id": "x00016469622",
+      "packet_id": "x00016469622",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x00016469622.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "YONGFATT ENTERPRISE",
+        "total_paid": "80.90",
+        "transaction_date": "25/12/2018"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    },
+    {
+      "document_id": "x00016469623",
+      "packet_id": "x00016469623",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x00016469623.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "MR D.I.Y. (M) SDN BHD",
+        "total_paid": "30.90",
+        "transaction_date": "18-11-18"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    },
+    {
+      "document_id": "x00016469669",
+      "packet_id": "x00016469669",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x00016469669.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "ABC HO TRADING",
+        "total_paid": "31.00",
+        "transaction_date": "09/01/2019"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    },
+    {
+      "document_id": "x00016469672",
+      "packet_id": "x00016469672",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x00016469672.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "SOON HUAT MACHINERY ENTERPRISE",
+        "total_paid": "327.00",
+        "transaction_date": "11/01/2019"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    },
+    {
+      "document_id": "x00016469676",
+      "packet_id": "x00016469676",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x00016469676.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "S.H.H. MOTOR (SUNGAI RENGIT) SDN. BHD.",
+        "total_paid": "20.00",
+        "transaction_date": "23-01-2019"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    },
+    {
+      "document_id": "x51005200938",
+      "packet_id": "x51005200938",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x51005200938.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "PERNIAGAAN ZHENG HUI",
+        "total_paid": "112.45",
+        "transaction_date": "12/02/2018"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    },
+    {
+      "document_id": "x51005230617",
+      "packet_id": "x51005230617",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x51005230617.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "GERBANG ALAF RESTAURANTS SDN BHD",
+        "total_paid": "26.60",
+        "transaction_date": "18/01/2018"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    },
+    {
+      "document_id": "x51005255805",
+      "packet_id": "x51005255805",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x51005255805.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "SAM SAM TRADING CO",
+        "total_paid": "14.10",
+        "transaction_date": "29-12-2017"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    },
+    {
+      "document_id": "x51005268200",
+      "packet_id": "x51005268200",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x51005268200.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "AIK HUAT HARDWARE ENTERPRISE (SETIA ALAM) SDN BHD",
+        "total_paid": "15.00",
+        "transaction_date": "15/06/2017"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    },
+    {
+      "document_id": "x51005268262",
+      "packet_id": "x51005268262",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x51005268262.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "HOME MASTER HARDWARE & ELECTRICAL",
+        "total_paid": "15.90",
+        "transaction_date": "22/12/2017"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    },
+    {
+      "document_id": "x51005268400",
+      "packet_id": "x51005268400",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x51005268400.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "RESTORAN HASSANBISTRO",
+        "total_paid": "15.00",
+        "transaction_date": "12/28/2017"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    },
+    {
+      "document_id": "x51005268472",
+      "packet_id": "x51005268472",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x51005268472.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "ASIA MART",
+        "total_paid": "32.70",
+        "transaction_date": "22/12/2017"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    },
+    {
+      "document_id": "x51005301659",
+      "packet_id": "x51005301659",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x51005301659.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "HOME MASTER HARDWARE & ELECTRICAL",
+        "total_paid": "15.90",
+        "transaction_date": "22/12/2017"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    },
+    {
+      "document_id": "x51005301661",
+      "packet_id": "x51005301661",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x51005301661.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "LIGHTROOM GALLERY SDN BHD",
+        "total_paid": "73.00",
+        "transaction_date": "20/12/2017"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    },
+    {
+      "document_id": "x51005301667",
+      "packet_id": "x51005301667",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x51005301667.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "LIGHTROOM GALLERY SDN BHD",
+        "total_paid": "39.80",
+        "transaction_date": "20/11/2017"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    },
+    {
+      "document_id": "x51005303661",
+      "packet_id": "x51005303661",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x51005303661.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "LIGHTROOM GALLERY SDN BHD",
+        "total_paid": "73.00",
+        "transaction_date": "20/12/2017"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    },
+    {
+      "document_id": "x51005306399",
+      "packet_id": "x51005306399",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x51005306399.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "SHELL ISNI PETRO TRADING",
+        "total_paid": "86.00",
+        "transaction_date": "18/03/18"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    },
+    {
+      "document_id": "x51005337872",
+      "packet_id": "x51005337872",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x51005337872.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "SYL ROASTED DELIGHTS SDN. BHD.",
+        "total_paid": "54.50",
+        "transaction_date": "06/03/2018"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    },
+    {
+      "document_id": "x51005361883",
+      "packet_id": "x51005361883",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x51005361883.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "TEO HENG STATIONERY & BOOKS",
+        "total_paid": "4.90",
+        "transaction_date": "18/01/2018"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    },
+    {
+      "document_id": "x51005361895",
+      "packet_id": "x51005361895",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x51005361895.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "FUYI MINI MARKET",
+        "total_paid": "9.00",
+        "transaction_date": "25/01/2018"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    },
+    {
+      "document_id": "x51005361897",
+      "packet_id": "x51005361897",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x51005361897.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "TEO HENG STATIONERY & BOOKS",
+        "total_paid": "27.55",
+        "transaction_date": "17/01/2018"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    }
+  ]
+}
