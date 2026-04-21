@@ -747,10 +747,17 @@ fn render_document_snapshot_card(html: &mut String, document: &DocumentSnapshotC
         html.push_str("</p></div>");
     }
     let document_href = format!("document/{}/{}", document.document_id, document.filename);
+    let inspection_href = format!(
+        "artifact/ocr_inspection/{}/inspection.html",
+        document.document_id
+    );
     html.push_str("<div class=\"document-snapshot-actions\">");
     html.push_str("<a class=\"document-link\" href=\"");
     html.push_str(&escape_html_attribute(&document_href));
     html.push_str("\" target=\"_blank\" rel=\"noreferrer noopener\">Open source document</a>");
+    html.push_str("<a class=\"document-link\" href=\"");
+    html.push_str(&escape_html_attribute(&inspection_href));
+    html.push_str("\" target=\"_blank\" rel=\"noreferrer noopener\">Open OCR inspection</a>");
     if let Some(href) = document.ocr_comparison_href.as_ref() {
         html.push_str("<a class=\"document-link\" href=\"");
         html.push_str(&escape_html_attribute(href));
@@ -1437,6 +1444,10 @@ mod tests {
         let rendered = render_review_workbench_html(&packet);
 
         assert!(rendered.contains("OCR cross-check"));
+        assert!(rendered.contains("Open OCR inspection"));
+        assert!(
+            rendered.contains("artifact/ocr_inspection/synthetic_receipt_baseline/inspection.html")
+        );
         assert!(rendered.contains("Open OCR diff"));
         assert!(rendered
             .contains("artifact/ocr_pass_comparisons/synthetic_receipt_baseline/comparison.html"));

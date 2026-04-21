@@ -329,6 +329,7 @@ def bundle_artifact_relative_path(
     if not relative.parts or relative.parts[0] not in {
         "ocr_pass_comparisons",
         "ocr_grounding",
+        "ocr_inspection",
     }:
         raise LocalAppError(f"artifact not available for export: {artifact_relative_path}")
 
