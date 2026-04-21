@@ -232,6 +232,41 @@ def latest_ledger_path(workspace_root: Path, bundle_id: str) -> Path | None:
     return path if path.exists() else None
 
 
+def bundle_root_path(workspace_root: Path, bundle_id: str) -> Path:
+    return workspace_root / "bundles" / ensure_safe_bundle_id(bundle_id)
+
+
+def bundle_inflight_marker_path(workspace_root: Path, bundle_id: str) -> Path:
+    return bundle_root_path(workspace_root, bundle_id) / ".local_app_inflight.json"
+
+
+def acquire_bundle_inflight_lock(workspace_root: Path, bundle_id: str) -> Path:
+    bundle_root = bundle_root_path(workspace_root, bundle_id)
+    bundle_root.mkdir(parents=True, exist_ok=True)
+    marker_path = bundle_inflight_marker_path(workspace_root, bundle_id)
+    payload = {
+        "bundle_id": bundle_id,
+        "started_at_epoch_ms": int(time_now_epoch_ms()),
+        "status": "processing",
+    }
+    try:
+        fd = os.open(marker_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
+    except FileExistsError as err:
+        raise LocalAppError(
+            f"bundle {bundle_id} is already processing. Wait for the current run to finish before uploading again."
+        ) from err
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2)
+    return marker_path
+
+
+def release_bundle_inflight_lock(marker_path: Path) -> None:
+    try:
+        marker_path.unlink()
+    except FileNotFoundError:
+        pass
+
+
 def bundle_document_href(bundle_id: str, document_id: str, stored_filename: str) -> str:
     return "/bundle/{bundle_id}/document/{document_id}/{filename}".format(
         bundle_id=urllib.parse.quote(bundle_id),
@@ -561,14 +596,20 @@ def handle_upload_submission(
     if not request.files:
         raise LocalAppError("at least one document upload is required")
 
-    with repo_scoped_tempdir(config.repo_root, "expense_local_app_") as temp_dir_str:
-        temp_dir = Path(temp_dir_str)
-        input_paths = save_uploaded_files(temp_dir, request.files)
-        command = build_ingest_command(config, request.fields, input_paths)
-        completed = command_runner(command, config.repo_root)
-        if completed.returncode != 0:
-            raise LocalAppError((completed.stderr or completed.stdout).strip() or "pipeline failed")
-        return request.fields.get("bundle_id") or default_bundle_id(input_paths)
+    default_bundle = sanitize_identifier(Path(request.files[0].filename).stem)
+    bundle_id = sanitize_identifier(request.fields.get("bundle_id") or default_bundle)
+    marker_path = acquire_bundle_inflight_lock(config.workspace_root, bundle_id)
+    try:
+        with repo_scoped_tempdir(config.repo_root, "expense_local_app_") as temp_dir_str:
+            temp_dir = Path(temp_dir_str)
+            input_paths = save_uploaded_files(temp_dir, request.files)
+            command = build_ingest_command(config, request.fields, input_paths)
+            completed = command_runner(command, config.repo_root)
+            if completed.returncode != 0:
+                raise LocalAppError((completed.stderr or completed.stdout).strip() or "pipeline failed")
+            return request.fields.get("bundle_id") or default_bundle_id(input_paths)
+    finally:
+        release_bundle_inflight_lock(marker_path)
 
 
 def handle_review_save_submission(

@@ -428,6 +428,56 @@ class LocalAppTests(unittest.TestCase):
                     request,
                 )
 
+    def test_handle_upload_submission_rejects_bundle_already_inflight(self):
+        request = local_app.UploadRequest(
+            fields={"engine": "builtin", "bundle_id": "demo_bundle"},
+            files=[
+                local_app.UploadedFile(
+                    filename="receipt.png",
+                    content_type="image/png",
+                    content=b"image",
+                )
+            ],
+        )
+        with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as workspace_dir:
+            workspace_root = Path(workspace_dir)
+            marker_path = local_app.acquire_bundle_inflight_lock(workspace_root, "demo_bundle")
+            try:
+                with self.assertRaises(local_app.LocalAppError) as ctx:
+                    local_app.handle_upload_submission(
+                        build_config(Path(repo_dir), workspace_root),
+                        request,
+                    )
+                self.assertIn("already processing", str(ctx.exception))
+            finally:
+                local_app.release_bundle_inflight_lock(marker_path)
+
+    def test_handle_upload_submission_clears_inflight_lock_after_failure(self):
+        def runner(command, cwd):
+            return CompletedProcess(command, 1, stdout="", stderr="boom")
+
+        request = local_app.UploadRequest(
+            fields={"engine": "builtin", "bundle_id": "demo_bundle"},
+            files=[
+                local_app.UploadedFile(
+                    filename="receipt.png",
+                    content_type="image/png",
+                    content=b"image",
+                )
+            ],
+        )
+
+        with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as workspace_dir:
+            workspace_root = Path(workspace_dir)
+            config = build_config(Path(repo_dir), workspace_root)
+            with self.assertRaises(local_app.LocalAppError):
+                local_app.handle_upload_submission(
+                    config,
+                    request,
+                    command_runner=runner,
+                )
+            self.assertFalse(local_app.bundle_inflight_marker_path(workspace_root, "demo_bundle").exists())
+
     def test_render_bundle_page_handles_missing_saved_workbench_when_ledger_exists(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
