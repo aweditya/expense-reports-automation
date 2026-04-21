@@ -16,7 +16,8 @@ use crate::ledger::{
 };
 use crate::ocr_compare::{
     compare_ocr_passes, render_ocr_comparison_html, render_ocr_comparison_json_pretty,
-    render_ocr_comparison_markdown, summarize_ocr_comparison, OcrComparisonResult,
+    render_ocr_comparison_markdown, resolve_receipt_ocr_consensus, summarize_ocr_comparison,
+    OcrComparisonResult,
 };
 use crate::ocr_grounding::{
     render_ocr_grounding_html, summarize_ocr_grounding, DocumentOcrGroundingSummary,
@@ -196,7 +197,7 @@ pub fn ingest_expense_documents(
                 )?
             }
         };
-        let facts = extract_document_facts(&document);
+        let mut facts = extract_document_facts(&document);
         if config.compare_receipt_passes
             && facts.classification.kind == DocumentKind::Receipt
             && matches!(
@@ -224,6 +225,9 @@ pub fn ingest_expense_documents(
             let comparison =
                 compare_ocr_passes(&[document.clone(), secondary_transcription.clone()])
                     .map_err(|err| ocr_comparison_error(path, err.to_string()))?;
+            let secondary_facts = extract_document_facts(&secondary_transcription);
+            facts = resolve_receipt_ocr_consensus(&facts, &secondary_facts, &comparison)
+                .map_err(|err| ocr_comparison_error(path, err.to_string()))?;
             ocr_pass_comparisons.push(OcrPassComparisonArtifact {
                 document_id: document.document_id.clone(),
                 secondary_transcription,
@@ -422,6 +426,10 @@ pub fn write_ingestion_artifacts(
                 &passes,
                 comparison,
                 grounding,
+                result
+                    .extracted_documents
+                    .iter()
+                    .find(|facts| facts.document_id == document.document_id),
                 Some(&format!(
                     "../../../document/{}/{}",
                     document.document_id, document.filename
@@ -545,6 +553,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use crate::synthetic_documents::{generate_synthetic_packet, SyntheticVariant};
+    use crate::ExtractionStatus;
     use crate::TranscriptionEngine;
 
     use super::*;
@@ -610,7 +619,7 @@ mod tests {
         let inspection_html =
             fs::read_to_string(receipt_inspection).expect("inspection artifact should read");
         assert!(inspection_html.contains("Developer OCR inspection"));
-        assert!(inspection_html.contains("Primary extraction"));
+        assert!(inspection_html.contains("Current extraction"));
     }
 
     #[test]
@@ -895,6 +904,87 @@ print(json.dumps({
         assert_eq!(result.bundle_id, "sdk_demo");
         assert_eq!(result.projection.bundle.expense_lines.len(), 3);
         assert!(result.review_workbench_html.contains("<!DOCTYPE html>"));
+    }
+
+    #[test]
+    fn sdk_receipt_pass_comparison_fills_missing_receipt_fields() {
+        let temp_dir = unique_temp_dir("ingest_vertex_sdk_receipt_compare");
+        let script_path = temp_dir.join("mock_compare.py");
+        let key_path = temp_dir.join("service_account.json");
+        let receipt_path = temp_dir.join("receipt.png");
+        fs::write(&key_path, "{}").expect("key should write");
+        fs::write(&receipt_path, b"receipt-bytes").expect("receipt should write");
+        fs::write(
+            &script_path,
+            r###"import json, pathlib, sys
+doc = pathlib.Path(sys.argv[-1])
+pass_kind = sys.argv[sys.argv.index("--pass-kind") + 1]
+if pass_kind == "table_focused":
+    text = "# Merchant Receipt\n- Merchant Name: BOOK TALK\n- Date: 25/12/2018\n- Total: MYR 9.00\n"
+else:
+    text = "# Merchant Receipt\n- Total: 9.00\n"
+print(json.dumps({
+  "document_id": "receipt",
+  "filename": doc.name,
+  "source_path": str(doc),
+  "pages": [{"page_number": 1, "text": text}]
+}))
+"###,
+        )
+        .expect("mock compare script should write");
+
+        let result = ingest_expense_documents(
+            &[receipt_path],
+            &IngestionConfig {
+                bundle_id: Some("sdk_compare_demo".to_owned()),
+                transcriber: IngestionTranscriber::VertexGeminiSdk(VertexGeminiSdkConfig {
+                    project_id: Some("demo-project".to_owned()),
+                    location: "global".to_owned(),
+                    model: "gemini-3-flash-preview".to_owned(),
+                    service_account_key_path: key_path,
+                    python_bin: PathBuf::from("python3"),
+                    script_path,
+                }),
+                fx_mode: IngestionFxMode::Demo,
+                compare_receipt_passes: true,
+            },
+        )
+        .expect("sdk comparison ingestion should succeed");
+
+        assert_eq!(result.ocr_pass_comparisons.len(), 1);
+        let crate::DocumentFactsPayload::Receipt(receipt) = &result.extracted_documents[0].facts
+        else {
+            panic!("expected receipt facts");
+        };
+        assert_eq!(
+            receipt
+                .merchant_name
+                .as_ref()
+                .map(|value| value.value.as_str()),
+            Some("BOOK TALK")
+        );
+        assert_eq!(
+            receipt
+                .transaction_date
+                .as_ref()
+                .map(|value| value.value.as_str()),
+            Some("25/12/2018")
+        );
+        assert_eq!(
+            receipt
+                .total_paid
+                .as_ref()
+                .and_then(|value| value.value.currency.as_deref()),
+            Some("MYR")
+        );
+        assert!(result.extracted_documents[0]
+            .issues
+            .iter()
+            .any(|issue| issue.code == "ocr_secondary_fill_merchant_name"));
+        assert_eq!(
+            result.extracted_documents[0].extraction_status,
+            ExtractionStatus::Partial
+        );
     }
 
     fn write_synthetic_packet(

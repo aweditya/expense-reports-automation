@@ -6,9 +6,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::document_extract::extract_document_facts;
 use crate::document_facts::{
-    DocumentFactsPayload, DocumentKind, ExtractedDocumentFacts, ExtractionStatus,
+    DocumentExtractionIssue, DocumentFactsPayload, DocumentKind, ExtractedDocumentFacts,
+    ExtractionStatus, IssueSeverity, MoneyAmount, Observed, ReceiptFacts,
 };
-use crate::draft::ConfidenceLevel;
+use crate::draft::{ConfidenceLevel, EvidenceKind, EvidenceReference};
 use crate::transcribe::{
     parse_transcribed_document_json_path, OcrPassKind, OcrPreprocessVariant, TranscribedDocument,
 };
@@ -193,6 +194,91 @@ pub fn summarize_ocr_comparison(comparison: &OcrComparisonResult) -> DocumentOcr
             })
             .collect(),
     }
+}
+
+pub fn resolve_receipt_ocr_consensus(
+    primary: &ExtractedDocumentFacts,
+    secondary: &ExtractedDocumentFacts,
+    comparison: &OcrComparisonResult,
+) -> Result<ExtractedDocumentFacts, OcrComparisonError> {
+    if primary.document_id != secondary.document_id
+        || primary.filename != secondary.filename
+        || comparison.document_id != primary.document_id
+        || comparison.filename != primary.filename
+    {
+        return Err(OcrComparisonError::MismatchedDocumentIdentity);
+    }
+
+    let (
+        DocumentFactsPayload::Receipt(primary_receipt),
+        DocumentFactsPayload::Receipt(secondary_receipt),
+    ) = (&primary.facts, &secondary.facts)
+    else {
+        return Ok(primary.clone());
+    };
+
+    let mut resolved = primary.clone();
+    let mut receipt = primary_receipt.clone();
+    let mut issues = primary.issues.clone();
+
+    receipt.merchant_name = reconcile_observed_field(
+        "merchant_name",
+        &primary_receipt.merchant_name,
+        &secondary_receipt.merchant_name,
+        field_comparison(comparison, "merchant_name"),
+        &mut issues,
+    );
+    receipt.transaction_date = reconcile_observed_field(
+        "transaction_date",
+        &primary_receipt.transaction_date,
+        &secondary_receipt.transaction_date,
+        field_comparison(comparison, "transaction_date"),
+        &mut issues,
+    );
+    receipt.total_paid = reconcile_total_paid_field(
+        &primary_receipt.total_paid,
+        &secondary_receipt.total_paid,
+        field_comparison(comparison, "total_paid"),
+        field_comparison(comparison, "total_paid_currency"),
+        &mut issues,
+    );
+    receipt.line_items = reconcile_line_items(
+        &primary_receipt.line_items,
+        &secondary_receipt.line_items,
+        field_comparison(comparison, "line_item_count"),
+        &mut issues,
+    );
+    receipt.merchant_location = fill_missing_secondary_observed(
+        "merchant_location",
+        &primary_receipt.merchant_location,
+        &secondary_receipt.merchant_location,
+    );
+    receipt.subtotal = fill_missing_secondary_observed(
+        "subtotal",
+        &primary_receipt.subtotal,
+        &secondary_receipt.subtotal,
+    );
+    receipt.tax_amount = fill_missing_secondary_observed(
+        "tax_amount",
+        &primary_receipt.tax_amount,
+        &secondary_receipt.tax_amount,
+    );
+    receipt.tip_amount = fill_missing_secondary_observed(
+        "tip_amount",
+        &primary_receipt.tip_amount,
+        &secondary_receipt.tip_amount,
+    );
+
+    resolved.facts = DocumentFactsPayload::Receipt(receipt.clone());
+    resolved.issues = issues;
+    resolved.extraction_status = resolve_extraction_status(
+        primary.extraction_status,
+        secondary.extraction_status,
+        comparison.overall_confidence,
+        &receipt,
+    );
+
+    Ok(resolved)
 }
 
 pub fn render_ocr_comparison_json_pretty(
@@ -494,6 +580,361 @@ fn compare_receipt_fields(
             normalize_generic_value,
         ),
     ]
+}
+
+fn field_comparison<'a>(
+    comparison: &'a OcrComparisonResult,
+    field_name: &str,
+) -> Option<&'a OcrFieldComparison> {
+    comparison
+        .fields
+        .iter()
+        .find(|field| field.field == field_name)
+}
+
+fn reconcile_observed_field<T: Clone>(
+    field_name: &str,
+    primary: &Option<Observed<T>>,
+    secondary: &Option<Observed<T>>,
+    comparison: Option<&OcrFieldComparison>,
+    issues: &mut Vec<DocumentExtractionIssue>,
+) -> Option<Observed<T>> {
+    let (mut chosen, used_secondary) = choose_observed_variant(primary, secondary, comparison);
+    let Some(observed) = chosen.as_mut() else {
+        return None;
+    };
+
+    if used_secondary {
+        observed
+            .flags
+            .push(format!("ocr_secondary_fill_{field_name}"));
+        observed.evidence.push(system_generated_evidence(&format!(
+            "ocr_compare.secondary_fill.{field_name}"
+        )));
+        issues.push(ocr_resolution_issue(
+            &format!("ocr_secondary_fill_{field_name}"),
+            &format!("Filled {field_name} from the secondary OCR pass"),
+        ));
+    }
+
+    if let Some(comparison) = comparison {
+        apply_comparison_signal(field_name, observed, comparison, issues);
+    }
+
+    Some(observed.clone())
+}
+
+fn reconcile_total_paid_field(
+    primary: &Option<Observed<MoneyAmount>>,
+    secondary: &Option<Observed<MoneyAmount>>,
+    amount_comparison: Option<&OcrFieldComparison>,
+    currency_comparison: Option<&OcrFieldComparison>,
+    issues: &mut Vec<DocumentExtractionIssue>,
+) -> Option<Observed<MoneyAmount>> {
+    let (mut chosen, used_secondary) =
+        choose_observed_variant(primary, secondary, amount_comparison);
+    let Some(observed) = chosen.as_mut() else {
+        return None;
+    };
+
+    if used_secondary {
+        observed
+            .flags
+            .push("ocr_secondary_fill_total_paid".to_owned());
+        observed.evidence.push(system_generated_evidence(
+            "ocr_compare.secondary_fill.total_paid",
+        ));
+        issues.push(ocr_resolution_issue(
+            "ocr_secondary_fill_total_paid",
+            "Filled total_paid from the secondary OCR pass",
+        ));
+    }
+
+    if observed.value.currency.is_none() {
+        if let (Some(primary_total), Some(secondary_total)) = (primary, secondary) {
+            if normalize_generic_value(&primary_total.value.amount)
+                == normalize_generic_value(&secondary_total.value.amount)
+            {
+                if let Some(currency) = secondary_total.value.currency.clone() {
+                    observed.value.currency = Some(currency);
+                    observed
+                        .flags
+                        .push("ocr_secondary_fill_total_paid_currency".to_owned());
+                    observed.evidence.push(system_generated_evidence(
+                        "ocr_compare.secondary_fill.total_paid_currency",
+                    ));
+                    issues.push(ocr_resolution_issue(
+                        "ocr_secondary_fill_total_paid_currency",
+                        "Filled total_paid_currency from the secondary OCR pass",
+                    ));
+                }
+            }
+        }
+    }
+
+    if let Some(comparison) = amount_comparison {
+        apply_comparison_signal("total_paid", observed, comparison, issues);
+    }
+    if let Some(comparison) = currency_comparison {
+        match comparison.status {
+            OcrComparisonStatus::Consensus => {
+                if observed.confidence != ConfidenceLevel::Low {
+                    observed.confidence =
+                        max_confidence(observed.confidence, comparison.confidence);
+                }
+            }
+            OcrComparisonStatus::PartialConsensus => {
+                if observed.confidence != ConfidenceLevel::Low {
+                    observed.confidence = ConfidenceLevel::Medium;
+                    observed
+                        .flags
+                        .push("ocr_partial_consensus_total_paid_currency".to_owned());
+                    observed.evidence.push(system_generated_evidence(
+                        "ocr_compare.partial_consensus.total_paid_currency",
+                    ));
+                }
+            }
+            OcrComparisonStatus::Divergent => {
+                observed.confidence = ConfidenceLevel::Low;
+                observed
+                    .flags
+                    .push("ocr_pass_disagreement_total_paid_currency".to_owned());
+                observed.evidence.push(system_generated_evidence(
+                    "ocr_compare.disagreement.total_paid_currency",
+                ));
+                issues.push(ocr_resolution_issue(
+                    "ocr_pass_disagreement_total_paid_currency",
+                    "OCR passes disagreed on total_paid_currency; retained the better-supported amount",
+                ));
+            }
+            OcrComparisonStatus::Missing => {}
+        }
+    }
+
+    Some(observed.clone())
+}
+
+fn reconcile_line_items(
+    primary: &[crate::document_facts::ReceiptLineItemFacts],
+    secondary: &[crate::document_facts::ReceiptLineItemFacts],
+    comparison: Option<&OcrFieldComparison>,
+    issues: &mut Vec<DocumentExtractionIssue>,
+) -> Vec<crate::document_facts::ReceiptLineItemFacts> {
+    let mut chosen = if primary.is_empty() && !secondary.is_empty() {
+        issues.push(ocr_resolution_issue(
+            "ocr_secondary_fill_line_items",
+            "Filled line_items from the secondary OCR pass",
+        ));
+        secondary.to_vec()
+    } else {
+        primary.to_vec()
+    };
+
+    if let Some(comparison) = comparison {
+        if comparison.status == OcrComparisonStatus::Divergent {
+            chosen.iter_mut().for_each(|item| {
+                item.description.confidence = ConfidenceLevel::Low;
+                item.description
+                    .flags
+                    .push("ocr_pass_disagreement_line_item_count".to_owned());
+                item.description.evidence.push(system_generated_evidence(
+                    "ocr_compare.disagreement.line_item_count",
+                ));
+                item.amount.confidence = ConfidenceLevel::Low;
+                item.amount
+                    .flags
+                    .push("ocr_pass_disagreement_line_item_count".to_owned());
+                item.amount.evidence.push(system_generated_evidence(
+                    "ocr_compare.disagreement.line_item_count",
+                ));
+            });
+            issues.push(ocr_resolution_issue(
+                "ocr_pass_disagreement_line_item_count",
+                "OCR passes disagreed on line_item_count; retained the current line item set",
+            ));
+        }
+    }
+
+    chosen
+}
+
+fn choose_observed_variant<T: Clone>(
+    primary: &Option<Observed<T>>,
+    secondary: &Option<Observed<T>>,
+    comparison: Option<&OcrFieldComparison>,
+) -> (Option<Observed<T>>, bool) {
+    let primary_rank = primary
+        .as_ref()
+        .map(|value| confidence_rank(value.confidence))
+        .unwrap_or(-1);
+    let secondary_rank = secondary
+        .as_ref()
+        .map(|value| confidence_rank(value.confidence))
+        .unwrap_or(-1);
+
+    let prefer_secondary = match comparison.map(|value| value.status) {
+        Some(OcrComparisonStatus::Consensus | OcrComparisonStatus::PartialConsensus) => {
+            primary.is_none() || (secondary.is_some() && secondary_rank > primary_rank)
+        }
+        Some(OcrComparisonStatus::Divergent) => {
+            secondary.is_some() && (primary.is_none() || secondary_rank > primary_rank)
+        }
+        Some(OcrComparisonStatus::Missing) => false,
+        None => primary.is_none() && secondary.is_some(),
+    };
+
+    if prefer_secondary {
+        (secondary.clone().or_else(|| primary.clone()), true)
+    } else {
+        (primary.clone().or_else(|| secondary.clone()), false)
+    }
+}
+
+fn fill_missing_secondary_observed<T: Clone>(
+    field_name: &str,
+    primary: &Option<Observed<T>>,
+    secondary: &Option<Observed<T>>,
+) -> Option<Observed<T>> {
+    if primary.is_some() {
+        return primary.clone();
+    }
+    let mut chosen = secondary.clone()?;
+    chosen
+        .flags
+        .push(format!("ocr_secondary_fill_{field_name}"));
+    chosen.evidence.push(system_generated_evidence(&format!(
+        "ocr_compare.secondary_fill.{field_name}"
+    )));
+    Some(chosen)
+}
+
+fn apply_comparison_signal<T>(
+    field_name: &str,
+    observed: &mut Observed<T>,
+    comparison: &OcrFieldComparison,
+    issues: &mut Vec<DocumentExtractionIssue>,
+) {
+    match comparison.status {
+        OcrComparisonStatus::Consensus => {
+            observed.confidence = max_confidence(observed.confidence, comparison.confidence);
+            observed.evidence.push(system_generated_evidence(&format!(
+                "ocr_compare.consensus.{field_name}"
+            )));
+        }
+        OcrComparisonStatus::PartialConsensus => {
+            observed.confidence = ConfidenceLevel::Medium;
+            observed
+                .flags
+                .push(format!("ocr_partial_consensus_{field_name}"));
+            observed.evidence.push(system_generated_evidence(&format!(
+                "ocr_compare.partial_consensus.{field_name}"
+            )));
+        }
+        OcrComparisonStatus::Divergent => {
+            observed.confidence = ConfidenceLevel::Low;
+            observed
+                .flags
+                .push(format!("ocr_pass_disagreement_{field_name}"));
+            observed.evidence.push(system_generated_evidence(&format!(
+                "ocr_compare.disagreement.{field_name}"
+            )));
+            issues.push(ocr_resolution_issue(
+                &format!("ocr_pass_disagreement_{field_name}"),
+                &format!(
+                    "OCR passes disagreed on {field_name}; retained the better-supported value"
+                ),
+            ));
+        }
+        OcrComparisonStatus::Missing => {}
+    }
+}
+
+fn resolve_extraction_status(
+    primary: ExtractionStatus,
+    secondary: ExtractionStatus,
+    overall_confidence: ConfidenceLevel,
+    receipt: &ReceiptFacts,
+) -> ExtractionStatus {
+    if matches!(primary, ExtractionStatus::Partial)
+        || matches!(secondary, ExtractionStatus::Partial)
+    {
+        return ExtractionStatus::Partial;
+    }
+
+    if overall_confidence == ConfidenceLevel::Low || receipt_needs_review(receipt) {
+        ExtractionStatus::NeedsReview
+    } else {
+        primary
+    }
+}
+
+fn receipt_needs_review(receipt: &ReceiptFacts) -> bool {
+    receipt
+        .merchant_name
+        .as_ref()
+        .is_some_and(Observed::needs_review)
+        || receipt
+            .transaction_date
+            .as_ref()
+            .is_some_and(Observed::needs_review)
+        || receipt
+            .total_paid
+            .as_ref()
+            .is_some_and(Observed::needs_review)
+        || receipt
+            .subtotal
+            .as_ref()
+            .is_some_and(Observed::needs_review)
+        || receipt
+            .tax_amount
+            .as_ref()
+            .is_some_and(Observed::needs_review)
+        || receipt
+            .tip_amount
+            .as_ref()
+            .is_some_and(Observed::needs_review)
+        || receipt
+            .line_items
+            .iter()
+            .any(|item| item.description.needs_review() || item.amount.needs_review())
+}
+
+fn max_confidence(left: ConfidenceLevel, right: ConfidenceLevel) -> ConfidenceLevel {
+    if confidence_rank(left) >= confidence_rank(right) {
+        left
+    } else {
+        right
+    }
+}
+
+fn confidence_rank(value: ConfidenceLevel) -> i8 {
+    match value {
+        ConfidenceLevel::Low => 0,
+        ConfidenceLevel::Medium => 1,
+        ConfidenceLevel::High => 2,
+    }
+}
+
+fn system_generated_evidence(origin: &str) -> EvidenceReference {
+    EvidenceReference {
+        kind: EvidenceKind::SystemGenerated,
+        document_id: None,
+        filename: None,
+        page: None,
+        quote: None,
+        origin: Some(origin.to_owned()),
+    }
+}
+
+fn ocr_resolution_issue(code: &str, message: &str) -> DocumentExtractionIssue {
+    DocumentExtractionIssue {
+        severity: IssueSeverity::Warning,
+        code: code.to_owned(),
+        message: message.to_owned(),
+        evidence: vec![system_generated_evidence(
+            "ocr_compare.resolve_receipt_ocr_consensus",
+        )],
+    }
 }
 
 fn pass_summary(document: &TranscribedDocument, facts: &ExtractedDocumentFacts) -> OcrPassSummary {
@@ -952,5 +1393,98 @@ mod tests {
             .any(|field| field.field == "total_paid"
                 && field.status == OcrComparisonStatus::Divergent
                 && field.confidence == ConfidenceLevel::Low));
+    }
+
+    #[test]
+    fn receipt_consensus_resolution_fills_missing_fields_from_secondary_pass() {
+        let primary = receipt_document(
+            "receipt_primary_original",
+            OcrPassKind::Primary,
+            OcrPreprocessVariant::Original,
+            "# Merchant Receipt\n- Total: 9.00\n",
+        );
+        let secondary = receipt_document(
+            "receipt_table_focused_binarized",
+            OcrPassKind::TableFocused,
+            OcrPreprocessVariant::Binarized,
+            "# Merchant Receipt\n- Merchant Name: BOOK TALK\n- Date: 25/12/2018\n- Total: MYR 9.00\n",
+        );
+
+        let primary_facts = extract_document_facts(&primary);
+        let secondary_facts = extract_document_facts(&secondary);
+        let comparison = compare_ocr_passes(&[primary, secondary]).expect("compare should work");
+        let resolved = resolve_receipt_ocr_consensus(&primary_facts, &secondary_facts, &comparison)
+            .expect("resolution should work");
+
+        let DocumentFactsPayload::Receipt(receipt) = &resolved.facts else {
+            panic!("expected receipt facts");
+        };
+
+        assert_eq!(
+            receipt
+                .merchant_name
+                .as_ref()
+                .map(|value| value.value.as_str()),
+            Some("BOOK TALK")
+        );
+        assert_eq!(
+            receipt
+                .transaction_date
+                .as_ref()
+                .map(|value| value.value.as_str()),
+            Some("25/12/2018")
+        );
+        assert_eq!(
+            receipt
+                .total_paid
+                .as_ref()
+                .and_then(|value| value.value.currency.as_deref()),
+            Some("MYR")
+        );
+        assert!(resolved
+            .issues
+            .iter()
+            .any(|issue| issue.code == "ocr_secondary_fill_merchant_name"));
+        assert_eq!(resolved.extraction_status, ExtractionStatus::Partial);
+    }
+
+    #[test]
+    fn receipt_consensus_resolution_marks_divergent_fields_for_review() {
+        let primary = receipt_document(
+            "receipt_primary_original",
+            OcrPassKind::Primary,
+            OcrPreprocessVariant::Original,
+            "# Merchant Receipt\n- Merchant Name: Book Talk\n- Date: 25/12/2018\n- Total: MYR 9.00\n",
+        );
+        let secondary = receipt_document(
+            "receipt_table_focused_binarized",
+            OcrPassKind::TableFocused,
+            OcrPreprocessVariant::Binarized,
+            "# Merchant Receipt\n- Merchant Name: Book Talk\n- Date: 25/12/2018\n- Total: MYR 90.00\n",
+        );
+
+        let primary_facts = extract_document_facts(&primary);
+        let secondary_facts = extract_document_facts(&secondary);
+        let comparison = compare_ocr_passes(&[primary, secondary]).expect("compare should work");
+        let resolved = resolve_receipt_ocr_consensus(&primary_facts, &secondary_facts, &comparison)
+            .expect("resolution should work");
+
+        let DocumentFactsPayload::Receipt(receipt) = &resolved.facts else {
+            panic!("expected receipt facts");
+        };
+
+        assert_eq!(
+            receipt.total_paid.as_ref().map(|value| value.confidence),
+            Some(ConfidenceLevel::Low)
+        );
+        assert!(receipt.total_paid.as_ref().is_some_and(|value| value
+            .flags
+            .iter()
+            .any(|flag| flag == "ocr_pass_disagreement_total_paid")));
+        assert!(resolved
+            .issues
+            .iter()
+            .any(|issue| issue.code == "ocr_pass_disagreement_total_paid"));
+        assert_eq!(resolved.extraction_status, ExtractionStatus::NeedsReview);
     }
 }

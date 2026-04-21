@@ -9,6 +9,7 @@ pub fn render_ocr_inspection_html(
     passes: &[&TranscribedDocument],
     comparison: Option<&OcrComparisonResult>,
     grounding: Option<&DocumentOcrGroundingSummary>,
+    current_facts: Option<&ExtractedDocumentFacts>,
     source_href: Option<&str>,
     comparison_href: Option<&str>,
     grounding_href: Option<&str>,
@@ -17,6 +18,7 @@ pub fn render_ocr_inspection_html(
         .first()
         .expect("ocr inspection requires at least one transcribed pass");
     let primary_facts = extract_document_facts(primary);
+    let current_facts = current_facts.unwrap_or(&primary_facts);
 
     let mut html = String::new();
     html.push_str(
@@ -86,25 +88,25 @@ pub fn render_ocr_inspection_html(
     }
     html.push_str("</div></section>");
 
-    html.push_str("<section class=\"section\"><div class=\"section-heading\"><div><h2>Primary extraction</h2><p class=\"muted\">The current filing pipeline still follows the primary OCR pass. This card shows what it extracted before any FA intervention.</p></div></div><div class=\"grid\">");
+    html.push_str("<section class=\"section\"><div class=\"section-heading\"><div><h2>Current extraction</h2><p class=\"muted\">This is the extraction currently flowing into the filing pipeline. When receipt pass comparison is enabled, it may include conservative secondary-pass fills and disagreement flags.</p></div></div><div class=\"grid\">");
     html.push_str(&metric_card(
         "kind",
-        primary_facts.classification.kind.as_str(),
+        current_facts.classification.kind.as_str(),
     ));
     html.push_str(&metric_card(
         "classification confidence",
-        confidence_label(primary_facts.classification.confidence),
+        confidence_label(current_facts.classification.confidence),
     ));
     html.push_str(&metric_card(
         "extraction status",
-        &format!("{:?}", primary_facts.extraction_status).to_ascii_lowercase(),
+        &format!("{:?}", current_facts.extraction_status).to_ascii_lowercase(),
     ));
     html.push_str(&metric_card(
         "issues",
-        &primary_facts.issues.len().to_string(),
+        &current_facts.issues.len().to_string(),
     ));
     html.push_str("</div>");
-    render_primary_summary(&mut html, &primary_facts);
+    render_primary_summary(&mut html, current_facts);
     html.push_str("</section>");
 
     html.push_str("<section class=\"section\"><div class=\"section-heading\"><div><h2>OCR passes</h2><p class=\"muted\">Each pass keeps its own OCR text, extractor outcome, and preprocess metadata so disagreements can be debugged without rerunning the receipt.</p></div></div><div class=\"pass-grid\">");
@@ -507,6 +509,7 @@ mod tests {
             &[&primary, &secondary],
             Some(&comparison),
             Some(&grounding),
+            None,
             Some("../../../document/receipt_demo/receipt.png"),
             Some("../../ocr_pass_comparisons/receipt_demo/comparison.html"),
             Some("../../ocr_grounding/receipt_demo/grounded_preview.html"),
@@ -533,9 +536,9 @@ mod tests {
             false,
         );
 
-        let rendered = render_ocr_inspection_html(&[&primary], None, None, None, None, None);
+        let rendered = render_ocr_inspection_html(&[&primary], None, None, None, None, None, None);
 
-        assert!(rendered.contains("Primary extraction"));
+        assert!(rendered.contains("Current extraction"));
         assert!(rendered.contains("Book Talk"));
         assert!(rendered.contains("--- Page 1 ---"));
         assert!(!rendered.contains("Open OCR diff"));
