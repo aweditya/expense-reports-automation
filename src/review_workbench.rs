@@ -20,9 +20,28 @@ struct GroundingLinkTarget {
     href: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ComparisonLinkTarget {
+    summary: crate::DocumentOcrComparisonSummary,
+    diff_href: Option<String>,
+    inspection_href: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct WorkbenchFieldOcrSignal {
+    confidence: crate::ConfidenceLevel,
+    status: crate::OcrComparisonStatus,
+    grounded: bool,
+    summary: String,
+    diff_href: Option<String>,
+    inspection_href: Option<String>,
+    grounding_href: Option<String>,
+}
+
 pub fn render_review_workbench_html(packet: &ReviewPacket) -> String {
     let index = build_workbench_index(packet);
     let grounding_lookup = build_grounding_lookup(packet);
+    let comparison_lookup = build_comparison_lookup(packet);
     let mut html = String::new();
 
     html.push_str("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n");
@@ -42,7 +61,13 @@ pub fn render_review_workbench_html(packet: &ReviewPacket) -> String {
     render_document_snapshot_panel(&mut html, packet);
     html.push_str("<main class=\"workbench-grid\">\n");
     render_issues_panel(&mut html, packet, &index);
-    render_copy_panel(&mut html, packet, &index, &grounding_lookup);
+    render_copy_panel(
+        &mut html,
+        packet,
+        &index,
+        &grounding_lookup,
+        &comparison_lookup,
+    );
     html.push_str("</main>\n");
     render_attachments_panel(&mut html, packet);
     html.push_str("</div>\n</body>\n</html>\n");
@@ -203,6 +228,7 @@ fn render_copy_panel(
     packet: &ReviewPacket,
     index: &WorkbenchIndex,
     grounding_lookup: &BTreeMap<String, GroundingLinkTarget>,
+    comparison_lookup: &BTreeMap<String, ComparisonLinkTarget>,
 ) {
     html.push_str("<section class=\"panel copy-panel\">\n");
     html.push_str("<div class=\"panel-heading\"><p class=\"eyebrow\">Oracle Copy View</p><h2>Ready-To-Copy Fields</h2></div>\n");
@@ -226,7 +252,7 @@ fn render_copy_panel(
             }
             html.push_str("<div class=\"field-list\">\n");
             for field in &instance.fields {
-                render_copy_field(html, field, index, grounding_lookup);
+                render_copy_field(html, field, index, grounding_lookup, comparison_lookup);
             }
             html.push_str("</div>\n</article>\n");
         }
@@ -240,7 +266,9 @@ fn render_copy_field(
     field: &CopyField,
     index: &WorkbenchIndex,
     grounding_lookup: &BTreeMap<String, GroundingLinkTarget>,
+    comparison_lookup: &BTreeMap<String, ComparisonLinkTarget>,
 ) {
+    let ocr_signal = derive_field_ocr_signal(field, comparison_lookup, grounding_lookup);
     let field_id = index
         .field_targets
         .get(&field.path)
@@ -285,6 +313,13 @@ fn render_copy_field(
     if field.needs_review {
         badge(html, "review");
     }
+    if let Some(signal) = ocr_signal.as_ref() {
+        html.push_str("<span class=\"badge ocr-field-status ");
+        html.push_str(ocr_status_class(signal.status));
+        html.push_str("\">ocr ");
+        html.push_str(ocr_status_label(signal.status));
+        html.push_str("</span>");
+    }
     html.push_str("</div>\n</div>\n");
     html.push_str("<div class=\"field-body\">\n");
     render_field_editor(html, field, &input_id);
@@ -294,6 +329,9 @@ fn render_copy_field(
     html.push_str("<p class=\"field-guidance\">");
     html.push_str(&escape_html(field_guidance(field)));
     html.push_str("</p>\n");
+    if let Some(signal) = ocr_signal.as_ref() {
+        render_field_ocr_signal(html, signal);
+    }
     render_review_controls(html, field);
     render_inline_evidence(html, field, grounding_lookup);
     html.push_str("</article>\n");
@@ -728,6 +766,20 @@ fn render_document_snapshot_card(html: &mut String, document: &DocumentSnapshotC
             ));
             html.push_str("</p>");
         }
+        if comparison.consistency_warning_count > 0 {
+            html.push_str("<p class=\"document-snapshot-ocr-fields\">Consistency warnings: ");
+            html.push_str(&escape_html(&comparison.consistency_warning_count.to_string()));
+            html.push_str("</p>");
+        }
+        if !comparison.consistency_notes.is_empty() {
+            html.push_str("<ul class=\"document-snapshot-ocr-notes\">");
+            for note in &comparison.consistency_notes {
+                html.push_str("<li>");
+                html.push_str(&escape_html(note));
+                html.push_str("</li>");
+            }
+            html.push_str("</ul>");
+        }
         html.push_str("</div>");
     }
     if let Some(grounding) = document.ocr_grounding.as_ref() {
@@ -744,7 +796,13 @@ fn render_document_snapshot_card(html: &mut String, document: &DocumentSnapshotC
             },
             grounding.geometry_source.as_str()
         )));
-        html.push_str("</p></div>");
+        html.push_str("</p>");
+        if let Some(variant) = grounding.grounding_preprocess_variant {
+            html.push_str("<p class=\"document-snapshot-ocr-fields\">Recovered via ");
+            html.push_str(&escape_html(variant.as_str()));
+            html.push_str(" preprocessing</p>");
+        }
+        html.push_str("</div>");
     }
     let document_href = format!("document/{}/{}", document.document_id, document.filename);
     let inspection_href = format!(
@@ -778,8 +836,15 @@ fn render_document_snapshot_field(html: &mut String, field: &DocumentSnapshotFie
     html.push_str("<span>");
     html.push_str(&escape_html(&field.label));
     html.push_str("</span>");
-    if field.ocr_confidence.is_some() || field.grounded {
+    if field.ocr_confidence.is_some() || field.ocr_status.is_some() || field.grounded {
         html.push_str("<span class=\"document-snapshot-signal-badges\">");
+        if let Some(status) = field.ocr_status {
+            html.push_str("<span class=\"badge document-snapshot-signal status ");
+            html.push_str(ocr_status_class(status));
+            html.push_str("\">");
+            html.push_str(ocr_status_label(status));
+            html.push_str("</span>");
+        }
         if let Some(confidence) = field.ocr_confidence {
             html.push_str("<span class=\"badge document-snapshot-signal ");
             html.push_str(confidence_level_class(confidence));
@@ -848,6 +913,257 @@ fn build_grounding_lookup(packet: &ReviewPacket) -> BTreeMap<String, GroundingLi
             ))
         })
         .collect()
+}
+
+fn build_comparison_lookup(packet: &ReviewPacket) -> BTreeMap<String, ComparisonLinkTarget> {
+    packet
+        .document_snapshots
+        .iter()
+        .filter_map(|snapshot| {
+            let summary = snapshot.ocr_comparison.clone()?;
+            Some((
+                snapshot.document_id.clone(),
+                ComparisonLinkTarget {
+                    summary,
+                    diff_href: snapshot.ocr_comparison_href.clone(),
+                    inspection_href: format!(
+                        "artifact/ocr_inspection/{}/inspection.html",
+                        snapshot.document_id
+                    ),
+                },
+            ))
+        })
+        .collect()
+}
+
+fn derive_field_ocr_signal(
+    field: &CopyField,
+    comparison_lookup: &BTreeMap<String, ComparisonLinkTarget>,
+    grounding_lookup: &BTreeMap<String, GroundingLinkTarget>,
+) -> Option<WorkbenchFieldOcrSignal> {
+    let mut statuses = Vec::new();
+    let mut confidences = Vec::new();
+    let mut grounded = false;
+    let mut diff_href = None;
+    let mut inspection_href = None;
+    let mut grounding_href = None;
+    let mut consistency_warning = false;
+    let mut matched_labels = Vec::new();
+    let mut saw_any = false;
+
+    for evidence in &field.evidence {
+        let Some(document_id) = evidence.document_id.as_deref() else {
+            continue;
+        };
+        let Some(comparison_target) = comparison_lookup.get(document_id) else {
+            continue;
+        };
+        saw_any = true;
+        if diff_href.is_none() {
+            diff_href = comparison_target.diff_href.clone();
+        }
+        if inspection_href.is_none() {
+            inspection_href = Some(comparison_target.inspection_href.clone());
+        }
+        consistency_warning |= comparison_target.summary.consistency_warning_count > 0;
+
+        let matched_regions = evidence
+            .quote
+            .as_deref()
+            .and_then(|quote| {
+                grounding_lookup
+                    .get(document_id)
+                    .and_then(|target| match_quote_to_region_id(&target.summary, quote))
+            })
+            .into_iter()
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+
+        if grounding_href.is_none() {
+            grounding_href =
+                evidence_grounding_link(evidence, grounding_lookup).map(|(href, _)| href);
+        }
+
+        let matched_fields = matched_comparison_fields(
+            field,
+            evidence,
+            &comparison_target.summary,
+            &matched_regions,
+        );
+        if matched_fields.is_empty() {
+            confidences.push(comparison_target.summary.overall_confidence);
+            statuses.push(if comparison_target.summary.disagreement_count > 0 {
+                crate::OcrComparisonStatus::Divergent
+            } else if comparison_target.summary.overall_confidence == crate::ConfidenceLevel::High {
+                crate::OcrComparisonStatus::Consensus
+            } else {
+                crate::OcrComparisonStatus::PartialConsensus
+            });
+            continue;
+        }
+
+        for matched in matched_fields {
+            if !matched_labels.contains(&matched.field) {
+                matched_labels.push(matched.field.clone());
+            }
+            confidences.push(matched.confidence);
+            statuses.push(matched.status);
+            grounded |= matched_regions.iter().any(|region_id| region_id == &matched.field);
+        }
+    }
+
+    if !saw_any {
+        return None;
+    }
+
+    let status = statuses
+        .into_iter()
+        .max_by_key(|value| ocr_status_rank(*value))
+        .unwrap_or(crate::OcrComparisonStatus::PartialConsensus);
+    let confidence = confidences
+        .into_iter()
+        .min_by_key(|value| confidence_level_rank(*value))
+        .unwrap_or(crate::ConfidenceLevel::Medium);
+    let summary = workbench_field_ocr_summary(status, grounded, consistency_warning, &matched_labels);
+
+    Some(WorkbenchFieldOcrSignal {
+        confidence,
+        status,
+        grounded,
+        summary,
+        diff_href,
+        inspection_href,
+        grounding_href,
+    })
+}
+
+fn matched_comparison_fields<'a>(
+    field: &CopyField,
+    evidence: &EvidenceReference,
+    summary: &'a crate::DocumentOcrComparisonSummary,
+    matched_regions: &[String],
+) -> Vec<&'a crate::OcrFieldComparisonSummary> {
+    let quote_value = evidence.quote.as_deref();
+    let field_value = field.value.as_deref();
+    summary
+        .field_summaries
+        .iter()
+        .filter(|candidate| {
+            matched_regions.iter().any(|region_id| region_id == &candidate.field)
+                || quote_value.is_some_and(|quote| {
+                    comparison_value_matches(quote, candidate.consensus_value.as_deref())
+                })
+                || field_value.is_some_and(|value| {
+                    comparison_value_matches(value, candidate.consensus_value.as_deref())
+                })
+        })
+        .collect()
+}
+
+fn comparison_value_matches(value: &str, consensus_value: Option<&str>) -> bool {
+    let Some(consensus_value) = consensus_value else {
+        return false;
+    };
+    let normalized_value = normalize_comparison_text(value);
+    let normalized_consensus = normalize_comparison_text(consensus_value);
+    !normalized_value.is_empty()
+        && !normalized_consensus.is_empty()
+        && (normalized_value == normalized_consensus
+            || normalized_value.contains(&normalized_consensus)
+            || normalized_consensus.contains(&normalized_value))
+}
+
+fn normalize_comparison_text(value: &str) -> String {
+    value
+        .to_ascii_lowercase()
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .collect()
+}
+
+fn workbench_field_ocr_summary(
+    status: crate::OcrComparisonStatus,
+    grounded: bool,
+    consistency_warning: bool,
+    matched_fields: &[String],
+) -> String {
+    let mut summary = match status {
+        crate::OcrComparisonStatus::Consensus => {
+            if grounded {
+                "Two OCR passes agreed on the linked evidence and localized it in the source document."
+                    .to_owned()
+            } else {
+                "Two OCR passes agreed on the linked evidence, but source grounding is not available for this field."
+                    .to_owned()
+            }
+        }
+        crate::OcrComparisonStatus::PartialConsensus | crate::OcrComparisonStatus::Missing => {
+            "OCR evidence is partially recovered across passes. Review the linked source before trusting this field."
+                .to_owned()
+        }
+        crate::OcrComparisonStatus::Divergent => {
+            "OCR passes disagreed on the linked evidence. This field needs review."
+                .to_owned()
+        }
+    };
+    if consistency_warning {
+        summary.push_str(" The linked receipt also failed an internal amount-consistency check.");
+    }
+    if !matched_fields.is_empty() {
+        summary.push_str(" Signals came from: ");
+        summary.push_str(
+            &matched_fields
+                .iter()
+                .map(|field| humanize_machine_label(field))
+                .collect::<Vec<_>>()
+                .join(", "),
+        );
+        summary.push('.');
+    }
+    summary
+}
+
+fn render_field_ocr_signal(html: &mut String, signal: &WorkbenchFieldOcrSignal) {
+    html.push_str("<div class=\"field-ocr-signal\">");
+    html.push_str("<div class=\"field-ocr-topline\">");
+    html.push_str("<span class=\"badge ocr-field-status ");
+    html.push_str(ocr_status_class(signal.status));
+    html.push_str("\">");
+    html.push_str(ocr_status_label(signal.status));
+    html.push_str("</span>");
+    html.push_str("<span class=\"badge ocr-field-confidence ");
+    html.push_str(confidence_level_class(signal.confidence));
+    html.push_str("\">ocr ");
+    html.push_str(confidence_level_label(signal.confidence));
+    html.push_str("</span>");
+    if signal.grounded {
+        html.push_str("<span class=\"badge ocr-field-grounded\">grounded</span>");
+    }
+    html.push_str("</div>");
+    html.push_str("<p class=\"field-ocr-summary\">");
+    html.push_str(&escape_html(&signal.summary));
+    html.push_str("</p>");
+    if signal.diff_href.is_some() || signal.inspection_href.is_some() || signal.grounding_href.is_some()
+    {
+        html.push_str("<div class=\"field-ocr-links\">");
+        if let Some(href) = signal.diff_href.as_deref() {
+            html.push_str("<a class=\"document-link\" href=\"");
+            html.push_str(&escape_html_attribute(href));
+            html.push_str("\" target=\"_blank\" rel=\"noreferrer noopener\">Open OCR diff</a>");
+        }
+        if let Some(href) = signal.inspection_href.as_deref() {
+            html.push_str("<a class=\"document-link\" href=\"");
+            html.push_str(&escape_html_attribute(href));
+            html.push_str("\" target=\"_blank\" rel=\"noreferrer noopener\">Open OCR inspection</a>");
+        }
+        if let Some(href) = signal.grounding_href.as_deref() {
+            html.push_str("<a class=\"document-link\" href=\"");
+            html.push_str(&escape_html_attribute(href));
+            html.push_str("\" target=\"_blank\" rel=\"noreferrer noopener\">Open grounded source</a>");
+        }
+        html.push_str("</div>");
+    }
+    html.push_str("</div>");
 }
 
 fn evidence_grounding_link(
@@ -1156,6 +1472,41 @@ fn confidence_level_class(level: crate::ConfidenceLevel) -> &'static str {
     }
 }
 
+fn confidence_level_rank(level: crate::ConfidenceLevel) -> usize {
+    match level {
+        crate::ConfidenceLevel::High => 0,
+        crate::ConfidenceLevel::Medium => 1,
+        crate::ConfidenceLevel::Low => 2,
+    }
+}
+
+fn ocr_status_label(status: crate::OcrComparisonStatus) -> &'static str {
+    match status {
+        crate::OcrComparisonStatus::Consensus => "two passes agreed",
+        crate::OcrComparisonStatus::PartialConsensus => "partial agreement",
+        crate::OcrComparisonStatus::Missing => "evidence incomplete",
+        crate::OcrComparisonStatus::Divergent => "needs review",
+    }
+}
+
+fn ocr_status_class(status: crate::OcrComparisonStatus) -> &'static str {
+    match status {
+        crate::OcrComparisonStatus::Consensus => "status-consensus",
+        crate::OcrComparisonStatus::PartialConsensus => "status-partial",
+        crate::OcrComparisonStatus::Missing => "status-missing",
+        crate::OcrComparisonStatus::Divergent => "status-divergent",
+    }
+}
+
+fn ocr_status_rank(status: crate::OcrComparisonStatus) -> usize {
+    match status {
+        crate::OcrComparisonStatus::Consensus => 0,
+        crate::OcrComparisonStatus::PartialConsensus => 1,
+        crate::OcrComparisonStatus::Missing => 2,
+        crate::OcrComparisonStatus::Divergent => 3,
+    }
+}
+
 fn issue_class_name(class: crate::ReadinessIssueClass) -> &'static str {
     match class {
         crate::ReadinessIssueClass::AutomationGap => "automation-gap",
@@ -1345,6 +1696,9 @@ mod tests {
         assert!(rendered.contains(".document-snapshot-signal.medium"));
         assert!(rendered.contains(".document-snapshot-signal.low"));
         assert!(rendered.contains(".document-snapshot-signal.grounded"));
+        assert!(rendered.contains(".document-snapshot-signal.status.status-consensus"));
+        assert!(rendered.contains(".field-ocr-signal"));
+        assert!(rendered.contains(".ocr-field-status.status-divergent"));
     }
 
     #[test]
@@ -1482,6 +1836,8 @@ mod tests {
                 overall_confidence: crate::ConfidenceLevel::Medium,
                 disagreement_count: 1,
                 divergent_fields: vec!["total_paid".to_owned()],
+                consistency_warning_count: 1,
+                consistency_notes: vec!["Line items did not sum to total.".to_owned()],
                 field_summaries: vec![],
             }],
         )
@@ -1496,6 +1852,8 @@ mod tests {
         assert!(rendered.contains("Open OCR diff"));
         assert!(rendered
             .contains("artifact/ocr_pass_comparisons/synthetic_receipt_baseline/comparison.html"));
+        assert!(rendered.contains("Consistency warnings: 1"));
+        assert!(rendered.contains("Line items did not sum to total."));
     }
 
     #[test]
@@ -1540,12 +1898,14 @@ mod tests {
                         label: "Merchant".to_owned(),
                         value: "BOOK TALK".to_owned(),
                         ocr_confidence: Some(crate::ConfidenceLevel::High),
+                        ocr_status: Some(crate::OcrComparisonStatus::Consensus),
                         grounded: true,
                     },
                     crate::review_packet::DocumentSnapshotField {
                         label: "Total".to_owned(),
                         value: "MYR 80.90".to_owned(),
                         ocr_confidence: Some(crate::ConfidenceLevel::Low),
+                        ocr_status: Some(crate::OcrComparisonStatus::Divergent),
                         grounded: false,
                     },
                 ],
@@ -1639,6 +1999,7 @@ mod tests {
                     document_id: "doc_receipt".to_owned(),
                     geometry_source: crate::OcrGeometrySource::Gemini,
                     geometry_available: true,
+                    grounding_preprocess_variant: Some(crate::OcrPreprocessVariant::Original),
                     preview_href: Some(
                         "artifact/ocr_grounding/doc_receipt/grounded_preview.html".to_owned(),
                     ),
@@ -1661,5 +2022,123 @@ mod tests {
             "artifact/ocr_grounding/doc_receipt/grounded_preview.html#region-total_paid"
         ));
         assert!(rendered.contains("Open grounded source"));
+    }
+
+    #[test]
+    fn workbench_renders_field_level_ocr_signal_panel() {
+        let packet = crate::review_packet::ReviewPacket {
+            summary: crate::review_packet::PacketSummary {
+                filing_status: crate::review_packet::FilingStatus::ManualReviewRequired,
+                payee_name: Some("Olivia Park".to_owned()),
+                event_name: Some("Receipt OCR review".to_owned()),
+                trip_window: None,
+                report_total_usd: None,
+                category: None,
+                transaction_type: None,
+                transaction_line_count: 0,
+                document_count: 1,
+                readiness: crate::review_packet::ReviewReadinessSummary {
+                    automation_gap_count: 0,
+                    user_input_gap_count: 0,
+                    manual_review_count: 1,
+                    other_warning_count: 0,
+                },
+                confidence: crate::review_packet::ConfidenceSummary {
+                    high: 0,
+                    medium: 1,
+                    low: 0,
+                    needs_review: 1,
+                },
+            },
+            issues_queue: Vec::new(),
+            copy_sections: vec![crate::review_packet::CopySection {
+                key: "general_information".to_owned(),
+                label: "General Information".to_owned(),
+                repeated: false,
+                instances: vec![crate::review_packet::CopySectionInstance {
+                    path: "expense_report.general_information".to_owned(),
+                    label: "General Information".to_owned(),
+                    fields: vec![crate::review_packet::CopyField {
+                        path: "expense_report.general_information.event_name".to_owned(),
+                        label: "Event Name".to_owned(),
+                        control: crate::FieldControl::Text,
+                        allowed_values: Vec::new(),
+                        collection_columns: Vec::new(),
+                        collection_rows: Vec::new(),
+                        value: Some("MYR 80.90".to_owned()),
+                        present: true,
+                        needs_review: true,
+                        required: true,
+                        source: Some("T3".to_owned()),
+                        entry_mode: crate::FieldEntryMode::ModelPrefillReview,
+                        evidence: vec![crate::EvidenceReference {
+                            kind: crate::EvidenceKind::DocumentSpan,
+                            document_id: Some("doc_receipt".to_owned()),
+                            filename: Some("receipt.png".to_owned()),
+                            page: Some(1),
+                            quote: Some("MYR 80.90".to_owned()),
+                            origin: None,
+                        }],
+                    }],
+                }],
+            }],
+            attachment_checklist: Vec::new(),
+            document_snapshots: vec![crate::review_packet::DocumentSnapshotCard {
+                document_id: "doc_receipt".to_owned(),
+                filename: "receipt.png".to_owned(),
+                kind: "receipt".to_owned(),
+                extraction_status: "complete".to_owned(),
+                used_in_bundle: true,
+                projected_to_filing: false,
+                status_label: "parsed for bundle context only".to_owned(),
+                summary_fields: Vec::new(),
+                issue_messages: Vec::new(),
+                ocr_comparison: Some(crate::DocumentOcrComparisonSummary {
+                    document_id: "doc_receipt".to_owned(),
+                    compared_pass_count: 2,
+                    overall_confidence: crate::ConfidenceLevel::Low,
+                    disagreement_count: 1,
+                    divergent_fields: vec!["total_paid".to_owned()],
+                    consistency_warning_count: 1,
+                    consistency_notes: vec!["Total did not match subtotal + tax.".to_owned()],
+                    field_summaries: vec![crate::OcrFieldComparisonSummary {
+                        field: "total_paid".to_owned(),
+                        status: crate::OcrComparisonStatus::Divergent,
+                        confidence: crate::ConfidenceLevel::Low,
+                        consensus_value: Some("MYR 80.90".to_owned()),
+                    }],
+                }),
+                ocr_comparison_href: Some(
+                    "artifact/ocr_pass_comparisons/doc_receipt/comparison.html".to_owned(),
+                ),
+                ocr_grounding: Some(crate::DocumentOcrGroundingSummary {
+                    document_id: "doc_receipt".to_owned(),
+                    geometry_source: crate::OcrGeometrySource::Gemini,
+                    geometry_available: true,
+                    grounding_preprocess_variant: Some(crate::OcrPreprocessVariant::ContrastBoosted),
+                    preview_href: Some(
+                        "artifact/ocr_grounding/doc_receipt/grounded_preview.html".to_owned(),
+                    ),
+                    regions: vec![crate::GroundedRegionSummary {
+                        region_id: "total_paid".to_owned(),
+                        page_number: 1,
+                        kind: crate::OcrRegionKind::ValueCandidate,
+                        text: "MYR 80.90".to_owned(),
+                    }],
+                }),
+                ocr_grounding_href: Some(
+                    "artifact/ocr_grounding/doc_receipt/grounded_preview.html".to_owned(),
+                ),
+            }],
+        };
+
+        let rendered = render_review_workbench_html(&packet);
+
+        assert!(rendered.contains("needs review"));
+        assert!(rendered.contains("ocr Low"));
+        assert!(rendered.contains("The linked receipt also failed an internal amount-consistency check."));
+        assert!(rendered.contains("Open OCR diff"));
+        assert!(rendered.contains("Open grounded source"));
+        assert!(rendered.contains("Recovered via contrast_boosted preprocessing"));
     }
 }

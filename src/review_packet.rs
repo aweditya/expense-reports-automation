@@ -125,6 +125,8 @@ pub struct DocumentSnapshotField {
     pub value: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ocr_confidence: Option<ConfidenceLevel>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ocr_status: Option<crate::OcrComparisonStatus>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub grounded: bool,
 }
@@ -1096,6 +1098,7 @@ fn push_snapshot_field_with_signal(
             label: label.to_owned(),
             value,
             ocr_confidence: signal.as_ref().map(|signal| signal.confidence),
+            ocr_status: signal.as_ref().map(|signal| signal.status),
             grounded: signal.is_some_and(|signal| signal.grounded),
         });
     }
@@ -1104,6 +1107,7 @@ fn push_snapshot_field_with_signal(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct SnapshotOcrSignal {
     confidence: ConfidenceLevel,
+    status: crate::OcrComparisonStatus,
     grounded: bool,
 }
 
@@ -1118,6 +1122,7 @@ fn receipt_field_signal(
         .find(|field| field.field == field_name)?;
     Some(SnapshotOcrSignal {
         confidence: field.confidence,
+        status: field.status,
         grounded: grounding_has_region(grounding, field_name),
     })
 }
@@ -1135,6 +1140,11 @@ fn combined_receipt_field_signal(
         return None;
     }
     let grounded = signals.iter().any(|signal| signal.grounded);
+    let status = signals
+        .iter()
+        .map(|signal| signal.status)
+        .max_by_key(|value| ocr_status_rank(*value))
+        .unwrap_or(crate::OcrComparisonStatus::Missing);
     let confidence = signals
         .drain(..)
         .map(|signal| signal.confidence)
@@ -1142,6 +1152,7 @@ fn combined_receipt_field_signal(
         .unwrap_or(ConfidenceLevel::Low);
     Some(SnapshotOcrSignal {
         confidence,
+        status,
         grounded,
     })
 }
@@ -1160,6 +1171,15 @@ fn confidence_rank(value: ConfidenceLevel) -> usize {
         ConfidenceLevel::Low => 0,
         ConfidenceLevel::Medium => 1,
         ConfidenceLevel::High => 2,
+    }
+}
+
+fn ocr_status_rank(value: crate::OcrComparisonStatus) -> usize {
+    match value {
+        crate::OcrComparisonStatus::Consensus => 0,
+        crate::OcrComparisonStatus::PartialConsensus => 1,
+        crate::OcrComparisonStatus::Missing => 2,
+        crate::OcrComparisonStatus::Divergent => 3,
     }
 }
 
@@ -1714,6 +1734,8 @@ mod tests {
             overall_confidence: ConfidenceLevel::Medium,
             disagreement_count: 2,
             divergent_fields: vec!["merchant_name".to_owned(), "total_paid".to_owned()],
+            consistency_warning_count: 1,
+            consistency_notes: vec!["Line items did not sum cleanly.".to_owned()],
             field_summaries: vec![
                 crate::OcrFieldComparisonSummary {
                     field: "merchant_name".to_owned(),
@@ -1775,6 +1797,7 @@ mod tests {
             document_id: "synthetic_receipt_baseline".to_owned(),
             geometry_source: crate::OcrGeometrySource::Gemini,
             geometry_available: true,
+            grounding_preprocess_variant: Some(crate::OcrPreprocessVariant::Original),
             preview_href: Some(
                 "artifact/ocr_grounding/synthetic_receipt_baseline/grounded_preview.html"
                     .to_owned(),
@@ -1831,6 +1854,8 @@ mod tests {
             overall_confidence: ConfidenceLevel::Medium,
             disagreement_count: 1,
             divergent_fields: vec!["total_paid".to_owned()],
+            consistency_warning_count: 1,
+            consistency_notes: vec!["Total did not match subtotal + tax.".to_owned()],
             field_summaries: vec![
                 crate::OcrFieldComparisonSummary {
                     field: "merchant_name".to_owned(),
@@ -1868,6 +1893,7 @@ mod tests {
             document_id: "synthetic_receipt_baseline".to_owned(),
             geometry_source: crate::OcrGeometrySource::Gemini,
             geometry_available: true,
+            grounding_preprocess_variant: Some(crate::OcrPreprocessVariant::Original),
             preview_href: Some(
                 "artifact/ocr_grounding/synthetic_receipt_baseline/grounded_preview.html"
                     .to_owned(),
@@ -1914,6 +1940,10 @@ mod tests {
             .find(|field| field.label == "Merchant")
             .expect("merchant field should exist");
         assert_eq!(merchant_field.ocr_confidence, Some(ConfidenceLevel::High));
+        assert_eq!(
+            merchant_field.ocr_status,
+            Some(crate::OcrComparisonStatus::Consensus)
+        );
         assert!(merchant_field.grounded);
 
         let total_field = receipt_snapshot
@@ -1922,6 +1952,10 @@ mod tests {
             .find(|field| field.label == "Total")
             .expect("total field should exist");
         assert_eq!(total_field.ocr_confidence, Some(ConfidenceLevel::Low));
+        assert_eq!(
+            total_field.ocr_status,
+            Some(crate::OcrComparisonStatus::Divergent)
+        );
         assert!(total_field.grounded);
 
         let line_items_field = receipt_snapshot

@@ -224,6 +224,25 @@ body {
   border-color: rgba(55, 102, 71, 0.25);
 }
 
+.document-snapshot-signal.status.status-consensus {
+  background: #edf5f1;
+  color: var(--forest);
+  border-color: rgba(55, 102, 71, 0.25);
+}
+
+.document-snapshot-signal.status.status-partial,
+.document-snapshot-signal.status.status-missing {
+  background: #f8f0dd;
+  color: var(--gold);
+  border-color: rgba(171, 127, 44, 0.25);
+}
+
+.document-snapshot-signal.status.status-divergent {
+  background: #fbebe4;
+  color: var(--accent);
+  border-color: rgba(182, 108, 63, 0.25);
+}
+
 .document-snapshot-signal.medium {
   background: #f8f0dd;
   color: var(--gold);
@@ -287,6 +306,14 @@ body {
 
 .document-snapshot-ocr-fields {
   margin-top: 6px;
+}
+
+.document-snapshot-ocr-notes {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
 }
 
 .toolbar-main,
@@ -623,6 +650,68 @@ select.field-input,
   margin: 10px 0 0;
   color: var(--muted);
   font-size: 13px;
+  line-height: 1.5;
+}
+
+.ocr-field-status.status-consensus {
+  background: #edf5f1;
+  color: var(--forest);
+  border-color: rgba(55, 102, 71, 0.25);
+}
+
+.ocr-field-status.status-partial,
+.ocr-field-status.status-missing {
+  background: #f8f0dd;
+  color: var(--gold);
+  border-color: rgba(171, 127, 44, 0.25);
+}
+
+.ocr-field-status.status-divergent {
+  background: #fbebe4;
+  color: var(--accent);
+  border-color: rgba(182, 108, 63, 0.25);
+}
+
+.ocr-field-confidence.high,
+.ocr-field-grounded {
+  background: #edf5f1;
+  color: var(--forest);
+  border-color: rgba(55, 102, 71, 0.25);
+}
+
+.ocr-field-confidence.medium {
+  background: #f8f0dd;
+  color: var(--gold);
+  border-color: rgba(171, 127, 44, 0.25);
+}
+
+.ocr-field-confidence.low {
+  background: #fbebe4;
+  color: var(--accent);
+  border-color: rgba(182, 108, 63, 0.25);
+}
+
+.field-ocr-signal {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(182, 108, 63, 0.18);
+  border-radius: 12px;
+  background: rgba(247, 243, 235, 0.82);
+  display: grid;
+  gap: 8px;
+}
+
+.field-ocr-topline,
+.field-ocr-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.field-ocr-summary {
+  margin: 0;
+  color: var(--muted);
   line-height: 1.5;
 }
 

@@ -75,12 +75,29 @@ pub struct OcrFieldComparison {
     pub candidates: Vec<OcrFieldCandidate>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OcrConsistencyStatus {
+    Pass,
+    Warning,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OcrConsistencyCheck {
+    pub check: String,
+    pub status: OcrConsistencyStatus,
+    pub message: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OcrComparisonResult {
     pub document_id: String,
     pub filename: String,
     pub passes: Vec<OcrPassSummary>,
     pub fields: Vec<OcrFieldComparison>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub consistency_checks: Vec<OcrConsistencyCheck>,
     pub disagreement_count: usize,
     pub overall_confidence: ConfidenceLevel,
 }
@@ -92,6 +109,9 @@ pub struct DocumentOcrComparisonSummary {
     pub overall_confidence: ConfidenceLevel,
     pub disagreement_count: usize,
     pub divergent_fields: Vec<String>,
+    pub consistency_warning_count: usize,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub consistency_notes: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub field_summaries: Vec<OcrFieldComparisonSummary>,
 }
@@ -140,11 +160,21 @@ pub fn compare_ocr_passes(
     {
         fields.extend(compare_receipt_fields(&extracted));
     }
+    let consistency_checks = if extracted
+        .iter()
+        .all(|(_, facts)| facts.classification.kind == DocumentKind::Receipt)
+    {
+        compare_receipt_consistency(&extracted)
+    } else {
+        Vec::new()
+    };
 
     let disagreement_count = fields
         .iter()
         .filter(|field| field.status == OcrComparisonStatus::Divergent)
         .count();
+
+    let overall_confidence = overall_confidence(&fields, &consistency_checks);
 
     Ok(OcrComparisonResult {
         document_id: first.document_id.clone(),
@@ -153,7 +183,8 @@ pub fn compare_ocr_passes(
             .iter()
             .map(|(document, facts)| pass_summary(document, facts))
             .collect(),
-        overall_confidence: overall_confidence(&fields),
+        consistency_checks,
+        overall_confidence,
         disagreement_count,
         fields,
     })
@@ -182,6 +213,17 @@ pub fn summarize_ocr_comparison(comparison: &OcrComparisonResult) -> DocumentOcr
             .iter()
             .filter(|field| field.status == OcrComparisonStatus::Divergent)
             .map(|field| field.field.clone())
+            .collect(),
+        consistency_warning_count: comparison
+            .consistency_checks
+            .iter()
+            .filter(|check| check.status == OcrConsistencyStatus::Warning)
+            .count(),
+        consistency_notes: comparison
+            .consistency_checks
+            .iter()
+            .filter(|check| check.status == OcrConsistencyStatus::Warning)
+            .map(|check| check.message.clone())
             .collect(),
         field_summaries: comparison
             .fields
@@ -331,6 +373,15 @@ pub fn render_ocr_comparison_html(comparison: &OcrComparisonResult) -> String {
         "disagreement_count",
         &comparison.disagreement_count.to_string(),
     ));
+    html.push_str(&metric_card(
+        "consistency_warnings",
+        &comparison
+            .consistency_checks
+            .iter()
+            .filter(|check| check.status == OcrConsistencyStatus::Warning)
+            .count()
+            .to_string(),
+    ));
     html.push_str("</div></div>");
 
     html.push_str("<section class=\"section\"><h2>Passes</h2><table><thead><tr>\
@@ -376,6 +427,28 @@ pub fn render_ocr_comparison_html(comparison: &OcrComparisonResult) -> String {
         html.push_str("</tr>");
     }
     html.push_str("</tbody></table></section>");
+
+    if !comparison.consistency_checks.is_empty() {
+        html.push_str("<section class=\"section\"><h2>Consistency Checks</h2>");
+        for check in &comparison.consistency_checks {
+            html.push_str("<article class=\"field\">");
+            html.push_str(&format!(
+                "<h3><code>{}</code></h3>",
+                escape_html(&check.check)
+            ));
+            html.push_str(&format!(
+                "<span class=\"badge {}\">{}</span>",
+                consistency_status_class(check.status),
+                escape_html(consistency_status_label(check.status))
+            ));
+            html.push_str(&format!(
+                "<p><strong>Summary:</strong> <span class=\"muted\">{}</span></p>",
+                escape_html(&check.message)
+            ));
+            html.push_str("</article>");
+        }
+        html.push_str("</section>");
+    }
 
     html.push_str("<section class=\"section\"><h2>Field Comparison</h2>");
     for field in &comparison.fields {
@@ -435,6 +508,14 @@ pub fn render_ocr_comparison_markdown(comparison: &OcrComparisonResult) -> Strin
             confidence_label(comparison.overall_confidence)
         ),
         format!("- disagreement_count: {}", comparison.disagreement_count),
+        format!(
+            "- consistency_warning_count: {}",
+            comparison
+                .consistency_checks
+                .iter()
+                .filter(|check| check.status == OcrConsistencyStatus::Warning)
+                .count()
+        ),
         String::new(),
         "## Passes".to_owned(),
     ];
@@ -456,6 +537,18 @@ pub fn render_ocr_comparison_markdown(comparison: &OcrComparisonResult) -> Strin
     }
 
     lines.push(String::new());
+    if !comparison.consistency_checks.is_empty() {
+        lines.push("## Consistency Checks".to_owned());
+        for check in &comparison.consistency_checks {
+            lines.push(format!(
+                "- `{}`: status=`{}` summary=`{}`",
+                check.check,
+                consistency_status_label(check.status),
+                check.message
+            ));
+        }
+        lines.push(String::new());
+    }
     lines.push("## Field Comparison".to_owned());
     for field in &comparison.fields {
         lines.push(format!(
@@ -585,6 +678,171 @@ fn compare_receipt_fields(
             exact_value_equivalent,
         ),
     ]
+}
+
+fn compare_receipt_consistency(
+    extracted: &[(&TranscribedDocument, ExtractedDocumentFacts)],
+) -> Vec<OcrConsistencyCheck> {
+    vec![
+        aggregate_consistency_check(
+            "subtotal_tax_tip_matches_total",
+            extracted,
+            evaluate_subtotal_tax_tip_consistency,
+            "Subtotal plus tax/tip does not match the total in",
+            "All evaluable OCR passes kept subtotal, tax, tip, and total internally consistent.",
+            "Not enough subtotal/tax/total data to evaluate subtotal-to-total consistency.",
+        ),
+        aggregate_consistency_check(
+            "line_items_sum_matches_subtotal_or_total",
+            extracted,
+            evaluate_line_item_sum_consistency,
+            "Line-item totals do not match the receipt subtotal/total in",
+            "All evaluable OCR passes kept line-item amounts consistent with the receipt total.",
+            "Not enough line-item amount data to evaluate amount-rollup consistency.",
+        ),
+    ]
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ConsistencyEvaluation {
+    pass_id: String,
+    message: String,
+}
+
+fn aggregate_consistency_check(
+    check: &str,
+    extracted: &[(&TranscribedDocument, ExtractedDocumentFacts)],
+    evaluator: fn(&ExtractedDocumentFacts) -> Option<bool>,
+    warning_prefix: &str,
+    pass_message: &str,
+    unavailable_message: &str,
+) -> OcrConsistencyCheck {
+    let mut failures = Vec::new();
+    let mut evaluated_passes = 0usize;
+
+    for (document, facts) in extracted {
+        match evaluator(facts) {
+            Some(true) => {
+                evaluated_passes += 1;
+            }
+            Some(false) => {
+                evaluated_passes += 1;
+                failures.push(ConsistencyEvaluation {
+                    pass_id: document.metadata.pass_id.clone(),
+                    message: document.metadata.preprocess_variant.as_str().to_owned(),
+                });
+            }
+            None => {}
+        }
+    }
+
+    let (status, message) = if evaluated_passes == 0 {
+        (OcrConsistencyStatus::Unavailable, unavailable_message.to_owned())
+    } else if failures.is_empty() {
+        (OcrConsistencyStatus::Pass, pass_message.to_owned())
+    } else {
+        let failing_passes = failures
+            .into_iter()
+            .map(|failure| format!("{} ({})", failure.pass_id, failure.message))
+            .collect::<Vec<_>>()
+            .join(", ");
+        (
+            OcrConsistencyStatus::Warning,
+            format!("{warning_prefix} {failing_passes}."),
+        )
+    };
+
+    OcrConsistencyCheck {
+        check: check.to_owned(),
+        status,
+        message,
+    }
+}
+
+fn evaluate_subtotal_tax_tip_consistency(facts: &ExtractedDocumentFacts) -> Option<bool> {
+    let receipt = receipt_facts(facts)?;
+    let total = parse_money_amount(receipt.total_paid.as_ref()?.value.amount.as_str())?;
+    let subtotal_observed = receipt.subtotal.as_ref()?;
+    let subtotal = parse_money_amount(subtotal_observed.value.amount.as_str())?;
+    let subtotal_currency = subtotal_observed.value.currency.as_deref();
+    let total_currency = receipt.total_paid.as_ref()?.value.currency.as_deref();
+    if !currencies_match(subtotal_currency, total_currency) {
+        return Some(false);
+    }
+    let tax = match receipt.tax_amount.as_ref() {
+        Some(value) => {
+            if !currencies_match(value.value.currency.as_deref(), total_currency) {
+                return Some(false);
+            }
+            parse_money_amount(value.value.amount.as_str())?
+        }
+        None => 0.0,
+    };
+    let tip = match receipt.tip_amount.as_ref() {
+        Some(value) => {
+            if !currencies_match(value.value.currency.as_deref(), total_currency) {
+                return Some(false);
+            }
+            parse_money_amount(value.value.amount.as_str())?
+        }
+        None => 0.0,
+    };
+    Some(nearly_equal(subtotal + tax + tip, total))
+}
+
+fn evaluate_line_item_sum_consistency(facts: &ExtractedDocumentFacts) -> Option<bool> {
+    let receipt = receipt_facts(facts)?;
+    if receipt.line_items.is_empty() {
+        return None;
+    }
+    let line_sum = receipt
+        .line_items
+        .iter()
+        .map(|item| parse_money_amount(item.amount.value.amount.as_str()))
+        .collect::<Option<Vec<_>>>()?
+        .into_iter()
+        .sum::<f64>();
+    let line_currency = receipt
+        .line_items
+        .first()
+        .and_then(|item| item.amount.value.currency.as_deref());
+    if receipt
+        .line_items
+        .iter()
+        .any(|item| !currencies_match(item.amount.value.currency.as_deref(), line_currency))
+    {
+        return Some(false);
+    }
+
+    if let Some(subtotal) = receipt.subtotal.as_ref() {
+        if currencies_match(subtotal.value.currency.as_deref(), line_currency) {
+            return Some(nearly_equal(
+                line_sum,
+                parse_money_amount(subtotal.value.amount.as_str())?,
+            ));
+        }
+        return Some(false);
+    }
+    let total = receipt.total_paid.as_ref()?;
+    if !currencies_match(total.value.currency.as_deref(), line_currency) {
+        return Some(false);
+    }
+    Some(nearly_equal(
+        line_sum,
+        parse_money_amount(total.value.amount.as_str())?,
+    ))
+}
+
+fn parse_money_amount(value: &str) -> Option<f64> {
+    value.parse::<f64>().ok()
+}
+
+fn nearly_equal(left: f64, right: f64) -> bool {
+    (left - right).abs() <= 0.02
+}
+
+fn currencies_match(left: Option<&str>, right: Option<&str>) -> bool {
+    left == right || left.is_none() || right.is_none()
 }
 
 fn field_comparison<'a>(
@@ -1085,29 +1343,45 @@ fn compare_field(
     }
 }
 
-fn overall_confidence(fields: &[OcrFieldComparison]) -> ConfidenceLevel {
-    if fields
+fn overall_confidence(
+    fields: &[OcrFieldComparison],
+    consistency_checks: &[OcrConsistencyCheck],
+) -> ConfidenceLevel {
+    let mut confidence = if fields
         .iter()
         .any(|field| field.status == OcrComparisonStatus::Divergent)
     {
-        return ConfidenceLevel::Low;
-    }
-    if fields
+        ConfidenceLevel::Low
+    } else if fields
         .iter()
         .any(|field| field.status == OcrComparisonStatus::PartialConsensus)
         || fields
             .iter()
             .any(|field| field.status == OcrComparisonStatus::Missing)
     {
-        return ConfidenceLevel::Medium;
-    }
-    if fields
+        ConfidenceLevel::Medium
+    } else if fields
         .iter()
         .all(|field| field.confidence == ConfidenceLevel::High)
     {
         ConfidenceLevel::High
     } else {
         ConfidenceLevel::Medium
+    };
+    if consistency_checks
+        .iter()
+        .any(|check| check.status == OcrConsistencyStatus::Warning)
+    {
+        confidence = lower_confidence(confidence);
+    }
+    confidence
+}
+
+fn lower_confidence(value: ConfidenceLevel) -> ConfidenceLevel {
+    match value {
+        ConfidenceLevel::High => ConfidenceLevel::Medium,
+        ConfidenceLevel::Medium => ConfidenceLevel::Low,
+        ConfidenceLevel::Low => ConfidenceLevel::Low,
     }
 }
 
@@ -1235,6 +1509,22 @@ fn confidence_label(value: ConfidenceLevel) -> &'static str {
         ConfidenceLevel::High => "high",
         ConfidenceLevel::Medium => "medium",
         ConfidenceLevel::Low => "low",
+    }
+}
+
+fn consistency_status_label(value: OcrConsistencyStatus) -> &'static str {
+    match value {
+        OcrConsistencyStatus::Pass => "pass",
+        OcrConsistencyStatus::Warning => "warning",
+        OcrConsistencyStatus::Unavailable => "unavailable",
+    }
+}
+
+fn consistency_status_class(value: OcrConsistencyStatus) -> &'static str {
+    match value {
+        OcrConsistencyStatus::Pass => "consensus",
+        OcrConsistencyStatus::Warning => "divergent",
+        OcrConsistencyStatus::Unavailable => "missing",
     }
 }
 
@@ -1385,6 +1675,31 @@ mod tests {
                     .disagreement_reason
                     .as_deref()
                     .is_some_and(|value| value.contains("9.00"))));
+    }
+
+    #[test]
+    fn receipt_consistency_warning_lowers_confidence_even_when_passes_agree() {
+        let primary = receipt_document(
+            "receipt_primary_original",
+            OcrPassKind::Primary,
+            OcrPreprocessVariant::Original,
+            "# Merchant Receipt\n\n- Merchant Name: Book Talk\n- Date: 25/12/2018\n- Subtotal: MYR 8.00\n- Tax: MYR 1.00\n- Total: MYR 20.00\n",
+        );
+        let verification = receipt_document(
+            "receipt_table_focused_binarized",
+            OcrPassKind::TableFocused,
+            OcrPreprocessVariant::Binarized,
+            "# Merchant Receipt\n\n- Merchant Name: BOOK TALK\n- Date: 25/12/2018\n- Subtotal: MYR 8.00\n- Tax: MYR 1.00\n- Total: MYR 20.00\n",
+        );
+
+        let comparison = compare_ocr_passes(&[primary, verification]).expect("compare should work");
+
+        assert_eq!(comparison.disagreement_count, 0);
+        assert_eq!(comparison.overall_confidence, ConfidenceLevel::Medium);
+        assert!(comparison
+            .consistency_checks
+            .iter()
+            .any(|check| check.status == OcrConsistencyStatus::Warning));
     }
 
     #[test]

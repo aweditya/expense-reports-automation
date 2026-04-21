@@ -495,6 +495,7 @@ mod tests {
             document_id: "receipt_demo".to_owned(),
             geometry_source: OcrGeometrySource::Gemini,
             geometry_available: true,
+            grounding_preprocess_variant: Some(OcrPreprocessVariant::Original),
             preview_href: Some(
                 "artifact/ocr_grounding/receipt_demo/grounded_preview.html".to_owned(),
             ),

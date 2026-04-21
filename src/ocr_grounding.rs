@@ -1,5 +1,6 @@
 use crate::transcribe::{
-    OcrGeometrySource, OcrRegionKind, TranscribedDocument, TranscribedPage, TranscribedRegion,
+    OcrGeometrySource, OcrPreprocessVariant, OcrRegionKind, TranscribedDocument, TranscribedPage,
+    TranscribedRegion,
 };
 use serde::{Deserialize, Serialize};
 
@@ -16,6 +17,8 @@ pub struct DocumentOcrGroundingSummary {
     pub document_id: String,
     pub geometry_source: OcrGeometrySource,
     pub geometry_available: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grounding_preprocess_variant: Option<OcrPreprocessVariant>,
     pub preview_href: Option<String>,
     pub regions: Vec<GroundedRegionSummary>,
 }
@@ -28,6 +31,7 @@ pub fn summarize_ocr_grounding(
         document_id: document.document_id.clone(),
         geometry_source: document.metadata.geometry_source,
         geometry_available: document.metadata.geometry_available,
+        grounding_preprocess_variant: document.metadata.grounding_preprocess_variant,
         preview_href,
         regions: document
             .pages
@@ -80,13 +84,18 @@ pub fn render_ocr_grounding_html(
     html.push_str(&escape_html(&document.filename));
     html.push_str("</h1><p class=\"meta\">");
     html.push_str(&escape_html(&format!(
-        "geometry source: {} · regions: {}",
+        "geometry source: {} · regions: {}{}",
         geometry_source_label(document.metadata.geometry_source),
         document
             .pages
             .iter()
             .map(|page| page.regions.len())
-            .sum::<usize>()
+            .sum::<usize>(),
+        document
+            .metadata
+            .grounding_preprocess_variant
+            .map(|variant| format!(" · grounded via {}", variant.as_str()))
+            .unwrap_or_default()
     )));
     html.push_str("</p></div></header>");
     html.push_str("<div class=\"layout\">");
@@ -285,6 +294,10 @@ mod tests {
         );
 
         assert!(summary.geometry_available);
+        assert_eq!(
+            summary.grounding_preprocess_variant,
+            Some(OcrPreprocessVariant::Original)
+        );
         assert_eq!(summary.regions.len(), 2);
         assert_eq!(
             summary.preview_href.as_deref(),
