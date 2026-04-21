@@ -193,11 +193,45 @@ body {
 }
 
 .document-snapshot-field dt {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.document-snapshot-signal-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.document-snapshot-signal.high {
+  background: #edf5f1;
+  color: var(--forest);
+  border-color: rgba(55, 102, 71, 0.25);
+}
+
+.document-snapshot-signal.medium {
+  background: #f8f0dd;
+  color: var(--gold);
+  border-color: rgba(171, 127, 44, 0.25);
+}
+
+.document-snapshot-signal.low {
+  background: #fbebe4;
+  color: var(--accent);
+  border-color: rgba(182, 108, 63, 0.25);
+}
+
+.document-snapshot-signal.grounded {
+  background: rgba(247, 243, 235, 0.8);
+  color: var(--muted);
 }
 
 .document-snapshot-field dd {

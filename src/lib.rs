@@ -199,6 +199,7 @@ pub use ocr_compare::OcrComparisonResult;
 pub use ocr_compare::OcrComparisonStatus;
 pub use ocr_compare::OcrFieldCandidate;
 pub use ocr_compare::OcrFieldComparison;
+pub use ocr_compare::OcrFieldComparisonSummary;
 pub use ocr_compare::OcrPassSummary;
 pub use ocr_grounding::match_quote_to_region_id;
 pub use ocr_grounding::render_ocr_grounding_html;

@@ -775,7 +775,25 @@ fn render_document_snapshot_card(html: &mut String, document: &DocumentSnapshotC
 fn render_document_snapshot_field(html: &mut String, field: &DocumentSnapshotField) {
     html.push_str("<div class=\"document-snapshot-field\">");
     html.push_str("<dt>");
+    html.push_str("<span>");
     html.push_str(&escape_html(&field.label));
+    html.push_str("</span>");
+    if field.ocr_confidence.is_some() || field.grounded {
+        html.push_str("<span class=\"document-snapshot-signal-badges\">");
+        if let Some(confidence) = field.ocr_confidence {
+            html.push_str("<span class=\"badge document-snapshot-signal ");
+            html.push_str(confidence_level_class(confidence));
+            html.push_str("\">ocr ");
+            html.push_str(confidence_level_label(confidence));
+            html.push_str("</span>");
+        }
+        if field.grounded {
+            html.push_str(
+                "<span class=\"badge document-snapshot-signal grounded\">grounded</span>",
+            );
+        }
+        html.push_str("</span>");
+    }
     html.push_str("</dt>");
     html.push_str("<dd>");
     html.push_str(&escape_html(&field.value));
@@ -1130,6 +1148,14 @@ fn confidence_level_label(level: crate::ConfidenceLevel) -> &'static str {
     }
 }
 
+fn confidence_level_class(level: crate::ConfidenceLevel) -> &'static str {
+    match level {
+        crate::ConfidenceLevel::High => "high",
+        crate::ConfidenceLevel::Medium => "medium",
+        crate::ConfidenceLevel::Low => "low",
+    }
+}
+
 fn issue_class_name(class: crate::ReadinessIssueClass) -> &'static str {
     match class {
         crate::ReadinessIssueClass::AutomationGap => "automation-gap",
@@ -1304,6 +1330,24 @@ mod tests {
     }
 
     #[test]
+    fn workbench_css_contains_document_snapshot_signal_styles() {
+        let provider = StaticFxRateProvider::demo();
+        let projection = synthesize_bundle_projection_with_fx(&synthetic_documents(), &provider);
+        let packet = build_review_packet(
+            &projection.bundle,
+            &projection.draft,
+            &projection.validation,
+        )
+        .expect("review packet should build");
+        let rendered = render_review_workbench_html(&packet);
+
+        assert!(rendered.contains(".document-snapshot-signal.high"));
+        assert!(rendered.contains(".document-snapshot-signal.medium"));
+        assert!(rendered.contains(".document-snapshot-signal.low"));
+        assert!(rendered.contains(".document-snapshot-signal.grounded"));
+    }
+
+    #[test]
     fn workbench_readonly_fields_show_review_computed_label() {
         let provider = StaticFxRateProvider::demo();
         let projection = synthesize_bundle_projection_with_fx(&synthetic_documents(), &provider);
@@ -1438,6 +1482,7 @@ mod tests {
                 overall_confidence: crate::ConfidenceLevel::Medium,
                 disagreement_count: 1,
                 divergent_fields: vec!["total_paid".to_owned()],
+                field_summaries: vec![],
             }],
         )
         .expect("review packet should build");
@@ -1451,6 +1496,72 @@ mod tests {
         assert!(rendered.contains("Open OCR diff"));
         assert!(rendered
             .contains("artifact/ocr_pass_comparisons/synthetic_receipt_baseline/comparison.html"));
+    }
+
+    #[test]
+    fn workbench_renders_document_snapshot_confidence_and_grounding_badges() {
+        let packet = crate::review_packet::ReviewPacket {
+            summary: crate::review_packet::PacketSummary {
+                filing_status: crate::review_packet::FilingStatus::ManualReviewRequired,
+                payee_name: Some("Olivia Park".to_owned()),
+                event_name: Some("Receipt OCR review".to_owned()),
+                trip_window: None,
+                report_total_usd: None,
+                category: None,
+                transaction_type: None,
+                transaction_line_count: 0,
+                document_count: 1,
+                readiness: crate::review_packet::ReviewReadinessSummary {
+                    automation_gap_count: 0,
+                    user_input_gap_count: 0,
+                    manual_review_count: 1,
+                    other_warning_count: 0,
+                },
+                confidence: crate::review_packet::ConfidenceSummary {
+                    high: 0,
+                    medium: 1,
+                    low: 0,
+                    needs_review: 1,
+                },
+            },
+            issues_queue: Vec::new(),
+            copy_sections: Vec::new(),
+            attachment_checklist: Vec::new(),
+            document_snapshots: vec![crate::review_packet::DocumentSnapshotCard {
+                document_id: "doc_receipt".to_owned(),
+                filename: "receipt.png".to_owned(),
+                kind: "receipt".to_owned(),
+                extraction_status: "complete".to_owned(),
+                used_in_bundle: true,
+                projected_to_filing: false,
+                status_label: "parsed for bundle context only".to_owned(),
+                summary_fields: vec![
+                    crate::review_packet::DocumentSnapshotField {
+                        label: "Merchant".to_owned(),
+                        value: "BOOK TALK".to_owned(),
+                        ocr_confidence: Some(crate::ConfidenceLevel::High),
+                        grounded: true,
+                    },
+                    crate::review_packet::DocumentSnapshotField {
+                        label: "Total".to_owned(),
+                        value: "MYR 80.90".to_owned(),
+                        ocr_confidence: Some(crate::ConfidenceLevel::Low),
+                        grounded: false,
+                    },
+                ],
+                issue_messages: Vec::new(),
+                ocr_comparison: None,
+                ocr_comparison_href: None,
+                ocr_grounding: None,
+                ocr_grounding_href: None,
+            }],
+        };
+
+        let rendered = render_review_workbench_html(&packet);
+
+        assert!(rendered.contains("ocr High"));
+        assert!(rendered.contains("ocr Low"));
+        assert!(rendered.contains("grounded"));
     }
 
     #[test]

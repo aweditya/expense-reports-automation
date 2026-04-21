@@ -92,6 +92,17 @@ pub struct DocumentOcrComparisonSummary {
     pub overall_confidence: ConfidenceLevel,
     pub disagreement_count: usize,
     pub divergent_fields: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub field_summaries: Vec<OcrFieldComparisonSummary>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OcrFieldComparisonSummary {
+    pub field: String,
+    pub status: OcrComparisonStatus,
+    pub confidence: ConfidenceLevel,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub consensus_value: Option<String>,
 }
 
 pub fn compare_ocr_passes(
@@ -170,6 +181,16 @@ pub fn summarize_ocr_comparison(comparison: &OcrComparisonResult) -> DocumentOcr
             .iter()
             .filter(|field| field.status == OcrComparisonStatus::Divergent)
             .map(|field| field.field.clone())
+            .collect(),
+        field_summaries: comparison
+            .fields
+            .iter()
+            .map(|field| OcrFieldComparisonSummary {
+                field: field.field.clone(),
+                status: field.status,
+                confidence: field.confidence,
+                consensus_value: field.consensus_value.clone(),
+            })
             .collect(),
     }
 }
@@ -925,5 +946,11 @@ mod tests {
         assert_eq!(summary.overall_confidence, ConfidenceLevel::Low);
         assert_eq!(summary.disagreement_count, 1);
         assert_eq!(summary.divergent_fields, vec!["total_paid".to_owned()]);
+        assert!(summary
+            .field_summaries
+            .iter()
+            .any(|field| field.field == "total_paid"
+                && field.status == OcrComparisonStatus::Divergent
+                && field.confidence == ConfidenceLevel::Low));
     }
 }

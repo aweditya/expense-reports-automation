@@ -123,6 +123,10 @@ pub struct AttachmentChecklistItem {
 pub struct DocumentSnapshotField {
     pub label: String,
     pub value: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ocr_confidence: Option<ConfidenceLevel>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub grounded: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -807,6 +811,8 @@ fn build_document_snapshots(
                         .expense_lines
                         .iter()
                         .find(|line| line.document_id == document.document_id),
+                    ocr_comparisons.get(&document.document_id),
+                    ocr_groundings.get(&document.document_id),
                 ),
                 issue_messages: issue_messages.into_iter().collect(),
                 ocr_comparison: ocr_comparisons.get(&document.document_id).cloned(),
@@ -833,36 +839,46 @@ fn build_document_snapshots(
 fn document_snapshot_fields(
     document: &crate::ExtractedDocumentFacts,
     line: Option<&crate::bundle_synthesis::CanonicalExpenseLine>,
+    ocr_comparison: Option<&DocumentOcrComparisonSummary>,
+    ocr_grounding: Option<&DocumentOcrGroundingSummary>,
 ) -> Vec<DocumentSnapshotField> {
     let mut fields = Vec::new();
     match &document.facts {
         DocumentFactsPayload::Receipt(facts) => {
-            push_snapshot_field(
+            push_snapshot_field_with_signal(
                 &mut fields,
                 "Merchant",
                 facts
                     .merchant_name
                     .as_ref()
                     .map(|value| value.value.clone()),
+                receipt_field_signal(ocr_comparison, ocr_grounding, "merchant_name"),
             );
-            push_snapshot_field(
+            push_snapshot_field_with_signal(
                 &mut fields,
                 "Date",
                 facts
                     .transaction_date
                     .as_ref()
                     .map(|value| value.value.clone()),
+                receipt_field_signal(ocr_comparison, ocr_grounding, "transaction_date"),
             );
-            push_snapshot_field(
+            push_snapshot_field_with_signal(
                 &mut fields,
                 "Total",
                 facts.total_paid.as_ref().map(observed_money_amount_display),
+                combined_receipt_field_signal(
+                    ocr_comparison,
+                    ocr_grounding,
+                    &["total_paid", "total_paid_currency"],
+                ),
             );
             if !facts.line_items.is_empty() {
-                push_snapshot_field(
+                push_snapshot_field_with_signal(
                     &mut fields,
                     "Line items",
                     Some(facts.line_items.len().to_string()),
+                    receipt_field_signal(ocr_comparison, ocr_grounding, "line_item_count"),
                 );
             }
         }
@@ -1066,12 +1082,89 @@ fn push_snapshot_field(
     label: &str,
     value: Option<String>,
 ) {
+    push_snapshot_field_with_signal(fields, label, value, None);
+}
+
+fn push_snapshot_field_with_signal(
+    fields: &mut Vec<DocumentSnapshotField>,
+    label: &str,
+    value: Option<String>,
+    signal: Option<SnapshotOcrSignal>,
+) {
     if let Some(value) = value {
         fields.push(DocumentSnapshotField {
             label: label.to_owned(),
             value,
+            ocr_confidence: signal.as_ref().map(|signal| signal.confidence),
+            grounded: signal.is_some_and(|signal| signal.grounded),
         });
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SnapshotOcrSignal {
+    confidence: ConfidenceLevel,
+    grounded: bool,
+}
+
+fn receipt_field_signal(
+    comparison: Option<&DocumentOcrComparisonSummary>,
+    grounding: Option<&DocumentOcrGroundingSummary>,
+    field_name: &str,
+) -> Option<SnapshotOcrSignal> {
+    let field = comparison?
+        .field_summaries
+        .iter()
+        .find(|field| field.field == field_name)?;
+    Some(SnapshotOcrSignal {
+        confidence: field.confidence,
+        grounded: grounding_has_region(grounding, field_name),
+    })
+}
+
+fn combined_receipt_field_signal(
+    comparison: Option<&DocumentOcrComparisonSummary>,
+    grounding: Option<&DocumentOcrGroundingSummary>,
+    field_names: &[&str],
+) -> Option<SnapshotOcrSignal> {
+    let mut signals = field_names
+        .iter()
+        .filter_map(|field_name| receipt_field_signal(comparison, grounding, field_name))
+        .collect::<Vec<_>>();
+    if signals.is_empty() {
+        return None;
+    }
+    let grounded = signals.iter().any(|signal| signal.grounded);
+    let confidence = signals
+        .drain(..)
+        .map(|signal| signal.confidence)
+        .min_by_key(|value| confidence_rank(*value))
+        .unwrap_or(ConfidenceLevel::Low);
+    Some(SnapshotOcrSignal {
+        confidence,
+        grounded,
+    })
+}
+
+fn grounding_has_region(grounding: Option<&DocumentOcrGroundingSummary>, field_name: &str) -> bool {
+    grounding.is_some_and(|grounding| {
+        grounding
+            .regions
+            .iter()
+            .any(|region| region.region_id == field_name)
+    })
+}
+
+fn confidence_rank(value: ConfidenceLevel) -> usize {
+    match value {
+        ConfidenceLevel::Low => 0,
+        ConfidenceLevel::Medium => 1,
+        ConfidenceLevel::High => 2,
+    }
+}
+
+fn is_false(value: &bool) -> bool {
+    !value
 }
 
 fn money_amount_display(amount: &crate::MoneyAmount) -> String {
@@ -1621,6 +1714,20 @@ mod tests {
             overall_confidence: ConfidenceLevel::Medium,
             disagreement_count: 2,
             divergent_fields: vec!["merchant_name".to_owned(), "total_paid".to_owned()],
+            field_summaries: vec![
+                crate::OcrFieldComparisonSummary {
+                    field: "merchant_name".to_owned(),
+                    status: crate::OcrComparisonStatus::Divergent,
+                    confidence: ConfidenceLevel::Low,
+                    consensus_value: None,
+                },
+                crate::OcrFieldComparisonSummary {
+                    field: "transaction_date".to_owned(),
+                    status: crate::OcrComparisonStatus::Consensus,
+                    confidence: ConfidenceLevel::High,
+                    consensus_value: Some("2025-04-24".to_owned()),
+                },
+            ],
         };
 
         let packet = build_review_packet_with_ocr_comparisons(
@@ -1648,6 +1755,10 @@ mod tests {
                 .map(|summary| summary.disagreement_count),
             Some(2)
         );
+        assert!(receipt_snapshot
+            .ocr_comparison
+            .as_ref()
+            .is_some_and(|summary| !summary.field_summaries.is_empty()));
     }
 
     #[test]
@@ -1702,5 +1813,123 @@ mod tests {
                 .map(|summary| summary.regions.len()),
             Some(1)
         );
+    }
+
+    #[test]
+    fn review_packet_receipt_snapshot_fields_carry_ocr_confidence_and_grounding() {
+        let packet_fixture = crate::synthetic_documents::generate_synthetic_packet(
+            crate::synthetic_documents::SyntheticVariant::Baseline,
+        );
+        let documents = packet_fixture
+            .into_iter()
+            .map(|fixture| fixture.expected_facts)
+            .collect::<Vec<_>>();
+        let projection = synthesize_bundle_projection(&documents);
+        let comparison = crate::ocr_compare::DocumentOcrComparisonSummary {
+            document_id: "synthetic_receipt_baseline".to_owned(),
+            compared_pass_count: 2,
+            overall_confidence: ConfidenceLevel::Medium,
+            disagreement_count: 1,
+            divergent_fields: vec!["total_paid".to_owned()],
+            field_summaries: vec![
+                crate::OcrFieldComparisonSummary {
+                    field: "merchant_name".to_owned(),
+                    status: crate::OcrComparisonStatus::Consensus,
+                    confidence: ConfidenceLevel::High,
+                    consensus_value: Some("EAST BAY BISTRO".to_owned()),
+                },
+                crate::OcrFieldComparisonSummary {
+                    field: "transaction_date".to_owned(),
+                    status: crate::OcrComparisonStatus::Consensus,
+                    confidence: ConfidenceLevel::Medium,
+                    consensus_value: Some("2025-04-24".to_owned()),
+                },
+                crate::OcrFieldComparisonSummary {
+                    field: "total_paid".to_owned(),
+                    status: crate::OcrComparisonStatus::Divergent,
+                    confidence: ConfidenceLevel::Low,
+                    consensus_value: None,
+                },
+                crate::OcrFieldComparisonSummary {
+                    field: "total_paid_currency".to_owned(),
+                    status: crate::OcrComparisonStatus::Consensus,
+                    confidence: ConfidenceLevel::High,
+                    consensus_value: Some("SGD".to_owned()),
+                },
+                crate::OcrFieldComparisonSummary {
+                    field: "line_item_count".to_owned(),
+                    status: crate::OcrComparisonStatus::Consensus,
+                    confidence: ConfidenceLevel::High,
+                    consensus_value: Some("3".to_owned()),
+                },
+            ],
+        };
+        let grounding = crate::DocumentOcrGroundingSummary {
+            document_id: "synthetic_receipt_baseline".to_owned(),
+            geometry_source: crate::OcrGeometrySource::Gemini,
+            geometry_available: true,
+            preview_href: Some(
+                "artifact/ocr_grounding/synthetic_receipt_baseline/grounded_preview.html"
+                    .to_owned(),
+            ),
+            regions: vec![
+                crate::GroundedRegionSummary {
+                    region_id: "merchant_name".to_owned(),
+                    page_number: 1,
+                    kind: crate::OcrRegionKind::ValueCandidate,
+                    text: "EAST BAY BISTRO".to_owned(),
+                },
+                crate::GroundedRegionSummary {
+                    region_id: "transaction_date".to_owned(),
+                    page_number: 1,
+                    kind: crate::OcrRegionKind::ValueCandidate,
+                    text: "2025-04-24".to_owned(),
+                },
+                crate::GroundedRegionSummary {
+                    region_id: "total_paid".to_owned(),
+                    page_number: 1,
+                    kind: crate::OcrRegionKind::ValueCandidate,
+                    text: "SGD 35.02".to_owned(),
+                },
+            ],
+        };
+
+        let packet = build_review_packet_with_ocr_artifacts(
+            &projection.bundle,
+            &projection.draft,
+            &summarize_validation_readiness(&projection.validation),
+            &[comparison],
+            &[grounding],
+        )
+        .expect("review packet should build");
+
+        let receipt_snapshot = packet
+            .document_snapshots
+            .iter()
+            .find(|snapshot| snapshot.document_id == "synthetic_receipt_baseline")
+            .expect("receipt snapshot should exist");
+        let merchant_field = receipt_snapshot
+            .summary_fields
+            .iter()
+            .find(|field| field.label == "Merchant")
+            .expect("merchant field should exist");
+        assert_eq!(merchant_field.ocr_confidence, Some(ConfidenceLevel::High));
+        assert!(merchant_field.grounded);
+
+        let total_field = receipt_snapshot
+            .summary_fields
+            .iter()
+            .find(|field| field.label == "Total")
+            .expect("total field should exist");
+        assert_eq!(total_field.ocr_confidence, Some(ConfidenceLevel::Low));
+        assert!(total_field.grounded);
+
+        let line_items_field = receipt_snapshot
+            .summary_fields
+            .iter()
+            .find(|field| field.label == "Line items")
+            .expect("line item field should exist");
+        assert_eq!(line_items_field.ocr_confidence, Some(ConfidenceLevel::High));
+        assert!(!line_items_field.grounded);
     }
 }
