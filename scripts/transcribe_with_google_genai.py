@@ -10,6 +10,7 @@ from pathlib import Path
 DEFAULT_MODEL = "gemini-3-flash-preview"
 CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
 DEFAULT_GENERATE_RETRIES = 3
+GROUNDABLE_IMAGE_MIME_TYPES = {"image/png", "image/jpeg"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -190,6 +191,121 @@ def normalize_pages(payload: dict) -> list[dict]:
             }
         )
     return normalized
+
+
+def build_grounding_prompt(filename: str, page_text: str) -> str:
+    return (
+        "Locate a small set of key receipt fields in this financial document image and return only JSON.\n"
+        "Use this schema exactly:\n"
+        "{\"regions\":[{\"region_id\":\"merchant_name\",\"kind\":\"value_candidate\",\"text\":\"...\",\"box_2d\":[y_min,x_min,y_max,x_max]}]}\n"
+        "Rules:\n"
+        "- Only include regions you can localize confidently.\n"
+        "- Use region_id values only from this set when applicable: merchant_name, transaction_date, total_paid, total_paid_currency.\n"
+        "- box_2d must use normalized 0-1000 coordinates in [y_min, x_min, y_max, x_max] order.\n"
+        "- Keep text faithful to the visible document.\n"
+        "- Prefer the final payable total, not subtotal or tax, for total_paid.\n"
+        f"Filename: {filename}\n"
+        "OCR transcription for context:\n"
+        f"{page_text[:2500]}\n"
+    )
+
+
+def normalize_grounding_regions(payload: dict) -> list[dict]:
+    raw_regions = payload.get("regions") if isinstance(payload, dict) else payload
+    if not isinstance(raw_regions, list):
+        return []
+
+    normalized = []
+    for index, region in enumerate(raw_regions, start=1):
+        if not isinstance(region, dict):
+            continue
+        box = region.get("box_2d")
+        if not isinstance(box, list) or len(box) != 4:
+            continue
+        try:
+            y_min, x_min, y_max, x_max = [float(value) for value in box]
+        except (TypeError, ValueError):
+            continue
+        if y_max < y_min or x_max < x_min:
+            continue
+        region_id = sanitize_identifier(region.get("region_id") or f"region_{index}")
+        text = str(region.get("text") or "").strip()
+        kind = str(region.get("kind") or "value_candidate").strip() or "value_candidate"
+        normalized.append(
+            {
+                "region_id": region_id,
+                "kind": kind,
+                "text": text,
+                "bbox": {
+                    "left": x_min / 1000.0,
+                    "top": y_min / 1000.0,
+                    "width": (x_max - x_min) / 1000.0,
+                    "height": (y_max - y_min) / 1000.0,
+                },
+            }
+        )
+    return normalized
+
+
+def image_page_dimensions(file_bytes: bytes, mime_type: str) -> dict | None:
+    if mime_type not in GROUNDABLE_IMAGE_MIME_TYPES:
+        return None
+    try:
+        from PIL import Image
+    except ImportError as exc:  # pragma: no cover - dependency exists in repo venv
+        raise SystemExit(f"Pillow is required to inspect image dimensions: {exc}") from exc
+
+    image = Image.open(io.BytesIO(file_bytes))
+    image.load()
+    width, height = image.size
+    return {"width": width, "height": height}
+
+
+def maybe_ground_key_receipt_fields(
+    client,
+    *,
+    model: str,
+    filename: str,
+    file_bytes: bytes,
+    mime_type: str,
+    normalized_pages: list[dict],
+):
+    if mime_type not in GROUNDABLE_IMAGE_MIME_TYPES or not normalized_pages:
+        return normalized_pages, "none", False
+
+    dimensions = image_page_dimensions(file_bytes, mime_type)
+    enriched_pages = [dict(page) for page in normalized_pages]
+    if dimensions:
+        enriched_pages[0] = dict(enriched_pages[0])
+        enriched_pages[0]["dimensions"] = dimensions
+
+    prompt = build_grounding_prompt(filename, enriched_pages[0]["text"])
+    try:
+        from google.genai import types
+
+        response = generate_content_with_retries(
+            client,
+            model=model,
+            contents=[
+                prompt,
+                types.Part.from_bytes(data=file_bytes, mime_type=mime_type),
+            ],
+            config=types.GenerateContentConfig(
+                temperature=0,
+                response_mime_type="application/json",
+                max_output_tokens=4096,
+            ),
+        )
+        payload = json.loads(extract_payload_text(response))
+        regions = normalize_grounding_regions(payload)
+    except Exception:
+        return enriched_pages, "none", False
+
+    if regions:
+        enriched_pages[0] = dict(enriched_pages[0])
+        enriched_pages[0]["regions"] = regions
+        return enriched_pages, "gemini", True
+    return enriched_pages, "none", False
 
 
 def normalize_extractor_markdown(text: str) -> str:
@@ -471,6 +587,16 @@ def main() -> int:
     )
     payload = json.loads(extract_payload_text(response))
 
+    normalized_pages = normalize_pages(payload)
+    normalized_pages, geometry_source, geometry_available = maybe_ground_key_receipt_fields(
+        client,
+        model=args.model,
+        filename=document_path.name,
+        file_bytes=file_bytes,
+        mime_type=mime_type,
+        normalized_pages=normalized_pages,
+    )
+
     result = {
         "document_id": sanitize_identifier(document_path.stem),
         "filename": document_path.name,
@@ -483,10 +609,10 @@ def main() -> int:
             "preprocess_variant": args.preprocess_variant,
             "producer": "google_genai_sdk",
             "model": args.model,
-            "geometry_source": "none",
-            "geometry_available": False,
+            "geometry_source": geometry_source,
+            "geometry_available": geometry_available,
         },
-        "pages": normalize_pages(payload),
+        "pages": normalized_pages,
     }
     rendered = json.dumps(result, indent=2)
 

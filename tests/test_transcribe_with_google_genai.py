@@ -187,6 +187,66 @@ class TranscribeWithGoogleGenAiTests(unittest.TestCase):
         )
         self.assertIn("Prioritize preserving table rows", prompt)
 
+    def test_build_grounding_prompt_targets_receipt_fields(self):
+        prompt = transcribe.build_grounding_prompt(
+            "receipt.png",
+            "# Merchant Receipt\n- Merchant Name: BOOK TALK\n- Total Paid: MYR 80.90",
+        )
+
+        self.assertIn("merchant_name", prompt)
+        self.assertIn("transaction_date", prompt)
+        self.assertIn("total_paid", prompt)
+        self.assertIn("normalized 0-1000 coordinates", prompt)
+
+    def test_normalize_grounding_regions_converts_box_coordinates(self):
+        normalized = transcribe.normalize_grounding_regions(
+            {
+                "regions": [
+                    {
+                        "region_id": "total_paid",
+                        "kind": "value_candidate",
+                        "text": "MYR 80.90",
+                        "box_2d": [100, 200, 160, 520],
+                    }
+                ]
+            }
+        )
+
+        self.assertEqual(
+            normalized,
+            [
+                {
+                    "region_id": "total_paid",
+                    "kind": "value_candidate",
+                    "text": "MYR 80.90",
+                    "bbox": {
+                        "left": 0.2,
+                        "top": 0.1,
+                        "width": 0.32,
+                        "height": 0.06,
+                    },
+                }
+            ],
+        )
+
+    def test_maybe_ground_key_receipt_fields_skips_non_image_inputs(self):
+        pages = [{"page_number": 1, "text": "# Merchant Receipt", "dimensions": None, "regions": []}]
+
+        grounded_pages, geometry_source, geometry_available = (
+            transcribe.maybe_ground_key_receipt_fields(
+                object(),
+                model="gemini-3-flash-preview",
+                filename="receipt.pdf",
+                file_bytes=b"%PDF-1.4 mock",
+                mime_type="application/pdf",
+                normalized_pages=pages,
+            )
+        )
+
+        self.assertEqual(grounded_pages, pages)
+        self.assertEqual(geometry_source, "none")
+        self.assertFalse(geometry_available)
+
     def test_preprocess_document_bytes_binarized_renders_png(self):
         from PIL import Image
 
