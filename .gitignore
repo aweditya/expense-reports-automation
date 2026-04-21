@@ -9,6 +9,8 @@ Cargo.lock
 expense-reports-filing.mp4
 soe-agile-agents-7581b31cd4d2.json
 .local_app_workspace/
+.local_app_demo_workspace/
+.local_app_live_workspace/
 .local_app_verify_workspace/
 .local_runtime/
 .tmp_test/
