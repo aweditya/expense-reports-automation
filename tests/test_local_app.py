@@ -91,6 +91,7 @@ def write_bundle_fixture(
     *,
     with_workbench: bool = True,
     with_ocr_diff: bool = False,
+    with_ocr_grounding: bool = False,
 ) -> None:
     bundle_root = workspace_root / "bundles" / bundle_id
     artifacts_dir = bundle_root / "runs" / "demo_run" / "artifacts"
@@ -114,6 +115,12 @@ def write_bundle_fixture(
         ocr_dir = artifacts_dir / "ocr_pass_comparisons" / "doc_receipt"
         ocr_dir.mkdir(parents=True, exist_ok=True)
         (ocr_dir / "comparison.html").write_text("<html><body>OCR Diff</body></html>")
+    if with_ocr_grounding:
+        grounding_dir = artifacts_dir / "ocr_grounding" / "doc_receipt"
+        grounding_dir.mkdir(parents=True, exist_ok=True)
+        (grounding_dir / "grounded_preview.html").write_text(
+            "<html><body>Grounded OCR</body></html>"
+        )
 
 
 def build_config(
@@ -353,6 +360,7 @@ class LocalAppTests(unittest.TestCase):
                 "demo_bundle",
                 with_workbench=True,
                 with_ocr_diff=True,
+                with_ocr_grounding=True,
             )
 
             workbench_path = local_app.latest_workbench_path(workspace_root, "demo_bundle")
@@ -646,6 +654,7 @@ class LocalAppHttpTests(unittest.TestCase):
                 "demo_bundle",
                 with_workbench=True,
                 with_ocr_diff=True,
+                with_ocr_grounding=True,
             )
             config = self.make_config(workspace_root)
             original_render = local_app.render_current_workbench_html
@@ -712,6 +721,14 @@ class LocalAppHttpTests(unittest.TestCase):
                 )
                 self.assertEqual(status, 200)
                 self.assertIn(b"OCR Diff", payload)
+
+                status, _, payload = self.request(
+                    config,
+                    "GET",
+                    "/bundle/demo_bundle/artifact/ocr_grounding/doc_receipt/grounded_preview.html",
+                )
+                self.assertEqual(status, 200)
+                self.assertIn(b"Grounded OCR", payload)
 
                 status, response_headers, payload = self.request(
                     config, "GET", "/bundle/demo_bundle/document/doc_receipt/receipt.png"

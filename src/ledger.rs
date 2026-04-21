@@ -10,9 +10,10 @@ use crate::feedback::{
     FeedbackCategory, SubmissionFeedback, SubmissionStatus,
 };
 use crate::ocr_compare::DocumentOcrComparisonSummary;
+use crate::ocr_grounding::DocumentOcrGroundingSummary;
 use crate::readiness::{summarize_validation_readiness_with_confirmations, ReadinessReport};
 use crate::review_packet::{
-    build_review_packet_with_ocr_comparisons, FilingStatus, ReviewPacket, ReviewPacketError,
+    build_review_packet_with_ocr_artifacts, FilingStatus, ReviewPacket, ReviewPacketError,
 };
 use crate::validator::{validate_draft_report, ValidationReport};
 use crate::value::ReportValue;
@@ -121,6 +122,9 @@ pub struct ReviewSubmissionLedger {
     pub bundle: CanonicalExpenseBundle,
     #[serde(default)]
     pub ocr_pass_comparisons: Vec<DocumentOcrComparisonSummary>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub ocr_groundings: Vec<DocumentOcrGroundingSummary>,
     pub summary: LedgerSummary,
     pub draft_versions: Vec<DraftVersionRecord>,
     pub review_actions: Vec<ReviewActionRecord>,
@@ -182,21 +186,23 @@ pub fn initialize_review_submission_ledger(
     draft: &DraftReport,
     validation: &ValidationReport,
 ) -> Result<ReviewSubmissionLedger, LedgerError> {
-    initialize_review_submission_ledger_with_ocr_comparisons(
+    initialize_review_submission_ledger_with_ocr_artifacts(
         bundle_id,
         bundle,
         draft,
         validation,
         &[],
+        &[],
     )
 }
 
-pub fn initialize_review_submission_ledger_with_ocr_comparisons(
+pub fn initialize_review_submission_ledger_with_ocr_artifacts(
     bundle_id: impl Into<String>,
     bundle: &CanonicalExpenseBundle,
     draft: &DraftReport,
     validation: &ValidationReport,
     ocr_pass_comparisons: &[DocumentOcrComparisonSummary],
+    ocr_groundings: &[DocumentOcrGroundingSummary],
 ) -> Result<ReviewSubmissionLedger, LedgerError> {
     let initial_version = build_version_record(
         1,
@@ -209,6 +215,7 @@ pub fn initialize_review_submission_ledger_with_ocr_comparisons(
         validation.clone(),
         bundle,
         ocr_pass_comparisons,
+        ocr_groundings,
         None,
         None,
     )?;
@@ -217,6 +224,7 @@ pub fn initialize_review_submission_ledger_with_ocr_comparisons(
         bundle_id: bundle_id.into(),
         bundle: bundle.clone(),
         ocr_pass_comparisons: ocr_pass_comparisons.to_vec(),
+        ocr_groundings: ocr_groundings.to_vec(),
         summary: LedgerSummary {
             current_state: state_from_filing_status(
                 initial_version.review_packet.summary.filing_status,
@@ -310,6 +318,7 @@ pub fn apply_review_revision(
         validation,
         &ledger.bundle,
         &ledger.ocr_pass_comparisons,
+        &ledger.ocr_groundings,
         Some(feedback),
         None,
     )?;
@@ -427,6 +436,7 @@ pub fn ingest_submission_feedback(
             validation,
             &ledger.bundle,
             &ledger.ocr_pass_comparisons,
+            &ledger.ocr_groundings,
             Some(feedback_capture.clone()),
             Some(attempt_id),
         )?;
@@ -569,13 +579,19 @@ fn build_version_record(
     validation: ValidationReport,
     bundle: &CanonicalExpenseBundle,
     ocr_pass_comparisons: &[DocumentOcrComparisonSummary],
+    ocr_groundings: &[DocumentOcrGroundingSummary],
     feedback_from_parent: Option<FeedbackCapture>,
     source_submission_attempt_id: Option<u32>,
 ) -> Result<DraftVersionRecord, LedgerError> {
     let readiness =
         summarize_validation_readiness_with_confirmations(&validation, &confirmed_review_paths);
-    let review_packet =
-        build_review_packet_with_ocr_comparisons(bundle, &draft, &readiness, ocr_pass_comparisons)?;
+    let review_packet = build_review_packet_with_ocr_artifacts(
+        bundle,
+        &draft,
+        &readiness,
+        ocr_pass_comparisons,
+        ocr_groundings,
+    )?;
     Ok(DraftVersionRecord {
         version_id,
         parent_version_id,

@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::draft::EvidenceReference;
 use crate::field_conventions::{FieldControl, FieldEntryMode};
+use crate::ocr_grounding::{match_quote_to_region_id, DocumentOcrGroundingSummary};
 use crate::review_packet::{
     CopyField, DocumentSnapshotCard, DocumentSnapshotField, FilingStatus, ReviewPacket,
 };
@@ -13,8 +14,15 @@ struct WorkbenchIndex {
     section_targets: BTreeMap<String, String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct GroundingLinkTarget {
+    summary: DocumentOcrGroundingSummary,
+    href: String,
+}
+
 pub fn render_review_workbench_html(packet: &ReviewPacket) -> String {
     let index = build_workbench_index(packet);
+    let grounding_lookup = build_grounding_lookup(packet);
     let mut html = String::new();
 
     html.push_str("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n");
@@ -34,7 +42,7 @@ pub fn render_review_workbench_html(packet: &ReviewPacket) -> String {
     render_document_snapshot_panel(&mut html, packet);
     html.push_str("<main class=\"workbench-grid\">\n");
     render_issues_panel(&mut html, packet, &index);
-    render_copy_panel(&mut html, packet, &index);
+    render_copy_panel(&mut html, packet, &index, &grounding_lookup);
     html.push_str("</main>\n");
     render_attachments_panel(&mut html, packet);
     html.push_str("</div>\n</body>\n</html>\n");
@@ -190,7 +198,12 @@ fn render_issues_panel(html: &mut String, packet: &ReviewPacket, index: &Workben
     html.push_str("</section>\n");
 }
 
-fn render_copy_panel(html: &mut String, packet: &ReviewPacket, index: &WorkbenchIndex) {
+fn render_copy_panel(
+    html: &mut String,
+    packet: &ReviewPacket,
+    index: &WorkbenchIndex,
+    grounding_lookup: &BTreeMap<String, GroundingLinkTarget>,
+) {
     html.push_str("<section class=\"panel copy-panel\">\n");
     html.push_str("<div class=\"panel-heading\"><p class=\"eyebrow\">Oracle Copy View</p><h2>Ready-To-Copy Fields</h2></div>\n");
     for section in &packet.copy_sections {
@@ -213,7 +226,7 @@ fn render_copy_panel(html: &mut String, packet: &ReviewPacket, index: &Workbench
             }
             html.push_str("<div class=\"field-list\">\n");
             for field in &instance.fields {
-                render_copy_field(html, field, index);
+                render_copy_field(html, field, index, grounding_lookup);
             }
             html.push_str("</div>\n</article>\n");
         }
@@ -222,7 +235,12 @@ fn render_copy_panel(html: &mut String, packet: &ReviewPacket, index: &Workbench
     html.push_str("</section>\n");
 }
 
-fn render_copy_field(html: &mut String, field: &CopyField, index: &WorkbenchIndex) {
+fn render_copy_field(
+    html: &mut String,
+    field: &CopyField,
+    index: &WorkbenchIndex,
+    grounding_lookup: &BTreeMap<String, GroundingLinkTarget>,
+) {
     let field_id = index
         .field_targets
         .get(&field.path)
@@ -277,7 +295,7 @@ fn render_copy_field(html: &mut String, field: &CopyField, index: &WorkbenchInde
     html.push_str(&escape_html(field_guidance(field)));
     html.push_str("</p>\n");
     render_review_controls(html, field);
-    render_inline_evidence(html, field);
+    render_inline_evidence(html, field, grounding_lookup);
     html.push_str("</article>\n");
 }
 
@@ -545,7 +563,11 @@ fn render_review_controls(html: &mut String, field: &CopyField) {
     html.push_str("</div></details>");
 }
 
-fn render_inline_evidence(html: &mut String, field: &CopyField) {
+fn render_inline_evidence(
+    html: &mut String,
+    field: &CopyField,
+    grounding_lookup: &BTreeMap<String, GroundingLinkTarget>,
+) {
     if field.evidence.is_empty() {
         return;
     }
@@ -604,6 +626,15 @@ fn render_inline_evidence(html: &mut String, field: &CopyField) {
                 html.push(')');
             }
             html.push_str("</a>");
+            if let Some((grounded_href, link_label)) =
+                evidence_grounding_link(evidence, grounding_lookup)
+            {
+                html.push_str("<a class=\"document-link\" href=\"");
+                html.push_str(&escape_html_attribute(&grounded_href));
+                html.push_str("\" target=\"_blank\" rel=\"noreferrer noopener\">");
+                html.push_str(link_label);
+                html.push_str("</a>");
+            }
             html.push_str("</div>");
         }
         html.push_str("</article>");
@@ -699,6 +730,22 @@ fn render_document_snapshot_card(html: &mut String, document: &DocumentSnapshotC
         }
         html.push_str("</div>");
     }
+    if let Some(grounding) = document.ocr_grounding.as_ref() {
+        html.push_str("<div class=\"document-snapshot-ocr-summary\">");
+        html.push_str("<p class=\"document-snapshot-ocr-heading\">Grounded OCR</p>");
+        html.push_str("<p class=\"document-snapshot-ocr-meta\">");
+        html.push_str(&escape_html(&format!(
+            "{} region{} localized via {}",
+            grounding.regions.len(),
+            if grounding.regions.len() == 1 {
+                ""
+            } else {
+                "s"
+            },
+            grounding.geometry_source.as_str()
+        )));
+        html.push_str("</p></div>");
+    }
     let document_href = format!("document/{}/{}", document.document_id, document.filename);
     html.push_str("<div class=\"document-snapshot-actions\">");
     html.push_str("<a class=\"document-link\" href=\"");
@@ -708,6 +755,11 @@ fn render_document_snapshot_card(html: &mut String, document: &DocumentSnapshotC
         html.push_str("<a class=\"document-link\" href=\"");
         html.push_str(&escape_html_attribute(href));
         html.push_str("\" target=\"_blank\" rel=\"noreferrer noopener\">Open OCR diff</a>");
+    }
+    if let Some(href) = document.ocr_grounding_href.as_ref() {
+        html.push_str("<a class=\"document-link\" href=\"");
+        html.push_str(&escape_html_attribute(href));
+        html.push_str("\" target=\"_blank\" rel=\"noreferrer noopener\">Open grounded source</a>");
     }
     html.push_str("</div>");
     html.push_str("</article>");
@@ -753,6 +805,41 @@ fn evidence_document_href(evidence: &EvidenceReference) -> Option<String> {
         .as_deref()
         .or(evidence.document_id.as_deref())?;
     Some(format!("document/{document_id}/{filename}"))
+}
+
+fn build_grounding_lookup(packet: &ReviewPacket) -> BTreeMap<String, GroundingLinkTarget> {
+    packet
+        .document_snapshots
+        .iter()
+        .filter_map(|snapshot| {
+            let summary = snapshot.ocr_grounding.clone()?;
+            let href = snapshot
+                .ocr_grounding_href
+                .clone()
+                .or_else(|| summary.preview_href.clone())?;
+            Some((
+                snapshot.document_id.clone(),
+                GroundingLinkTarget { summary, href },
+            ))
+        })
+        .collect()
+}
+
+fn evidence_grounding_link(
+    evidence: &EvidenceReference,
+    grounding_lookup: &BTreeMap<String, GroundingLinkTarget>,
+) -> Option<(String, &'static str)> {
+    let document_id = evidence.document_id.as_deref()?;
+    let target = grounding_lookup.get(document_id)?;
+    if let Some(quote) = evidence.quote.as_deref() {
+        if let Some(region_id) = match_quote_to_region_id(&target.summary, quote) {
+            return Some((
+                format!("{}#region-{}", target.href, region_id),
+                "Open highlighted source",
+            ));
+        }
+    }
+    Some((target.href.clone(), "Open grounded source"))
 }
 
 fn evidence_anchor_id(evidence: &EvidenceReference) -> String {
@@ -1353,5 +1440,104 @@ mod tests {
         assert!(rendered.contains("Open OCR diff"));
         assert!(rendered
             .contains("artifact/ocr_pass_comparisons/synthetic_receipt_baseline/comparison.html"));
+    }
+
+    #[test]
+    fn workbench_renders_highlighted_grounded_source_links() {
+        let packet = crate::review_packet::ReviewPacket {
+            summary: crate::review_packet::PacketSummary {
+                filing_status: crate::review_packet::FilingStatus::ManualReviewRequired,
+                payee_name: Some("Olivia Park".to_owned()),
+                event_name: Some("Receipt OCR review".to_owned()),
+                trip_window: None,
+                report_total_usd: None,
+                category: None,
+                transaction_type: None,
+                transaction_line_count: 0,
+                document_count: 1,
+                readiness: crate::review_packet::ReviewReadinessSummary {
+                    automation_gap_count: 0,
+                    user_input_gap_count: 0,
+                    manual_review_count: 1,
+                    other_warning_count: 0,
+                },
+                confidence: crate::review_packet::ConfidenceSummary {
+                    high: 0,
+                    medium: 1,
+                    low: 0,
+                    needs_review: 1,
+                },
+            },
+            issues_queue: Vec::new(),
+            copy_sections: vec![crate::review_packet::CopySection {
+                key: "general_information".to_owned(),
+                label: "General Information".to_owned(),
+                repeated: false,
+                instances: vec![crate::review_packet::CopySectionInstance {
+                    path: "expense_report.general_information".to_owned(),
+                    label: "General Information".to_owned(),
+                    fields: vec![crate::review_packet::CopyField {
+                        path: "expense_report.general_information.event_name".to_owned(),
+                        label: "Event Name".to_owned(),
+                        control: crate::FieldControl::Text,
+                        allowed_values: Vec::new(),
+                        collection_columns: Vec::new(),
+                        collection_rows: Vec::new(),
+                        value: Some("Receipt OCR review".to_owned()),
+                        present: true,
+                        needs_review: true,
+                        required: true,
+                        source: Some("T3".to_owned()),
+                        entry_mode: crate::FieldEntryMode::ModelPrefillReview,
+                        evidence: vec![crate::EvidenceReference {
+                            kind: crate::EvidenceKind::DocumentSpan,
+                            document_id: Some("doc_receipt".to_owned()),
+                            filename: Some("receipt.png".to_owned()),
+                            page: Some(1),
+                            quote: Some("MYR 80.90".to_owned()),
+                            origin: None,
+                        }],
+                    }],
+                }],
+            }],
+            attachment_checklist: Vec::new(),
+            document_snapshots: vec![crate::review_packet::DocumentSnapshotCard {
+                document_id: "doc_receipt".to_owned(),
+                filename: "receipt.png".to_owned(),
+                kind: "receipt".to_owned(),
+                extraction_status: "complete".to_owned(),
+                used_in_bundle: true,
+                projected_to_filing: false,
+                status_label: "parsed for bundle context only".to_owned(),
+                summary_fields: Vec::new(),
+                issue_messages: Vec::new(),
+                ocr_comparison: None,
+                ocr_comparison_href: None,
+                ocr_grounding: Some(crate::DocumentOcrGroundingSummary {
+                    document_id: "doc_receipt".to_owned(),
+                    geometry_source: crate::OcrGeometrySource::Gemini,
+                    geometry_available: true,
+                    preview_href: Some(
+                        "artifact/ocr_grounding/doc_receipt/grounded_preview.html".to_owned(),
+                    ),
+                    regions: vec![crate::GroundedRegionSummary {
+                        region_id: "total_paid".to_owned(),
+                        page_number: 1,
+                        kind: crate::OcrRegionKind::ValueCandidate,
+                        text: "MYR 80.90".to_owned(),
+                    }],
+                }),
+                ocr_grounding_href: Some(
+                    "artifact/ocr_grounding/doc_receipt/grounded_preview.html".to_owned(),
+                ),
+            }],
+        };
+        let rendered = render_review_workbench_html(&packet);
+
+        assert!(rendered.contains("Open highlighted source"));
+        assert!(rendered.contains(
+            "artifact/ocr_grounding/doc_receipt/grounded_preview.html#region-total_paid"
+        ));
+        assert!(rendered.contains("Open grounded source"));
     }
 }

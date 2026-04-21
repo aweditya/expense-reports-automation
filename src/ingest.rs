@@ -11,17 +11,20 @@ use crate::bundle_synthesis::{
 use crate::document_extract::extract_document_facts;
 use crate::document_facts::{render_document_facts_json_pretty, DocumentKind};
 use crate::ledger::{
-    initialize_review_submission_ledger_with_ocr_comparisons,
+    initialize_review_submission_ledger_with_ocr_artifacts,
     render_review_submission_ledger_json_pretty, ReviewSubmissionLedger,
 };
 use crate::ocr_compare::{
     compare_ocr_passes, render_ocr_comparison_html, render_ocr_comparison_json_pretty,
     render_ocr_comparison_markdown, summarize_ocr_comparison, OcrComparisonResult,
 };
+use crate::ocr_grounding::{
+    render_ocr_grounding_html, summarize_ocr_grounding, DocumentOcrGroundingSummary,
+};
 use crate::readiness::{summarize_validation_readiness, ReadinessReport};
 use crate::render::render_draft_report_yaml;
 use crate::review_packet::{
-    build_review_packet_with_ocr_comparisons, render_review_packet_json_pretty, ReviewPacket,
+    build_review_packet_with_ocr_artifacts, render_review_packet_json_pretty, ReviewPacket,
 };
 use crate::review_workbench::render_review_workbench_html;
 use crate::transcribe::{
@@ -70,6 +73,7 @@ pub struct IngestionPipelineResult {
     pub bundle_id: String,
     pub transcriptions: Vec<TranscribedDocument>,
     pub ocr_pass_comparisons: Vec<OcrPassComparisonArtifact>,
+    pub ocr_groundings: Vec<DocumentOcrGroundingSummary>,
     pub extracted_documents: Vec<ExtractedDocumentFacts>,
     pub projection: BundleProjectionResult,
     pub readiness: ReadinessReport,
@@ -151,6 +155,7 @@ pub fn ingest_expense_documents(
 
     let mut transcriptions = Vec::new();
     let mut ocr_pass_comparisons = Vec::new();
+    let mut ocr_groundings = Vec::new();
     let mut extracted_documents = Vec::new();
     let resolved_vertex_config = match &config.transcriber {
         IngestionTranscriber::VertexGemini(vertex_config) => {
@@ -224,6 +229,15 @@ pub fn ingest_expense_documents(
                 comparison,
             });
         }
+        if document.metadata.geometry_available {
+            ocr_groundings.push(summarize_ocr_grounding(
+                &document,
+                Some(format!(
+                    "artifact/ocr_grounding/{}/grounded_preview.html",
+                    document.document_id
+                )),
+            ));
+        }
         transcriptions.push(document);
         extracted_documents.push(facts);
     }
@@ -240,11 +254,12 @@ pub fn ingest_expense_documents(
         .iter()
         .map(|artifact| summarize_ocr_comparison(&artifact.comparison))
         .collect::<Vec<_>>();
-    let review_packet = build_review_packet_with_ocr_comparisons(
+    let review_packet = build_review_packet_with_ocr_artifacts(
         &projection.bundle,
         &projection.draft,
         &readiness,
         &ocr_comparison_summaries,
+        &ocr_groundings,
     )
     .map_err(|err| IngestionError::ReviewPacket(format!("failed to build review packet: {err}")))?;
     let review_workbench_html = render_review_workbench_html(&review_packet);
@@ -253,12 +268,13 @@ pub fn ingest_expense_documents(
         .bundle_id
         .clone()
         .unwrap_or_else(|| default_bundle_id(paths));
-    let ledger = initialize_review_submission_ledger_with_ocr_comparisons(
+    let ledger = initialize_review_submission_ledger_with_ocr_artifacts(
         &bundle_id,
         &projection.bundle,
         &projection.draft,
         &projection.validation,
         &ocr_comparison_summaries,
+        &ocr_groundings,
     )
     .map_err(|err| {
         IngestionError::Ledger(format!(
@@ -270,6 +286,7 @@ pub fn ingest_expense_documents(
         bundle_id,
         transcriptions,
         ocr_pass_comparisons,
+        ocr_groundings,
         extracted_documents,
         projection,
         readiness,
@@ -288,9 +305,11 @@ pub fn write_ingestion_artifacts(
     let transcriptions_dir = output_dir.join("transcriptions");
     let facts_dir = output_dir.join("facts");
     let ocr_compare_dir = output_dir.join("ocr_pass_comparisons");
+    let ocr_grounding_dir = output_dir.join("ocr_grounding");
     fs::create_dir_all(&transcriptions_dir)?;
     fs::create_dir_all(&facts_dir)?;
     fs::create_dir_all(&ocr_compare_dir)?;
+    fs::create_dir_all(&ocr_grounding_dir)?;
 
     for document in &result.transcriptions {
         let filename = format!("{}.transcribed.json", document.document_id);
@@ -340,6 +359,32 @@ pub fn write_ingestion_artifacts(
         )?;
     }
 
+    for document in &result.transcriptions {
+        if !document.metadata.geometry_available {
+            continue;
+        }
+        let grounding_dir = ocr_grounding_dir.join(&document.document_id);
+        fs::create_dir_all(&grounding_dir)?;
+        let image_href = match document
+            .source_path
+            .extension()
+            .and_then(|value| value.to_str())
+            .map(|value| value.to_ascii_lowercase())
+            .as_deref()
+        {
+            Some("png" | "jpg" | "jpeg") => {
+                let copied_source = grounding_dir.join(&document.filename);
+                fs::copy(&document.source_path, &copied_source)?;
+                Some(document.filename.as_str())
+            }
+            _ => None,
+        };
+        fs::write(
+            grounding_dir.join("grounded_preview.html"),
+            render_ocr_grounding_html(document, image_href),
+        )?;
+    }
+
     fs::write(
         output_dir.join("bundle.json"),
         render_canonical_bundle_json_pretty(&result.projection.bundle)?,
@@ -384,6 +429,7 @@ pub fn write_ingestion_artifacts(
             "engine": format!("{:?}", document.engine).to_ascii_lowercase(),
         })).collect::<Vec<_>>(),
         "ocr_pass_comparison_count": result.ocr_pass_comparisons.len(),
+        "ocr_grounding_count": result.ocr_groundings.len(),
     });
     fs::write(
         output_dir.join("manifest.json"),

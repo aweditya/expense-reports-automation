@@ -8,6 +8,7 @@ use crate::document_facts::{DocumentFactsPayload, DocumentKind, ExtractionStatus
 use crate::draft::{ConfidenceLevel, DraftReport, EvidenceReference};
 use crate::field_conventions::{FieldControl, FieldEntryMode};
 use crate::ocr_compare::DocumentOcrComparisonSummary;
+use crate::ocr_grounding::DocumentOcrGroundingSummary;
 use crate::readiness::{
     summarize_validation_readiness, ReadinessIssue, ReadinessIssueClass, ReadinessReport,
 };
@@ -137,6 +138,10 @@ pub struct DocumentSnapshotCard {
     pub issue_messages: Vec<String>,
     pub ocr_comparison: Option<DocumentOcrComparisonSummary>,
     pub ocr_comparison_href: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ocr_grounding: Option<DocumentOcrGroundingSummary>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ocr_grounding_href: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -223,7 +228,7 @@ pub fn build_review_packet_with_readiness(
     draft: &DraftReport,
     readiness: &ReadinessReport,
 ) -> Result<ReviewPacket, ReviewPacketError> {
-    build_review_packet_with_ocr_comparisons(bundle, draft, readiness, &[])
+    build_review_packet_with_ocr_artifacts(bundle, draft, readiness, &[], &[])
 }
 
 pub fn build_review_packet_with_ocr_comparisons(
@@ -232,8 +237,22 @@ pub fn build_review_packet_with_ocr_comparisons(
     readiness: &ReadinessReport,
     ocr_comparisons: &[DocumentOcrComparisonSummary],
 ) -> Result<ReviewPacket, ReviewPacketError> {
+    build_review_packet_with_ocr_artifacts(bundle, draft, readiness, ocr_comparisons, &[])
+}
+
+pub fn build_review_packet_with_ocr_artifacts(
+    bundle: &CanonicalExpenseBundle,
+    draft: &DraftReport,
+    readiness: &ReadinessReport,
+    ocr_comparisons: &[DocumentOcrComparisonSummary],
+    ocr_groundings: &[DocumentOcrGroundingSummary],
+) -> Result<ReviewPacket, ReviewPacketError> {
     let ui_map = load_ui_field_map().map_err(ReviewPacketError::UiFieldMapParse)?;
     let ocr_by_document_id = ocr_comparisons
+        .iter()
+        .map(|summary| (summary.document_id.clone(), summary.clone()))
+        .collect::<BTreeMap<_, _>>();
+    let grounding_by_document_id = ocr_groundings
         .iter()
         .map(|summary| (summary.document_id.clone(), summary.clone()))
         .collect::<BTreeMap<_, _>>();
@@ -243,7 +262,11 @@ pub fn build_review_packet_with_ocr_comparisons(
         issues_queue: build_issue_queue(draft, readiness, ui_map),
         copy_sections: build_copy_sections(draft, readiness, ui_map),
         attachment_checklist: build_attachment_checklist(bundle),
-        document_snapshots: build_document_snapshots(bundle, &ocr_by_document_id),
+        document_snapshots: build_document_snapshots(
+            bundle,
+            &ocr_by_document_id,
+            &grounding_by_document_id,
+        ),
     })
 }
 
@@ -724,6 +747,7 @@ fn build_attachment_checklist(bundle: &CanonicalExpenseBundle) -> Vec<Attachment
 fn build_document_snapshots(
     bundle: &CanonicalExpenseBundle,
     ocr_comparisons: &BTreeMap<String, DocumentOcrComparisonSummary>,
+    ocr_groundings: &BTreeMap<String, DocumentOcrGroundingSummary>,
 ) -> Vec<DocumentSnapshotCard> {
     let mut used_document_ids = BTreeSet::new();
     let mut projected_document_ids = BTreeSet::new();
@@ -794,6 +818,13 @@ fn build_document_snapshots(
                         )
                     },
                 ),
+                ocr_grounding: ocr_groundings.get(&document.document_id).cloned(),
+                ocr_grounding_href: ocr_groundings.contains_key(&document.document_id).then(|| {
+                    format!(
+                        "artifact/ocr_grounding/{}/grounded_preview.html",
+                        document.document_id
+                    )
+                }),
             }
         })
         .collect()
@@ -1263,8 +1294,8 @@ fn push_optional_line(lines: &mut Vec<String>, prefix: &str, value: Option<&str>
 #[cfg(test)]
 mod tests {
     use super::{
-        build_review_packet, build_review_packet_with_ocr_comparisons,
-        render_review_packet_markdown, FilingStatus,
+        build_review_packet, build_review_packet_with_ocr_artifacts,
+        build_review_packet_with_ocr_comparisons, render_review_packet_markdown, FilingStatus,
     };
     use crate::bundle_synthesis::{
         synthesize_bundle, synthesize_bundle_projection, synthesize_bundle_projection_with_fx,
@@ -1616,6 +1647,60 @@ mod tests {
                 .as_ref()
                 .map(|summary| summary.disagreement_count),
             Some(2)
+        );
+    }
+
+    #[test]
+    fn review_packet_attaches_ocr_grounding_summary_to_document_snapshot() {
+        let packet_fixture = crate::synthetic_documents::generate_synthetic_packet(
+            crate::synthetic_documents::SyntheticVariant::Baseline,
+        );
+        let documents = packet_fixture
+            .into_iter()
+            .map(|fixture| fixture.expected_facts)
+            .collect::<Vec<_>>();
+        let projection = synthesize_bundle_projection(&documents);
+        let grounding = crate::DocumentOcrGroundingSummary {
+            document_id: "synthetic_receipt_baseline".to_owned(),
+            geometry_source: crate::OcrGeometrySource::Gemini,
+            geometry_available: true,
+            preview_href: Some(
+                "artifact/ocr_grounding/synthetic_receipt_baseline/grounded_preview.html"
+                    .to_owned(),
+            ),
+            regions: vec![crate::GroundedRegionSummary {
+                region_id: "total_paid".to_owned(),
+                page_number: 1,
+                kind: crate::OcrRegionKind::ValueCandidate,
+                text: "$19.42".to_owned(),
+            }],
+        };
+
+        let packet = build_review_packet_with_ocr_artifacts(
+            &projection.bundle,
+            &projection.draft,
+            &summarize_validation_readiness(&projection.validation),
+            &[],
+            &[grounding],
+        )
+        .expect("review packet should build");
+
+        let receipt_snapshot = packet
+            .document_snapshots
+            .iter()
+            .find(|snapshot| snapshot.document_id == "synthetic_receipt_baseline")
+            .expect("receipt snapshot should exist");
+        assert!(receipt_snapshot.ocr_grounding.is_some());
+        assert_eq!(
+            receipt_snapshot.ocr_grounding_href.as_deref(),
+            Some("artifact/ocr_grounding/synthetic_receipt_baseline/grounded_preview.html")
+        );
+        assert_eq!(
+            receipt_snapshot
+                .ocr_grounding
+                .as_ref()
+                .map(|summary| summary.regions.len()),
+            Some(1)
         );
     }
 }

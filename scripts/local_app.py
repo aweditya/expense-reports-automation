@@ -326,7 +326,10 @@ def bundle_artifact_relative_path(
         return bundle_artifact_path(workspace_root, bundle_id, "review_workbench.html")
     if len(relative.parts) == 1:
         return bundle_artifact_path(workspace_root, bundle_id, relative.name)
-    if not relative.parts or relative.parts[0] != "ocr_pass_comparisons":
+    if not relative.parts or relative.parts[0] not in {
+        "ocr_pass_comparisons",
+        "ocr_grounding",
+    }:
         raise LocalAppError(f"artifact not available for export: {artifact_relative_path}")
 
     path = artifacts_dir / relative

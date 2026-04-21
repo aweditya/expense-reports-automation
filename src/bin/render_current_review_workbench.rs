@@ -1,5 +1,5 @@
 use expense_report_schema::{
-    build_review_packet_with_ocr_comparisons, load_review_submission_ledger_path,
+    build_review_packet_with_ocr_artifacts, load_review_submission_ledger_path,
     render_review_workbench_html,
 };
 
@@ -48,11 +48,12 @@ fn run() -> Result<String, String> {
                 ledger_path.display()
             )
         })?;
-    let packet = build_review_packet_with_ocr_comparisons(
+    let packet = build_review_packet_with_ocr_artifacts(
         &ledger.bundle,
         &current_version.draft,
         &current_version.readiness,
         &ledger.ocr_pass_comparisons,
+        &ledger.ocr_groundings,
     )
     .map_err(|err| format!("failed to rebuild review packet: {err}"))?;
     Ok(render_review_workbench_html(&packet))
