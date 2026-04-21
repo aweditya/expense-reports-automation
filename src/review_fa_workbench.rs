@@ -31,7 +31,7 @@ pub fn render_fa_workbench_html(packet: &ReviewPacket) -> String {
          h3{font-size:22px;line-height:1.18;}\
          h4{font-size:18px;line-height:1.2;}\
          .hero-status{margin-top:12px;font-size:18px;font-weight:700;color:#2c5845;text-transform:capitalize;}\
-         .hero-subtitle,.hero-copy,.field-path,.field-source,.field-guidance,.issue-path,.issue-message,.toolbar-status,.toolbar-count,.source-status,.source-meta,.evidence-copy,.evidence-detail,.field-hint{color:#655a50;}\
+         .hero-subtitle,.hero-copy,.field-source,.field-guidance,.issue-message,.toolbar-status,.toolbar-count,.source-status,.source-meta,.evidence-copy,.evidence-detail,.field-hint{color:#655a50;}\
          .hero-subtitle{margin-top:8px;font-size:18px;}\
          .hero-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px;align-items:start;}\
          .summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}\
@@ -57,7 +57,6 @@ pub fn render_fa_workbench_html(packet: &ReviewPacket) -> String {
          .issue-class.review{background:#f6e6ce;color:#7f511f;}\
          .issue-class.ready{background:#dcebd8;color:#21472f;}\
          .issue-label{font-size:18px;font-weight:700;margin-top:8px;}\
-         .issue-path{margin-top:6px;font-size:12px;}\
          .issue-message{margin-top:8px;line-height:1.45;}\
          .editor-panel{min-width:0;}\
          .editor-header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;}\
@@ -68,7 +67,6 @@ pub fn render_fa_workbench_html(packet: &ReviewPacket) -> String {
          .field-card.missing{border-style:dashed;}\
          .field-card.readonly{background:#faf7f1;}\
          .field-label{font-size:19px;font-weight:700;}\
-         .field-path{margin-top:4px;font-size:12px;}\
          .badge{display:inline-flex;align-items:center;border-radius:999px;padding:5px 9px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;background:#efe6da;color:#54463a;}\
          .badge.status-ready{background:#dcebd8;color:#21472f;}\
          .badge.status-missing{background:#f4ddd9;color:#7c3128;}\
@@ -227,8 +225,6 @@ fn render_issues_panel(html: &mut String, packet: &ReviewPacket, index: &Workben
             html.push_str(issue_label(issue.class));
             html.push_str("</span><p class=\"issue-label\">");
             html.push_str(&escape_html(&issue.label));
-            html.push_str("</p><p class=\"issue-path\">");
-            html.push_str(&escape_html(&issue.path));
             html.push_str("</p></div>");
             if let Some(target) = target {
                 html.push_str("<a class=\"issue-link\" href=\"#");
@@ -247,7 +243,7 @@ fn render_issues_panel(html: &mut String, packet: &ReviewPacket, index: &Workben
 }
 
 fn render_editor_panel(html: &mut String, packet: &ReviewPacket, index: &WorkbenchIndex) {
-    html.push_str("<section class=\"editor-panel\"><div class=\"editor-header\"><div><p class=\"eyebrow\">Filing Form</p><h2>Sections to complete</h2></div><p class=\"field-hint\">Fields marked “Needs your input” are still missing. Fields marked “Check this field” already have a value but should be reviewed before filing.</p></div>");
+    html.push_str("<section class=\"editor-panel\"><div class=\"editor-header\"><div><p class=\"eyebrow\">Filing Form</p><h2>Sections to complete</h2></div><p class=\"field-hint\">Use the queue on the left to jump to open items. Missing fields need your input, “Check this field” means a value exists but should be confirmed, and computed fields are system-generated.</p></div>");
     html.push_str("<div class=\"section-stack\">");
     for section in &packet.copy_sections {
         render_section(html, section, index);
@@ -270,9 +266,7 @@ fn render_section(html: &mut String, section: &CopySection, index: &WorkbenchInd
         if section.repeated {
             html.push_str("<div class=\"field-head\"><div><h4>");
             html.push_str(&escape_html(&instance.label));
-            html.push_str("</h4><p class=\"field-path\">");
-            html.push_str(&escape_html(&instance.path));
-            html.push_str("</p></div></div>");
+            html.push_str("</h4></div></div>");
         }
         html.push_str("<div class=\"field-list\">");
         for field in &instance.fields {
@@ -306,8 +300,6 @@ fn render_field(html: &mut String, field: &CopyField, index: &WorkbenchIndex) {
     html.push_str("\">");
     html.push_str("<div class=\"field-head\"><div><p class=\"field-label\">");
     html.push_str(&escape_html(&field.label));
-    html.push_str("</p><p class=\"field-path\">");
-    html.push_str(&escape_html(&field.path));
     html.push_str("</p></div><div class=\"field-badges\">");
     html.push_str("<span class=\"badge field-dirty-badge\" hidden>edited</span>");
     html.push_str("<span class=\"badge ");
@@ -331,7 +323,7 @@ fn render_field(html: &mut String, field: &CopyField, index: &WorkbenchIndex) {
 fn render_field_editor(html: &mut String, field: &CopyField, input_id: &str) {
     let value = field.value.as_deref().unwrap_or("");
     let placeholder = if field.present {
-        ""
+        String::new()
     } else {
         field_placeholder(field)
     };
@@ -344,9 +336,9 @@ fn render_field_editor(html: &mut String, field: &CopyField, input_id: &str) {
     html.push_str(if field_is_readonly(field) {
         "Review computed value"
     } else if field.present {
-        "Review or edit value"
+        "Check or edit value"
     } else {
-        "Enter missing value"
+        "Add this value"
     });
     html.push_str("</label>");
 
@@ -360,7 +352,7 @@ fn render_field_editor(html: &mut String, field: &CopyField, input_id: &str) {
         html.push_str("\" data-field-path=\"");
         html.push_str(&escape_html_attribute(&field.path));
         html.push_str("\" placeholder=\"");
-        html.push_str(&escape_html_attribute(placeholder));
+        html.push_str(&escape_html_attribute(&placeholder));
         html.push_str("\"");
         html.push_str(readonly);
         html.push_str(">");
@@ -375,7 +367,13 @@ fn render_field_editor(html: &mut String, field: &CopyField, input_id: &str) {
         html.push_str(&escape_html_attribute(&scalar_initial_json(value)));
         html.push_str("\"");
         html.push_str(disabled);
-        html.push_str("><option value=\"\"></option>");
+        html.push_str("><option value=\"\">");
+        html.push_str(&escape_html(if field.present {
+            "Select a different option"
+        } else {
+            "Choose an option"
+        }));
+        html.push_str("</option>");
         for option in &field.allowed_values {
             html.push_str("<option value=\"");
             html.push_str(&escape_html_attribute(option));
@@ -398,7 +396,16 @@ fn render_field_editor(html: &mut String, field: &CopyField, input_id: &str) {
         html.push_str("\"");
         html.push_str(disabled);
         html.push_str(">");
-        render_checkbox_option(html, "", "Unset", value.is_empty());
+        render_checkbox_option(
+            html,
+            "",
+            if field.present {
+                "Choose yes or no"
+            } else {
+                "Select yes or no"
+            },
+            value.is_empty(),
+        );
         render_checkbox_option(html, "true", "Yes", value == "true");
         render_checkbox_option(html, "false", "No", value == "false");
         html.push_str("</select>");
@@ -421,7 +428,7 @@ fn render_field_editor(html: &mut String, field: &CopyField, input_id: &str) {
         html.push_str("\" value=\"");
         html.push_str(&escape_html_attribute(value));
         html.push_str("\" placeholder=\"");
-        html.push_str(&escape_html_attribute(placeholder));
+        html.push_str(&escape_html_attribute(&placeholder));
         html.push_str("\"");
         if field.control.uses_decimal_input_mode() {
             html.push_str(" inputmode=\"decimal\"");
@@ -721,7 +728,7 @@ fn field_status_label(field: &CopyField) -> &'static str {
     } else if field_is_readonly(field) {
         "Computed"
     } else {
-        "Ready"
+        "Filled in"
     }
 }
 
@@ -765,11 +772,12 @@ fn field_guidance(field: &CopyField) -> &'static str {
     }
 }
 
-fn field_placeholder(field: &CopyField) -> &str {
+fn field_placeholder(field: &CopyField) -> String {
+    let label = field.label.trim();
     if field.required {
-        "Required value"
+        format!("Enter {label}")
     } else {
-        "Optional value"
+        format!("Optional: {label}")
     }
 }
 
@@ -924,7 +932,9 @@ mod tests {
         let rendered = render_fa_workbench_html(&synthetic_packet());
         assert!(rendered.contains("Open final preview"));
         assert!(rendered.contains("Save and recompute"));
-        assert!(rendered.contains("Enter missing value"));
+        assert!(rendered.contains("Add this value"));
+        assert!(rendered.contains("Choose an option"));
+        assert!(rendered.contains("Check or edit value"));
         assert!(rendered.contains("Jump to field"));
         assert!(rendered.contains("beforeunload"));
     }
@@ -936,5 +946,14 @@ mod tests {
         assert!(!rendered.contains("Open OCR diff"));
         assert!(!rendered.contains("Open OCR inspection"));
         assert!(!rendered.contains("Fields To Double-Check"));
+    }
+
+    #[test]
+    fn fa_workbench_hides_schema_paths_and_uses_friendlier_labels() {
+        let rendered = render_fa_workbench_html(&synthetic_packet());
+        assert!(!rendered.contains("class=\"field-path\""));
+        assert!(!rendered.contains("class=\"issue-path\""));
+        assert!(rendered.contains("Payee Name"));
+        assert!(rendered.contains("Payee Affiliation"));
     }
 }

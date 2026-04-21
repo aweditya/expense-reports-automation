@@ -4599,9 +4599,9 @@
         "issues_queue": [
           {
             "class": "user_input_required",
-            "path": "expense_report.general_information.payee.affiliation",
-            "label": "Affiliation",
-            "source": "t3",
+            "path": "expense_report.transaction_lines[2].meal_details.attendees",
+            "label": "Attendees",
+            "source": "t1",
             "current_value": null,
             "message": "Required field is missing"
           },
@@ -4615,16 +4615,16 @@
           },
           {
             "class": "user_input_required",
-            "path": "expense_report.transaction_lines[2].meal_details.attendees",
-            "label": "attendees",
-            "source": "t1",
+            "path": "expense_report.general_information.payee.affiliation",
+            "label": "Payee Affiliation",
+            "source": "t3",
             "current_value": null,
             "message": "Required field is missing"
           },
           {
             "class": "user_input_required",
             "path": "expense_report.general_information",
-            "label": "student certification",
+            "label": "Student Certification",
             "source": "t3",
             "current_value": null,
             "message": "Dependent field \"general_information.payee.affiliation\" is missing"
@@ -4713,7 +4713,7 @@
                   },
                   {
                     "path": "expense_report.general_information.payee.name",
-                    "label": "Name",
+                    "label": "Payee Name",
                     "control": "text",
                     "allowed_values": [],
                     "collection_columns": [],
@@ -4737,7 +4737,7 @@
                   },
                   {
                     "path": "expense_report.general_information.payee.affiliation",
-                    "label": "Affiliation",
+                    "label": "Payee Affiliation",
                     "control": "select",
                     "allowed_values": [
                       "stanford_student",
@@ -4809,7 +4809,7 @@
                   },
                   {
                     "path": "expense_report.general_information.business_purpose.who",
-                    "label": "Who",
+                    "label": "Who Is Involved",
                     "control": "textarea",
                     "allowed_values": [],
                     "collection_columns": [],
@@ -4833,7 +4833,7 @@
                   },
                   {
                     "path": "expense_report.general_information.business_purpose.what",
-                    "label": "What",
+                    "label": "What Happened",
                     "control": "textarea",
                     "allowed_values": [],
                     "collection_columns": [],
@@ -4865,7 +4865,7 @@
                   },
                   {
                     "path": "expense_report.general_information.business_purpose.when",
-                    "label": "When",
+                    "label": "When / Trip Window",
                     "control": "textarea",
                     "allowed_values": [],
                     "collection_columns": [],
@@ -4913,7 +4913,7 @@
                   },
                   {
                     "path": "expense_report.general_information.business_purpose.where",
-                    "label": "Where",
+                    "label": "Where / Destination",
                     "control": "textarea",
                     "allowed_values": [],
                     "collection_columns": [],
@@ -4945,7 +4945,7 @@
                   },
                   {
                     "path": "expense_report.general_information.business_purpose.why",
-                    "label": "Why",
+                    "label": "Why Stanford Should Pay",
                     "control": "textarea",
                     "allowed_values": [],
                     "collection_columns": [],
@@ -4977,7 +4977,7 @@
                   },
                   {
                     "path": "expense_report.general_information.business_purpose.key_30char",
-                    "label": "Key 30char",
+                    "label": "Business Purpose Summary (30 Characters)",
                     "control": "textarea",
                     "allowed_values": [],
                     "collection_columns": [],
@@ -5224,7 +5224,7 @@
                   },
                   {
                     "path": "expense_report.transaction_summary.total_usd",
-                    "label": "Total Usd",
+                    "label": "Total USD",
                     "control": "currency",
                     "allowed_values": [],
                     "collection_columns": [],
@@ -5348,7 +5348,7 @@
                     "collection_rows": [],
                     "value": "2025-04-10",
                     "present": true,
-                    "needs_review": false,
+                    "needs_review": true,
                     "required": true,
                     "source": "T3",
                     "entry_mode": "model_prefill_review",
@@ -5365,7 +5365,7 @@
                   },
                   {
                     "path": "expense_report.transaction_lines[0].common.line_amount_usd",
-                    "label": "Line Amount Usd",
+                    "label": "Line Amount USD",
                     "control": "currency",
                     "allowed_values": [],
                     "collection_columns": [],
@@ -5660,7 +5660,7 @@
                   },
                   {
                     "path": "expense_report.transaction_lines[0].airfare_details.travelers_name",
-                    "label": "Travelers Name",
+                    "label": "Traveler Name",
                     "control": "text",
                     "allowed_values": [],
                     "collection_columns": [],
@@ -5994,7 +5994,7 @@
                     "collection_rows": [],
                     "value": "2025-04-24",
                     "present": true,
-                    "needs_review": false,
+                    "needs_review": true,
                     "required": true,
                     "source": "T3",
                     "entry_mode": "model_prefill_review",
@@ -6035,7 +6035,7 @@
                   },
                   {
                     "path": "expense_report.transaction_lines[1].common.line_amount_usd",
-                    "label": "Line Amount Usd",
+                    "label": "Line Amount USD",
                     "control": "currency",
                     "allowed_values": [],
                     "collection_columns": [],
@@ -6727,7 +6727,7 @@
                     "collection_rows": [],
                     "value": "2025-04-24",
                     "present": true,
-                    "needs_review": false,
+                    "needs_review": true,
                     "required": true,
                     "source": "T3",
                     "entry_mode": "model_prefill_review",
@@ -6744,7 +6744,7 @@
                   },
                   {
                     "path": "expense_report.transaction_lines[2].common.line_amount_usd",
-                    "label": "Line Amount Usd",
+                    "label": "Line Amount USD",
                     "control": "currency",
                     "allowed_values": [],
                     "collection_columns": [],
@@ -9698,7 +9698,7 @@
                   },
                   {
                     "path": "expense_report.general_information.payee.name",
-                    "label": "Name",
+                    "label": "Payee Name",
                     "control": "text",
                     "allowed_values": [],
                     "collection_columns": [],
@@ -9722,7 +9722,7 @@
                   },
                   {
                     "path": "expense_report.general_information.payee.affiliation",
-                    "label": "Affiliation",
+                    "label": "Payee Affiliation",
                     "control": "select",
                     "allowed_values": [
                       "stanford_student",
@@ -9803,7 +9803,7 @@
                   },
                   {
                     "path": "expense_report.general_information.business_purpose.who",
-                    "label": "Who",
+                    "label": "Who Is Involved",
                     "control": "textarea",
                     "allowed_values": [],
                     "collection_columns": [],
@@ -9827,7 +9827,7 @@
                   },
                   {
                     "path": "expense_report.general_information.business_purpose.what",
-                    "label": "What",
+                    "label": "What Happened",
                     "control": "textarea",
                     "allowed_values": [],
                     "collection_columns": [],
@@ -9859,7 +9859,7 @@
                   },
                   {
                     "path": "expense_report.general_information.business_purpose.when",
-                    "label": "When",
+                    "label": "When / Trip Window",
                     "control": "textarea",
                     "allowed_values": [],
                     "collection_columns": [],
@@ -9907,7 +9907,7 @@
                   },
                   {
                     "path": "expense_report.general_information.business_purpose.where",
-                    "label": "Where",
+                    "label": "Where / Destination",
                     "control": "textarea",
                     "allowed_values": [],
                     "collection_columns": [],
@@ -9939,7 +9939,7 @@
                   },
                   {
                     "path": "expense_report.general_information.business_purpose.why",
-                    "label": "Why",
+                    "label": "Why Stanford Should Pay",
                     "control": "textarea",
                     "allowed_values": [],
                     "collection_columns": [],
@@ -9971,7 +9971,7 @@
                   },
                   {
                     "path": "expense_report.general_information.business_purpose.key_30char",
-                    "label": "Key 30char",
+                    "label": "Business Purpose Summary (30 Characters)",
                     "control": "textarea",
                     "allowed_values": [],
                     "collection_columns": [],
@@ -10227,7 +10227,7 @@
                   },
                   {
                     "path": "expense_report.transaction_summary.total_usd",
-                    "label": "Total Usd",
+                    "label": "Total USD",
                     "control": "currency",
                     "allowed_values": [],
                     "collection_columns": [],
@@ -10368,7 +10368,7 @@
                   },
                   {
                     "path": "expense_report.transaction_lines[0].common.line_amount_usd",
-                    "label": "Line Amount Usd",
+                    "label": "Line Amount USD",
                     "control": "currency",
                     "allowed_values": [],
                     "collection_columns": [],
@@ -10663,7 +10663,7 @@
                   },
                   {
                     "path": "expense_report.transaction_lines[0].airfare_details.travelers_name",
-                    "label": "Travelers Name",
+                    "label": "Traveler Name",
                     "control": "text",
                     "allowed_values": [],
                     "collection_columns": [],
@@ -11038,7 +11038,7 @@
                   },
                   {
                     "path": "expense_report.transaction_lines[1].common.line_amount_usd",
-                    "label": "Line Amount Usd",
+                    "label": "Line Amount USD",
                     "control": "currency",
                     "allowed_values": [],
                     "collection_columns": [],
@@ -11747,7 +11747,7 @@
                   },
                   {
                     "path": "expense_report.transaction_lines[2].common.line_amount_usd",
-                    "label": "Line Amount Usd",
+                    "label": "Line Amount USD",
                     "control": "currency",
                     "allowed_values": [],
                     "collection_columns": [],

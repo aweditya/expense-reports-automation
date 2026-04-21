@@ -477,8 +477,8 @@ fn build_issue_queue(
         .iter()
         .map(|issue| {
             let label = ui_field_for_issue(ui_map, issue)
-                .map(|field| field.label.clone())
-                .unwrap_or_else(|| humanize_path_tail(&issue.schema_path));
+                .map(|field| friendly_field_label(&issue.path, &field.label))
+                .unwrap_or_else(|| friendly_field_label(&issue.path, &humanize_path_tail(&issue.schema_path)));
             ReviewIssueEntry {
                 class: issue.class,
                 path: issue.path.clone(),
@@ -538,7 +538,7 @@ fn build_section_instances(
                     .fields
                     .iter()
                     .filter(|field| !is_nested_collection_child(&field.path))
-                    .filter_map(|field| build_copy_field(draft, field, Some(index)))
+                    .filter_map(|field| build_copy_field(draft, readiness, field, Some(index)))
                     .collect::<Vec<_>>();
                 fields.extend(build_collection_helper_fields(
                     draft,
@@ -559,7 +559,7 @@ fn build_section_instances(
             .fields
             .iter()
             .filter(|field| !is_nested_collection_child(&field.path))
-            .filter_map(|field| build_copy_field(draft, field, None))
+            .filter_map(|field| build_copy_field(draft, readiness, field, None))
             .collect::<Vec<_>>();
         fields.extend(build_collection_helper_fields(
             draft, readiness, section, None,
@@ -578,32 +578,39 @@ fn build_section_instances(
 
 fn build_copy_field(
     draft: &DraftReport,
+    readiness: &ReadinessReport,
     field: &UiField,
     line_index: Option<usize>,
 ) -> Option<CopyField> {
     let resolved_path = resolve_ui_field_path(&field.path, line_index);
     let value = value_at(&draft.report, &resolved_path);
     let present = value.is_some();
+    let issue = readiness
+        .issues
+        .iter()
+        .find(|issue| issue.path == resolved_path);
+    let effectively_required = field.required || issue.is_some();
     let relevant = line_index.map_or(true, |index| {
         field_is_relevant_for_line(draft, field, index)
     });
 
-    if !relevant || (!present && !field.required) {
+    if !relevant || (!present && !effectively_required) {
         return None;
     }
 
     let metadata = draft.metadata.get(&resolved_path);
     Some(CopyField {
         path: resolved_path.clone(),
-        label: field.label.clone(),
+        label: friendly_field_label(&resolved_path, &field.label),
         control: field.control.clone(),
         allowed_values: field.allowed_values.clone(),
         collection_columns: Vec::new(),
         collection_rows: Vec::new(),
         value: value.and_then(report_value_to_string),
         present,
-        needs_review: metadata.is_some_and(|value| value.needs_review),
-        required: field.required,
+        needs_review: metadata.is_some_and(|value| value.needs_review)
+            || issue.is_some_and(|issue| issue.class == ReadinessIssueClass::ManualReview),
+        required: effectively_required,
         source: field.source.clone(),
         entry_mode: field.entry_mode.clone(),
         evidence: metadata.map_or_else(Vec::new, |value| value.evidence.clone()),
@@ -657,7 +664,7 @@ fn collect_collection_helper_specs(section: &UiSection) -> Vec<CollectionHelperS
         let Some((parent_path, child_key)) = collection_parent_and_key(&field.path) else {
             continue;
         };
-        let parent_label = title_case_label(&humanize_path_tail(&parent_path));
+        let parent_label = friendly_field_label(&parent_path, &title_case_label(&humanize_path_tail(&parent_path)));
         let entry = grouped
             .entry(parent_path.clone())
             .or_insert_with(|| CollectionHelperSpec {
@@ -1350,6 +1357,60 @@ fn humanize_path_tail(path: &str) -> String {
     path.rsplit('.').next().unwrap_or(path).replace('_', " ")
 }
 
+fn friendly_field_label(path: &str, label: &str) -> String {
+    let normalized_path = wildcard_schema_path(path);
+    if let Some(override_label) = friendly_label_override(&normalized_path) {
+        return override_label.to_owned();
+    }
+
+    let label = label
+        .split_whitespace()
+        .map(normalize_label_word)
+        .collect::<Vec<_>>()
+        .join(" ");
+    title_case_label(&label)
+}
+
+fn friendly_label_override(path: &str) -> Option<&'static str> {
+    match path.strip_prefix("expense_report.").unwrap_or(path) {
+        "general_information.payee.name" => Some("Payee Name"),
+        "general_information.payee.affiliation" => Some("Payee Affiliation"),
+        "general_information.business_purpose.who" => Some("Who Is Involved"),
+        "general_information.business_purpose.what" => Some("What Happened"),
+        "general_information.business_purpose.when" => Some("When / Trip Window"),
+        "general_information.business_purpose.where" => Some("Where / Destination"),
+        "general_information.business_purpose.why" => Some("Why Stanford Should Pay"),
+        "general_information.business_purpose.key_30char" => {
+            Some("Business Purpose Summary (30 Characters)")
+        }
+        "general_information.student_certification.other_explanation" => {
+            Some("Other Justification Details")
+        }
+        "transaction_summary.total_usd" => Some("Total USD"),
+        "transaction_lines[].common.line_amount_usd" => Some("Line Amount USD"),
+        "transaction_lines[].common.original_currency" => Some("Original Currency"),
+        "transaction_lines[].common.original_amount" => Some("Original Amount"),
+        "transaction_lines[].common.exchange_rate" => Some("Exchange Rate"),
+        "transaction_lines[].common.country_of_activity" => Some("Country Of Activity"),
+        "transaction_lines[].common.foreign_activity_type" => Some("Foreign Activity Type"),
+        "transaction_lines[].airfare_details.travelers_name" => Some("Traveler Name"),
+        "transaction_lines[].lodging_details.hotel_name" => Some("Hotel Name"),
+        "transaction_lines[].conference_details.conference_name" => Some("Conference Name"),
+        "transaction_lines[].conference_details.venue_name" => Some("Venue Name"),
+        _ => None,
+    }
+}
+
+fn normalize_label_word(word: &str) -> String {
+    match word.to_ascii_lowercase().as_str() {
+        "usd" => "USD".to_owned(),
+        "id" => "ID".to_owned(),
+        "fx" => "FX".to_owned(),
+        "30char" => "30-char".to_owned(),
+        other => other.to_owned(),
+    }
+}
+
 fn title_case_label(value: &str) -> String {
     value
         .split_whitespace()
@@ -1408,7 +1469,8 @@ fn push_optional_line(lines: &mut Vec<String>, prefix: &str, value: Option<&str>
 mod tests {
     use super::{
         build_review_packet, build_review_packet_with_ocr_artifacts,
-        build_review_packet_with_ocr_comparisons, render_review_packet_markdown, FilingStatus,
+        build_review_packet_with_ocr_comparisons, build_review_packet_with_readiness,
+        render_review_packet_markdown, FilingStatus,
     };
     use crate::bundle_synthesis::{
         synthesize_bundle, synthesize_bundle_projection, synthesize_bundle_projection_with_fx,
@@ -1420,8 +1482,10 @@ mod tests {
     };
     use crate::draft::{ConfidenceLevel, EvidenceKind, EvidenceReference};
     use crate::readiness::summarize_validation_readiness;
+    use crate::readiness::{ReadinessIssue, ReadinessIssueClass, ReadinessReport};
     use crate::synthetic_documents::{generate_synthetic_packet, SyntheticVariant};
     use crate::FieldControl;
+    use crate::validator::{ValidationIssueKind, ValidationSeverity};
 
     fn synthetic_documents() -> Vec<crate::ExtractedDocumentFacts> {
         generate_synthetic_packet(SyntheticVariant::Baseline)
@@ -1530,6 +1594,93 @@ mod tests {
                 && field.control == FieldControl::StructuredList
                 && field.required
                 && field.collection_columns.len() == 2));
+    }
+
+    #[test]
+    fn review_packet_uses_friendly_labels_for_fa_fields() {
+        let provider = StaticFxRateProvider::demo();
+        let projection = synthesize_bundle_projection_with_fx(&synthetic_documents(), &provider);
+        let packet = build_review_packet(
+            &projection.bundle,
+            &projection.draft,
+            &projection.validation,
+        )
+        .expect("review packet should build");
+
+        let general_information = packet
+            .copy_sections
+            .iter()
+            .find(|section| section.key == "general_information")
+            .expect("general information section should exist");
+        let general_fields = &general_information.instances[0].fields;
+        assert!(general_fields
+            .iter()
+            .any(|field| field.path == "expense_report.general_information.payee.name"
+                && field.label == "Payee Name"));
+        assert!(general_fields
+            .iter()
+            .any(|field| field.path == "expense_report.general_information.business_purpose.who"
+                && field.label == "Who Is Involved"));
+        let transaction_summary = packet
+            .copy_sections
+            .iter()
+            .find(|section| section.key == "transaction_summary")
+            .expect("transaction summary section should exist");
+        assert!(transaction_summary.instances[0]
+            .fields
+            .iter()
+            .any(|field| field.path == "expense_report.transaction_summary.total_usd"
+                && field.label == "Total USD"));
+    }
+
+    #[test]
+    fn review_packet_keeps_conditionally_required_missing_fields_editable_when_flagged() {
+        let provider = StaticFxRateProvider::demo();
+        let projection = synthesize_bundle_projection_with_fx(&synthetic_documents(), &provider);
+        let mut readiness = summarize_validation_readiness(&projection.validation);
+        readiness.issues.push(ReadinessIssue {
+            class: ReadinessIssueClass::UserInputRequired,
+            severity: ValidationSeverity::Error,
+            kind: ValidationIssueKind::MissingRequiredField,
+            path: "expense_report.general_information.student_certification.other_explanation"
+                .to_owned(),
+            schema_path:
+                "expense_report.general_information.student_certification.other_explanation"
+                    .to_owned(),
+            source: Some("T3".to_owned()),
+            message: "Other justification details are required when the other box is checked."
+                .to_owned(),
+        });
+
+        let packet = build_review_packet_with_readiness(
+            &projection.bundle,
+            &projection.draft,
+            &ReadinessReport {
+                issues: readiness.issues,
+            },
+        )
+        .expect("review packet should build");
+
+        let general_information = packet
+            .copy_sections
+            .iter()
+            .find(|section| section.key == "general_information")
+            .expect("general information section should exist");
+        assert!(general_information.instances[0]
+            .fields
+            .iter()
+            .any(|field| field.path
+                == "expense_report.general_information.student_certification.other_explanation"
+                && field.label == "Other Justification Details"
+                && field.required
+                && !field.present
+                && field.control == FieldControl::Textarea));
+        assert!(packet
+            .issues_queue
+            .iter()
+            .any(|issue| issue.path
+                == "expense_report.general_information.student_certification.other_explanation"
+                && issue.label == "Other Justification Details"));
     }
 
     #[test]
