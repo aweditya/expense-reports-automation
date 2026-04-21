@@ -1412,6 +1412,32 @@ def render_model_report_html(report: dict) -> str:
         html.append("</section></main></body></html>")
         return "".join(html)
 
+    profile_summaries = summary.get("pass_comparison_profile_summaries", {})
+    if profile_summaries:
+        html.append("<section class=\"panel\"><h2>OCR Pass Profile Breakdown</h2>")
+        html.append(
+            "<table><thead><tr><th>Profile</th><th>Runs</th><th>Divergent Runs</th><th>Field Disagreements</th><th>Confidence</th></tr></thead><tbody>"
+        )
+        for profile_name, profile in sorted(profile_summaries.items()):
+            confidence_counts = ", ".join(
+                f"{key}={value}"
+                for key, value in sorted(profile.get("confidence_counts", {}).items())
+            )
+            html.append("<tr>")
+            html.append(f"<td>{escape_html(profile_name)}</td>")
+            html.append(f"<td>{escape_html(profile.get('run_count', 0))}</td>")
+            html.append(
+                f"<td>{escape_html(profile.get('divergent_run_count', 0))}</td>"
+            )
+            html.append(
+                f"<td>{escape_html(profile.get('disagreement_count', 0))}</td>"
+            )
+            html.append(
+                f"<td>{escape_html(confidence_counts or 'none')}</td>"
+            )
+            html.append("</tr>")
+        html.append("</tbody></table></section>")
+
     html.append("<section class=\"panel\"><h2>Packet Results</h2>")
     for packet in report["packets"]:
         readiness = packet["readiness"]

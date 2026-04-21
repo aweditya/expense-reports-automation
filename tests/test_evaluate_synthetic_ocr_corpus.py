@@ -604,6 +604,17 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
                         "consensus": 2,
                         "divergent": 1,
                     },
+                    "pass_comparison_profile_run_count": 4,
+                    "pass_comparison_profile_summaries": {
+                        "table_focused_binarized": {
+                            "run_count": 2,
+                            "divergent_run_count": 1,
+                            "disagreement_count": 3,
+                            "confidence_counts": {"high": 1, "low": 1},
+                            "field_confidence_counts": {"high": 2, "low": 1},
+                            "field_status_counts": {"consensus": 2, "divergent": 1},
+                        }
+                    },
                     "inspection_document_count": 2,
                     "model": "gemini-3-flash-preview",
                     "exact_match_count": 4,
@@ -622,6 +633,7 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
         self.assertIn("- matched grounded fields: 6/8", markdown)
         self.assertIn("- merchant_name: 2", markdown)
         self.assertIn("- pass comparisons: 2", markdown)
+        self.assertIn("- pass profile runs: 4", markdown)
         self.assertIn("- OCR inspections: 2", markdown)
         self.assertIn("- pass-comparison divergences: 1", markdown)
         self.assertIn("- total field disagreements: 3", markdown)
@@ -629,6 +641,7 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
         self.assertIn("- low: 1", markdown)
         self.assertIn("- field confidence counts:", markdown)
         self.assertIn("- field status counts:", markdown)
+        self.assertIn("table_focused_binarized: runs=2", markdown)
 
     def test_render_model_report_html_includes_artifact_links(self):
         html = ocr_eval.render_model_report_html(
@@ -736,10 +749,12 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
         )
 
         self.assertIn("OCR Evaluation", html)
+        self.assertIn("OCR Pass Profile Breakdown", html)
         self.assertIn("inspection", html)
         self.assertIn("pass diff (table_focused_binarized)", html)
         self.assertIn("pass diff (verification_contrast_boosted)", html)
         self.assertIn("table_focused_binarized=high/0", html)
+        self.assertIn("table_focused_binarized", html)
         self.assertIn("file:///repo/out/inspection.html", html)
 
 
