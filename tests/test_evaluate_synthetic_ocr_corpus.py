@@ -281,12 +281,24 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
 
     def test_summarize_pass_comparison_marks_divergence_and_confidence(self):
         summary = ocr_eval.summarize_pass_comparison(
-            {"overall_confidence": "low", "disagreement_count": 2}
+            {
+                "overall_confidence": "low",
+                "disagreement_count": 2,
+                "fields": [
+                    {"field": "merchant_name", "confidence": "high", "status": "consensus"},
+                    {"field": "total_paid", "confidence": "low", "status": "divergent"},
+                ],
+            }
         )
 
         self.assertEqual(summary["overall_confidence"], "low")
         self.assertEqual(summary["disagreement_count"], 2)
         self.assertTrue(summary["has_divergence"])
+        self.assertEqual(summary["field_confidence_counts"]["high"], 1)
+        self.assertEqual(summary["field_confidence_counts"]["low"], 1)
+        self.assertEqual(summary["field_status_counts"]["consensus"], 1)
+        self.assertEqual(summary["field_status_counts"]["divergent"], 1)
+        self.assertEqual(summary["divergent_fields"], ["total_paid"])
 
     def test_summarize_comparison_preserves_per_model_totals(self):
         comparison = ocr_eval.summarize_comparison(
@@ -310,11 +322,17 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
                         "pass_comparison_divergent_document_count": 1,
                         "pass_comparison_disagreement_count": 2,
                         "pass_comparison_confidence_counts": {"high": 2, "low": 1},
+                        "pass_comparison_field_confidence_counts": {"high": 4, "low": 1},
+                        "pass_comparison_field_status_counts": {
+                            "consensus": 4,
+                            "divergent": 1,
+                        },
                         "exact_match_count": 10,
                         "relaxed_match_count": 11,
                         "content_match_count": 12,
                         "filing_status_counts": {"userinputrequired": 4},
                         "ledger_state_counts": {"userinputrequired": 4},
+                        "inspection_document_count": 12,
                     }
                 },
                 {
@@ -336,11 +354,14 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
                         "pass_comparison_divergent_document_count": 0,
                         "pass_comparison_disagreement_count": 0,
                         "pass_comparison_confidence_counts": {"high": 3},
+                        "pass_comparison_field_confidence_counts": {"high": 5},
+                        "pass_comparison_field_status_counts": {"consensus": 5},
                         "exact_match_count": 11,
                         "relaxed_match_count": 12,
                         "content_match_count": 12,
                         "filing_status_counts": {"userinputrequired": 4},
                         "ledger_state_counts": {"userinputrequired": 4},
+                        "inspection_document_count": 12,
                     }
                 },
             ]
@@ -353,6 +374,10 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
         self.assertEqual(comparison["models"][1]["grounding_available_document_count"], 3)
         self.assertEqual(comparison["models"][0]["pass_comparison_disagreement_count"], 2)
         self.assertEqual(comparison["models"][1]["pass_comparison_confidence_counts"]["high"], 3)
+        self.assertEqual(
+            comparison["models"][0]["pass_comparison_field_status_counts"]["divergent"], 1
+        )
+        self.assertEqual(comparison["models"][0]["inspection_document_count"], 12)
 
     def test_render_comparison_markdown_lists_models(self):
         markdown = ocr_eval.render_comparison_markdown(
@@ -371,11 +396,17 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
                         "pass_comparison_divergent_document_count": 1,
                         "pass_comparison_disagreement_count": 2,
                         "pass_comparison_confidence_counts": {"high": 2, "low": 1},
+                        "pass_comparison_field_confidence_counts": {"high": 4, "low": 1},
+                        "pass_comparison_field_status_counts": {
+                            "consensus": 4,
+                            "divergent": 1,
+                        },
                         "exact_match_count": 10,
                         "relaxed_match_count": 11,
                         "content_match_count": 12,
                         "filing_status_counts": {"userinputrequired": 4},
                         "ledger_state_counts": {"userinputrequired": 4},
+                        "inspection_document_count": 12,
                     },
                     {
                         "model": "gemini-3-pro-preview",
@@ -384,11 +415,14 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
                         "pass_comparison_divergent_document_count": 0,
                         "pass_comparison_disagreement_count": 0,
                         "pass_comparison_confidence_counts": {"high": 3},
+                        "pass_comparison_field_confidence_counts": {"high": 5},
+                        "pass_comparison_field_status_counts": {"consensus": 5},
                         "exact_match_count": 11,
                         "relaxed_match_count": 12,
                         "content_match_count": 12,
                         "filing_status_counts": {"userinputrequired": 4},
                         "ledger_state_counts": {"userinputrequired": 4},
+                        "inspection_document_count": 12,
                     },
                 ]
             }
@@ -398,6 +432,39 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
         self.assertIn("gemini-3-pro-preview", markdown)
         self.assertIn("pass_disagreements=2", markdown)
         self.assertIn("confidence=high=2, low=1", markdown)
+        self.assertIn("field status counts", ocr_eval.render_model_report_markdown(
+            {
+                "summary": {
+                    "status": "ok",
+                    "corpus_name": "receipt_seed",
+                    "packet_count": 0,
+                    "document_count": 0,
+                    "comparable_document_count": 0,
+                    "expected_field_count": 0,
+                    "matched_field_count": 0,
+                    "grounding_document_count": 0,
+                    "grounding_available_document_count": 0,
+                    "grounding_fully_matched_document_count": 0,
+                    "grounding_expected_field_count": 0,
+                    "grounding_matched_field_count": 0,
+                    "grounding_field_match_counts": {},
+                    "pass_comparison_document_count": 1,
+                    "pass_comparison_divergent_document_count": 1,
+                    "pass_comparison_disagreement_count": 1,
+                    "pass_comparison_confidence_counts": {"low": 1},
+                    "pass_comparison_field_confidence_counts": {"high": 2, "low": 1},
+                    "pass_comparison_field_status_counts": {"consensus": 2, "divergent": 1},
+                    "inspection_document_count": 1,
+                    "model": "gemini-3-flash-preview",
+                    "exact_match_count": 0,
+                    "relaxed_match_count": 0,
+                    "content_match_count": 0,
+                    "filing_status_counts": {},
+                    "ledger_state_counts": {},
+                },
+                "packets": [],
+            }
+        ))
 
     def test_render_comparison_markdown_surfaces_model_errors(self):
         markdown = ocr_eval.render_comparison_markdown(
@@ -417,11 +484,14 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
                         "pass_comparison_divergent_document_count": 0,
                         "pass_comparison_disagreement_count": 0,
                         "pass_comparison_confidence_counts": {},
+                        "pass_comparison_field_confidence_counts": {},
+                        "pass_comparison_field_status_counts": {},
                         "exact_match_count": 10,
                         "relaxed_match_count": 11,
                         "content_match_count": 12,
                         "filing_status_counts": {"userinputrequired": 4},
                         "ledger_state_counts": {"userinputrequired": 4},
+                        "inspection_document_count": 12,
                     },
                     {
                         "model": "gemini-3-pro-preview",
@@ -439,11 +509,14 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
                         "pass_comparison_divergent_document_count": 0,
                         "pass_comparison_disagreement_count": 0,
                         "pass_comparison_confidence_counts": {},
+                        "pass_comparison_field_confidence_counts": {},
+                        "pass_comparison_field_status_counts": {},
                         "exact_match_count": 0,
                         "relaxed_match_count": 0,
                         "content_match_count": 0,
                         "filing_status_counts": {},
                         "ledger_state_counts": {},
+                        "inspection_document_count": 0,
                     },
                 ]
             }
@@ -473,6 +546,7 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
         self.assertEqual(report["summary"]["document_count"], 0)
         self.assertEqual(report["summary"]["grounding_document_count"], 0)
         self.assertEqual(report["summary"]["pass_comparison_document_count"], 0)
+        self.assertEqual(report["summary"]["inspection_document_count"], 0)
         self.assertEqual(report["summary"]["exact_match_count"], 0)
 
     def test_render_model_report_markdown_includes_pass_comparison_summary(self):
@@ -499,6 +573,12 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
                     "pass_comparison_divergent_document_count": 1,
                     "pass_comparison_disagreement_count": 3,
                     "pass_comparison_confidence_counts": {"high": 1, "low": 1},
+                    "pass_comparison_field_confidence_counts": {"high": 2, "low": 1},
+                    "pass_comparison_field_status_counts": {
+                        "consensus": 2,
+                        "divergent": 1,
+                    },
+                    "inspection_document_count": 2,
                     "model": "gemini-3-flash-preview",
                     "exact_match_count": 4,
                     "relaxed_match_count": 4,
@@ -516,10 +596,94 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
         self.assertIn("- matched grounded fields: 6/8", markdown)
         self.assertIn("- merchant_name: 2", markdown)
         self.assertIn("- pass comparisons: 2", markdown)
+        self.assertIn("- OCR inspections: 2", markdown)
         self.assertIn("- pass-comparison divergences: 1", markdown)
         self.assertIn("- total field disagreements: 3", markdown)
         self.assertIn("- high: 1", markdown)
         self.assertIn("- low: 1", markdown)
+        self.assertIn("- field confidence counts:", markdown)
+        self.assertIn("- field status counts:", markdown)
+
+    def test_render_model_report_html_includes_artifact_links(self):
+        html = ocr_eval.render_model_report_html(
+            {
+                "summary": {
+                    "status": "ok",
+                    "corpus_name": "receipt_seed",
+                    "packet_count": 1,
+                    "document_count": 1,
+                    "comparable_document_count": 1,
+                    "expected_field_count": 4,
+                    "matched_field_count": 4,
+                    "grounding_document_count": 1,
+                    "grounding_available_document_count": 1,
+                    "grounding_fully_matched_document_count": 1,
+                    "grounding_expected_field_count": 4,
+                    "grounding_matched_field_count": 4,
+                    "grounding_field_match_counts": {"merchant_name": 1},
+                    "pass_comparison_document_count": 1,
+                    "pass_comparison_divergent_document_count": 0,
+                    "pass_comparison_disagreement_count": 0,
+                    "pass_comparison_confidence_counts": {"high": 1},
+                    "pass_comparison_field_confidence_counts": {"high": 5},
+                    "pass_comparison_field_status_counts": {"consensus": 5},
+                    "inspection_document_count": 1,
+                    "model": "gemini-3-flash-preview",
+                    "exact_match_count": 1,
+                    "relaxed_match_count": 1,
+                    "content_match_count": 1,
+                    "filing_status_counts": {"userinputrequired": 1},
+                    "ledger_state_counts": {"userinputrequired": 1},
+                },
+                "packets": [
+                    {
+                        "packet_id": "packet_001",
+                        "filing_status": "userinputrequired",
+                        "ledger_state": "userinputrequired",
+                        "readiness": {
+                            "automation_gap_count": 0,
+                            "user_input_gap_count": 1,
+                            "manual_review_item_count": 0,
+                            "other_warning_count": 0,
+                        },
+                        "documents": [
+                            {
+                                "document_id": "receipt_001",
+                                "kind": "receipt",
+                                "input_document": "receipt.png",
+                                "transcription_json": "/repo/out/transcription.json",
+                                "facts_json": "/repo/out/facts.json",
+                                "ocr_inspection_html": "/repo/out/inspection.html",
+                                "ocr_grounding_html": "/repo/out/grounding.html",
+                                "ocr_pass_comparison_html": "/repo/out/comparison.html",
+                                "exact_match": True,
+                                "relaxed_match": True,
+                                "content_match": True,
+                                "expected_fields": {
+                                    "matched_field_count": 4,
+                                    "expected_field_count": 4,
+                                },
+                                "expected_grounding": {
+                                    "matched_field_count": 4,
+                                    "expected_field_count": 4,
+                                },
+                                "ocr_pass_comparison": {
+                                    "comparison": {
+                                        "overall_confidence": "high",
+                                        "disagreement_count": 0,
+                                    }
+                                },
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
+
+        self.assertIn("OCR Evaluation", html)
+        self.assertIn("inspection", html)
+        self.assertIn("pass diff", html)
+        self.assertIn("file:///repo/out/inspection.html", html)
 
 
 if __name__ == "__main__":

@@ -671,10 +671,23 @@ def compare_receipt_passes(
 def summarize_pass_comparison(comparison: dict) -> dict:
     confidence = comparison.get("overall_confidence") or "unknown"
     disagreement_count = comparison.get("disagreement_count", 0)
+    field_confidence_counts: Counter[str] = Counter()
+    field_status_counts: Counter[str] = Counter()
+    divergent_fields = []
+    for field in comparison.get("fields") or []:
+        field_confidence = field.get("confidence") or "unknown"
+        field_status = field.get("status") or "unknown"
+        field_confidence_counts[field_confidence] += 1
+        field_status_counts[field_status] += 1
+        if field_status == "divergent":
+            divergent_fields.append(field.get("field"))
     return {
         "overall_confidence": confidence,
         "disagreement_count": disagreement_count,
         "has_divergence": disagreement_count > 0,
+        "field_confidence_counts": dict(field_confidence_counts),
+        "field_status_counts": dict(field_status_counts),
+        "divergent_fields": [field for field in divergent_fields if field],
     }
 
 
@@ -701,9 +714,12 @@ def evaluate_model(
     pass_comparison_divergent_document_count = 0
     pass_comparison_disagreement_count = 0
     pass_comparison_confidence_counts: Counter[str] = Counter()
+    pass_comparison_field_confidence_counts: Counter[str] = Counter()
+    pass_comparison_field_status_counts: Counter[str] = Counter()
     filing_status_counts: Counter[str] = Counter()
     ledger_state_counts: Counter[str] = Counter()
     document_count = 0
+    inspection_document_count = 0
     model_key = sanitize_identifier(model)
 
     for packet in corpus_spec["packets"]:
@@ -769,6 +785,7 @@ def evaluate_model(
                 for field in grounding_comparison["fields"]:
                     grounding_field_match_counts[field["field"]] += int(field["matched"])
             pass_comparison = None
+            comparison_html_path = None
             if args.compare_passes and document["kind"] == "receipt":
                 pass_comparison = compare_receipt_passes(
                     packet_id,
@@ -785,15 +802,44 @@ def evaluate_model(
                     pass_summary["has_divergence"]
                 )
                 pass_comparison_confidence_counts[pass_summary["overall_confidence"]] += 1
+                for key, value in pass_summary["field_confidence_counts"].items():
+                    pass_comparison_field_confidence_counts[key] += value
+                for key, value in pass_summary["field_status_counts"].items():
+                    pass_comparison_field_status_counts[key] += value
+                comparison_html_path = str(
+                    packet_ingestion_dir
+                    / "ocr_pass_comparisons"
+                    / document["transcription_stem"]
+                    / "comparison.html"
+                )
             document_count += 1
+            inspection_path = (
+                packet_ingestion_dir
+                / "ocr_inspection"
+                / document["transcription_stem"]
+                / "inspection.html"
+            )
+            grounding_html_path = (
+                packet_ingestion_dir
+                / "ocr_grounding"
+                / document["transcription_stem"]
+                / "grounded_preview.html"
+            )
+            inspection_document_count += int(inspection_path.exists())
 
             packet_document_results.append(
                 {
                     "kind": document["kind"],
+                    "document_id": document["document_id"],
                     "source_markdown": ground_truth_markdown_path,
                     "input_document": document["input_path"],
                     "transcription_json": str(transcription_path),
                     "facts_json": str(facts_path),
+                    "ocr_inspection_html": str(inspection_path) if inspection_path.exists() else None,
+                    "ocr_grounding_html": str(grounding_html_path)
+                    if grounding_html_path.exists()
+                    else None,
+                    "ocr_pass_comparison_html": comparison_html_path,
                     "exact_match": comparison["exact_match"] if comparison else None,
                     "relaxed_match": comparison["relaxed_match"] if comparison else None,
                     "content_match": comparison["content_match"] if comparison else None,
@@ -838,6 +884,10 @@ def evaluate_model(
             "pass_comparison_divergent_document_count": pass_comparison_divergent_document_count,
             "pass_comparison_disagreement_count": pass_comparison_disagreement_count,
             "pass_comparison_confidence_counts": dict(pass_comparison_confidence_counts),
+            "pass_comparison_field_confidence_counts": dict(
+                pass_comparison_field_confidence_counts
+            ),
+            "pass_comparison_field_status_counts": dict(pass_comparison_field_status_counts),
             "model": model,
             "model_key": model_key,
             "location": args.location,
@@ -846,6 +896,7 @@ def evaluate_model(
             "content_match_count": content_match_count,
             "filing_status_counts": dict(filing_status_counts),
             "ledger_state_counts": dict(ledger_state_counts),
+            "inspection_document_count": inspection_document_count,
         },
         "packets": packet_results,
     }
@@ -899,11 +950,20 @@ def summarize_comparison(model_reports: list[dict]) -> dict:
                 "pass_comparison_confidence_counts": report["summary"].get(
                     "pass_comparison_confidence_counts", {}
                 ),
+                "pass_comparison_field_confidence_counts": report["summary"].get(
+                    "pass_comparison_field_confidence_counts", {}
+                ),
+                "pass_comparison_field_status_counts": report["summary"].get(
+                    "pass_comparison_field_status_counts", {}
+                ),
                 "exact_match_count": report["summary"]["exact_match_count"],
                 "relaxed_match_count": report["summary"]["relaxed_match_count"],
                 "content_match_count": report["summary"]["content_match_count"],
                 "filing_status_counts": report["summary"]["filing_status_counts"],
                 "ledger_state_counts": report["summary"]["ledger_state_counts"],
+                "inspection_document_count": report["summary"].get(
+                    "inspection_document_count", 0
+                ),
             }
             for report in model_reports
         ]
@@ -941,11 +1001,14 @@ def failed_model_report(model: str, location: str, error: str) -> dict:
             "pass_comparison_divergent_document_count": 0,
             "pass_comparison_disagreement_count": 0,
             "pass_comparison_confidence_counts": {},
+            "pass_comparison_field_confidence_counts": {},
+            "pass_comparison_field_status_counts": {},
             "exact_match_count": 0,
             "relaxed_match_count": 0,
             "content_match_count": 0,
             "filing_status_counts": {},
             "ledger_state_counts": {},
+            "inspection_document_count": 0,
         },
         "packets": [],
     }
@@ -968,6 +1031,7 @@ def render_model_report_markdown(report: dict) -> str:
         f"- expected grounded fields: {report['summary'].get('grounding_expected_field_count', 0)}",
         f"- matched grounded fields: {report['summary'].get('grounding_matched_field_count', 0)}",
         f"- pass comparisons: {report['summary'].get('pass_comparison_document_count', 0)}",
+        f"- OCR inspections: {report['summary'].get('inspection_document_count', 0)}",
         f"- pass-comparison divergences: {report['summary'].get('pass_comparison_divergent_document_count', 0)}",
         f"- pass-comparison field disagreements: {report['summary'].get('pass_comparison_disagreement_count', 0)}",
         f"- model: {report['summary']['model']}",
@@ -1019,6 +1083,18 @@ def render_model_report_markdown(report: dict) -> str:
     if confidence_counts:
         for key, value in sorted(confidence_counts.items()):
             lines.append(f"- {key}: {value}")
+    field_confidence_counts = report["summary"].get(
+        "pass_comparison_field_confidence_counts", {}
+    )
+    if field_confidence_counts:
+        lines.append("- field confidence counts:")
+        for key, value in sorted(field_confidence_counts.items()):
+            lines.append(f"  - {key}: {value}")
+    field_status_counts = report["summary"].get("pass_comparison_field_status_counts", {})
+    if field_status_counts:
+        lines.append("- field status counts:")
+        for key, value in sorted(field_status_counts.items()):
+            lines.append(f"  - {key}: {value}")
     lines.append("")
     lines.append("## Packet Results")
     for packet in report["packets"]:
@@ -1116,6 +1192,143 @@ def render_comparison_markdown(comparison: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+def render_model_report_html(report: dict) -> str:
+    summary = report["summary"]
+    html = [
+        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">",
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
+        "<title>OCR Evaluation</title>",
+        "<style>",
+        ":root{color-scheme:light;font-family:ui-sans-serif,system-ui,sans-serif;}",
+        "body{margin:0;background:#f7f3eb;color:#231f1a;}",
+        "main{max-width:1240px;margin:0 auto;padding:32px 24px 48px;}",
+        "h1,h2{margin:0 0 12px;}",
+        ".panel{background:#fffdf9;border:1px solid #ddcfbb;border-radius:18px;box-shadow:0 8px 24px rgba(86,61,35,.08);padding:20px 22px;margin-bottom:18px;}",
+        ".grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;}",
+        ".metric{padding:12px 14px;border-radius:14px;background:#f3ece0;border:1px solid #e1d3bf;}",
+        ".metric-label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8a5a2b;font-weight:700;}",
+        ".metric-value{margin-top:6px;font-size:20px;font-weight:700;}",
+        ".muted{color:#6f6258;}",
+        ".packet{border-top:1px solid #eadfce;padding-top:14px;margin-top:14px;}",
+        ".packet:first-child{border-top:0;padding-top:0;margin-top:0;}",
+        "table{width:100%;border-collapse:collapse;margin-top:12px;}",
+        "th,td{text-align:left;padding:10px 8px;border-top:1px solid #eadfce;vertical-align:top;}",
+        "th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#8a5a2b;}",
+        "a{color:#8a5a2b;font-weight:700;text-decoration:none;}",
+        ".badge{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border:1px solid rgba(120,97,73,.16);background:#fff;}",
+        ".ok{background:#edf5f1;color:#376647;border-color:rgba(55,102,71,.2);}",
+        ".warn{background:#f8f0dd;color:#91691f;border-color:rgba(171,127,44,.2);}",
+        ".bad{background:#fbebe4;color:#9c4f32;border-color:rgba(182,108,63,.2);}",
+        "</style></head><body><main>",
+    ]
+    html.append("<section class=\"panel\">")
+    html.append("<p class=\"muted\">Corpus OCR evaluation</p>")
+    html.append(f"<h1>{escape_html(summary['model'])}</h1>")
+    html.append("<div class=\"grid\">")
+    for label, value in [
+        ("status", summary.get("status", "ok")),
+        ("documents", summary["document_count"]),
+        ("exact matches", summary["exact_match_count"]),
+        ("grounded fields", f"{summary.get('grounding_matched_field_count', 0)}/{summary.get('grounding_expected_field_count', 0)}"),
+        ("pass disagreements", summary.get("pass_comparison_disagreement_count", 0)),
+        ("OCR inspections", summary.get("inspection_document_count", 0)),
+    ]:
+        html.append(
+            f"<div class=\"metric\"><div class=\"metric-label\">{escape_html(str(label))}</div><div class=\"metric-value\">{escape_html(str(value))}</div></div>"
+        )
+    html.append("</div></section>")
+
+    if summary.get("error"):
+        html.append("<section class=\"panel\">")
+        html.append("<h2>Error</h2>")
+        html.append(f"<p>{escape_html(summary['error'])}</p>")
+        html.append("</section></main></body></html>")
+        return "".join(html)
+
+    html.append("<section class=\"panel\"><h2>Packet Results</h2>")
+    for packet in report["packets"]:
+        readiness = packet["readiness"]
+        html.append("<div class=\"packet\">")
+        html.append(
+            f"<p><strong>{escape_html(packet['packet_id'])}</strong> <span class=\"badge {'bad' if packet['readiness']['automation_gap_count'] else 'ok'}\">{escape_html(packet['filing_status'])}</span></p>"
+        )
+        html.append(
+            f"<p class=\"muted\">automation_gaps={readiness['automation_gap_count']} · user_input_gaps={readiness['user_input_gap_count']} · manual_review_items={readiness['manual_review_item_count']}</p>"
+        )
+        html.append("<table><thead><tr><th>Document</th><th>Kind</th><th>Markdown</th><th>Fields</th><th>Grounding</th><th>Passes</th><th>Artifacts</th></tr></thead><tbody>")
+        for document in packet["documents"]:
+            expected_fields = document.get("expected_fields") or {}
+            expected_grounding = document.get("expected_grounding") or {}
+            pass_comparison = (document.get("ocr_pass_comparison") or {}).get("comparison") or {}
+            artifact_links = []
+            for label, path in [
+                ("transcription", document.get("transcription_json")),
+                ("facts", document.get("facts_json")),
+                ("inspection", document.get("ocr_inspection_html")),
+                ("grounding", document.get("ocr_grounding_html")),
+                ("pass diff", document.get("ocr_pass_comparison_html")),
+            ]:
+                if path:
+                    artifact_links.append(
+                        f"<a href=\"file://{escape_html_attribute(path)}\" target=\"_blank\" rel=\"noreferrer noopener\">{escape_html(label)}</a>"
+                    )
+            html.append("<tr>")
+            html.append(f"<td>{escape_html(document.get('document_id') or document['input_document'])}</td>")
+            html.append(f"<td>{escape_html(document['kind'])}</td>")
+            html.append(
+                f"<td>{escape_html(render_match_summary(document.get('exact_match'), document.get('relaxed_match'), document.get('content_match')))}</td>"
+            )
+            html.append(
+                f"<td>{escape_html(render_field_match_summary(expected_fields.get('matched_field_count'), expected_fields.get('expected_field_count')))}</td>"
+            )
+            html.append(
+                f"<td>{escape_html(render_field_match_summary(expected_grounding.get('matched_field_count'), expected_grounding.get('expected_field_count')))}</td>"
+            )
+            html.append(
+                f"<td>{escape_html(render_pass_summary(pass_comparison))}</td>"
+            )
+            html.append(f"<td>{' · '.join(artifact_links) or '<span class=\"muted\">none</span>'}</td>")
+            html.append("</tr>")
+        html.append("</tbody></table></div>")
+    html.append("</section></main></body></html>")
+    return "".join(html)
+
+
+def render_match_summary(exact_match, relaxed_match, content_match) -> str:
+    if exact_match is None:
+        return "n/a"
+    return f"exact={str(bool(exact_match)).lower()}, relaxed={str(bool(relaxed_match)).lower()}, content={str(bool(content_match)).lower()}"
+
+
+def render_field_match_summary(matched_count, expected_count) -> str:
+    if matched_count is None or expected_count is None:
+        return "n/a"
+    return f"{matched_count}/{expected_count}"
+
+
+def render_pass_summary(pass_comparison: dict) -> str:
+    if not pass_comparison:
+        return "n/a"
+    confidence = pass_comparison.get("overall_confidence") or "unknown"
+    disagreements = pass_comparison.get("disagreement_count", 0)
+    return f"{confidence}, disagreements={disagreements}"
+
+
+def escape_html(value: str) -> str:
+    return (
+        str(value)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#39;")
+    )
+
+
+def escape_html_attribute(value: str) -> str:
+    return escape_html(value)
+
+
 def write_reports(output_dir: Path, model_reports: list[dict]) -> None:
     comparison = summarize_comparison(model_reports)
     write_json(output_dir / "ocr_comparison.json", comparison)
@@ -1126,12 +1339,18 @@ def write_reports(output_dir: Path, model_reports: list[dict]) -> None:
         (output_dir / "ocr_evaluation.md").write_text(
             render_model_report_markdown(model_reports[0])
         )
+        (output_dir / "ocr_evaluation.html").write_text(
+            render_model_report_html(model_reports[0])
+        )
 
     for report in model_reports:
         model_key = report["summary"]["model_key"]
         write_json(output_dir / f"ocr_evaluation_{model_key}.json", report)
         (output_dir / f"ocr_evaluation_{model_key}.md").write_text(
             render_model_report_markdown(report)
+        )
+        (output_dir / f"ocr_evaluation_{model_key}.html").write_text(
+            render_model_report_html(report)
         )
 
 
