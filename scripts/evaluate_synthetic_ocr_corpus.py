@@ -12,6 +12,18 @@ from pathlib import Path
 DEFAULT_MODELS = ["gemini-3-flash-preview", "gemini-3-pro-preview"]
 DEFAULT_LOCATION = "global"
 DEFAULT_PACKETS = 4
+DEFAULT_COMPARE_PROFILES = (
+    ("table_focused_binarized", "table_focused", "binarized"),
+    ("verification_contrast_boosted", "verification", "contrast_boosted"),
+)
+SUPPORTED_PASS_KINDS = {"primary", "verification", "table_focused", "geometry_assist"}
+SUPPORTED_PREPROCESS_VARIANTS = {
+    "original",
+    "contrast_boosted",
+    "grayscale",
+    "binarized",
+    "deskewed",
+}
 GROUNDABLE_RECEIPT_FIELDS = (
     "merchant_name",
     "transaction_date",
@@ -77,6 +89,17 @@ def parse_args() -> argparse.Namespace:
             "compare it against the primary ingestion transcription."
         ),
     )
+    parser.add_argument(
+        "--compare-profile",
+        action="append",
+        dest="compare_profiles",
+        help=(
+            "Additional OCR comparison profile in name:pass_kind:preprocess form. "
+            "Repeat to benchmark multiple receipt OCR lanes. Defaults to "
+            "table_focused_binarized:table_focused:binarized and "
+            "verification_contrast_boosted:verification:contrast_boosted."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -96,6 +119,40 @@ def default_sdk_python() -> str:
 
 def resolve_models(args: argparse.Namespace) -> list[str]:
     return args.models or list(DEFAULT_MODELS)
+
+
+def resolve_compare_profiles(args: argparse.Namespace) -> list[dict]:
+    raw_profiles = args.compare_profiles or [
+        ":".join(profile) for profile in DEFAULT_COMPARE_PROFILES
+    ]
+    profiles = []
+    for raw in raw_profiles:
+        parts = raw.split(":")
+        if len(parts) != 3:
+            raise ValueError(
+                f"invalid compare profile {raw!r}; expected name:pass_kind:preprocess_variant"
+            )
+        name, pass_kind, preprocess_variant = parts
+        if not name:
+            raise ValueError("compare profile name must not be empty")
+        if pass_kind not in SUPPORTED_PASS_KINDS:
+            raise ValueError(
+                f"unsupported compare profile pass kind {pass_kind!r}; "
+                f"expected one of {', '.join(sorted(SUPPORTED_PASS_KINDS))}"
+            )
+        if preprocess_variant not in SUPPORTED_PREPROCESS_VARIANTS:
+            raise ValueError(
+                f"unsupported compare profile preprocess variant {preprocess_variant!r}; "
+                f"expected one of {', '.join(sorted(SUPPORTED_PREPROCESS_VARIANTS))}"
+            )
+        profiles.append(
+            {
+                "name": sanitize_identifier(name),
+                "pass_kind": pass_kind,
+                "preprocess_variant": preprocess_variant,
+            }
+        )
+    return profiles
 
 
 def sanitize_identifier(value: str) -> str:
@@ -594,77 +651,99 @@ def compare_receipt_passes(
         / document["transcription_stem"]
     )
     compare_dir.mkdir(parents=True, exist_ok=True)
-    secondary_transcription_path = (
-        compare_dir / f"{document['transcription_stem']}.table_focused_binarized.json"
-    )
-    comparison_json_path = compare_dir / "comparison.json"
-    comparison_md_path = compare_dir / "comparison.md"
+    profiles = []
+    for profile in resolve_compare_profiles(args):
+        profile_dir = compare_dir / profile["name"]
+        profile_dir.mkdir(parents=True, exist_ok=True)
+        secondary_transcription_path = (
+            profile_dir / f"{document['transcription_stem']}.{profile['name']}.json"
+        )
+        comparison_json_path = profile_dir / "comparison.json"
+        comparison_md_path = profile_dir / "comparison.md"
+        comparison_html_path = profile_dir / "comparison.html"
 
-    transcribe_command = [
-        "cargo",
-        "run",
-        "--bin",
-        "transcribe_document",
-        "--",
-        "--engine",
-        "vertex-gemini-sdk",
-        "--service-account-key",
-        args.service_account_key,
-        "--location",
-        args.location,
-        "--model",
-        model,
-        "--sdk-python",
-        args.sdk_python or default_sdk_python(),
-        "--format",
-        "json",
-        "--output",
-        str(secondary_transcription_path),
-        "--pass-kind",
-        "table_focused",
-        "--preprocess-variant",
-        "binarized",
-        "--pass-id",
-        f"{packet_id}_{document['transcription_stem']}_table_focused_binarized",
-    ]
-    if args.project:
-        transcribe_command.extend(["--project", args.project])
-    transcribe_command.append(document["input_path"])
-    run_command(transcribe_command, cwd=repo_root())
+        transcribe_command = [
+            "cargo",
+            "run",
+            "--bin",
+            "transcribe_document",
+            "--",
+            "--engine",
+            "vertex-gemini-sdk",
+            "--service-account-key",
+            args.service_account_key,
+            "--location",
+            args.location,
+            "--model",
+            model,
+            "--sdk-python",
+            args.sdk_python or default_sdk_python(),
+            "--format",
+            "json",
+            "--output",
+            str(secondary_transcription_path),
+            "--pass-kind",
+            profile["pass_kind"],
+            "--preprocess-variant",
+            profile["preprocess_variant"],
+            "--pass-id",
+            f"{packet_id}_{document['transcription_stem']}_{profile['name']}",
+        ]
+        if args.project:
+            transcribe_command.extend(["--project", args.project])
+        transcribe_command.append(document["input_path"])
+        run_command(transcribe_command, cwd=repo_root())
 
-    compare_command = [
-        "cargo",
-        "run",
-        "--bin",
-        "compare_ocr_passes",
-        "--",
-        "--format",
-        "json",
-        "--output",
-        str(comparison_json_path),
-        str(primary_transcription_path),
-        str(secondary_transcription_path),
-    ]
-    run_command(compare_command, cwd=repo_root())
-    compare_markdown_command = [
-        "cargo",
-        "run",
-        "--bin",
-        "compare_ocr_passes",
-        "--",
-        "--format",
-        "markdown",
-        "--output",
-        str(comparison_md_path),
-        str(primary_transcription_path),
-        str(secondary_transcription_path),
-    ]
-    run_command(compare_markdown_command, cwd=repo_root())
+        for output_format, output_path in [
+            ("json", comparison_json_path),
+            ("markdown", comparison_md_path),
+            ("html", comparison_html_path),
+        ]:
+            compare_command = [
+                "cargo",
+                "run",
+                "--bin",
+                "compare_ocr_passes",
+                "--",
+                "--format",
+                output_format,
+                "--output",
+                str(output_path),
+                str(primary_transcription_path),
+                str(secondary_transcription_path),
+            ]
+            run_command(compare_command, cwd=repo_root())
+
+        comparison = read_json(comparison_json_path)
+        profiles.append(
+            {
+                "name": profile["name"],
+                "pass_kind": profile["pass_kind"],
+                "preprocess_variant": profile["preprocess_variant"],
+                "secondary_transcription_path": str(secondary_transcription_path),
+                "json_path": str(comparison_json_path),
+                "markdown_path": str(comparison_md_path),
+                "html_path": str(comparison_html_path),
+                "comparison": comparison,
+                "summary": summarize_pass_comparison(comparison),
+            }
+        )
 
     return {
-        "json_path": str(comparison_json_path),
-        "markdown_path": str(comparison_md_path),
-        "comparison": read_json(comparison_json_path),
+        "profiles": profiles,
+        "profile_count": len(profiles),
+    }
+
+
+def empty_pass_profile_summary(name: str) -> dict:
+    return {
+        "profile_name": name,
+        "run_count": 0,
+        "divergent_run_count": 0,
+        "disagreement_count": 0,
+        "confidence_counts": {},
+        "field_confidence_counts": {},
+        "field_status_counts": {},
     }
 
 
@@ -711,11 +790,13 @@ def evaluate_model(
     grounding_matched_field_count = 0
     grounding_field_match_counts: Counter[str] = Counter()
     pass_comparison_document_count = 0
+    pass_comparison_profile_run_count = 0
     pass_comparison_divergent_document_count = 0
     pass_comparison_disagreement_count = 0
     pass_comparison_confidence_counts: Counter[str] = Counter()
     pass_comparison_field_confidence_counts: Counter[str] = Counter()
     pass_comparison_field_status_counts: Counter[str] = Counter()
+    pass_comparison_profile_summaries: dict[str, dict] = {}
     filing_status_counts: Counter[str] = Counter()
     ledger_state_counts: Counter[str] = Counter()
     document_count = 0
@@ -795,22 +876,55 @@ def evaluate_model(
                     args,
                     model,
                 )
-                pass_summary = summarize_pass_comparison(pass_comparison["comparison"])
                 pass_comparison_document_count += 1
-                pass_comparison_disagreement_count += pass_summary["disagreement_count"]
-                pass_comparison_divergent_document_count += int(
-                    pass_summary["has_divergence"]
-                )
-                pass_comparison_confidence_counts[pass_summary["overall_confidence"]] += 1
-                for key, value in pass_summary["field_confidence_counts"].items():
-                    pass_comparison_field_confidence_counts[key] += value
-                for key, value in pass_summary["field_status_counts"].items():
-                    pass_comparison_field_status_counts[key] += value
-                comparison_html_path = str(
-                    packet_ingestion_dir
-                    / "ocr_pass_comparisons"
-                    / document["transcription_stem"]
-                    / "comparison.html"
+                document_has_divergence = False
+                for profile_run in pass_comparison["profiles"]:
+                    pass_summary = profile_run["summary"]
+                    pass_comparison_profile_run_count += 1
+                    pass_comparison_disagreement_count += pass_summary["disagreement_count"]
+                    document_has_divergence = (
+                        document_has_divergence or pass_summary["has_divergence"]
+                    )
+                    pass_comparison_confidence_counts[pass_summary["overall_confidence"]] += 1
+                    for key, value in pass_summary["field_confidence_counts"].items():
+                        pass_comparison_field_confidence_counts[key] += value
+                    for key, value in pass_summary["field_status_counts"].items():
+                        pass_comparison_field_status_counts[key] += value
+
+                    profile_summary = pass_comparison_profile_summaries.setdefault(
+                        profile_run["name"],
+                        empty_pass_profile_summary(profile_run["name"]),
+                    )
+                    profile_summary["run_count"] += 1
+                    profile_summary["divergent_run_count"] += int(
+                        pass_summary["has_divergence"]
+                    )
+                    profile_summary["disagreement_count"] += pass_summary[
+                        "disagreement_count"
+                    ]
+                    confidence_counts = Counter(profile_summary["confidence_counts"])
+                    field_confidence_counts = Counter(
+                        profile_summary["field_confidence_counts"]
+                    )
+                    field_status_counts = Counter(profile_summary["field_status_counts"])
+                    confidence_counts[pass_summary["overall_confidence"]] += 1
+                    for key, value in pass_summary["field_confidence_counts"].items():
+                        field_confidence_counts[key] += value
+                    for key, value in pass_summary["field_status_counts"].items():
+                        field_status_counts[key] += value
+                    profile_summary["confidence_counts"] = dict(confidence_counts)
+                    profile_summary["field_confidence_counts"] = dict(
+                        field_confidence_counts
+                    )
+                    profile_summary["field_status_counts"] = dict(field_status_counts)
+
+                pass_comparison_divergent_document_count += int(document_has_divergence)
+                comparison_html_path = next(
+                    (
+                        profile_run["html_path"]
+                        for profile_run in pass_comparison["profiles"]
+                    ),
+                    None,
                 )
             document_count += 1
             inspection_path = (
@@ -840,6 +954,14 @@ def evaluate_model(
                     if grounding_html_path.exists()
                     else None,
                     "ocr_pass_comparison_html": comparison_html_path,
+                    "ocr_pass_comparison_profiles": [
+                        {
+                            "name": profile_run["name"],
+                            "html_path": profile_run["html_path"],
+                            "summary": profile_run["summary"],
+                        }
+                        for profile_run in (pass_comparison or {}).get("profiles", [])
+                    ],
                     "exact_match": comparison["exact_match"] if comparison else None,
                     "relaxed_match": comparison["relaxed_match"] if comparison else None,
                     "content_match": comparison["content_match"] if comparison else None,
@@ -881,6 +1003,7 @@ def evaluate_model(
             "grounding_matched_field_count": grounding_matched_field_count,
             "grounding_field_match_counts": dict(grounding_field_match_counts),
             "pass_comparison_document_count": pass_comparison_document_count,
+            "pass_comparison_profile_run_count": pass_comparison_profile_run_count,
             "pass_comparison_divergent_document_count": pass_comparison_divergent_document_count,
             "pass_comparison_disagreement_count": pass_comparison_disagreement_count,
             "pass_comparison_confidence_counts": dict(pass_comparison_confidence_counts),
@@ -888,6 +1011,9 @@ def evaluate_model(
                 pass_comparison_field_confidence_counts
             ),
             "pass_comparison_field_status_counts": dict(pass_comparison_field_status_counts),
+            "pass_comparison_profile_summaries": dict(
+                sorted(pass_comparison_profile_summaries.items())
+            ),
             "model": model,
             "model_key": model_key,
             "location": args.location,
@@ -941,6 +1067,9 @@ def summarize_comparison(model_reports: list[dict]) -> dict:
                 "pass_comparison_document_count": report["summary"].get(
                     "pass_comparison_document_count", 0
                 ),
+                "pass_comparison_profile_run_count": report["summary"].get(
+                    "pass_comparison_profile_run_count", 0
+                ),
                 "pass_comparison_divergent_document_count": report["summary"].get(
                     "pass_comparison_divergent_document_count", 0
                 ),
@@ -955,6 +1084,9 @@ def summarize_comparison(model_reports: list[dict]) -> dict:
                 ),
                 "pass_comparison_field_status_counts": report["summary"].get(
                     "pass_comparison_field_status_counts", {}
+                ),
+                "pass_comparison_profile_summaries": report["summary"].get(
+                    "pass_comparison_profile_summaries", {}
                 ),
                 "exact_match_count": report["summary"]["exact_match_count"],
                 "relaxed_match_count": report["summary"]["relaxed_match_count"],
@@ -998,11 +1130,13 @@ def failed_model_report(model: str, location: str, error: str) -> dict:
             "grounding_matched_field_count": 0,
             "grounding_field_match_counts": {},
             "pass_comparison_document_count": 0,
+            "pass_comparison_profile_run_count": 0,
             "pass_comparison_divergent_document_count": 0,
             "pass_comparison_disagreement_count": 0,
             "pass_comparison_confidence_counts": {},
             "pass_comparison_field_confidence_counts": {},
             "pass_comparison_field_status_counts": {},
+            "pass_comparison_profile_summaries": {},
             "exact_match_count": 0,
             "relaxed_match_count": 0,
             "content_match_count": 0,
@@ -1031,6 +1165,7 @@ def render_model_report_markdown(report: dict) -> str:
         f"- expected grounded fields: {report['summary'].get('grounding_expected_field_count', 0)}",
         f"- matched grounded fields: {report['summary'].get('grounding_matched_field_count', 0)}",
         f"- pass comparisons: {report['summary'].get('pass_comparison_document_count', 0)}",
+        f"- pass profile runs: {report['summary'].get('pass_comparison_profile_run_count', 0)}",
         f"- OCR inspections: {report['summary'].get('inspection_document_count', 0)}",
         f"- pass-comparison divergences: {report['summary'].get('pass_comparison_divergent_document_count', 0)}",
         f"- pass-comparison field disagreements: {report['summary'].get('pass_comparison_disagreement_count', 0)}",
@@ -1075,6 +1210,9 @@ def render_model_report_markdown(report: dict) -> str:
         f"- compared receipt docs: {report['summary'].get('pass_comparison_document_count', 0)}"
     )
     lines.append(
+        f"- pass profile runs: {report['summary'].get('pass_comparison_profile_run_count', 0)}"
+    )
+    lines.append(
         f"- divergent receipt docs: {report['summary'].get('pass_comparison_divergent_document_count', 0)}"
     )
     lines.append(
@@ -1095,6 +1233,20 @@ def render_model_report_markdown(report: dict) -> str:
         lines.append("- field status counts:")
         for key, value in sorted(field_status_counts.items()):
             lines.append(f"  - {key}: {value}")
+    profile_summaries = report["summary"].get("pass_comparison_profile_summaries", {})
+    if profile_summaries:
+        lines.append("- profile summaries:")
+        for profile_name, profile in sorted(profile_summaries.items()):
+            confidence_counts = ", ".join(
+                f"{key}={value}"
+                for key, value in sorted(profile.get("confidence_counts", {}).items())
+            )
+            lines.append(
+                f"  - {profile_name}: runs={profile.get('run_count', 0)}, "
+                f"divergent_runs={profile.get('divergent_run_count', 0)}, "
+                f"field_disagreements={profile.get('disagreement_count', 0)}, "
+                f"confidence={confidence_counts or 'none'}"
+            )
     lines.append("")
     lines.append("## Packet Results")
     for packet in report["packets"]:
@@ -1162,10 +1314,24 @@ def render_comparison_markdown(comparison: dict) -> str:
         )
         lines.append(
             f"- {model['model']}: compared_docs={model.get('pass_comparison_document_count', 0)}, "
+            f"profile_runs={model.get('pass_comparison_profile_run_count', 0)}, "
             f"divergent_docs={model.get('pass_comparison_divergent_document_count', 0)}, "
             f"field_disagreements={model.get('pass_comparison_disagreement_count', 0)}, "
             f"confidence={confidence_counts or 'none'}"
         )
+        for profile_name, profile in sorted(
+            model.get("pass_comparison_profile_summaries", {}).items()
+        ):
+            profile_confidence = ", ".join(
+                f"{key}={value}"
+                for key, value in sorted(profile.get("confidence_counts", {}).items())
+            )
+            lines.append(
+                f"  - {profile_name}: runs={profile.get('run_count', 0)}, "
+                f"divergent_runs={profile.get('divergent_run_count', 0)}, "
+                f"field_disagreements={profile.get('disagreement_count', 0)}, "
+                f"confidence={profile_confidence or 'none'}"
+            )
 
     lines.append("")
     lines.append("## Filing Status Counts")
@@ -1231,6 +1397,7 @@ def render_model_report_html(report: dict) -> str:
         ("exact matches", summary["exact_match_count"]),
         ("grounded fields", f"{summary.get('grounding_matched_field_count', 0)}/{summary.get('grounding_expected_field_count', 0)}"),
         ("pass disagreements", summary.get("pass_comparison_disagreement_count", 0)),
+        ("pass profile runs", summary.get("pass_comparison_profile_run_count", 0)),
         ("OCR inspections", summary.get("inspection_document_count", 0)),
     ]:
         html.append(
@@ -1266,12 +1433,23 @@ def render_model_report_html(report: dict) -> str:
                 ("facts", document.get("facts_json")),
                 ("inspection", document.get("ocr_inspection_html")),
                 ("grounding", document.get("ocr_grounding_html")),
-                ("pass diff", document.get("ocr_pass_comparison_html")),
             ]:
                 if path:
                     artifact_links.append(
                         f"<a href=\"file://{escape_html_attribute(path)}\" target=\"_blank\" rel=\"noreferrer noopener\">{escape_html(label)}</a>"
                     )
+            pass_profiles = document.get("ocr_pass_comparison_profiles") or []
+            if pass_profiles:
+                for profile in pass_profiles:
+                    if profile.get("html_path"):
+                        label = f"pass diff ({profile['name']})"
+                        artifact_links.append(
+                            f"<a href=\"file://{escape_html_attribute(profile['html_path'])}\" target=\"_blank\" rel=\"noreferrer noopener\">{escape_html(label)}</a>"
+                        )
+            elif document.get("ocr_pass_comparison_html"):
+                artifact_links.append(
+                    f"<a href=\"file://{escape_html_attribute(document['ocr_pass_comparison_html'])}\" target=\"_blank\" rel=\"noreferrer noopener\">pass diff</a>"
+                )
             html.append("<tr>")
             html.append(f"<td>{escape_html(document.get('document_id') or document['input_document'])}</td>")
             html.append(f"<td>{escape_html(document['kind'])}</td>")
@@ -1285,7 +1463,7 @@ def render_model_report_html(report: dict) -> str:
                 f"<td>{escape_html(render_field_match_summary(expected_grounding.get('matched_field_count'), expected_grounding.get('expected_field_count')))}</td>"
             )
             html.append(
-                f"<td>{escape_html(render_pass_summary(pass_comparison))}</td>"
+                f"<td>{escape_html(render_pass_summary(pass_comparison, pass_profiles))}</td>"
             )
             html.append(f"<td>{' · '.join(artifact_links) or '<span class=\"muted\">none</span>'}</td>")
             html.append("</tr>")
@@ -1306,7 +1484,15 @@ def render_field_match_summary(matched_count, expected_count) -> str:
     return f"{matched_count}/{expected_count}"
 
 
-def render_pass_summary(pass_comparison: dict) -> str:
+def render_pass_summary(pass_comparison: dict, pass_profiles: list[dict] | None = None) -> str:
+    if pass_profiles:
+        parts = []
+        for profile in pass_profiles:
+            summary = profile.get("summary") or {}
+            confidence = summary.get("overall_confidence") or "unknown"
+            disagreements = summary.get("disagreement_count", 0)
+            parts.append(f"{profile['name']}={confidence}/{disagreements}")
+        return "; ".join(parts) or "n/a"
     if not pass_comparison:
         return "n/a"
     confidence = pass_comparison.get("overall_confidence") or "unknown"
@@ -1356,6 +1542,11 @@ def write_reports(output_dir: Path, model_reports: list[dict]) -> None:
 
 def main() -> int:
     args = parse_args()
+    try:
+        compare_profiles = resolve_compare_profiles(args) if args.compare_passes else []
+    except ValueError as err:
+        print(f"error: {err}", flush=True)
+        return 1
     models = resolve_models(args)
     output_dir = Path(args.output_dir)
     source_dir = output_dir / "source_corpus"
@@ -1377,6 +1568,17 @@ def main() -> int:
     model_reports = []
     for model in models:
         try:
+            if args.compare_passes:
+                args.compare_profiles = [
+                    ":".join(
+                        [
+                            profile["name"],
+                            profile["pass_kind"],
+                            profile["preprocess_variant"],
+                        ]
+                    )
+                    for profile in compare_profiles
+                ]
             model_reports.append(
                 evaluate_model(
                     corpus_spec,

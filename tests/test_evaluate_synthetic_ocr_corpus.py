@@ -300,6 +300,32 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
         self.assertEqual(summary["field_status_counts"]["divergent"], 1)
         self.assertEqual(summary["divergent_fields"], ["total_paid"])
 
+    def test_resolve_compare_profiles_uses_defaults_and_validates_custom_profiles(self):
+        defaults = ocr_eval.resolve_compare_profiles(
+            type("Args", (), {"compare_profiles": None})()
+        )
+
+        self.assertEqual(
+            [profile["name"] for profile in defaults],
+            ["table_focused_binarized", "verification_contrast_boosted"],
+        )
+
+        custom = ocr_eval.resolve_compare_profiles(
+            type(
+                "Args",
+                (),
+                {"compare_profiles": ["deskew_check:verification:deskewed"]},
+            )()
+        )
+
+        self.assertEqual(custom[0]["pass_kind"], "verification")
+        self.assertEqual(custom[0]["preprocess_variant"], "deskewed")
+
+        with self.assertRaises(ValueError):
+            ocr_eval.resolve_compare_profiles(
+                type("Args", (), {"compare_profiles": ["badprofile"]})()
+            )
+
     def test_summarize_comparison_preserves_per_model_totals(self):
         comparison = ocr_eval.summarize_comparison(
             [
@@ -622,11 +648,22 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
                     "grounding_matched_field_count": 4,
                     "grounding_field_match_counts": {"merchant_name": 1},
                     "pass_comparison_document_count": 1,
+                    "pass_comparison_profile_run_count": 2,
                     "pass_comparison_divergent_document_count": 0,
                     "pass_comparison_disagreement_count": 0,
                     "pass_comparison_confidence_counts": {"high": 1},
                     "pass_comparison_field_confidence_counts": {"high": 5},
                     "pass_comparison_field_status_counts": {"consensus": 5},
+                    "pass_comparison_profile_summaries": {
+                        "table_focused_binarized": {
+                            "run_count": 1,
+                            "divergent_run_count": 0,
+                            "disagreement_count": 0,
+                            "confidence_counts": {"high": 1},
+                            "field_confidence_counts": {"high": 5},
+                            "field_status_counts": {"consensus": 5},
+                        }
+                    },
                     "inspection_document_count": 1,
                     "model": "gemini-3-flash-preview",
                     "exact_match_count": 1,
@@ -656,6 +693,24 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
                                 "ocr_inspection_html": "/repo/out/inspection.html",
                                 "ocr_grounding_html": "/repo/out/grounding.html",
                                 "ocr_pass_comparison_html": "/repo/out/comparison.html",
+                                "ocr_pass_comparison_profiles": [
+                                    {
+                                        "name": "table_focused_binarized",
+                                        "html_path": "/repo/out/comparison_table.html",
+                                        "summary": {
+                                            "overall_confidence": "high",
+                                            "disagreement_count": 0,
+                                        },
+                                    },
+                                    {
+                                        "name": "verification_contrast_boosted",
+                                        "html_path": "/repo/out/comparison_verify.html",
+                                        "summary": {
+                                            "overall_confidence": "medium",
+                                            "disagreement_count": 1,
+                                        },
+                                    },
+                                ],
                                 "exact_match": True,
                                 "relaxed_match": True,
                                 "content_match": True,
@@ -682,7 +737,9 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
 
         self.assertIn("OCR Evaluation", html)
         self.assertIn("inspection", html)
-        self.assertIn("pass diff", html)
+        self.assertIn("pass diff (table_focused_binarized)", html)
+        self.assertIn("pass diff (verification_contrast_boosted)", html)
+        self.assertIn("table_focused_binarized=high/0", html)
         self.assertIn("file:///repo/out/inspection.html", html)
 
 
