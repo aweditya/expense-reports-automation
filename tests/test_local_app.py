@@ -221,7 +221,7 @@ class LocalAppTests(unittest.TestCase):
             self.assertIn("receipt", command)
             self.assertNotIn("--run-id", command)
 
-    def test_build_ingest_command_prefers_built_binary_and_vertex_fields(self):
+    def test_build_ingest_command_uses_cargo_runner_for_vertex_fields_even_if_binary_exists(self):
         with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as workspace_dir:
             repo_root = Path(repo_dir)
             workspace_root = Path(workspace_dir)
@@ -253,7 +253,7 @@ class LocalAppTests(unittest.TestCase):
                 [input_path],
             )
 
-            self.assertEqual(command[0], str(binary))
+            self.assertEqual(command[:4], ["cargo", "run", "--bin", "ingest_bundle_workspace"])
             self.assertIn("demo_bundle", command)
             self.assertIn("gemini_flash", command)
             self.assertIn("--project", command)

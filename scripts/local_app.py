@@ -467,9 +467,6 @@ def sanitize_filename(value: str) -> str:
 
 
 def resolve_cli_command(repo_root: Path) -> list[str]:
-    candidate = repo_root / "target" / "debug" / "ingest_bundle_workspace"
-    if candidate.exists() and os.access(candidate, os.X_OK):
-        return [str(candidate)]
     return ["cargo", "run", "--bin", "ingest_bundle_workspace", "--"]
 
 
