@@ -223,6 +223,36 @@ body {
 
 .document-snapshot-actions {
   margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.document-snapshot-ocr-summary {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(182, 108, 63, 0.22);
+  border-radius: 12px;
+  background: rgba(247, 243, 235, 0.8);
+}
+
+.document-snapshot-ocr-heading {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.document-snapshot-ocr-meta,
+.document-snapshot-ocr-fields {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.document-snapshot-ocr-fields {
+  margin-top: 6px;
 }
 
 .toolbar-main,

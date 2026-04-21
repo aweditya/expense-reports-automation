@@ -85,7 +85,13 @@ def build_ledger_fixture() -> dict:
     }
 
 
-def write_bundle_fixture(workspace_root: Path, bundle_id: str, *, with_workbench: bool = True) -> None:
+def write_bundle_fixture(
+    workspace_root: Path,
+    bundle_id: str,
+    *,
+    with_workbench: bool = True,
+    with_ocr_diff: bool = False,
+) -> None:
     bundle_root = workspace_root / "bundles" / bundle_id
     artifacts_dir = bundle_root / "runs" / "demo_run" / "artifacts"
     uploads_dir = bundle_root / "uploads" / "doc_receipt"
@@ -104,6 +110,10 @@ def write_bundle_fixture(workspace_root: Path, bundle_id: str, *, with_workbench
     (artifacts_dir / "review_packet.json").write_text(
         json.dumps({"summary": {"filing_status": "ready_to_file"}}, indent=2)
     )
+    if with_ocr_diff:
+        ocr_dir = artifacts_dir / "ocr_pass_comparisons" / "doc_receipt"
+        ocr_dir.mkdir(parents=True, exist_ok=True)
+        (ocr_dir / "comparison.html").write_text("<html><body>OCR Diff</body></html>")
 
 
 def build_config(
@@ -238,6 +248,7 @@ class LocalAppTests(unittest.TestCase):
             self.assertIn("/tmp/key.json", command)
             self.assertIn("--run-id", command)
             self.assertIn("gemini_flash", command)
+            self.assertIn("--compare-receipt-passes", command)
 
     def test_build_ingest_command_uses_server_side_vertex_defaults(self):
         with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as workspace_dir:
@@ -261,6 +272,7 @@ class LocalAppTests(unittest.TestCase):
             self.assertIn("/abs/path/to/key.json", command)
             self.assertIn("--sdk-python", command)
             self.assertIn("./.venv/bin/python", command)
+            self.assertIn("--compare-receipt-passes", command)
 
     def test_build_review_save_command_supports_base_version(self):
         with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as artifacts_dir:
@@ -336,7 +348,12 @@ class LocalAppTests(unittest.TestCase):
     def test_latest_workbench_path_returns_existing_html(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
-            write_bundle_fixture(workspace_root, "demo_bundle", with_workbench=True)
+            write_bundle_fixture(
+                workspace_root,
+                "demo_bundle",
+                with_workbench=True,
+                with_ocr_diff=True,
+            )
 
             workbench_path = local_app.latest_workbench_path(workspace_root, "demo_bundle")
 
@@ -624,7 +641,12 @@ class LocalAppHttpTests(unittest.TestCase):
     def test_http_routes_serve_index_bundle_manifest_and_workbench(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
-            write_bundle_fixture(workspace_root, "demo_bundle", with_workbench=True)
+            write_bundle_fixture(
+                workspace_root,
+                "demo_bundle",
+                with_workbench=True,
+                with_ocr_diff=True,
+            )
             config = self.make_config(workspace_root)
             original_render = local_app.render_current_workbench_html
             local_app.render_current_workbench_html = (
@@ -682,6 +704,14 @@ class LocalAppHttpTests(unittest.TestCase):
                 )
                 self.assertEqual(status, 200)
                 self.assertIn(b"Dynamic Workbench", payload)
+
+                status, _, payload = self.request(
+                    config,
+                    "GET",
+                    "/bundle/demo_bundle/artifact/ocr_pass_comparisons/doc_receipt/comparison.html",
+                )
+                self.assertEqual(status, 200)
+                self.assertIn(b"OCR Diff", payload)
 
                 status, response_headers, payload = self.request(
                     config, "GET", "/bundle/demo_bundle/document/doc_receipt/receipt.png"

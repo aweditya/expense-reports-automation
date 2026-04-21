@@ -310,6 +310,37 @@ def bundle_artifact_path(workspace_root: Path, bundle_id: str, artifact_name: st
     return path
 
 
+def bundle_artifact_relative_path(
+    workspace_root: Path, bundle_id: str, artifact_relative_path: str
+) -> Path:
+    artifacts_dir = latest_run_artifacts_dir(workspace_root, bundle_id)
+    if not artifacts_dir:
+        raise LocalAppError(f"bundle {bundle_id} does not have a run yet")
+
+    relative = Path(artifact_relative_path)
+    if relative.is_absolute():
+        raise LocalAppError("artifact path must be relative")
+    if ".." in relative.parts:
+        raise LocalAppError("artifact path escaped artifacts dir")
+    if relative.parts == ("review_workbench.html",):
+        return bundle_artifact_path(workspace_root, bundle_id, "review_workbench.html")
+    if len(relative.parts) == 1:
+        return bundle_artifact_path(workspace_root, bundle_id, relative.name)
+    if not relative.parts or relative.parts[0] != "ocr_pass_comparisons":
+        raise LocalAppError(f"artifact not available for export: {artifact_relative_path}")
+
+    path = artifacts_dir / relative
+    resolved_artifacts_dir = artifacts_dir.resolve()
+    resolved_path = path.resolve()
+    try:
+        resolved_path.relative_to(resolved_artifacts_dir)
+    except ValueError as err:
+        raise LocalAppError("artifact path escaped artifacts dir") from err
+    if not resolved_path.exists():
+        raise LocalAppError(f"artifact not found: {artifact_relative_path}")
+    return path
+
+
 def load_review_session_state(workspace_root: Path, bundle_id: str) -> dict:
     ledger_path = latest_ledger_path(workspace_root, bundle_id)
     if not ledger_path:
@@ -488,6 +519,7 @@ def build_ingest_command(
             command.extend(["--service-account-key", service_account_key])
         if sdk_python:
             command.extend(["--sdk-python", sdk_python])
+        command.append("--compare-receipt-passes")
     command.extend(str(path) for path in input_paths)
     return command
 
@@ -1127,15 +1159,15 @@ class LocalAppHandler(http.server.BaseHTTPRequestHandler):
             )
             self.respond_html(body)
             return
-        if len(segments) == 4 and segments[2] == "artifact":
-            artifact_name = urllib.parse.unquote(segments[3])
+        if len(segments) >= 4 and segments[2] == "artifact":
+            artifact_name = "/".join(urllib.parse.unquote(segment) for segment in segments[3:])
             if artifact_name == "review_workbench.html":
                 body = render_current_workbench_html(
                     self.config.repo_root, self.config.workspace_root, bundle_id
                 )
                 self.respond_html(body)
             else:
-                path = bundle_artifact_path(
+                path = bundle_artifact_relative_path(
                     self.config.workspace_root,
                     bundle_id,
                     artifact_name,

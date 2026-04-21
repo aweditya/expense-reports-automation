@@ -664,11 +664,51 @@ fn render_document_snapshot_card(html: &mut String, document: &DocumentSnapshotC
         }
         html.push_str("</ul>");
     }
+    if let Some(comparison) = document.ocr_comparison.as_ref() {
+        html.push_str("<div class=\"document-snapshot-ocr-summary\">");
+        html.push_str("<p class=\"document-snapshot-ocr-heading\">OCR cross-check</p>");
+        html.push_str("<p class=\"document-snapshot-ocr-meta\">");
+        html.push_str(&escape_html(&format!(
+            "{} pass{} compared · {} disagreement{} · {} confidence",
+            comparison.compared_pass_count,
+            if comparison.compared_pass_count == 1 {
+                ""
+            } else {
+                "es"
+            },
+            comparison.disagreement_count,
+            if comparison.disagreement_count == 1 {
+                ""
+            } else {
+                "s"
+            },
+            confidence_level_label(comparison.overall_confidence)
+        )));
+        html.push_str("</p>");
+        if !comparison.divergent_fields.is_empty() {
+            html.push_str("<p class=\"document-snapshot-ocr-fields\">Disagreed fields: ");
+            html.push_str(&escape_html(
+                &comparison
+                    .divergent_fields
+                    .iter()
+                    .map(|field| humanize_machine_label(field))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            ));
+            html.push_str("</p>");
+        }
+        html.push_str("</div>");
+    }
     let document_href = format!("document/{}/{}", document.document_id, document.filename);
     html.push_str("<div class=\"document-snapshot-actions\">");
     html.push_str("<a class=\"document-link\" href=\"");
     html.push_str(&escape_html_attribute(&document_href));
     html.push_str("\" target=\"_blank\" rel=\"noreferrer noopener\">Open source document</a>");
+    if let Some(href) = document.ocr_comparison_href.as_ref() {
+        html.push_str("<a class=\"document-link\" href=\"");
+        html.push_str(&escape_html_attribute(href));
+        html.push_str("\" target=\"_blank\" rel=\"noreferrer noopener\">Open OCR diff</a>");
+    }
     html.push_str("</div>");
     html.push_str("</article>");
 }
@@ -988,6 +1028,14 @@ fn filing_status_label(status: FilingStatus) -> &'static str {
     }
 }
 
+fn confidence_level_label(level: crate::ConfidenceLevel) -> &'static str {
+    match level {
+        crate::ConfidenceLevel::High => "High",
+        crate::ConfidenceLevel::Medium => "Medium",
+        crate::ConfidenceLevel::Low => "Low",
+    }
+}
+
 fn issue_class_name(class: crate::ReadinessIssueClass) -> &'static str {
     match class {
         crate::ReadinessIssueClass::AutomationGap => "automation-gap",
@@ -1280,5 +1328,30 @@ mod tests {
                 && rendered.contains("event.key==='s'"),
             "workbench must include Ctrl/Cmd+S keyboard shortcut for saving"
         );
+    }
+
+    #[test]
+    fn workbench_renders_ocr_diff_links_for_document_snapshots() {
+        let provider = StaticFxRateProvider::demo();
+        let projection = synthesize_bundle_projection_with_fx(&synthetic_documents(), &provider);
+        let packet = crate::build_review_packet_with_ocr_comparisons(
+            &projection.bundle,
+            &projection.draft,
+            &crate::summarize_validation_readiness(&projection.validation),
+            &[crate::DocumentOcrComparisonSummary {
+                document_id: "synthetic_receipt_baseline".to_owned(),
+                compared_pass_count: 2,
+                overall_confidence: crate::ConfidenceLevel::Medium,
+                disagreement_count: 1,
+                divergent_fields: vec!["total_paid".to_owned()],
+            }],
+        )
+        .expect("review packet should build");
+        let rendered = render_review_workbench_html(&packet);
+
+        assert!(rendered.contains("OCR cross-check"));
+        assert!(rendered.contains("Open OCR diff"));
+        assert!(rendered
+            .contains("artifact/ocr_pass_comparisons/synthetic_receipt_baseline/comparison.html"));
     }
 }
