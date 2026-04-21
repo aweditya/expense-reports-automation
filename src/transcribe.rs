@@ -13,6 +13,7 @@ pub enum TranscriptionEngine {
     PlainText,
     VertexGemini,
     VertexGeminiSdk,
+    DocumentAi,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -392,6 +393,7 @@ fn transcription_engine_name(value: TranscriptionEngine) -> &'static str {
         TranscriptionEngine::PlainText => "plain_text",
         TranscriptionEngine::VertexGemini => "vertex_gemini",
         TranscriptionEngine::VertexGeminiSdk => "vertex_gemini_sdk",
+        TranscriptionEngine::DocumentAi => "document_ai",
     }
 }
 

@@ -3,10 +3,12 @@ use std::fs;
 use std::process::ExitCode;
 
 use expense_report_schema::{
+    transcribe_document_path_with_document_ai_profile,
     render_transcribed_document_json_pretty, render_transcribed_document_markdown,
     transcribe_document_path, transcribe_document_path_with_vertex,
     transcribe_document_path_with_vertex_sdk_profile, OcrPassKind, OcrPreprocessVariant,
-    VertexGeminiConfig, VertexGeminiSdkConfig, VertexGeminiSdkPassProfile,
+    DocumentAiConfig, DocumentAiPassProfile, VertexGeminiConfig, VertexGeminiSdkConfig,
+    VertexGeminiSdkPassProfile,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,6 +42,8 @@ fn run() -> Result<(), String> {
     let mut token_endpoint_override = None;
     let mut sdk_python = None;
     let mut sdk_script = None;
+    let mut processor_id = None;
+    let mut processor_version = None;
     let mut pass_id = None;
     let mut pass_kind = OcrPassKind::Primary;
     let mut preprocess_variant = OcrPreprocessVariant::Original;
@@ -125,6 +129,18 @@ fn run() -> Result<(), String> {
                         .ok_or_else(|| "missing value for --sdk-script".to_owned())?,
                 );
             }
+            "--processor-id" => {
+                processor_id = Some(
+                    args.next()
+                        .ok_or_else(|| "missing value for --processor-id".to_owned())?,
+                );
+            }
+            "--processor-version" => {
+                processor_version = Some(
+                    args.next()
+                        .ok_or_else(|| "missing value for --processor-version".to_owned())?,
+                );
+            }
             "--pass-id" => {
                 pass_id = Some(
                     args.next()
@@ -176,7 +192,7 @@ fn run() -> Result<(), String> {
     }
 
     let Some(path) = path else {
-        return Err("usage: transcribe_document [--format markdown|json] [--output PATH] [--engine builtin|vertex-gemini|vertex-gemini-sdk] [--project PROJECT] [--location LOCATION] [--model MODEL] [--access-token TOKEN] [--service-account-key PATH] [--endpoint URL] [--token-endpoint URL] [--sdk-python PATH] [--sdk-script PATH] [--pass-id ID] [--pass-kind primary|verification|table_focused|geometry_assist] [--preprocess-variant original|contrast_boosted|grayscale|binarized|deskewed] <document>".to_owned());
+        return Err("usage: transcribe_document [--format markdown|json] [--output PATH] [--engine builtin|vertex-gemini|vertex-gemini-sdk|document-ai] [--project PROJECT] [--location LOCATION] [--model MODEL] [--access-token TOKEN] [--service-account-key PATH] [--endpoint URL] [--token-endpoint URL] [--sdk-python PATH] [--sdk-script PATH] [--processor-id ID] [--processor-version ID] [--pass-id ID] [--pass-kind primary|verification|table_focused|geometry_assist] [--preprocess-variant original|contrast_boosted|grayscale|binarized|deskewed] <document>".to_owned());
     };
 
     let document = match engine.as_str() {
@@ -216,9 +232,31 @@ fn run() -> Result<(), String> {
             )
             .map_err(|err| err.to_string())?
         }
+        "document-ai" => {
+            let document_ai_config = DocumentAiConfig::resolve_from_sources(
+                project_id,
+                location,
+                processor_id,
+                processor_version,
+                service_account_key_path.map(Into::into),
+                sdk_python.map(Into::into),
+                sdk_script.map(Into::into),
+            )
+            .map_err(|err| err.to_string())?;
+            transcribe_document_path_with_document_ai_profile(
+                &path,
+                &document_ai_config,
+                &DocumentAiPassProfile {
+                    pass_id,
+                    pass_kind,
+                    preprocess_variant,
+                },
+            )
+            .map_err(|err| err.to_string())?
+        }
         _ => {
             return Err(
-                "engine must be one of builtin | vertex-gemini | vertex-gemini-sdk".to_owned(),
+                "engine must be one of builtin | vertex-gemini | vertex-gemini-sdk | document-ai".to_owned(),
             )
         }
     };
