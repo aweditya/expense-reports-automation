@@ -694,7 +694,7 @@ def render_current_workbench_html(
         repo_root,
         workspace_root,
         bundle_id,
-        "developer",
+        "fa",
         command_runner=command_runner,
     )
 
@@ -1226,7 +1226,7 @@ class LocalAppHandler(http.server.BaseHTTPRequestHandler):
                 self.config.repo_root,
                 self.config.workspace_root,
                 bundle_id,
-                "developer",
+                "fa",
             )
             self.respond_html(body)
             return

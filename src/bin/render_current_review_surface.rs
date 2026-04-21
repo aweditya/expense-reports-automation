@@ -1,6 +1,6 @@
 use expense_report_schema::{
     build_review_packet_with_ocr_artifacts, load_review_submission_ledger_path,
-    render_review_preview_html, render_review_workbench_html,
+    render_fa_workbench_html, render_review_preview_html, render_review_workbench_html,
 };
 
 fn main() {
@@ -56,13 +56,14 @@ fn run() -> Result<String, String> {
     .map_err(|err| format!("failed to rebuild review packet: {err}"))?;
 
     match surface.as_str() {
-        "developer" | "workbench" => Ok(render_review_workbench_html(&packet)),
+        "fa" | "workbench" => Ok(render_fa_workbench_html(&packet)),
+        "developer" => Ok(render_review_workbench_html(&packet)),
         "preview" => Ok(render_review_preview_html(&packet)),
         other => Err(format!("unknown surface: {other}\n{}", usage())),
     }
 }
 
 fn usage() -> String {
-    "usage: render_current_review_surface --artifacts-dir <dir> [--surface developer|preview]"
+    "usage: render_current_review_surface --artifacts-dir <dir> [--surface fa|developer|preview]"
         .to_owned()
 }

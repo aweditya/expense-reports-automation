@@ -348,7 +348,7 @@ class LocalAppTests(unittest.TestCase):
             self.assertEqual(captured["cwd"], Path(repo_dir))
             self.assertIn("--artifacts-dir", captured["command"])
             self.assertIn("--surface", captured["command"])
-            self.assertIn("developer", captured["command"])
+            self.assertIn("fa", captured["command"])
 
     def test_render_current_review_surface_html_supports_preview(self):
         captured = {}
@@ -756,7 +756,11 @@ class LocalAppHttpTests(unittest.TestCase):
                 lambda repo_root, workspace_root, bundle_id, surface, command_runner=local_app.run_pipeline_command: (
                     "<!DOCTYPE html><html><body><h1>Dynamic Preview</h1></body></html>"
                     if surface == "preview"
-                    else "<!DOCTYPE html><html><body><h1>Dynamic Developer Workbench</h1><input class='field-control'></body></html>"
+                    else (
+                        "<!DOCTYPE html><html><body><h1>Dynamic Developer Workbench</h1><input class='field-control'></body></html>"
+                        if surface == "developer"
+                        else "<!DOCTYPE html><html><body><h1>Dynamic FA Workbench</h1><input class='field-control'></body></html>"
+                    )
                 )
             )
 
@@ -791,7 +795,7 @@ class LocalAppHttpTests(unittest.TestCase):
                     response_headers["Cache-Control"],
                     "no-store, no-cache, must-revalidate, max-age=0",
                 )
-                self.assertIn(b"Dynamic Developer Workbench", payload)
+                self.assertIn(b"Dynamic FA Workbench", payload)
                 self.assertNotIn(b"Stale Saved Workbench", payload)
 
                 status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/preview")
