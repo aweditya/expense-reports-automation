@@ -1294,6 +1294,7 @@ mod tests {
                 pass_id: pass_id.to_owned(),
                 pass_kind,
                 preprocess_variant,
+                grounding_preprocess_variant: None,
                 producer: "google_genai_sdk".to_owned(),
                 model: Some("gemini-3-flash-preview".to_owned()),
                 geometry_source: crate::transcribe::OcrGeometrySource::None,

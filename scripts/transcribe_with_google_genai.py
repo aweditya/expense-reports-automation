@@ -11,6 +11,7 @@ DEFAULT_MODEL = "gemini-3-flash-preview"
 CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
 DEFAULT_GENERATE_RETRIES = 3
 GROUNDABLE_IMAGE_MIME_TYPES = {"image/png", "image/jpeg"}
+GROUNDING_FALLBACK_VARIANTS = ("contrast_boosted", "binarized", "grayscale")
 
 
 def parse_args() -> argparse.Namespace:
@@ -261,6 +262,52 @@ def image_page_dimensions(file_bytes: bytes, mime_type: str) -> dict | None:
     return {"width": width, "height": height}
 
 
+def grounding_retry_variants(primary_variant: str) -> list[str]:
+    variants = [primary_variant or "original"]
+    for candidate in GROUNDING_FALLBACK_VARIANTS:
+        if candidate not in variants:
+            variants.append(candidate)
+    return variants
+
+
+def attempt_grounding_regions(
+    client,
+    *,
+    model: str,
+    prompt: str,
+    file_bytes: bytes,
+    mime_type: str,
+    generate_fn=None,
+    part_factory=None,
+) -> list[dict]:
+    if generate_fn is None:
+        generate_fn = generate_content_with_retries
+    config = {
+        "temperature": 0,
+        "response_mime_type": "application/json",
+        "max_output_tokens": 4096,
+    }
+    if part_factory is None:
+        from google.genai import types
+
+        part_factory = lambda data, detected_mime: types.Part.from_bytes(  # noqa: E731
+            data=data, mime_type=detected_mime
+        )
+        config = types.GenerateContentConfig(**config)
+
+    response = generate_fn(
+        client,
+        model=model,
+        contents=[
+            prompt,
+            part_factory(file_bytes, mime_type),
+        ],
+        config=config,
+    )
+    payload = json.loads(extract_payload_text(response))
+    return normalize_grounding_regions(payload)
+
+
 def maybe_ground_key_receipt_fields(
     client,
     *,
@@ -269,43 +316,62 @@ def maybe_ground_key_receipt_fields(
     file_bytes: bytes,
     mime_type: str,
     normalized_pages: list[dict],
+    document_path: Path | None = None,
+    source_file_bytes: bytes | None = None,
+    source_mime_type: str | None = None,
+    preprocess_variant: str = "original",
+    grounding_variants: list[str] | None = None,
+    generate_fn=None,
+    preprocess_fn=preprocess_document_bytes,
+    part_factory=None,
 ):
-    if mime_type not in GROUNDABLE_IMAGE_MIME_TYPES or not normalized_pages:
-        return normalized_pages, "none", False
+    if generate_fn is None:
+        generate_fn = generate_content_with_retries
+    source_bytes = source_file_bytes if source_file_bytes is not None else file_bytes
+    source_mime = source_mime_type or mime_type
+    if source_mime not in GROUNDABLE_IMAGE_MIME_TYPES or not normalized_pages:
+        return normalized_pages, "none", False, None
+    if document_path is None:
+        document_path = Path(filename)
 
-    dimensions = image_page_dimensions(file_bytes, mime_type)
+    dimensions = image_page_dimensions(source_bytes, source_mime)
     enriched_pages = [dict(page) for page in normalized_pages]
     if dimensions:
         enriched_pages[0] = dict(enriched_pages[0])
         enriched_pages[0]["dimensions"] = dimensions
 
     prompt = build_grounding_prompt(filename, enriched_pages[0]["text"])
-    try:
-        from google.genai import types
+    attempt_variants = grounding_variants or grounding_retry_variants(preprocess_variant)
 
-        response = generate_content_with_retries(
-            client,
-            model=model,
-            contents=[
-                prompt,
-                types.Part.from_bytes(data=file_bytes, mime_type=mime_type),
-            ],
-            config=types.GenerateContentConfig(
-                temperature=0,
-                response_mime_type="application/json",
-                max_output_tokens=4096,
-            ),
-        )
-        payload = json.loads(extract_payload_text(response))
-        regions = normalize_grounding_regions(payload)
-    except Exception:
-        return enriched_pages, "none", False
+    for attempt_variant in attempt_variants:
+        try:
+            if attempt_variant == preprocess_variant:
+                attempt_bytes = file_bytes
+                attempt_mime = mime_type
+            else:
+                attempt_bytes, attempt_mime = preprocess_fn(
+                    document_path,
+                    source_bytes,
+                    source_mime,
+                    attempt_variant,
+                )
+            regions = attempt_grounding_regions(
+                client,
+                model=model,
+                prompt=prompt,
+                file_bytes=attempt_bytes,
+                mime_type=attempt_mime,
+                generate_fn=generate_fn,
+                part_factory=part_factory,
+            )
+        except Exception:
+            continue
 
-    if regions:
-        enriched_pages[0] = dict(enriched_pages[0])
-        enriched_pages[0]["regions"] = regions
-        return enriched_pages, "gemini", True
-    return enriched_pages, "none", False
+        if regions:
+            enriched_pages[0] = dict(enriched_pages[0])
+            enriched_pages[0]["regions"] = regions
+            return enriched_pages, "gemini", True, attempt_variant
+    return enriched_pages, "none", False, None
 
 
 def normalize_extractor_markdown(text: str) -> str:
@@ -562,12 +628,12 @@ def main() -> int:
         credentials=credentials,
     )
 
-    mime_type = detect_mime_type(document_path)
-    file_bytes = document_path.read_bytes()
+    source_mime_type = detect_mime_type(document_path)
+    source_file_bytes = document_path.read_bytes()
     file_bytes, mime_type = preprocess_document_bytes(
         document_path,
-        file_bytes,
-        mime_type,
+        source_file_bytes,
+        source_mime_type,
         args.preprocess_variant,
     )
     prompt = build_prompt(document_path.name, mime_type, args.pass_kind)
@@ -588,13 +654,22 @@ def main() -> int:
     payload = json.loads(extract_payload_text(response))
 
     normalized_pages = normalize_pages(payload)
-    normalized_pages, geometry_source, geometry_available = maybe_ground_key_receipt_fields(
+    (
+        normalized_pages,
+        geometry_source,
+        geometry_available,
+        grounding_preprocess_variant,
+    ) = maybe_ground_key_receipt_fields(
         client,
         model=args.model,
         filename=document_path.name,
         file_bytes=file_bytes,
         mime_type=mime_type,
         normalized_pages=normalized_pages,
+        document_path=document_path,
+        source_file_bytes=source_file_bytes,
+        source_mime_type=source_mime_type,
+        preprocess_variant=args.preprocess_variant,
     )
 
     result = {
@@ -607,6 +682,11 @@ def main() -> int:
             or f"{sanitize_identifier(document_path.stem)}_{args.pass_kind}_{args.preprocess_variant}",
             "pass_kind": args.pass_kind,
             "preprocess_variant": args.preprocess_variant,
+            **(
+                {"grounding_preprocess_variant": grounding_preprocess_variant}
+                if grounding_preprocess_variant
+                else {}
+            ),
             "producer": "google_genai_sdk",
             "model": args.model,
             "geometry_source": geometry_source,

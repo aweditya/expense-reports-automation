@@ -236,6 +236,7 @@ mod tests {
                 pass_id: "receipt_primary_original".to_owned(),
                 pass_kind: OcrPassKind::Primary,
                 preprocess_variant: OcrPreprocessVariant::Original,
+                grounding_preprocess_variant: Some(OcrPreprocessVariant::Original),
                 producer: "google_genai_sdk".to_owned(),
                 model: Some("gemini-3-flash-preview".to_owned()),
                 geometry_source: OcrGeometrySource::Gemini,

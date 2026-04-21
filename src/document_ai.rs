@@ -152,6 +152,7 @@ struct RawTranscriptionMetadata {
     pass_id: Option<String>,
     pass_kind: Option<String>,
     preprocess_variant: Option<String>,
+    grounding_preprocess_variant: Option<String>,
     producer: Option<String>,
     model: Option<String>,
     geometry_source: Option<String>,
@@ -294,6 +295,10 @@ fn parse_raw_transcription_metadata(raw: RawTranscriptionMetadata) -> Transcript
             .unwrap_or_else(|| "document_ai_primary_original".to_owned()),
         pass_kind: parse_pass_kind(raw.pass_kind.as_deref()),
         preprocess_variant: parse_preprocess_variant(raw.preprocess_variant.as_deref()),
+        grounding_preprocess_variant: raw
+            .grounding_preprocess_variant
+            .as_deref()
+            .map(|value| parse_preprocess_variant(Some(value))),
         producer: raw
             .producer
             .unwrap_or_else(|| "document_ai_sdk".to_owned()),

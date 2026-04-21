@@ -438,6 +438,7 @@ mod tests {
                 pass_id: pass_id.to_owned(),
                 pass_kind,
                 preprocess_variant,
+                grounding_preprocess_variant: geometry_available.then_some(preprocess_variant),
                 producer: "google_genai_sdk".to_owned(),
                 model: Some("gemini-3-flash-preview".to_owned()),
                 geometry_source: if geometry_available {

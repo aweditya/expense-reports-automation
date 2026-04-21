@@ -1,5 +1,6 @@
 import importlib.util
 import io
+import json
 import unittest
 from pathlib import Path
 
@@ -21,6 +22,15 @@ transcribe = load_module()
 
 
 class TranscribeWithGoogleGenAiTests(unittest.TestCase):
+    @staticmethod
+    def make_png_bytes() -> bytes:
+        from PIL import Image
+
+        image = Image.new("RGB", (8, 8), color=(220, 220, 220))
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+        return buffer.getvalue()
+
     def test_generate_content_with_retries_recovers_from_transient_failure(self):
         class FakeModels:
             def __init__(self):
@@ -232,7 +242,7 @@ class TranscribeWithGoogleGenAiTests(unittest.TestCase):
     def test_maybe_ground_key_receipt_fields_skips_non_image_inputs(self):
         pages = [{"page_number": 1, "text": "# Merchant Receipt", "dimensions": None, "regions": []}]
 
-        grounded_pages, geometry_source, geometry_available = (
+        grounded_pages, geometry_source, geometry_available, grounding_variant = (
             transcribe.maybe_ground_key_receipt_fields(
                 object(),
                 model="gemini-3-flash-preview",
@@ -246,6 +256,105 @@ class TranscribeWithGoogleGenAiTests(unittest.TestCase):
         self.assertEqual(grounded_pages, pages)
         self.assertEqual(geometry_source, "none")
         self.assertFalse(geometry_available)
+        self.assertIsNone(grounding_variant)
+
+    def test_grounding_retry_variants_try_primary_then_unique_fallbacks(self):
+        self.assertEqual(
+            transcribe.grounding_retry_variants("original"),
+            ["original", "contrast_boosted", "binarized", "grayscale"],
+        )
+        self.assertEqual(
+            transcribe.grounding_retry_variants("binarized"),
+            ["binarized", "contrast_boosted", "grayscale"],
+        )
+
+    def test_maybe_ground_key_receipt_fields_retries_fallback_variant(self):
+        pages = [{"page_number": 1, "text": "# Merchant Receipt", "dimensions": None, "regions": []}]
+        attempted_payloads = []
+        source_png = self.make_png_bytes()
+
+        def fake_generate(_, **kwargs):
+            image_bytes, detected_mime = kwargs["contents"][1]
+            attempted_payloads.append((image_bytes, detected_mime))
+            if image_bytes == source_png:
+                text = json.dumps({"regions": []})
+            else:
+                text = json.dumps(
+                    {
+                        "regions": [
+                            {
+                                "region_id": "total_paid",
+                                "kind": "value_candidate",
+                                "text": "MYR 9.00",
+                                "box_2d": [100, 200, 160, 520],
+                            }
+                        ]
+                    }
+                )
+            return type("Response", (), {"text": text})()
+
+        def fake_preprocess(document_path, file_bytes, mime_type, variant):
+            self.assertEqual(document_path, Path("receipt.png"))
+            self.assertEqual(file_bytes, source_png)
+            self.assertEqual(mime_type, "image/png")
+            return f"{variant}-bytes".encode(), "image/png"
+
+        grounded_pages, geometry_source, geometry_available, grounding_variant = (
+            transcribe.maybe_ground_key_receipt_fields(
+                object(),
+                model="gemini-3-flash-preview",
+                filename="receipt.png",
+                file_bytes=source_png,
+                mime_type="image/png",
+                normalized_pages=pages,
+                document_path=Path("receipt.png"),
+                source_file_bytes=source_png,
+                source_mime_type="image/png",
+                preprocess_variant="original",
+                generate_fn=fake_generate,
+                preprocess_fn=fake_preprocess,
+                part_factory=lambda data, detected_mime: (data, detected_mime),
+            )
+        )
+
+        self.assertEqual(
+            attempted_payloads,
+            [(source_png, "image/png"), (b"contrast_boosted-bytes", "image/png")],
+        )
+        self.assertEqual(geometry_source, "gemini")
+        self.assertTrue(geometry_available)
+        self.assertEqual(grounding_variant, "contrast_boosted")
+        self.assertEqual(grounded_pages[0]["regions"][0]["region_id"], "total_paid")
+
+    def test_maybe_ground_key_receipt_fields_returns_none_when_all_variants_fail(self):
+        pages = [{"page_number": 1, "text": "# Merchant Receipt", "dimensions": None, "regions": []}]
+        source_png = self.make_png_bytes()
+
+        def fake_generate(_, **kwargs):
+            return type("Response", (), {"text": json.dumps({"regions": []})})()
+
+        grounded_pages, geometry_source, geometry_available, grounding_variant = (
+            transcribe.maybe_ground_key_receipt_fields(
+                object(),
+                model="gemini-3-flash-preview",
+                filename="receipt.png",
+                file_bytes=source_png,
+                mime_type="image/png",
+                normalized_pages=pages,
+                document_path=Path("receipt.png"),
+                source_file_bytes=source_png,
+                source_mime_type="image/png",
+                preprocess_variant="original",
+                generate_fn=fake_generate,
+                preprocess_fn=lambda *_args: (b"retry-bytes", "image/png"),
+                part_factory=lambda data, detected_mime: (data, detected_mime),
+            )
+        )
+
+        self.assertEqual(grounded_pages[0]["regions"], [])
+        self.assertEqual(geometry_source, "none")
+        self.assertFalse(geometry_available)
+        self.assertIsNone(grounding_variant)
 
     def test_preprocess_document_bytes_binarized_renders_png(self):
         from PIL import Image
