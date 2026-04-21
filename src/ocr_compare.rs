@@ -337,32 +337,49 @@ pub fn render_ocr_comparison_html(comparison: &OcrComparisonResult) -> String {
          <title>OCR Pass Comparison</title><style>\
          :root{color-scheme:light;font-family:ui-sans-serif,system-ui,sans-serif;}\
          body{margin:0;background:#f7f3eb;color:#231f1a;}\
-         main{max-width:1100px;margin:0 auto;padding:32px 24px 48px;}\
-         h1,h2{margin:0 0 12px;}\
+         main{max-width:1260px;margin:0 auto;padding:32px 24px 48px;}\
+         h1,h2,h3{margin:0;}\
+         p{margin:0;}\
          .summary,.section,.field{background:#fffdf9;border:1px solid #ddcfbb;border-radius:18px;box-shadow:0 8px 24px rgba(86,61,35,.08);}\
          .summary,.section{padding:20px 22px;margin-bottom:18px;}\
+         .summary-header{display:flex;justify-content:space-between;gap:16px;align-items:end;margin-bottom:16px;flex-wrap:wrap;}\
+         .eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8a5a2b;font-weight:700;margin-bottom:8px;}\
+         .summary-subtitle{color:#7b7064;line-height:1.5;max-width:760px;}\
          .field{padding:18px 20px;margin-bottom:14px;}\
          .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;}\
          .metric{padding:12px 14px;border-radius:14px;background:#f3ece0;border:1px solid #e1d3bf;}\
          .metric-label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8a5a2b;font-weight:700;}\
          .metric-value{margin-top:6px;font-size:20px;font-weight:700;}\
-         .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;}\
-         .badge.high,.badge.consensus{background:#d8f0df;color:#195c31;}\
-         .badge.medium,.badge.partialconsensus{background:#fff0c9;color:#7d5700;}\
-         .badge.low,.badge.divergent,.badge.missing{background:#ffd7d2;color:#8f2414;}\
-         table{width:100%;border-collapse:collapse;margin-top:12px;}\
-         th,td{text-align:left;padding:10px 8px;border-top:1px solid #eadfce;vertical-align:top;}\
-         th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#8a5a2b;}\
+         .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border:1px solid transparent;}\
+         .badge.high,.badge.consensus,.badge.pass{background:#d8f0df;color:#195c31;border-color:rgba(25,92,49,.12);}\
+         .badge.medium,.badge.partialconsensus,.badge.unavailable{background:#fff0c9;color:#7d5700;border-color:rgba(125,87,0,.12);}\
+         .badge.low,.badge.divergent,.badge.missing,.badge.warning{background:#ffd7d2;color:#8f2414;border-color:rgba(143,36,20,.12);}\
          code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;}\
-         .reason{margin-top:10px;padding:10px 12px;border-radius:12px;background:#f8ede7;color:#7b3426;}\
-         .candidate-list{margin:10px 0 0;padding:0;list-style:none;}\
-         .candidate-list li{padding:8px 0;border-top:1px solid #eadfce;}\
-         .candidate-list li:first-child{border-top:0;}\
+         .pass-grid,.candidate-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;}\
+         .pass-card,.candidate-card{border:1px solid #eadfce;border-radius:16px;background:#fff;padding:14px 16px;}\
+         .pass-card header,.field header{display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap;}\
+         .pass-card-title{display:grid;gap:4px;}\
+         .pass-meta{color:#7b7064;font-size:13px;line-height:1.5;}\
+         .pass-details{margin-top:14px;display:grid;gap:8px;}\
+         .detail-row{display:grid;gap:4px;}\
+         .detail-label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8a5a2b;font-weight:700;}\
+         .detail-value{line-height:1.45;word-break:break-word;}\
          .muted{color:#7b7064;}\
+         .section-heading{display:flex;justify-content:space-between;gap:16px;align-items:end;margin-bottom:14px;flex-wrap:wrap;}\
+         .section-copy{color:#7b7064;line-height:1.5;max-width:760px;}\
+         .reason{margin-top:10px;padding:10px 12px;border-radius:12px;background:#f8ede7;color:#7b3426;}\
+         .candidate-grid{margin-top:12px;}\
+         .candidate-card.missing{background:#f9f4ee;}\
+         .candidate-card header{display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap;margin-bottom:10px;}\
+         .candidate-value{font-size:18px;font-weight:700;line-height:1.35;}\
+         .candidate-meta{color:#7b7064;font-size:13px;line-height:1.5;}\
+         .field-topline{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}\
+         .field-summary{margin-top:10px;color:#7b7064;line-height:1.5;}\
+         .consistency-list{display:grid;gap:12px;}\
+         .field-list{display:grid;gap:14px;}\
          </style></head><body><main>",
     );
-    html.push_str("<h1>OCR Pass Comparison</h1>");
-    html.push_str("<div class=\"summary\"><div class=\"grid\">");
+    html.push_str("<div class=\"summary\"><div class=\"summary-header\"><div><p class=\"eyebrow\">Developer OCR diff</p><h1>OCR Pass Comparison</h1><p class=\"summary-subtitle\">Side-by-side inspection of OCR passes for one document. Use this view to see which fields agreed, which ones drifted, and whether arithmetic consistency checks succeeded before the FA sees the result.</p></div></div><div class=\"grid\">");
     html.push_str(&metric_card("document_id", &comparison.document_id));
     html.push_str(&metric_card("filename", &comparison.filename));
     html.push_str(&metric_card(
@@ -384,81 +401,65 @@ pub fn render_ocr_comparison_html(comparison: &OcrComparisonResult) -> String {
     ));
     html.push_str("</div></div>");
 
-    html.push_str("<section class=\"section\"><h2>Passes</h2><table><thead><tr>\
-                   <th>Pass</th><th>Kind</th><th>Preprocess</th><th>Classification</th>\
-                   <th>Status</th><th>Merchant</th><th>Date</th><th>Total</th><th>Currency</th><th>Line Items</th>\
-                   </tr></thead><tbody>");
+    html.push_str("<section class=\"section\"><div class=\"section-heading\"><div><p class=\"eyebrow\">Passes</p><h2>Per-pass extraction</h2></div><p class=\"section-copy\">Each card shows the structured extraction produced by one OCR pass after its own preprocess lane. This is the fastest way to see whether disagreement comes from the OCR itself or from downstream reconciliation.</p></div><div class=\"pass-grid\">");
     for pass in &comparison.passes {
-        html.push_str("<tr>");
+        html.push_str("<article class=\"pass-card\"><header><div class=\"pass-card-title\">");
+        html.push_str(&format!("<h3><code>{}</code></h3>", escape_html(&pass.pass_id)));
         html.push_str(&format!(
-            "<td><code>{}</code></td>",
-            escape_html(&pass.pass_id)
+            "<p class=\"pass-meta\">{} pass · {} preprocess · {} · {:?}</p>",
+            escape_html(pass.pass_kind.as_str()),
+            escape_html(pass.preprocess_variant.as_str()),
+            escape_html(pass.classification_kind.as_str()),
+            pass.extraction_status
         ));
+        html.push_str("</div>");
         html.push_str(&format!(
-            "<td>{}</td>",
-            escape_html(pass.pass_kind.as_str())
+            "<span class=\"badge {}\">{}</span>",
+            confidence_label(pass.classification_confidence),
+            escape_html(confidence_label(pass.classification_confidence))
         ));
-        html.push_str(&format!(
-            "<td>{}</td>",
-            escape_html(pass.preprocess_variant.as_str())
+        html.push_str("</header><div class=\"pass-details\">");
+        html.push_str(&detail_row("Merchant", pass.merchant_name.as_deref().unwrap_or("[missing]")));
+        html.push_str(&detail_row("Date", pass.transaction_date.as_deref().unwrap_or("[missing]")));
+        html.push_str(&detail_row("Total", pass.total_paid.as_deref().unwrap_or("[missing]")));
+        html.push_str(&detail_row(
+            "Currency",
+            pass.total_paid_currency.as_deref().unwrap_or("[missing]"),
         ));
-        html.push_str(&format!(
-            "<td>{}</td>",
-            escape_html(pass.classification_kind.as_str())
-        ));
-        html.push_str(&format!("<td>{:?}</td>", pass.extraction_status));
-        html.push_str(&format!(
-            "<td>{}</td>",
-            escape_html(pass.merchant_name.as_deref().unwrap_or("[missing]"))
-        ));
-        html.push_str(&format!(
-            "<td>{}</td>",
-            escape_html(pass.transaction_date.as_deref().unwrap_or("[missing]"))
-        ));
-        html.push_str(&format!(
-            "<td>{}</td>",
-            escape_html(pass.total_paid.as_deref().unwrap_or("[missing]"))
-        ));
-        html.push_str(&format!(
-            "<td>{}</td>",
-            escape_html(pass.total_paid_currency.as_deref().unwrap_or("[missing]"))
-        ));
-        html.push_str(&format!("<td>{}</td>", pass.line_item_count));
-        html.push_str("</tr>");
+        html.push_str(&detail_row("Line Items", &pass.line_item_count.to_string()));
+        html.push_str("</div></article>");
     }
-    html.push_str("</tbody></table></section>");
+    html.push_str("</div></section>");
 
     if !comparison.consistency_checks.is_empty() {
-        html.push_str("<section class=\"section\"><h2>Consistency Checks</h2>");
+        html.push_str("<section class=\"section\"><div class=\"section-heading\"><div><p class=\"eyebrow\">Internal checks</p><h2>Consistency Checks</h2></div><p class=\"section-copy\">These checks are independent of pass agreement. A warning here means the receipt content itself does not add up cleanly, so even matching OCR passes should be reviewed carefully.</p></div><div class=\"consistency-list\">");
         for check in &comparison.consistency_checks {
             html.push_str("<article class=\"field\">");
-            html.push_str(&format!(
-                "<h3><code>{}</code></h3>",
-                escape_html(&check.check)
-            ));
+            html.push_str("<header>");
+            html.push_str(&format!("<h3><code>{}</code></h3>", escape_html(&check.check)));
             html.push_str(&format!(
                 "<span class=\"badge {}\">{}</span>",
                 consistency_status_class(check.status),
                 escape_html(consistency_status_label(check.status))
             ));
+            html.push_str("</header>");
             html.push_str(&format!(
-                "<p><strong>Summary:</strong> <span class=\"muted\">{}</span></p>",
+                "<p class=\"field-summary\"><strong>Summary:</strong> <span class=\"muted\">{}</span></p>",
                 escape_html(&check.message)
             ));
             html.push_str("</article>");
         }
-        html.push_str("</section>");
+        html.push_str("</div></section>");
     }
 
-    html.push_str("<section class=\"section\"><h2>Field Comparison</h2>");
+    html.push_str("<section class=\"section\"><div class=\"section-heading\"><div><p class=\"eyebrow\">Field matrix</p><h2>Field Comparison</h2></div><p class=\"section-copy\">Each field card shows the consensus verdict plus the raw value emitted by every pass. This is the main debugging surface for understanding whether a value is stable enough to trust.</p></div><div class=\"field-list\">");
     for field in &comparison.fields {
         html.push_str("<article class=\"field\">");
+        html.push_str("<header>");
+        html.push_str(&format!("<h3><code>{}</code></h3>", escape_html(&field.field)));
+        html.push_str("<div class=\"field-topline\">");
         html.push_str(&format!(
-            "<h3><code>{}</code></h3>",
-            escape_html(&field.field)
-        ));
-        html.push_str(&format!(
-            "<span class=\"badge {}\">{}</span> ",
+            "<span class=\"badge {}\">{}</span>",
             status_class(field.status),
             escape_html(status_label(field.status))
         ));
@@ -467,8 +468,9 @@ pub fn render_ocr_comparison_html(comparison: &OcrComparisonResult) -> String {
             confidence_label(field.confidence),
             escape_html(confidence_label(field.confidence))
         ));
+        html.push_str("</div></header>");
         html.push_str(&format!(
-            "<p><strong>Consensus:</strong> <span class=\"muted\">{}</span></p>",
+            "<p class=\"field-summary\"><strong>Consensus:</strong> <span class=\"muted\">{}</span></p>",
             escape_html(field.consensus_value.as_deref().unwrap_or("[missing]"))
         ));
         if let Some(reason) = field.disagreement_reason.as_deref() {
@@ -477,12 +479,20 @@ pub fn render_ocr_comparison_html(comparison: &OcrComparisonResult) -> String {
                 escape_html(reason)
             ));
         }
-        html.push_str("<ul class=\"candidate-list\">");
+        html.push_str("<div class=\"candidate-grid\">");
         for candidate in &field.candidates {
+            let card_class = if candidate.value.is_some() { "" } else { " missing" };
+            html.push_str("<article class=\"candidate-card");
+            html.push_str(card_class);
+            html.push_str("\"><header><div>");
+            html.push_str(&format!("<h3><code>{}</code></h3>", escape_html(&candidate.pass_id)));
+            html.push_str("</div>");
             html.push_str(&format!(
-                "<li><code>{}</code> -> <strong>{}</strong> <span class=\"muted\">({})</span></li>",
-                escape_html(&candidate.pass_id),
-                escape_html(candidate.value.as_deref().unwrap_or("[missing]")),
+                "<span class=\"badge {}\">{}</span>",
+                candidate
+                    .extractor_confidence
+                    .map(confidence_label)
+                    .unwrap_or("medium"),
                 escape_html(
                     candidate
                         .extractor_confidence
@@ -490,10 +500,17 @@ pub fn render_ocr_comparison_html(comparison: &OcrComparisonResult) -> String {
                         .unwrap_or("unknown")
                 )
             ));
+            html.push_str("</header>");
+            html.push_str("<p class=\"candidate-value\">");
+            html.push_str(&escape_html(candidate.value.as_deref().unwrap_or("[missing]")));
+            html.push_str("</p>");
+            html.push_str("<p class=\"candidate-meta\">");
+            html.push_str("Pass-specific extracted value");
+            html.push_str("</p></article>");
         }
-        html.push_str("</ul></article>");
+        html.push_str("</div></article>");
     }
-    html.push_str("</section></main></body></html>");
+    html.push_str("</div></section></main></body></html>");
     html
 }
 
@@ -1554,6 +1571,14 @@ fn metric_card(label: &str, value: &str) -> String {
     )
 }
 
+fn detail_row(label: &str, value: &str) -> String {
+    format!(
+        "<div class=\"detail-row\"><div class=\"detail-label\">{}</div><div class=\"detail-value\">{}</div></div>",
+        escape_html(label),
+        escape_html(value)
+    )
+}
+
 fn escape_html(value: &str) -> String {
     value
         .replace('&', "&amp;")
@@ -1775,6 +1800,9 @@ mod tests {
         assert!(html.contains("receipt_primary_original"));
         assert!(html.contains("consensus"));
         assert!(html.contains("Book Talk"));
+        assert!(html.contains("Per-pass extraction"));
+        assert!(html.contains("Field Comparison"));
+        assert!(html.contains("candidate-grid"));
     }
 
     #[test]
