@@ -2341,6 +2341,7 @@
     ],
     "issues": []
   },
+  "ocr_pass_comparisons": [],
   "summary": {
     "current_state": "ready_to_file",
     "current_draft_version_id": 3,
@@ -7135,7 +7136,9 @@
                 "value": "airfare_foreign"
               }
             ],
-            "issue_messages": []
+            "issue_messages": [],
+            "ocr_comparison": null,
+            "ocr_comparison_href": null
           },
           {
             "document_id": "hotel_folio_property_labeled",
@@ -7171,7 +7174,9 @@
                 "value": "lodging_foreign"
               }
             ],
-            "issue_messages": []
+            "issue_messages": [],
+            "ocr_comparison": null,
+            "ocr_comparison_href": null
           },
           {
             "document_id": "receipt_merchant_labeled",
@@ -7211,7 +7216,9 @@
                 "value": "business_meal"
               }
             ],
-            "issue_messages": []
+            "issue_messages": [],
+            "ocr_comparison": null,
+            "ocr_comparison_href": null
           }
         ]
       },
@@ -11985,7 +11992,9 @@
                 "value": "airfare_foreign"
               }
             ],
-            "issue_messages": []
+            "issue_messages": [],
+            "ocr_comparison": null,
+            "ocr_comparison_href": null
           },
           {
             "document_id": "hotel_folio_property_labeled",
@@ -12021,7 +12030,9 @@
                 "value": "lodging_foreign"
               }
             ],
-            "issue_messages": []
+            "issue_messages": [],
+            "ocr_comparison": null,
+            "ocr_comparison_href": null
           },
           {
             "document_id": "receipt_merchant_labeled",
@@ -12061,7 +12072,9 @@
                 "value": "business_meal"
               }
             ],
-            "issue_messages": []
+            "issue_messages": [],
+            "ocr_comparison": null,
+            "ocr_comparison_href": null
           }
         ]
       },
@@ -16967,7 +16980,9 @@
                 "value": "airfare_foreign"
               }
             ],
-            "issue_messages": []
+            "issue_messages": [],
+            "ocr_comparison": null,
+            "ocr_comparison_href": null
           },
           {
             "document_id": "hotel_folio_property_labeled",
@@ -17003,7 +17018,9 @@
                 "value": "lodging_foreign"
               }
             ],
-            "issue_messages": []
+            "issue_messages": [],
+            "ocr_comparison": null,
+            "ocr_comparison_href": null
           },
           {
             "document_id": "receipt_merchant_labeled",
@@ -17043,7 +17060,9 @@
                 "value": "business_meal"
               }
             ],
-            "issue_messages": []
+            "issue_messages": [],
+            "ocr_comparison": null,
+            "ocr_comparison_href": null
           }
         ]
       },

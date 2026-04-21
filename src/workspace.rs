@@ -58,6 +58,8 @@ pub struct WorkspaceDocumentRecord {
 pub struct WorkspaceRunConfigSummary {
     pub engine: String,
     pub fx_mode: String,
+    #[serde(default)]
+    pub compare_receipt_passes: bool,
     pub project_id: Option<String>,
     pub location: Option<String>,
     pub model: Option<String>,
@@ -97,6 +99,7 @@ pub struct WorkspaceRunConfig {
     pub run_id: Option<String>,
     pub transcriber: IngestionTranscriber,
     pub fx_mode: IngestionFxMode,
+    pub compare_receipt_passes: bool,
 }
 
 #[derive(Debug)]
@@ -231,6 +234,7 @@ pub fn run_staged_bundle(
             bundle_id: Some(bundle_id.to_owned()),
             transcriber: config.transcriber.clone(),
             fx_mode: config.fx_mode,
+            compare_receipt_passes: config.compare_receipt_passes,
         },
     )?;
     write_ingestion_artifacts(&artifacts_dir, &pipeline)?;
@@ -620,6 +624,7 @@ fn summarize_run_config(config: &WorkspaceRunConfig) -> WorkspaceRunConfigSummar
         IngestionTranscriber::Builtin => WorkspaceRunConfigSummary {
             engine: "builtin".to_owned(),
             fx_mode: fx_mode_name(config.fx_mode).to_owned(),
+            compare_receipt_passes: config.compare_receipt_passes,
             project_id: None,
             location: None,
             model: None,
@@ -627,6 +632,7 @@ fn summarize_run_config(config: &WorkspaceRunConfig) -> WorkspaceRunConfigSummar
         IngestionTranscriber::VertexGemini(vertex) => WorkspaceRunConfigSummary {
             engine: "vertex-gemini".to_owned(),
             fx_mode: fx_mode_name(config.fx_mode).to_owned(),
+            compare_receipt_passes: config.compare_receipt_passes,
             project_id: Some(vertex.project_id.clone()),
             location: Some(vertex.location.clone()),
             model: Some(vertex.model.clone()),
@@ -634,6 +640,7 @@ fn summarize_run_config(config: &WorkspaceRunConfig) -> WorkspaceRunConfigSummar
         IngestionTranscriber::VertexGeminiSdk(vertex) => WorkspaceRunConfigSummary {
             engine: "vertex-gemini-sdk".to_owned(),
             fx_mode: fx_mode_name(config.fx_mode).to_owned(),
+            compare_receipt_passes: config.compare_receipt_passes,
             project_id: vertex.project_id.clone(),
             location: Some(vertex.location.clone()),
             model: Some(vertex.model.clone()),
@@ -856,6 +863,7 @@ mod tests {
                 run_id: Some("baseline_builtin".to_owned()),
                 transcriber: IngestionTranscriber::Builtin,
                 fx_mode: IngestionFxMode::Demo,
+                compare_receipt_passes: false,
             },
         )
         .expect("workspace run should succeed");
@@ -893,6 +901,7 @@ mod tests {
                 run_id: Some("run_one".to_owned()),
                 transcriber: IngestionTranscriber::Builtin,
                 fx_mode: IngestionFxMode::Demo,
+                compare_receipt_passes: false,
             },
         )
         .expect("first run should succeed");
@@ -904,6 +913,7 @@ mod tests {
                 run_id: Some("run_two".to_owned()),
                 transcriber: IngestionTranscriber::Builtin,
                 fx_mode: IngestionFxMode::Demo,
+                compare_receipt_passes: false,
             },
         )
         .expect("second run should succeed");
@@ -929,6 +939,7 @@ mod tests {
                 run_id: Some("run_one".to_owned()),
                 transcriber: IngestionTranscriber::Builtin,
                 fx_mode: IngestionFxMode::Demo,
+                compare_receipt_passes: false,
             },
         )
         .expect("stage-and-run should succeed");

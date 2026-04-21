@@ -7,6 +7,7 @@ use crate::bundle_synthesis::CanonicalExpenseBundle;
 use crate::document_facts::{DocumentFactsPayload, DocumentKind, ExtractionStatus};
 use crate::draft::{ConfidenceLevel, DraftReport, EvidenceReference};
 use crate::field_conventions::{FieldControl, FieldEntryMode};
+use crate::ocr_compare::DocumentOcrComparisonSummary;
 use crate::readiness::{
     summarize_validation_readiness, ReadinessIssue, ReadinessIssueClass, ReadinessReport,
 };
@@ -134,6 +135,8 @@ pub struct DocumentSnapshotCard {
     pub status_label: String,
     pub summary_fields: Vec<DocumentSnapshotField>,
     pub issue_messages: Vec<String>,
+    pub ocr_comparison: Option<DocumentOcrComparisonSummary>,
+    pub ocr_comparison_href: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -220,14 +223,27 @@ pub fn build_review_packet_with_readiness(
     draft: &DraftReport,
     readiness: &ReadinessReport,
 ) -> Result<ReviewPacket, ReviewPacketError> {
+    build_review_packet_with_ocr_comparisons(bundle, draft, readiness, &[])
+}
+
+pub fn build_review_packet_with_ocr_comparisons(
+    bundle: &CanonicalExpenseBundle,
+    draft: &DraftReport,
+    readiness: &ReadinessReport,
+    ocr_comparisons: &[DocumentOcrComparisonSummary],
+) -> Result<ReviewPacket, ReviewPacketError> {
     let ui_map = load_ui_field_map().map_err(ReviewPacketError::UiFieldMapParse)?;
+    let ocr_by_document_id = ocr_comparisons
+        .iter()
+        .map(|summary| (summary.document_id.clone(), summary.clone()))
+        .collect::<BTreeMap<_, _>>();
 
     Ok(ReviewPacket {
         summary: build_packet_summary(bundle, draft, readiness),
         issues_queue: build_issue_queue(draft, readiness, ui_map),
         copy_sections: build_copy_sections(draft, readiness, ui_map),
         attachment_checklist: build_attachment_checklist(bundle),
-        document_snapshots: build_document_snapshots(bundle),
+        document_snapshots: build_document_snapshots(bundle, &ocr_by_document_id),
     })
 }
 
@@ -705,7 +721,10 @@ fn build_attachment_checklist(bundle: &CanonicalExpenseBundle) -> Vec<Attachment
         .collect()
 }
 
-fn build_document_snapshots(bundle: &CanonicalExpenseBundle) -> Vec<DocumentSnapshotCard> {
+fn build_document_snapshots(
+    bundle: &CanonicalExpenseBundle,
+    ocr_comparisons: &BTreeMap<String, DocumentOcrComparisonSummary>,
+) -> Vec<DocumentSnapshotCard> {
     let mut used_document_ids = BTreeSet::new();
     let mut projected_document_ids = BTreeSet::new();
 
@@ -766,6 +785,15 @@ fn build_document_snapshots(bundle: &CanonicalExpenseBundle) -> Vec<DocumentSnap
                         .find(|line| line.document_id == document.document_id),
                 ),
                 issue_messages: issue_messages.into_iter().collect(),
+                ocr_comparison: ocr_comparisons.get(&document.document_id).cloned(),
+                ocr_comparison_href: ocr_comparisons.contains_key(&document.document_id).then(
+                    || {
+                        format!(
+                            "artifact/ocr_pass_comparisons/{}/comparison.html",
+                            document.document_id
+                        )
+                    },
+                ),
             }
         })
         .collect()
@@ -1234,7 +1262,10 @@ fn push_optional_line(lines: &mut Vec<String>, prefix: &str, value: Option<&str>
 
 #[cfg(test)]
 mod tests {
-    use super::{build_review_packet, render_review_packet_markdown, FilingStatus};
+    use super::{
+        build_review_packet, build_review_packet_with_ocr_comparisons,
+        render_review_packet_markdown, FilingStatus,
+    };
     use crate::bundle_synthesis::{
         synthesize_bundle, synthesize_bundle_projection, synthesize_bundle_projection_with_fx,
         CanonicalExpenseKind, StaticFxRateProvider,
@@ -1244,6 +1275,7 @@ mod tests {
         IssueSeverity, MoneyAmount, ReceiptFacts,
     };
     use crate::draft::{ConfidenceLevel, EvidenceKind, EvidenceReference};
+    use crate::readiness::summarize_validation_readiness;
     use crate::synthetic_documents::{generate_synthetic_packet, SyntheticVariant};
     use crate::FieldControl;
 
@@ -1540,5 +1572,50 @@ mod tests {
             .summary_fields
             .iter()
             .any(|field| field.label == "Exchange rate" && field.value == "0.24"));
+    }
+
+    #[test]
+    fn review_packet_attaches_ocr_comparison_summary_to_document_snapshot() {
+        let packet_fixture = crate::synthetic_documents::generate_synthetic_packet(
+            crate::synthetic_documents::SyntheticVariant::Baseline,
+        );
+        let documents = packet_fixture
+            .into_iter()
+            .map(|fixture| fixture.expected_facts)
+            .collect::<Vec<_>>();
+        let projection = synthesize_bundle_projection(&documents);
+        let comparison = crate::ocr_compare::DocumentOcrComparisonSummary {
+            document_id: "synthetic_receipt_baseline".to_owned(),
+            compared_pass_count: 2,
+            overall_confidence: ConfidenceLevel::Medium,
+            disagreement_count: 2,
+            divergent_fields: vec!["merchant_name".to_owned(), "total_paid".to_owned()],
+        };
+
+        let packet = build_review_packet_with_ocr_comparisons(
+            &projection.bundle,
+            &projection.draft,
+            &summarize_validation_readiness(&projection.validation),
+            &[comparison],
+        )
+        .expect("review packet should build");
+
+        let receipt_snapshot = packet
+            .document_snapshots
+            .iter()
+            .find(|snapshot| snapshot.document_id == "synthetic_receipt_baseline")
+            .expect("receipt snapshot should exist");
+        assert!(receipt_snapshot.ocr_comparison.is_some());
+        assert_eq!(
+            receipt_snapshot.ocr_comparison_href.as_deref(),
+            Some("artifact/ocr_pass_comparisons/synthetic_receipt_baseline/comparison.html")
+        );
+        assert_eq!(
+            receipt_snapshot
+                .ocr_comparison
+                .as_ref()
+                .map(|summary| summary.disagreement_count),
+            Some(2)
+        );
     }
 }

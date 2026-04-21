@@ -81,6 +81,7 @@ fn run_run(args: Vec<String>) -> Result<(), String> {
             run_id: parsed.run_id,
             transcriber,
             fx_mode: parsed.fx_mode,
+            compare_receipt_passes: parsed.compare_receipt_passes,
         },
     )
     .map_err(|err| err.to_string())?;
@@ -118,6 +119,7 @@ fn run_stage_and_run(args: Vec<String>) -> Result<(), String> {
             run_id: parsed.run_id,
             transcriber,
             fx_mode: parsed.fx_mode,
+            compare_receipt_passes: parsed.compare_receipt_passes,
         },
     )
     .map_err(|err| err.to_string())?;
@@ -185,6 +187,7 @@ struct ParsedArgs {
     token_endpoint_override: Option<String>,
     sdk_python: Option<String>,
     sdk_script: Option<String>,
+    compare_receipt_passes: bool,
     input_paths: Vec<PathBuf>,
 }
 
@@ -207,6 +210,7 @@ impl Default for ParsedArgs {
             token_endpoint_override: None,
             sdk_python: None,
             sdk_script: None,
+            compare_receipt_passes: false,
             input_paths: Vec::new(),
         }
     }
@@ -286,6 +290,9 @@ fn parse_args(args: &[String], parsed: &mut ParsedArgs) -> Result<(), String> {
                 index += 1;
                 parsed.sdk_script = Some(required_value(args, index, arg)?.to_owned());
             }
+            "--compare-receipt-passes" => {
+                parsed.compare_receipt_passes = true;
+            }
             "--help" | "-h" => return Err(usage().to_owned()),
             other if other.starts_with("--") => return Err(format!("unknown flag {other:?}")),
             other => parsed.input_paths.push(PathBuf::from(other)),
@@ -334,8 +341,8 @@ fn resolve_transcriber(parsed: &ParsedArgs) -> Result<IngestionTranscriber, Stri
 fn usage() -> &'static str {
     "usage:
   ingest_bundle_workspace stage --workspace-root <dir> [--bundle-id ID] [--user-id USER] <document>...
-  ingest_bundle_workspace run --workspace-root <dir> --bundle-id ID [--run-id ID] [--fx none|demo] [--engine builtin|vertex-gemini|vertex-gemini-sdk] [--project PROJECT] [--location LOCATION] [--model MODEL] [--access-token TOKEN] [--service-account-key PATH] [--endpoint URL] [--token-endpoint URL] [--sdk-python PATH] [--sdk-script PATH]
-  ingest_bundle_workspace stage-and-run --workspace-root <dir> [--bundle-id ID] [--user-id USER] [--run-id ID] [--fx none|demo] [--engine builtin|vertex-gemini|vertex-gemini-sdk] [--project PROJECT] [--location LOCATION] [--model MODEL] [--access-token TOKEN] [--service-account-key PATH] [--endpoint URL] [--token-endpoint URL] [--sdk-python PATH] [--sdk-script PATH] <document>...
+  ingest_bundle_workspace run --workspace-root <dir> --bundle-id ID [--run-id ID] [--fx none|demo] [--engine builtin|vertex-gemini|vertex-gemini-sdk] [--project PROJECT] [--location LOCATION] [--model MODEL] [--access-token TOKEN] [--service-account-key PATH] [--endpoint URL] [--token-endpoint URL] [--sdk-python PATH] [--sdk-script PATH] [--compare-receipt-passes]
+  ingest_bundle_workspace stage-and-run --workspace-root <dir> [--bundle-id ID] [--user-id USER] [--run-id ID] [--fx none|demo] [--engine builtin|vertex-gemini|vertex-gemini-sdk] [--project PROJECT] [--location LOCATION] [--model MODEL] [--access-token TOKEN] [--service-account-key PATH] [--endpoint URL] [--token-endpoint URL] [--sdk-python PATH] [--sdk-script PATH] [--compare-receipt-passes] <document>...
   ingest_bundle_workspace status --workspace-root <dir> --bundle-id ID [--format summary|json]"
 }
 

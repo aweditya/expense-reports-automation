@@ -85,6 +85,15 @@ pub struct OcrComparisonResult {
     pub overall_confidence: ConfidenceLevel,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DocumentOcrComparisonSummary {
+    pub document_id: String,
+    pub compared_pass_count: usize,
+    pub overall_confidence: ConfidenceLevel,
+    pub disagreement_count: usize,
+    pub divergent_fields: Vec<String>,
+}
+
 pub fn compare_ocr_passes(
     documents: &[TranscribedDocument],
 ) -> Result<OcrComparisonResult, OcrComparisonError> {
@@ -148,6 +157,21 @@ pub fn compare_ocr_passes_json_paths(
         documents.push(document);
     }
     compare_ocr_passes(&documents)
+}
+
+pub fn summarize_ocr_comparison(comparison: &OcrComparisonResult) -> DocumentOcrComparisonSummary {
+    DocumentOcrComparisonSummary {
+        document_id: comparison.document_id.clone(),
+        compared_pass_count: comparison.passes.len(),
+        overall_confidence: comparison.overall_confidence,
+        disagreement_count: comparison.disagreement_count,
+        divergent_fields: comparison
+            .fields
+            .iter()
+            .filter(|field| field.status == OcrComparisonStatus::Divergent)
+            .map(|field| field.field.clone())
+            .collect(),
+    }
 }
 
 pub fn render_ocr_comparison_json_pretty(
@@ -876,5 +900,30 @@ mod tests {
             OcrComparisonError::MismatchedDocumentIdentity
         ));
         first.document_id = "receipt".to_owned();
+    }
+
+    #[test]
+    fn summary_extracts_confidence_and_divergent_fields() {
+        let primary = receipt_document(
+            "receipt_primary_original",
+            OcrPassKind::Primary,
+            OcrPreprocessVariant::Original,
+            "# Merchant Receipt\n\n- Merchant Name: Book Talk\n- Date: 25/12/2018\n- Total: MYR 9.00\n",
+        );
+        let verification = receipt_document(
+            "receipt_table_focused_binarized",
+            OcrPassKind::TableFocused,
+            OcrPreprocessVariant::Binarized,
+            "# Merchant Receipt\n\n- Merchant Name: Book Talk\n- Date: 25/12/2018\n- Total: MYR 90.00\n",
+        );
+
+        let comparison = compare_ocr_passes(&[primary, verification]).expect("compare should work");
+        let summary = summarize_ocr_comparison(&comparison);
+
+        assert_eq!(summary.document_id, "receipt");
+        assert_eq!(summary.compared_pass_count, 2);
+        assert_eq!(summary.overall_confidence, ConfidenceLevel::Low);
+        assert_eq!(summary.disagreement_count, 1);
+        assert_eq!(summary.divergent_fields, vec!["total_paid".to_owned()]);
     }
 }

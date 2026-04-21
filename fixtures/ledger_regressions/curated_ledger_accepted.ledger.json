@@ -2437,6 +2437,7 @@
     ],
     "issues": []
   },
+  "ocr_pass_comparisons": [],
   "summary": {
     "current_state": "accepted",
     "current_draft_version_id": 2,
@@ -7391,7 +7392,9 @@
                 "value": "airfare_foreign"
               }
             ],
-            "issue_messages": []
+            "issue_messages": [],
+            "ocr_comparison": null,
+            "ocr_comparison_href": null
           },
           {
             "document_id": "hotel_folio_guest_bill",
@@ -7427,7 +7430,9 @@
                 "value": "lodging_foreign"
               }
             ],
-            "issue_messages": []
+            "issue_messages": [],
+            "ocr_comparison": null,
+            "ocr_comparison_href": null
           },
           {
             "document_id": "receipt_card_dotted",
@@ -7467,7 +7472,9 @@
                 "value": "business_meal"
               }
             ],
-            "issue_messages": []
+            "issue_messages": [],
+            "ocr_comparison": null,
+            "ocr_comparison_href": null
           }
         ]
       },
@@ -12401,7 +12408,9 @@
                 "value": "airfare_foreign"
               }
             ],
-            "issue_messages": []
+            "issue_messages": [],
+            "ocr_comparison": null,
+            "ocr_comparison_href": null
           },
           {
             "document_id": "hotel_folio_guest_bill",
@@ -12437,7 +12446,9 @@
                 "value": "lodging_foreign"
               }
             ],
-            "issue_messages": []
+            "issue_messages": [],
+            "ocr_comparison": null,
+            "ocr_comparison_href": null
           },
           {
             "document_id": "receipt_card_dotted",
@@ -12477,7 +12488,9 @@
                 "value": "business_meal"
               }
             ],
-            "issue_messages": []
+            "issue_messages": [],
+            "ocr_comparison": null,
+            "ocr_comparison_href": null
           }
         ]
       },

@@ -31,6 +31,7 @@ fn run() -> Result<(), String> {
     let mut token_endpoint_override = None;
     let mut sdk_python = None;
     let mut sdk_script = None;
+    let mut compare_receipt_passes = false;
     let mut input_paths = Vec::new();
 
     while let Some(arg) = args.next() {
@@ -114,9 +115,12 @@ fn run() -> Result<(), String> {
                         .ok_or_else(|| "missing value for --sdk-script".to_owned())?,
                 );
             }
+            "--compare-receipt-passes" => {
+                compare_receipt_passes = true;
+            }
             "--help" | "-h" => {
                 return Err(
-                    "usage: ingest_expense_documents --output-dir <dir> [--bundle-id ID] [--fx none|demo] [--engine builtin|vertex-gemini|vertex-gemini-sdk] [--project PROJECT] [--location LOCATION] [--model MODEL] [--access-token TOKEN] [--service-account-key PATH] [--endpoint URL] [--token-endpoint URL] [--sdk-python PATH] [--sdk-script PATH] <document>..."
+                    "usage: ingest_expense_documents --output-dir <dir> [--bundle-id ID] [--fx none|demo] [--engine builtin|vertex-gemini|vertex-gemini-sdk] [--project PROJECT] [--location LOCATION] [--model MODEL] [--access-token TOKEN] [--service-account-key PATH] [--endpoint URL] [--token-endpoint URL] [--sdk-python PATH] [--sdk-script PATH] [--compare-receipt-passes] <document>..."
                         .to_owned(),
                 )
             }
@@ -128,12 +132,12 @@ fn run() -> Result<(), String> {
     let output_dir = output_dir
         .map(PathBuf::from)
         .ok_or_else(|| {
-            "usage: ingest_expense_documents --output-dir <dir> [--bundle-id ID] [--fx none|demo] [--engine builtin|vertex-gemini|vertex-gemini-sdk] [--project PROJECT] [--location LOCATION] [--model MODEL] [--access-token TOKEN] [--service-account-key PATH] [--endpoint URL] [--token-endpoint URL] [--sdk-python PATH] [--sdk-script PATH] <document>..."
+            "usage: ingest_expense_documents --output-dir <dir> [--bundle-id ID] [--fx none|demo] [--engine builtin|vertex-gemini|vertex-gemini-sdk] [--project PROJECT] [--location LOCATION] [--model MODEL] [--access-token TOKEN] [--service-account-key PATH] [--endpoint URL] [--token-endpoint URL] [--sdk-python PATH] [--sdk-script PATH] [--compare-receipt-passes] <document>..."
                 .to_owned()
         })?;
     if input_paths.is_empty() {
         return Err(
-            "usage: ingest_expense_documents --output-dir <dir> [--bundle-id ID] [--fx none|demo] [--engine builtin|vertex-gemini|vertex-gemini-sdk] [--project PROJECT] [--location LOCATION] [--model MODEL] [--access-token TOKEN] [--service-account-key PATH] [--endpoint URL] [--token-endpoint URL] [--sdk-python PATH] [--sdk-script PATH] <document>..."
+            "usage: ingest_expense_documents --output-dir <dir> [--bundle-id ID] [--fx none|demo] [--engine builtin|vertex-gemini|vertex-gemini-sdk] [--project PROJECT] [--location LOCATION] [--model MODEL] [--access-token TOKEN] [--service-account-key PATH] [--endpoint URL] [--token-endpoint URL] [--sdk-python PATH] [--sdk-script PATH] [--compare-receipt-passes] <document>..."
                 .to_owned(),
         );
     }
@@ -176,6 +180,7 @@ fn run() -> Result<(), String> {
             bundle_id,
             transcriber,
             fx_mode,
+            compare_receipt_passes,
         },
     )
     .map_err(|err| err.to_string())?;

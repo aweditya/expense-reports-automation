@@ -2738,7 +2738,9 @@
           "value": "airfare_foreign"
         }
       ],
-      "issue_messages": []
+      "issue_messages": [],
+      "ocr_comparison": null,
+      "ocr_comparison_href": null
     },
     {
       "document_id": "hotel_folio_property_labeled",
@@ -2774,7 +2776,9 @@
           "value": "lodging_foreign"
         }
       ],
-      "issue_messages": []
+      "issue_messages": [],
+      "ocr_comparison": null,
+      "ocr_comparison_href": null
     },
     {
       "document_id": "receipt_merchant_labeled",
@@ -2814,7 +2818,9 @@
           "value": "business_meal"
         }
       ],
-      "issue_messages": []
+      "issue_messages": [],
+      "ocr_comparison": null,
+      "ocr_comparison_href": null
     }
   ]
 }

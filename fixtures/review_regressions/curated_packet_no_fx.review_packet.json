@@ -2607,7 +2607,9 @@
           "value": "airfare_foreign"
         }
       ],
-      "issue_messages": []
+      "issue_messages": [],
+      "ocr_comparison": null,
+      "ocr_comparison_href": null
     },
     {
       "document_id": "hotel_folio_guest_bill",
@@ -2637,7 +2639,9 @@
       ],
       "issue_messages": [
         "Document hotel_folio_guest_bill needs FX enrichment before it can produce a complete projected line"
-      ]
+      ],
+      "ocr_comparison": null,
+      "ocr_comparison_href": null
     },
     {
       "document_id": "receipt_card_dotted",
@@ -2671,7 +2675,9 @@
       ],
       "issue_messages": [
         "Document receipt_card_dotted needs FX enrichment before it can produce a complete projected line"
-      ]
+      ],
+      "ocr_comparison": null,
+      "ocr_comparison_href": null
     }
   ]
 }

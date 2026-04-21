@@ -9,14 +9,20 @@ use crate::bundle_synthesis::{
     synthesize_bundle_projection_with_fx, BundleProjectionResult, StaticFxRateProvider,
 };
 use crate::document_extract::extract_document_facts;
-use crate::document_facts::render_document_facts_json_pretty;
+use crate::document_facts::{render_document_facts_json_pretty, DocumentKind};
 use crate::ledger::{
-    initialize_review_submission_ledger, render_review_submission_ledger_json_pretty,
-    ReviewSubmissionLedger,
+    initialize_review_submission_ledger_with_ocr_comparisons,
+    render_review_submission_ledger_json_pretty, ReviewSubmissionLedger,
+};
+use crate::ocr_compare::{
+    compare_ocr_passes, render_ocr_comparison_html, render_ocr_comparison_json_pretty,
+    render_ocr_comparison_markdown, summarize_ocr_comparison, OcrComparisonResult,
 };
 use crate::readiness::{summarize_validation_readiness, ReadinessReport};
 use crate::render::render_draft_report_yaml;
-use crate::review_packet::{build_review_packet, render_review_packet_json_pretty, ReviewPacket};
+use crate::review_packet::{
+    build_review_packet_with_ocr_comparisons, render_review_packet_json_pretty, ReviewPacket,
+};
 use crate::review_workbench::render_review_workbench_html;
 use crate::transcribe::{
     render_transcribed_document_json_pretty, transcribe_document_path, TranscribedDocument,
@@ -25,7 +31,10 @@ use crate::validator::render_validation_report_json_pretty;
 use crate::vertex_gemini::{
     resolve_access_token, transcribe_document_path_with_vertex, VertexGeminiConfig,
 };
-use crate::vertex_gemini_sdk::{transcribe_document_path_with_vertex_sdk, VertexGeminiSdkConfig};
+use crate::vertex_gemini_sdk::{
+    transcribe_document_path_with_vertex_sdk, transcribe_document_path_with_vertex_sdk_profile,
+    VertexGeminiSdkConfig, VertexGeminiSdkPassProfile,
+};
 use crate::ExtractedDocumentFacts;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,12 +55,21 @@ pub struct IngestionConfig {
     pub bundle_id: Option<String>,
     pub transcriber: IngestionTranscriber,
     pub fx_mode: IngestionFxMode,
+    pub compare_receipt_passes: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct OcrPassComparisonArtifact {
+    pub document_id: String,
+    pub secondary_transcription: TranscribedDocument,
+    pub comparison: OcrComparisonResult,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct IngestionPipelineResult {
     pub bundle_id: String,
     pub transcriptions: Vec<TranscribedDocument>,
+    pub ocr_pass_comparisons: Vec<OcrPassComparisonArtifact>,
     pub extracted_documents: Vec<ExtractedDocumentFacts>,
     pub projection: BundleProjectionResult,
     pub readiness: ReadinessReport,
@@ -64,6 +82,7 @@ pub struct IngestionPipelineResult {
 pub enum IngestionError {
     NoInputDocuments,
     Transcription { path: PathBuf, message: String },
+    OcrComparison { path: PathBuf, message: String },
     ReviewPacket(String),
     Ledger(String),
     Io(std::io::Error),
@@ -78,6 +97,13 @@ impl fmt::Display for IngestionError {
             Self::NoInputDocuments => write!(f, "at least one input document is required"),
             Self::Transcription { path, message } => {
                 write!(f, "failed to transcribe {}: {message}", path.display())
+            }
+            Self::OcrComparison { path, message } => {
+                write!(
+                    f,
+                    "failed to compare OCR passes for {}: {message}",
+                    path.display()
+                )
             }
             Self::ReviewPacket(message) => write!(f, "{message}"),
             Self::Ledger(message) => write!(f, "{message}"),
@@ -124,6 +150,7 @@ pub fn ingest_expense_documents(
     }
 
     let mut transcriptions = Vec::new();
+    let mut ocr_pass_comparisons = Vec::new();
     let mut extracted_documents = Vec::new();
     let resolved_vertex_config = match &config.transcriber {
         IngestionTranscriber::VertexGemini(vertex_config) => {
@@ -164,6 +191,39 @@ pub fn ingest_expense_documents(
             }
         };
         let facts = extract_document_facts(&document);
+        if config.compare_receipt_passes
+            && facts.classification.kind == DocumentKind::Receipt
+            && matches!(
+                &config.transcriber,
+                IngestionTranscriber::VertexGeminiSdk(_)
+            )
+        {
+            let sdk_config = match &config.transcriber {
+                IngestionTranscriber::VertexGeminiSdk(sdk_config) => sdk_config,
+                _ => unreachable!("checked above"),
+            };
+            let secondary_profile = VertexGeminiSdkPassProfile {
+                pass_id: Some(format!("{}_table_focused_binarized", document.document_id)),
+                pass_kind: crate::OcrPassKind::TableFocused,
+                preprocess_variant: crate::OcrPreprocessVariant::Binarized,
+            };
+            let secondary_transcription = transcribe_document_path_with_vertex_sdk_profile(
+                path,
+                sdk_config,
+                &secondary_profile,
+            )
+            .map_err(|err: crate::vertex_gemini_sdk::VertexGeminiSdkError| {
+                transcription_error(path, err.to_string())
+            })?;
+            let comparison =
+                compare_ocr_passes(&[document.clone(), secondary_transcription.clone()])
+                    .map_err(|err| ocr_comparison_error(path, err.to_string()))?;
+            ocr_pass_comparisons.push(OcrPassComparisonArtifact {
+                document_id: document.document_id.clone(),
+                secondary_transcription,
+                comparison,
+            });
+        }
         transcriptions.push(document);
         extracted_documents.push(facts);
     }
@@ -176,10 +236,15 @@ pub fn ingest_expense_documents(
         }
     };
     let readiness = summarize_validation_readiness(&projection.validation);
-    let review_packet = build_review_packet(
+    let ocr_comparison_summaries = ocr_pass_comparisons
+        .iter()
+        .map(|artifact| summarize_ocr_comparison(&artifact.comparison))
+        .collect::<Vec<_>>();
+    let review_packet = build_review_packet_with_ocr_comparisons(
         &projection.bundle,
         &projection.draft,
-        &projection.validation,
+        &readiness,
+        &ocr_comparison_summaries,
     )
     .map_err(|err| IngestionError::ReviewPacket(format!("failed to build review packet: {err}")))?;
     let review_workbench_html = render_review_workbench_html(&review_packet);
@@ -188,11 +253,12 @@ pub fn ingest_expense_documents(
         .bundle_id
         .clone()
         .unwrap_or_else(|| default_bundle_id(paths));
-    let ledger = initialize_review_submission_ledger(
+    let ledger = initialize_review_submission_ledger_with_ocr_comparisons(
         &bundle_id,
         &projection.bundle,
         &projection.draft,
         &projection.validation,
+        &ocr_comparison_summaries,
     )
     .map_err(|err| {
         IngestionError::Ledger(format!(
@@ -203,6 +269,7 @@ pub fn ingest_expense_documents(
     Ok(IngestionPipelineResult {
         bundle_id,
         transcriptions,
+        ocr_pass_comparisons,
         extracted_documents,
         projection,
         readiness,
@@ -220,8 +287,10 @@ pub fn write_ingestion_artifacts(
     fs::create_dir_all(output_dir)?;
     let transcriptions_dir = output_dir.join("transcriptions");
     let facts_dir = output_dir.join("facts");
+    let ocr_compare_dir = output_dir.join("ocr_pass_comparisons");
     fs::create_dir_all(&transcriptions_dir)?;
     fs::create_dir_all(&facts_dir)?;
+    fs::create_dir_all(&ocr_compare_dir)?;
 
     for document in &result.transcriptions {
         let filename = format!("{}.transcribed.json", document.document_id);
@@ -240,6 +309,34 @@ pub fn write_ingestion_artifacts(
             render_document_facts_json_pretty(facts).map_err(|err| {
                 IngestionError::ReviewPacket(format!("failed to render document facts json: {err}"))
             })?,
+        )?;
+    }
+
+    for artifact in &result.ocr_pass_comparisons {
+        let comparison_dir = ocr_compare_dir.join(&artifact.document_id);
+        fs::create_dir_all(&comparison_dir)?;
+        fs::write(
+            comparison_dir.join("secondary.transcribed.json"),
+            render_transcribed_document_json_pretty(&artifact.secondary_transcription).map_err(
+                |err| {
+                    IngestionError::ReviewPacket(format!(
+                        "failed to render secondary transcription json: {err}"
+                    ))
+                },
+            )?,
+        )?;
+        fs::write(
+            comparison_dir.join("comparison.json"),
+            render_ocr_comparison_json_pretty(&artifact.comparison)
+                .map_err(IngestionError::Json)?,
+        )?;
+        fs::write(
+            comparison_dir.join("comparison.md"),
+            render_ocr_comparison_markdown(&artifact.comparison),
+        )?;
+        fs::write(
+            comparison_dir.join("comparison.html"),
+            render_ocr_comparison_html(&artifact.comparison),
         )?;
     }
 
@@ -286,6 +383,7 @@ pub fn write_ingestion_artifacts(
             "filename": document.filename,
             "engine": format!("{:?}", document.engine).to_ascii_lowercase(),
         })).collect::<Vec<_>>(),
+        "ocr_pass_comparison_count": result.ocr_pass_comparisons.len(),
     });
     fs::write(
         output_dir.join("manifest.json"),
@@ -297,6 +395,13 @@ pub fn write_ingestion_artifacts(
 
 fn transcription_error(path: &Path, message: String) -> IngestionError {
     IngestionError::Transcription {
+        path: path.to_path_buf(),
+        message,
+    }
+}
+
+fn ocr_comparison_error(path: &Path, message: String) -> IngestionError {
+    IngestionError::OcrComparison {
         path: path.to_path_buf(),
         message,
     }
@@ -362,6 +467,7 @@ mod tests {
                 bundle_id: Some("builtin_demo".to_owned()),
                 transcriber: IngestionTranscriber::Builtin,
                 fx_mode: IngestionFxMode::Demo,
+                compare_receipt_passes: false,
             },
         )
         .expect("builtin ingestion should succeed");
@@ -387,6 +493,7 @@ mod tests {
                 bundle_id: Some("artifact_demo".to_owned()),
                 transcriber: IngestionTranscriber::Builtin,
                 fx_mode: IngestionFxMode::Demo,
+                compare_receipt_passes: false,
             },
         )
         .expect("builtin ingestion should succeed");
@@ -463,6 +570,7 @@ mod tests {
                     token_endpoint_override: None,
                 }),
                 fx_mode: IngestionFxMode::Demo,
+                compare_receipt_passes: false,
             },
         )
         .expect("vertex ingestion should succeed");
@@ -596,6 +704,7 @@ mod tests {
                     token_endpoint_override: Some(format!("{base_url}/token")),
                 }),
                 fx_mode: IngestionFxMode::Demo,
+                compare_receipt_passes: false,
             },
         )
         .expect("vertex ingestion with service account should succeed");
@@ -669,6 +778,7 @@ print(json.dumps({
                     script_path,
                 }),
                 fx_mode: IngestionFxMode::Demo,
+                compare_receipt_passes: false,
             },
         )
         .expect("sdk ingestion should succeed");
