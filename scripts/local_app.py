@@ -509,8 +509,8 @@ def resolve_review_cli_command(repo_root: Path) -> list[str]:
     return ["cargo", "run", "--bin", "apply_review_revision_to_artifacts", "--"]
 
 
-def resolve_workbench_render_cli_command(repo_root: Path) -> list[str]:
-    return ["cargo", "run", "--bin", "render_current_review_workbench", "--"]
+def resolve_review_surface_cli_command(repo_root: Path) -> list[str]:
+    return ["cargo", "run", "--bin", "render_current_review_surface", "--"]
 
 
 def build_ingest_command(
@@ -581,10 +581,16 @@ def build_review_save_command(
     return command
 
 
-def build_render_workbench_command(repo_root: Path, artifacts_dir: Path) -> list[str]:
-    return resolve_workbench_render_cli_command(repo_root) + [
+def build_render_surface_command(
+    repo_root: Path,
+    artifacts_dir: Path,
+    surface: str,
+) -> list[str]:
+    return resolve_review_surface_cli_command(repo_root) + [
         "--artifacts-dir",
         str(artifacts_dir),
+        "--surface",
+        surface,
     ]
 
 
@@ -654,10 +660,11 @@ def handle_review_save_submission(
     return result
 
 
-def render_current_workbench_html(
+def render_current_review_surface_html(
     repo_root: Path,
     workspace_root: Path,
     bundle_id: str,
+    surface: str,
     command_runner: Callable[[list[str], Path], subprocess.CompletedProcess[str]] = run_pipeline_command,
 ) -> str:
     bundle_id = ensure_safe_bundle_id(bundle_id)
@@ -667,14 +674,29 @@ def render_current_workbench_html(
     if not (artifacts_dir / "ledger.json").exists():
         raise LocalAppError(f"bundle {bundle_id} does not have a ledger yet")
 
-    command = build_render_workbench_command(repo_root, artifacts_dir)
+    command = build_render_surface_command(repo_root, artifacts_dir, surface)
     completed = command_runner(command, repo_root)
     if completed.returncode != 0:
         raise LocalAppError(
             (completed.stderr or completed.stdout).strip()
-            or "failed to render current review workbench"
+            or f"failed to render current review {surface} surface"
         )
     return completed.stdout
+
+
+def render_current_workbench_html(
+    repo_root: Path,
+    workspace_root: Path,
+    bundle_id: str,
+    command_runner: Callable[[list[str], Path], subprocess.CompletedProcess[str]] = run_pipeline_command,
+) -> str:
+    return render_current_review_surface_html(
+        repo_root,
+        workspace_root,
+        bundle_id,
+        "developer",
+        command_runner=command_runner,
+    )
 
 
 def update_bundle_manifest_after_review_save(
@@ -966,6 +988,8 @@ def render_bundle_page(config: LocalAppConfig, bundle_manifest: dict) -> str:
         None,
     )
     workbench_href = f"/bundle/{urllib.parse.quote(bundle_id)}/workbench"
+    preview_href = f"/bundle/{urllib.parse.quote(bundle_id)}/preview"
+    developer_href = f"/bundle/{urllib.parse.quote(bundle_id)}/developer"
     overview_href = f"/bundle/{urllib.parse.quote(bundle_id)}/overview"
     manifest_href = f"/bundle/{urllib.parse.quote(bundle_id)}/manifest"
     session_href = f"/bundle/{urllib.parse.quote(bundle_id)}/review-session"
@@ -1031,7 +1055,9 @@ def render_bundle_page(config: LocalAppConfig, bundle_manifest: dict) -> str:
       <aside class="panel">
         <p><strong>Current stage:</strong> {html.escape(bundle_manifest['current_stage'])}</p>
         {run_summary}
-        <p><a class="primary-link" href="{workbench_href}">Open editable workbench</a></p>
+        <p><a class="primary-link" href="{workbench_href}">Open FA workbench</a></p>
+        <p><a href="{preview_href}">Open final preview</a></p>
+        <p><a href="{developer_href}">Open developer tools</a></p>
         <p><a href="{overview_href}">Refresh this overview</a></p>
         <p><a href="{manifest_href}">Bundle manifest JSON</a></p>
         <p><a href="{session_href}">Review session JSON</a></p>
@@ -1044,8 +1070,8 @@ def render_bundle_page(config: LocalAppConfig, bundle_manifest: dict) -> str:
       <section class="panel meta-grid">
         <div>
           <p style="margin: 0; color: #6b6156;">Default landing behavior</p>
-          <h2 style="margin: 0 0 12px;">Bundles now open straight into the editable workbench</h2>
-          <p>Use this overview page when you want bundle metadata, export links, or a full list of uploaded source documents.</p>
+          <h2 style="margin: 0 0 12px;">Bundles now separate FA, preview, and developer surfaces</h2>
+          <p>Use the FA workbench for editing, the final preview for print/PDF export, and the developer tools page for OCR inspection and debugging.</p>
         </div>
         <div>
           <p><strong>Configured ingestion:</strong> {html.escape(configured_ingestion_label(config))}</p>
@@ -1056,10 +1082,10 @@ def render_bundle_page(config: LocalAppConfig, bundle_manifest: dict) -> str:
         <div>
           <p style="margin: 0 0 6px;"><strong>Recommended flow</strong></p>
           <ol style="margin: 0; padding-left: 18px;">
-            <li>Open the editable workbench.</li>
-            <li>Review missing or low-confidence fields from the left queue.</li>
+            <li>Open the FA workbench and resolve missing or review fields.</li>
             <li>Save edits to create a reviewed draft version.</li>
-            <li>Use the export links or inline evidence/source-doc links as needed.</li>
+            <li>Open the final preview and confirm the packet looks filing-ready.</li>
+            <li>Print or save the preview as a PDF when needed.</li>
           </ol>
         </div>
       </section>
@@ -1196,16 +1222,40 @@ class LocalAppHandler(http.server.BaseHTTPRequestHandler):
             self.respond_json(load_review_session_state(self.config.workspace_root, bundle_id))
             return
         if len(segments) == 3 and segments[2] == "workbench":
-            body = render_current_workbench_html(
-                self.config.repo_root, self.config.workspace_root, bundle_id
+            body = render_current_review_surface_html(
+                self.config.repo_root,
+                self.config.workspace_root,
+                bundle_id,
+                "developer",
+            )
+            self.respond_html(body)
+            return
+        if len(segments) == 3 and segments[2] == "preview":
+            body = render_current_review_surface_html(
+                self.config.repo_root,
+                self.config.workspace_root,
+                bundle_id,
+                "preview",
+            )
+            self.respond_html(body)
+            return
+        if len(segments) == 3 and segments[2] == "developer":
+            body = render_current_review_surface_html(
+                self.config.repo_root,
+                self.config.workspace_root,
+                bundle_id,
+                "developer",
             )
             self.respond_html(body)
             return
         if len(segments) >= 4 and segments[2] == "artifact":
             artifact_name = "/".join(urllib.parse.unquote(segment) for segment in segments[3:])
             if artifact_name == "review_workbench.html":
-                body = render_current_workbench_html(
-                    self.config.repo_root, self.config.workspace_root, bundle_id
+                body = render_current_review_surface_html(
+                    self.config.repo_root,
+                    self.config.workspace_root,
+                    bundle_id,
+                    "developer",
                 )
                 self.respond_html(body)
             else:

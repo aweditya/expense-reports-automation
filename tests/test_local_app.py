@@ -304,18 +304,21 @@ class LocalAppTests(unittest.TestCase):
             self.assertIn("--base-version", command)
             self.assertIn("7", command)
 
-    def test_build_render_workbench_command_supports_cargo_fallback(self):
+    def test_build_render_surface_command_supports_cargo_fallback(self):
         with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as artifacts_dir:
-            command = local_app.build_render_workbench_command(
+            command = local_app.build_render_surface_command(
                 Path(repo_dir),
                 Path(artifacts_dir),
+                "preview",
             )
 
             self.assertEqual(
                 command[:4],
-                ["cargo", "run", "--bin", "render_current_review_workbench"],
+                ["cargo", "run", "--bin", "render_current_review_surface"],
             )
             self.assertIn("--artifacts-dir", command)
+            self.assertIn("--surface", command)
+            self.assertIn("preview", command)
 
     def test_render_current_workbench_html_invokes_renderer_cli(self):
         captured = {}
@@ -344,6 +347,36 @@ class LocalAppTests(unittest.TestCase):
             self.assertIn("Dynamic Workbench", rendered)
             self.assertEqual(captured["cwd"], Path(repo_dir))
             self.assertIn("--artifacts-dir", captured["command"])
+            self.assertIn("--surface", captured["command"])
+            self.assertIn("developer", captured["command"])
+
+    def test_render_current_review_surface_html_supports_preview(self):
+        captured = {}
+
+        def runner(command, cwd):
+            captured["command"] = command
+            return CompletedProcess(
+                command,
+                0,
+                stdout="<!DOCTYPE html><html><body><h1>Preview Surface</h1></body></html>",
+                stderr="",
+            )
+
+        with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as workspace_dir:
+            workspace_root = Path(workspace_dir)
+            write_bundle_fixture(workspace_root, "demo_bundle", with_workbench=True)
+
+            rendered = local_app.render_current_review_surface_html(
+                Path(repo_dir),
+                workspace_root,
+                "demo_bundle",
+                "preview",
+                command_runner=runner,
+            )
+
+            self.assertIn("Preview Surface", rendered)
+            self.assertIn("--surface", captured["command"])
+            self.assertIn("preview", captured["command"])
 
     def test_list_bundles_sorts_by_latest_update(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -491,6 +524,8 @@ class LocalAppTests(unittest.TestCase):
 
             self.assertIn("Workbench availability:</strong> ready", page)
             self.assertIn("/bundle/demo_bundle/overview", page)
+            self.assertIn("/bundle/demo_bundle/preview", page)
+            self.assertIn("/bundle/demo_bundle/developer", page)
             self.assertIn("/bundle/demo_bundle/document/doc_receipt/receipt.png", page)
             self.assertIn("/bundle/demo_bundle/review-session", page)
             self.assertIn("/bundle/demo_bundle/artifact/ledger.json", page)
@@ -716,9 +751,13 @@ class LocalAppHttpTests(unittest.TestCase):
                 with_ocr_inspection=True,
             )
             config = self.make_config(workspace_root)
-            original_render = local_app.render_current_workbench_html
-            local_app.render_current_workbench_html = (
-                lambda repo_root, workspace_root, bundle_id, command_runner=local_app.run_pipeline_command: "<!DOCTYPE html><html><body><h1>Dynamic Workbench</h1><input class='field-control'></body></html>"
+            original_render = local_app.render_current_review_surface_html
+            local_app.render_current_review_surface_html = (
+                lambda repo_root, workspace_root, bundle_id, surface, command_runner=local_app.run_pipeline_command: (
+                    "<!DOCTYPE html><html><body><h1>Dynamic Preview</h1></body></html>"
+                    if surface == "preview"
+                    else "<!DOCTYPE html><html><body><h1>Dynamic Developer Workbench</h1><input class='field-control'></body></html>"
+                )
             )
 
             try:
@@ -752,8 +791,16 @@ class LocalAppHttpTests(unittest.TestCase):
                     response_headers["Cache-Control"],
                     "no-store, no-cache, must-revalidate, max-age=0",
                 )
-                self.assertIn(b"Dynamic Workbench", payload)
+                self.assertIn(b"Dynamic Developer Workbench", payload)
                 self.assertNotIn(b"Stale Saved Workbench", payload)
+
+                status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/preview")
+                self.assertEqual(status, 200)
+                self.assertIn(b"Dynamic Preview", payload)
+
+                status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/developer")
+                self.assertEqual(status, 200)
+                self.assertIn(b"Dynamic Developer Workbench", payload)
 
                 status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/review-session")
                 self.assertEqual(status, 200)
@@ -771,7 +818,7 @@ class LocalAppHttpTests(unittest.TestCase):
                     config, "GET", "/bundle/demo_bundle/artifact/review_workbench.html"
                 )
                 self.assertEqual(status, 200)
-                self.assertIn(b"Dynamic Workbench", payload)
+                self.assertIn(b"Dynamic Developer Workbench", payload)
 
                 status, _, payload = self.request(
                     config,
@@ -804,7 +851,7 @@ class LocalAppHttpTests(unittest.TestCase):
                 self.assertEqual(response_headers["Content-Type"], "image/png")
                 self.assertEqual(payload, b"fixture-receipt")
             finally:
-                local_app.render_current_workbench_html = original_render
+                local_app.render_current_review_surface_html = original_render
 
     def test_http_upload_redirects_after_successful_submission(self):
         original = local_app.handle_upload_submission
