@@ -104,8 +104,16 @@ class BenchmarkReceiptGroundingEnginesTests(unittest.TestCase):
             [
                 {
                     "document_id": "a",
+                    "duration_seconds": 1.25,
                     "markdown": {"content_match": True},
-                    "text_fields": {"expected_field_count": 4, "matched_field_count": 4},
+                    "text_fields": {
+                        "expected_field_count": 4,
+                        "matched_field_count": 4,
+                        "fields": [
+                            {"field": "merchant_name", "matched": True},
+                            {"field": "transaction_date", "matched": True},
+                        ],
+                    },
                     "grounding": {
                         "geometry_available": True,
                         "expected_field_count": 4,
@@ -119,8 +127,16 @@ class BenchmarkReceiptGroundingEnginesTests(unittest.TestCase):
                 },
                 {
                     "document_id": "b",
+                    "duration_seconds": 2.75,
                     "markdown": {"content_match": False},
-                    "text_fields": {"expected_field_count": 4, "matched_field_count": 2},
+                    "text_fields": {
+                        "expected_field_count": 4,
+                        "matched_field_count": 2,
+                        "fields": [
+                            {"field": "merchant_name", "matched": False},
+                            {"field": "transaction_date", "matched": True},
+                        ],
+                    },
                     "grounding": {
                         "geometry_available": False,
                         "expected_field_count": 4,
@@ -129,7 +145,7 @@ class BenchmarkReceiptGroundingEnginesTests(unittest.TestCase):
                     },
                     "error": None,
                 },
-                {"document_id": "c", "error": "failed"},
+                {"document_id": "c", "duration_seconds": 5.0, "error": "failed"},
             ],
         )
 
@@ -139,6 +155,11 @@ class BenchmarkReceiptGroundingEnginesTests(unittest.TestCase):
         self.assertEqual(summary["text_matched_field_count"], 6)
         self.assertEqual(summary["grounding_matched_field_count"], 5)
         self.assertEqual(summary["grounding_available_document_count"], 1)
+        self.assertEqual(summary["duration_seconds_total"], 9.0)
+        self.assertEqual(summary["duration_seconds_avg"], 3.0)
+        self.assertEqual(summary["duration_seconds_max"], 5.0)
+        self.assertEqual(summary["text_field_miss_counts"]["merchant_name"], 1)
+        self.assertEqual(summary["grounding_field_miss_counts"].get("transaction_date", 0), 0)
 
     def test_render_reports_include_lane_names(self):
         report = {
@@ -158,6 +179,10 @@ class BenchmarkReceiptGroundingEnginesTests(unittest.TestCase):
                         "grounding_matched_field_count": 7,
                         "grounding_available_document_count": 2,
                         "grounding_fully_matched_document_count": 1,
+                        "duration_seconds_avg": 1.5,
+                        "duration_seconds_max": 2.0,
+                        "text_field_miss_counts": {"merchant_name": 1},
+                        "grounding_field_miss_counts": {"total_paid": 1},
                     },
                     "documents": [],
                 }
@@ -168,8 +193,10 @@ class BenchmarkReceiptGroundingEnginesTests(unittest.TestCase):
         html = benchmark.render_html_report(report)
 
         self.assertIn("## gemini", markdown)
+        self.assertIn("text field misses", markdown)
         self.assertIn("Receipt OCR Engine Benchmark", html)
         self.assertIn("gemini", html)
+        self.assertIn("duration (s)", html)
 
     def test_run_command_reports_timeout_cleanly(self):
         with mock.patch.object(
@@ -199,6 +226,7 @@ class BenchmarkReceiptGroundingEnginesTests(unittest.TestCase):
                 "docai_processor_id": None,
                 "docai_processor_version": None,
                 "output_dir": ".",
+                "jobs": 1,
             },
         )()
 
@@ -225,6 +253,58 @@ class BenchmarkReceiptGroundingEnginesTests(unittest.TestCase):
 
         self.assertEqual(report["document_count"], 1)
         self.assertEqual(run_lane_document.call_count, 1)
+
+    def test_benchmark_lanes_parallel_path_preserves_document_order(self):
+        args = type(
+            "Args",
+            (),
+            {
+                "lanes": ["gemini"],
+                "max_documents": None,
+                "command_timeout_seconds": 5,
+                "service_account_key": "key.json",
+                "gemini_location": "global",
+                "gemini_model": "gemini-3-flash-preview",
+                "sdk_python": ".venv/bin/python",
+                "project": None,
+                "docai_location": "us",
+                "docai_processor_id": None,
+                "docai_processor_version": None,
+                "output_dir": ".",
+                "jobs": 2,
+            },
+        )()
+
+        def fake_run_lane_document(_lane_name, document, _lane_dir, _args):
+            return {"document_id": document["document_id"], "error": None, "duration_seconds": 0.1}
+
+        with mock.patch.object(
+            benchmark,
+            "run_lane_document",
+            side_effect=fake_run_lane_document,
+        ):
+            report = benchmark.benchmark_lanes(
+                {
+                    "corpus_name": "receipt_seed",
+                    "packets": [
+                        {
+                            "packet_id": "packet_a",
+                            "documents": [
+                                {"document_id": "receipt_a"},
+                                {"document_id": "receipt_b"},
+                                {"document_id": "receipt_c"},
+                            ],
+                        }
+                    ],
+                },
+                args,
+            )
+
+        documents = report["lanes"][0]["documents"]
+        self.assertEqual(
+            [document["document_id"] for document in documents],
+            ["receipt_a", "receipt_b", "receipt_c"],
+        )
 
 
 if __name__ == "__main__":

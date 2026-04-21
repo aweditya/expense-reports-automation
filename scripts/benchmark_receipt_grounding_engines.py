@@ -5,7 +5,9 @@ import copy
 import importlib.util
 import json
 import subprocess
+import time
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 
@@ -98,6 +100,12 @@ def parse_args() -> argparse.Namespace:
         "--max-documents",
         type=int,
         help="Optional cap on how many corpus documents to benchmark",
+    )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=1,
+        help="How many documents to transcribe concurrently per lane, default 1",
     )
     return parser.parse_args()
 
@@ -315,9 +323,19 @@ def summarize_lane_results(lane_name: str, document_results: list[dict]) -> dict
         for result in available_results
     )
     grounding_field_counts: Counter[str] = Counter()
+    grounding_field_miss_counts: Counter[str] = Counter()
+    text_field_counts: Counter[str] = Counter()
+    text_field_miss_counts: Counter[str] = Counter()
+    duration_seconds = [
+        float(result.get("duration_seconds") or 0.0) for result in document_results
+    ]
     for result in available_results:
+        for field in (result.get("text_fields") or {}).get("fields") or []:
+            text_field_counts[field["field"]] += int(field.get("matched"))
+            text_field_miss_counts[field["field"]] += int(not field.get("matched"))
         for field in (result.get("grounding") or {}).get("fields") or []:
             grounding_field_counts[field["field"]] += int(field.get("matched"))
+            grounding_field_miss_counts[field["field"]] += int(not field.get("matched"))
 
     return {
         "lane": lane_name,
@@ -331,7 +349,17 @@ def summarize_lane_results(lane_name: str, document_results: list[dict]) -> dict
         "grounding_matched_field_count": grounding_matched,
         "grounding_available_document_count": geometry_available,
         "grounding_fully_matched_document_count": fully_grounded,
+        "duration_seconds_total": round(sum(duration_seconds), 3),
+        "duration_seconds_max": round(max(duration_seconds, default=0.0), 3),
+        "duration_seconds_avg": round(
+            sum(duration_seconds) / len(duration_seconds), 3
+        )
+        if duration_seconds
+        else 0.0,
+        "text_field_match_counts": dict(text_field_counts),
+        "text_field_miss_counts": dict(text_field_miss_counts),
         "grounding_field_match_counts": dict(grounding_field_counts),
+        "grounding_field_miss_counts": dict(grounding_field_miss_counts),
     }
 
 
@@ -355,9 +383,23 @@ def render_markdown_report(report: dict) -> str:
                 f"- grounded fields matched: {summary['grounding_matched_field_count']}/{summary['grounding_expected_field_count']}",
                 f"- docs with geometry: {summary['grounding_available_document_count']}",
                 f"- fully grounded docs: {summary['grounding_fully_matched_document_count']}",
+                f"- avg duration (s): {summary['duration_seconds_avg']}",
+                f"- max duration (s): {summary['duration_seconds_max']}",
                 "",
             ]
         )
+        if summary.get("text_field_miss_counts"):
+            lines.append("### text field misses")
+            lines.append("")
+            for field_name, miss_count in sorted(summary["text_field_miss_counts"].items()):
+                lines.append(f"- {field_name}: {miss_count}")
+            lines.append("")
+        if summary.get("grounding_field_miss_counts"):
+            lines.append("### grounding field misses")
+            lines.append("")
+            for field_name, miss_count in sorted(summary["grounding_field_miss_counts"].items()):
+                lines.append(f"- {field_name}: {miss_count}")
+            lines.append("")
     return "\n".join(lines)
 
 
@@ -392,8 +434,30 @@ def render_html_report(report: dict) -> str:
                 f"<tr><th>grounded fields matched</th><td>{summary['grounding_matched_field_count']}/{summary['grounding_expected_field_count']}</td></tr>",
                 f"<tr><th>docs with geometry</th><td>{summary['grounding_available_document_count']}</td></tr>",
                 f"<tr><th>fully grounded docs</th><td>{summary['grounding_fully_matched_document_count']}</td></tr>",
+                f"<tr><th>avg duration (s)</th><td>{summary['duration_seconds_avg']}</td></tr>",
+                f"<tr><th>max duration (s)</th><td>{summary['duration_seconds_max']}</td></tr>",
                 "</tbody></table>",
-                "<table><thead><tr><th>document</th><th>content</th><th>text fields</th><th>grounding</th><th>artifact</th><th>error</th></tr></thead><tbody>",
+                "<table><thead><tr><th>field</th><th>text misses</th><th>grounding misses</th></tr></thead><tbody>",
+            ]
+        )
+        field_names = sorted(
+            set(summary.get("text_field_miss_counts", {}))
+            | set(summary.get("grounding_field_miss_counts", {}))
+        )
+        for field_name in field_names:
+            html.extend(
+                [
+                    "<tr>",
+                    f"<td>{escape_html(field_name)}</td>",
+                    f"<td>{summary.get('text_field_miss_counts', {}).get(field_name, 0)}</td>",
+                    f"<td>{summary.get('grounding_field_miss_counts', {}).get(field_name, 0)}</td>",
+                    "</tr>",
+                ]
+            )
+        html.extend(
+            [
+                "</tbody></table>",
+                "<table><thead><tr><th>document</th><th>content</th><th>text fields</th><th>grounding</th><th>duration (s)</th><th>artifact</th><th>error</th></tr></thead><tbody>",
             ]
         )
         for document in lane["documents"]:
@@ -410,6 +474,7 @@ def render_html_report(report: dict) -> str:
                     f"<td>{escape_html(render_ratio((document.get('markdown') or {}).get('content_match'), (document.get('markdown') or {}).get('content_match')))}</td>",
                     f"<td>{escape_html(render_count_summary(document.get('text_fields')))}</td>",
                     f"<td>{escape_html(render_count_summary(document.get('grounding')))}</td>",
+                    f"<td>{escape_html(str(document.get('duration_seconds', '')))}</td>",
                     f"<td>{artifact_link}</td>",
                     f"<td>{escape_html(document.get('error') or '')}</td>",
                     "</tr>",
@@ -440,6 +505,7 @@ def run_lane_document(
 ) -> dict:
     lane_dir.mkdir(parents=True, exist_ok=True)
     transcription_path = lane_dir / f"{document['document_id']}.transcribed.json"
+    start_time = time.monotonic()
     try:
         if lane_name == "gemini":
             transcribe_with_gemini(document, transcription_path, args)
@@ -457,6 +523,7 @@ def run_lane_document(
     except CommandError as error:
         return {
             "document_id": document["document_id"],
+            "duration_seconds": round(time.monotonic() - start_time, 3),
             "error": str(error),
         }
 
@@ -478,6 +545,7 @@ def run_lane_document(
         "markdown": markdown,
         "text_fields": text_fields,
         "grounding": grounding,
+        "duration_seconds": round(time.monotonic() - start_time, 3),
         "error": None,
     }
 
@@ -491,9 +559,21 @@ def benchmark_lanes(corpus_spec: dict, args: argparse.Namespace) -> dict:
         all_documents = all_documents[: args.max_documents]
     for lane_name in resolve_lanes(args):
         lane_dir = output_dir / lane_name
-        document_results = [
-            run_lane_document(lane_name, document, lane_dir, args) for document in all_documents
-        ]
+        jobs = max(1, int(getattr(args, "jobs", 1)))
+        if jobs == 1 or len(all_documents) <= 1:
+            document_results = [
+                run_lane_document(lane_name, document, lane_dir, args)
+                for document in all_documents
+            ]
+        else:
+            document_results = [None] * len(all_documents)
+            with ThreadPoolExecutor(max_workers=jobs) as executor:
+                future_to_index = {
+                    executor.submit(run_lane_document, lane_name, document, lane_dir, args): index
+                    for index, document in enumerate(all_documents)
+                }
+                for future in as_completed(future_to_index):
+                    document_results[future_to_index[future]] = future.result()
         lanes.append(
             {
                 "lane": lane_name,
