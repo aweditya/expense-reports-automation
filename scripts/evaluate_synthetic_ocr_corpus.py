@@ -347,6 +347,16 @@ def join_region_texts_by_id(transcription_payload: dict) -> dict[str, list[str]]
     return region_texts
 
 
+def all_region_texts(transcription_payload: dict) -> list[str]:
+    texts = []
+    for page in transcription_payload.get("pages") or []:
+        for region in page.get("regions") or []:
+            text = str(region.get("text") or "").strip()
+            if text:
+                texts.append(text)
+    return texts
+
+
 def first_numeric_token(value):
     if value is None:
         return None
@@ -360,11 +370,17 @@ def normalize_currency_token(value):
     normalized = normalize_field_value(value)
     if normalized is None:
         return None
-    if normalized == "rm":
-        return "myr"
-    if normalized in {"sg$", "sgd"}:
+    tokens = re.findall(r"[a-z$]+", normalized)
+    for token in tokens:
+        if token == "rm":
+            return "myr"
+        if token in {"myr", "sgd", "usd"}:
+            return token
+        if token == "sg":
+            continue
+    if "sg$" in normalized:
         return "sgd"
-    if normalized in {"us$", "usd"}:
+    if "us$" in normalized:
         return "usd"
     return normalized
 
@@ -404,11 +420,12 @@ def compare_expected_grounding(expected_fields: dict, transcription_path: Path) 
 
     transcription_payload = read_json(transcription_path)
     region_texts = join_region_texts_by_id(transcription_payload)
+    fallback_candidates = all_region_texts(transcription_payload)
     field_results = []
     match_count = 0
 
     for field_name, expected_value in grounded_expected_fields.items():
-        candidates = region_texts.get(field_name) or []
+        candidates = region_texts.get(field_name) or fallback_candidates
         matched_text = next(
             (
                 candidate

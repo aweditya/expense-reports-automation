@@ -170,6 +170,54 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
 
             self.assertIsNone(comparison)
 
+    def test_compare_expected_grounding_falls_back_to_generic_region_text(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            transcription_path = temp_path / "receipt.transcribed.json"
+            transcription_path.write_text(
+                json.dumps(
+                    {
+                        "metadata": {
+                            "geometry_source": "document_ai",
+                            "geometry_available": True,
+                        },
+                        "pages": [
+                            {
+                                "page_number": 1,
+                                "text": "BOOK TALK\n25/12/2018\nTOTAL RM 80.90",
+                                "regions": [
+                                    {
+                                        "region_id": "page_1_line_1",
+                                        "text": "BOOK TALK (TAMAN DAYA) SDN BHD",
+                                    },
+                                    {
+                                        "region_id": "page_1_line_2",
+                                        "text": "25/12/2018",
+                                    },
+                                    {
+                                        "region_id": "page_1_line_3",
+                                        "text": "TOTAL RM 80.90",
+                                    },
+                                ],
+                            }
+                        ],
+                    }
+                )
+            )
+
+            comparison = ocr_eval.compare_expected_grounding(
+                {
+                    "merchant_name": "BOOK TALK (TAMAN DAYA) SDN BHD",
+                    "transaction_date": "25/12/2018",
+                    "total_paid": "80.90",
+                },
+                transcription_path,
+            )
+
+            self.assertIsNotNone(comparison)
+            self.assertEqual(comparison["geometry_source"], "document_ai")
+            self.assertEqual(comparison["matched_field_count"], 3)
+
     def test_build_manifest_corpus_spec_from_flat_documents(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
