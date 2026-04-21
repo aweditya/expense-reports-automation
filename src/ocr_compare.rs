@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::fmt;
 use std::path::Path;
 
@@ -132,6 +131,7 @@ pub fn compare_ocr_passes(
             })
             .collect(),
         |value| value.to_owned(),
+        exact_value_equivalent,
     )];
 
     if extracted
@@ -506,6 +506,7 @@ fn compare_receipt_fields(
                 })
                 .collect(),
             normalize_merchant_name,
+            merchant_name_equivalent,
         ),
         compare_field(
             "transaction_date",
@@ -525,6 +526,7 @@ fn compare_receipt_fields(
                 })
                 .collect(),
             normalize_date_value,
+            exact_value_equivalent,
         ),
         compare_field(
             "total_paid",
@@ -544,6 +546,7 @@ fn compare_receipt_fields(
                 })
                 .collect(),
             normalize_generic_value,
+            exact_value_equivalent,
         ),
         compare_field(
             "total_paid_currency",
@@ -563,6 +566,7 @@ fn compare_receipt_fields(
                 })
                 .collect(),
             normalize_generic_value,
+            exact_value_equivalent,
         ),
         compare_field(
             "line_item_count",
@@ -578,6 +582,7 @@ fn compare_receipt_fields(
                 })
                 .collect(),
             normalize_generic_value,
+            exact_value_equivalent,
         ),
     ]
 }
@@ -988,9 +993,9 @@ fn compare_field(
     field_name: &str,
     candidates: Vec<OcrFieldCandidateInput<'_>>,
     normalize: fn(&str) -> String,
+    equivalent: fn(&str, &str) -> bool,
 ) -> OcrFieldComparison {
-    let mut normalized_groups = BTreeMap::<String, usize>::new();
-    let mut display_by_normalized = BTreeMap::<String, String>::new();
+    let mut grouped_values = Vec::<(String, String, usize)>::new();
     let mut non_missing_count = 0usize;
     let mut has_missing = false;
     let mut all_high = true;
@@ -1005,10 +1010,14 @@ fn compare_field(
             }
             if let Some(value) = candidate.value.as_deref() {
                 let normalized = normalize(value);
-                *normalized_groups.entry(normalized.clone()).or_default() += 1;
-                display_by_normalized
-                    .entry(normalized)
-                    .or_insert_with(|| value.to_owned());
+                if let Some((_, _, count)) = grouped_values
+                    .iter_mut()
+                    .find(|(group_normalized, _, _)| equivalent(&normalized, group_normalized))
+                {
+                    *count += 1;
+                } else {
+                    grouped_values.push((normalized, value.to_owned(), 1));
+                }
                 non_missing_count += 1;
             } else {
                 has_missing = true;
@@ -1029,9 +1038,10 @@ fn compare_field(
             None,
             Some("all OCR passes left this field empty".to_owned()),
         )
-    } else if normalized_groups.len() == 1 {
-        let (normalized_value, _) = normalized_groups.into_iter().next().unwrap();
-        let consensus_value = display_by_normalized.get(&normalized_value).cloned();
+    } else if grouped_values.len() == 1 {
+        let consensus_value = grouped_values
+            .first()
+            .map(|(_, display_value, _)| display_value.clone());
         if has_missing {
             (
                 OcrComparisonStatus::PartialConsensus,
@@ -1052,9 +1062,9 @@ fn compare_field(
             )
         }
     } else {
-        let rendered_values = display_by_normalized
-            .values()
-            .cloned()
+        let rendered_values = grouped_values
+            .iter()
+            .map(|(_, display_value, _)| display_value.clone())
             .collect::<Vec<_>>()
             .join(" vs ");
         (
@@ -1105,13 +1115,98 @@ fn normalize_generic_value(value: &str) -> String {
     value.to_ascii_lowercase()
 }
 
+fn exact_value_equivalent(left: &str, right: &str) -> bool {
+    left == right
+}
+
 fn normalize_merchant_name(value: &str) -> String {
     let normalized = value
         .to_ascii_lowercase()
         .replace('.', " ")
         .replace(',', " ")
         .replace('&', " and ");
-    normalized.split_whitespace().collect::<Vec<_>>().join(" ")
+    let normalized = normalized
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .trim_start_matches(|ch: char| matches!(ch, '-' | ':' | '*' | '•') || ch.is_whitespace())
+        .to_owned();
+    strip_common_merchant_prefix(&normalized).to_owned()
+}
+
+fn strip_common_merchant_prefix<'a>(value: &'a str) -> &'a str {
+    [
+        "merchant name:",
+        "merchant:",
+        "merchant name",
+        "merchant",
+        "store:",
+        "store",
+        "vendor:",
+        "vendor",
+        "company:",
+        "company",
+    ]
+    .into_iter()
+    .find_map(|prefix| value.strip_prefix(prefix).map(str::trim))
+    .unwrap_or(value)
+}
+
+fn collapse_alphanumeric(value: &str) -> String {
+    value.chars().filter(|ch| ch.is_ascii_alphanumeric()).collect()
+}
+
+fn merchant_name_equivalent(left: &str, right: &str) -> bool {
+    if left == right {
+        return true;
+    }
+    let collapsed_left = collapse_alphanumeric(left);
+    let collapsed_right = collapse_alphanumeric(right);
+    if collapsed_left == collapsed_right {
+        return true;
+    }
+    if collapsed_left.len() < 8 || collapsed_right.len() < 8 {
+        return false;
+    }
+    let max_len = collapsed_left.len().max(collapsed_right.len());
+    let allowed_distance = if max_len >= 24 { 2 } else { 1 };
+    bounded_levenshtein_distance(&collapsed_left, &collapsed_right, allowed_distance)
+        .is_some_and(|distance| distance <= allowed_distance)
+}
+
+fn bounded_levenshtein_distance(left: &str, right: &str, limit: usize) -> Option<usize> {
+    let left_chars = left.chars().collect::<Vec<_>>();
+    let right_chars = right.chars().collect::<Vec<_>>();
+    let left_len = left_chars.len();
+    let right_len = right_chars.len();
+
+    if left_len.abs_diff(right_len) > limit {
+        return None;
+    }
+
+    let mut previous = (0..=right_len).collect::<Vec<_>>();
+    let mut current = vec![0usize; right_len + 1];
+
+    for (left_index, left_char) in left_chars.iter().enumerate() {
+        current[0] = left_index + 1;
+        let mut row_minimum = current[0];
+        for (right_index, right_char) in right_chars.iter().enumerate() {
+            let substitution_cost = usize::from(left_char != right_char);
+            let insertion = current[right_index] + 1;
+            let deletion = previous[right_index + 1] + 1;
+            let substitution = previous[right_index] + substitution_cost;
+            let value = insertion.min(deletion).min(substitution);
+            current[right_index + 1] = value;
+            row_minimum = row_minimum.min(value);
+        }
+        if row_minimum > limit {
+            return None;
+        }
+        std::mem::swap(&mut previous, &mut current);
+    }
+
+    let distance = previous[right_len];
+    (distance <= limit).then_some(distance)
 }
 
 fn normalize_date_value(value: &str) -> String {
@@ -1233,6 +1328,32 @@ mod tests {
             .any(|field| field.field == "total_paid"
                 && field.status == OcrComparisonStatus::Consensus
                 && field.consensus_value.as_deref() == Some("9.00")));
+    }
+
+    #[test]
+    fn merchant_name_comparison_tolerates_small_ocr_edits() {
+        let primary = receipt_document(
+            "receipt_primary_original",
+            OcrPassKind::Primary,
+            OcrPreprocessVariant::Original,
+            "# Merchant Receipt\n\n- Merchant Name: BOOK TA .K (TAMAN DAYA) SDN BHD\n- Date: 25/12/2018\n- Total: MYR 9.00\n",
+        );
+        let verification = receipt_document(
+            "receipt_table_focused_binarized",
+            OcrPassKind::TableFocused,
+            OcrPreprocessVariant::Binarized,
+            "# Merchant Receipt\n\n- Merchant Name: BOOK TALK (TAMAN DAYA) SDN BHD\n- Date: 25/12/2018\n- Total: MYR 9.00\n",
+        );
+
+        let comparison = compare_ocr_passes(&[primary, verification]).expect("compare should work");
+        let merchant = comparison
+            .fields
+            .iter()
+            .find(|field| field.field == "merchant_name")
+            .expect("merchant comparison");
+
+        assert_eq!(merchant.status, OcrComparisonStatus::Consensus);
+        assert_eq!(comparison.disagreement_count, 0);
     }
 
     #[test]
@@ -1393,6 +1514,22 @@ mod tests {
             .any(|field| field.field == "total_paid"
                 && field.status == OcrComparisonStatus::Divergent
                 && field.confidence == ConfidenceLevel::Low));
+    }
+
+    #[test]
+    fn merchant_name_equivalence_stays_conservative_for_distinct_merchants() {
+        assert!(merchant_name_equivalent(
+            "book ta k taman daya sdn bhd",
+            "book talk taman daya sdn bhd"
+        ));
+        assert_eq!(
+            normalize_merchant_name("- Merchant: BOOK TALK (TAMAN DAYA) SDN BHD"),
+            normalize_merchant_name("BOOK TALK (TAMAN DAYA) SDN BHD")
+        );
+        assert!(!merchant_name_equivalent(
+            "book talk taman daya sdn bhd",
+            "book world taman daya sdn bhd"
+        ));
     }
 
     #[test]

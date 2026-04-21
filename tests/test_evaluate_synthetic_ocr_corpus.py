@@ -92,6 +92,35 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
             self.assertEqual(comparison["expected_field_count"], 2)
             self.assertEqual(comparison["matched_field_count"], 2)
 
+    def test_compare_expected_fields_tolerates_small_merchant_ocr_edits(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            facts_path = temp_path / "receipt.facts.json"
+            facts_path.write_text(
+                json.dumps(
+                    {
+                        "classification": {"kind": "receipt"},
+                        "facts": {
+                            "receipt": {
+                                "merchant_name": {
+                                    "value": "BOOK TALK (TAMAN DAYA) SDN BHD"
+                                },
+                            }
+                        },
+                    }
+                )
+            )
+
+            comparison = ocr_eval.compare_expected_fields(
+                {
+                    "merchant_name": "BOOK TA .K (TAMAN DAYA) SDN BHD",
+                },
+                facts_path,
+            )
+
+            self.assertEqual(comparison["expected_field_count"], 1)
+            self.assertEqual(comparison["matched_field_count"], 1)
+
     def test_compare_expected_grounding_scores_localized_receipt_regions(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
@@ -217,6 +246,80 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
             self.assertIsNotNone(comparison)
             self.assertEqual(comparison["geometry_source"], "document_ai")
             self.assertEqual(comparison["matched_field_count"], 3)
+
+    def test_compare_expected_grounding_tolerates_small_merchant_ocr_edits(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            transcription_path = temp_path / "receipt.transcribed.json"
+            transcription_path.write_text(
+                json.dumps(
+                    {
+                        "metadata": {
+                            "geometry_source": "gemini",
+                            "geometry_available": True,
+                        },
+                        "pages": [
+                            {
+                                "page_number": 1,
+                                "text": "BOOK TALK (TAMAN DAYA) SDN BHD",
+                                "regions": [
+                                    {
+                                        "region_id": "merchant_name",
+                                        "text": "BOOK TALK (TAMAN DAYA) SDN BHD",
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                )
+            )
+
+            comparison = ocr_eval.compare_expected_grounding(
+                {
+                    "merchant_name": "BOOK TA .K (TAMAN DAYA) SDN BHD",
+                },
+                transcription_path,
+            )
+
+            self.assertIsNotNone(comparison)
+            self.assertEqual(comparison["matched_field_count"], 1)
+
+    def test_compare_expected_grounding_ignores_merchant_line_labels(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            transcription_path = temp_path / "receipt.transcribed.json"
+            transcription_path.write_text(
+                json.dumps(
+                    {
+                        "metadata": {
+                            "geometry_source": "document_ai",
+                            "geometry_available": True,
+                        },
+                        "pages": [
+                            {
+                                "page_number": 1,
+                                "text": "Merchant: AIK HUAT HARDWARE ENTERPRISE (SETIA ALAM) SDN BHD",
+                                "regions": [
+                                    {
+                                        "region_id": "page_1_line_1",
+                                        "text": "- Merchant: AIK HUAT HARDWARE ENTERPRISE (SETIA ALAM) SDN BHD",
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                )
+            )
+
+            comparison = ocr_eval.compare_expected_grounding(
+                {
+                    "merchant_name": "AIK HUAT HARDWARE ENTERPRISE (SETIA ALAM) SDN BHD",
+                },
+                transcription_path,
+            )
+
+            self.assertIsNotNone(comparison)
+            self.assertEqual(comparison["matched_field_count"], 1)
 
     def test_build_manifest_corpus_spec_from_flat_documents(self):
         with tempfile.TemporaryDirectory() as temp_dir:

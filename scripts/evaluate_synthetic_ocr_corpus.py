@@ -255,7 +255,83 @@ def normalize_merchant_name(value):
         .replace(")", " ")
         .replace("&", " and ")
     )
+    normalized = " ".join(normalized.split())
+    normalized = normalized.lstrip("-:*• ").strip()
+    for prefix in (
+        "merchant name:",
+        "merchant:",
+        "merchant name",
+        "merchant",
+        "store:",
+        "store",
+        "vendor:",
+        "vendor",
+        "company:",
+        "company",
+    ):
+        if normalized.startswith(prefix):
+            normalized = normalized[len(prefix) :].strip()
+            break
     return " ".join(normalized.split())
+
+
+def collapse_alphanumeric(value):
+    if value is None:
+        return None
+    return "".join(ch for ch in value if ch.isalnum())
+
+
+def bounded_levenshtein_distance(left, right, limit):
+    if left is None or right is None:
+        return None
+    if abs(len(left) - len(right)) > limit:
+        return None
+
+    previous = list(range(len(right) + 1))
+    current = [0] * (len(right) + 1)
+
+    for left_index, left_char in enumerate(left, start=1):
+        current[0] = left_index
+        row_minimum = current[0]
+        for right_index, right_char in enumerate(right, start=1):
+            substitution_cost = 0 if left_char == right_char else 1
+            insertion = current[right_index - 1] + 1
+            deletion = previous[right_index] + 1
+            substitution = previous[right_index - 1] + substitution_cost
+            current[right_index] = min(insertion, deletion, substitution)
+            row_minimum = min(row_minimum, current[right_index])
+        if row_minimum > limit:
+            return None
+        previous, current = current, previous
+
+    distance = previous[len(right)]
+    if distance > limit:
+        return None
+    return distance
+
+
+def merchant_name_matches(expected_value, actual_value):
+    expected = normalize_merchant_name(expected_value)
+    actual = normalize_merchant_name(actual_value)
+    if expected is None or actual is None:
+        return expected == actual
+    if expected == actual:
+        return True
+
+    collapsed_expected = collapse_alphanumeric(expected)
+    collapsed_actual = collapse_alphanumeric(actual)
+    if collapsed_expected == collapsed_actual:
+        return True
+    if len(collapsed_expected) < 8 or len(collapsed_actual) < 8:
+        return False
+
+    allowed_distance = 2 if max(len(collapsed_expected), len(collapsed_actual)) >= 24 else 1
+    return (
+        bounded_levenshtein_distance(
+            collapsed_expected, collapsed_actual, allowed_distance
+        )
+        is not None
+    )
 
 
 def normalize_date_value(value):
@@ -311,9 +387,7 @@ def compare_expected_fields(expected_fields: dict, facts_path: Path) -> dict:
     for field_name, expected_value in expected_fields.items():
         actual_value = facts_value_for_expected_field(facts_payload, field_name)
         if field_name == "merchant_name":
-            matched = normalize_merchant_name(expected_value) == normalize_merchant_name(
-                actual_value
-            )
+            matched = merchant_name_matches(expected_value, actual_value)
         elif field_name == "transaction_date":
             matched = normalize_date_value(expected_value) == normalize_date_value(actual_value)
         else:
@@ -389,9 +463,7 @@ def grounding_field_matches(field_name: str, expected_value, actual_text: str | 
     if actual_text is None:
         return False
     if field_name == "merchant_name":
-        expected = normalize_merchant_name(expected_value)
-        actual = normalize_merchant_name(actual_text)
-        return expected is not None and actual is not None and expected == actual
+        return merchant_name_matches(expected_value, actual_text)
     if field_name == "transaction_date":
         expected = normalize_date_value(expected_value)
         actual = normalize_date_value(actual_text)
