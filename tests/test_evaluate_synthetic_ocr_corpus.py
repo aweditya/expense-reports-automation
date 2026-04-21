@@ -92,6 +92,84 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
             self.assertEqual(comparison["expected_field_count"], 2)
             self.assertEqual(comparison["matched_field_count"], 2)
 
+    def test_compare_expected_grounding_scores_localized_receipt_regions(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            transcription_path = temp_path / "receipt.transcribed.json"
+            transcription_path.write_text(
+                json.dumps(
+                    {
+                        "metadata": {
+                            "geometry_source": "gemini",
+                            "geometry_available": True,
+                        },
+                        "pages": [
+                            {
+                                "page_number": 1,
+                                "text": "# Receipt",
+                                "regions": [
+                                    {
+                                        "region_id": "merchant_name",
+                                        "text": "BOOK TALK (TAMAN DAYA) SDN BHD",
+                                    },
+                                    {
+                                        "region_id": "transaction_date",
+                                        "text": "25/12/2018",
+                                    },
+                                    {
+                                        "region_id": "total_paid",
+                                        "text": "RM 80.90",
+                                    },
+                                    {
+                                        "region_id": "total_paid_currency",
+                                        "text": "MYR",
+                                    },
+                                ],
+                            }
+                        ],
+                    }
+                )
+            )
+
+            comparison = ocr_eval.compare_expected_grounding(
+                {
+                    "merchant_name": "BOOK TALK (TAMAN DAYA) SDN BHD",
+                    "transaction_date": "25/12/2018",
+                    "total_paid": "80.90",
+                    "total_paid_currency": "MYR",
+                    "classification_kind": "receipt",
+                },
+                transcription_path,
+            )
+
+            self.assertIsNotNone(comparison)
+            self.assertTrue(comparison["geometry_available"])
+            self.assertEqual(comparison["expected_field_count"], 4)
+            self.assertEqual(comparison["matched_field_count"], 4)
+
+    def test_compare_expected_grounding_returns_none_when_no_groundable_fields_exist(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            transcription_path = temp_path / "receipt.transcribed.json"
+            transcription_path.write_text(
+                json.dumps(
+                    {
+                        "metadata": {
+                            "geometry_source": "none",
+                            "geometry_available": False,
+                        },
+                        "pages": [{"page_number": 1, "text": "# Receipt", "regions": []}],
+                    }
+                )
+            )
+
+            comparison = ocr_eval.compare_expected_grounding(
+                {"classification_kind": "receipt"},
+                transcription_path,
+            )
+
+            self.assertIsNone(comparison)
+
     def test_build_manifest_corpus_spec_from_flat_documents(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
@@ -219,6 +297,15 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
                         "model_key": "gemini_3_flash_preview",
                         "packet_count": 4,
                         "document_count": 12,
+                        "grounding_document_count": 3,
+                        "grounding_available_document_count": 2,
+                        "grounding_fully_matched_document_count": 2,
+                        "grounding_expected_field_count": 12,
+                        "grounding_matched_field_count": 9,
+                        "grounding_field_match_counts": {
+                            "merchant_name": 3,
+                            "transaction_date": 2,
+                        },
                         "pass_comparison_document_count": 3,
                         "pass_comparison_divergent_document_count": 1,
                         "pass_comparison_disagreement_count": 2,
@@ -236,6 +323,15 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
                         "model_key": "gemini_3_pro_preview",
                         "packet_count": 4,
                         "document_count": 12,
+                        "grounding_document_count": 3,
+                        "grounding_available_document_count": 3,
+                        "grounding_fully_matched_document_count": 3,
+                        "grounding_expected_field_count": 12,
+                        "grounding_matched_field_count": 12,
+                        "grounding_field_match_counts": {
+                            "merchant_name": 3,
+                            "transaction_date": 3,
+                        },
                         "pass_comparison_document_count": 3,
                         "pass_comparison_divergent_document_count": 0,
                         "pass_comparison_disagreement_count": 0,
@@ -253,6 +349,8 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
         self.assertEqual(len(comparison["models"]), 2)
         self.assertEqual(comparison["models"][0]["exact_match_count"], 10)
         self.assertEqual(comparison["models"][1]["exact_match_count"], 11)
+        self.assertEqual(comparison["models"][0]["grounding_matched_field_count"], 9)
+        self.assertEqual(comparison["models"][1]["grounding_available_document_count"], 3)
         self.assertEqual(comparison["models"][0]["pass_comparison_disagreement_count"], 2)
         self.assertEqual(comparison["models"][1]["pass_comparison_confidence_counts"]["high"], 3)
 
@@ -263,6 +361,12 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
                     {
                         "model": "gemini-3-flash-preview",
                         "document_count": 12,
+                        "grounding_document_count": 3,
+                        "grounding_available_document_count": 2,
+                        "grounding_fully_matched_document_count": 2,
+                        "grounding_expected_field_count": 12,
+                        "grounding_matched_field_count": 9,
+                        "grounding_field_match_counts": {"merchant_name": 3},
                         "pass_comparison_document_count": 3,
                         "pass_comparison_divergent_document_count": 1,
                         "pass_comparison_disagreement_count": 2,
@@ -303,6 +407,12 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
                         "model": "gemini-3-flash-preview",
                         "status": "ok",
                         "document_count": 12,
+                        "grounding_document_count": 3,
+                        "grounding_available_document_count": 2,
+                        "grounding_fully_matched_document_count": 2,
+                        "grounding_expected_field_count": 12,
+                        "grounding_matched_field_count": 9,
+                        "grounding_field_match_counts": {"merchant_name": 3},
                         "pass_comparison_document_count": 0,
                         "pass_comparison_divergent_document_count": 0,
                         "pass_comparison_disagreement_count": 0,
@@ -319,6 +429,12 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
                         "error": "command failed with exit code 1\n404 NOT_FOUND",
                         "error_summary": "404 NOT_FOUND",
                         "document_count": 0,
+                        "grounding_document_count": 0,
+                        "grounding_available_document_count": 0,
+                        "grounding_fully_matched_document_count": 0,
+                        "grounding_expected_field_count": 0,
+                        "grounding_matched_field_count": 0,
+                        "grounding_field_match_counts": {},
                         "pass_comparison_document_count": 0,
                         "pass_comparison_divergent_document_count": 0,
                         "pass_comparison_disagreement_count": 0,
@@ -335,6 +451,7 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
 
         self.assertIn("gemini-3-pro-preview: error=404 NOT_FOUND", markdown)
         self.assertIn("gemini-3-pro-preview: unavailable", markdown)
+        self.assertIn("grounded=9/12", markdown)
 
     def test_condense_error_message_prefers_404_marker(self):
         error = "command failed with exit code 1\nupstream detail\n404 NOT_FOUND\nextra context"
@@ -354,6 +471,7 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
         self.assertEqual(report["summary"]["error_summary"], "404 NOT_FOUND")
         self.assertEqual(report["summary"]["packet_count"], 0)
         self.assertEqual(report["summary"]["document_count"], 0)
+        self.assertEqual(report["summary"]["grounding_document_count"], 0)
         self.assertEqual(report["summary"]["pass_comparison_document_count"], 0)
         self.assertEqual(report["summary"]["exact_match_count"], 0)
 
@@ -368,6 +486,15 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
                     "comparable_document_count": 4,
                     "expected_field_count": 8,
                     "matched_field_count": 8,
+                    "grounding_document_count": 2,
+                    "grounding_available_document_count": 2,
+                    "grounding_fully_matched_document_count": 1,
+                    "grounding_expected_field_count": 8,
+                    "grounding_matched_field_count": 6,
+                    "grounding_field_match_counts": {
+                        "merchant_name": 2,
+                        "transaction_date": 1,
+                    },
                     "pass_comparison_document_count": 2,
                     "pass_comparison_divergent_document_count": 1,
                     "pass_comparison_disagreement_count": 3,
@@ -383,6 +510,11 @@ class EvaluateSyntheticOcrCorpusTests(unittest.TestCase):
             }
         )
 
+        self.assertIn("- grounded receipt docs: 2", markdown)
+        self.assertIn("- docs with OCR geometry: 2", markdown)
+        self.assertIn("- fully grounded docs: 1", markdown)
+        self.assertIn("- matched grounded fields: 6/8", markdown)
+        self.assertIn("- merchant_name: 2", markdown)
         self.assertIn("- pass comparisons: 2", markdown)
         self.assertIn("- pass-comparison divergences: 1", markdown)
         self.assertIn("- total field disagreements: 3", markdown)

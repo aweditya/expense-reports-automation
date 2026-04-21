@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import re
 import subprocess
 from collections import Counter
 from pathlib import Path
@@ -11,6 +12,12 @@ from pathlib import Path
 DEFAULT_MODELS = ["gemini-3-flash-preview", "gemini-3-pro-preview"]
 DEFAULT_LOCATION = "global"
 DEFAULT_PACKETS = 4
+GROUNDABLE_RECEIPT_FIELDS = (
+    "merchant_name",
+    "transaction_date",
+    "total_paid",
+    "total_paid_currency",
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -265,6 +272,110 @@ def compare_expected_fields(expected_fields: dict, facts_path: Path) -> dict:
         )
 
     return {
+        "expected_field_count": len(field_results),
+        "matched_field_count": match_count,
+        "fields": field_results,
+    }
+
+
+def join_region_texts_by_id(transcription_payload: dict) -> dict[str, list[str]]:
+    region_texts = {}
+    for page in transcription_payload.get("pages") or []:
+        for region in page.get("regions") or []:
+            region_id = str(region.get("region_id") or "").strip()
+            text = str(region.get("text") or "").strip()
+            if not region_id or not text:
+                continue
+            region_texts.setdefault(region_id, []).append(text)
+    return region_texts
+
+
+def first_numeric_token(value):
+    if value is None:
+        return None
+    matches = re.findall(r"\d+(?:[.,]\d+)?", str(value))
+    if not matches:
+        return None
+    return matches[0].replace(",", ".")
+
+
+def normalize_currency_token(value):
+    normalized = normalize_field_value(value)
+    if normalized is None:
+        return None
+    if normalized == "rm":
+        return "myr"
+    if normalized in {"sg$", "sgd"}:
+        return "sgd"
+    if normalized in {"us$", "usd"}:
+        return "usd"
+    return normalized
+
+
+def grounding_field_matches(field_name: str, expected_value, actual_text: str | None) -> bool:
+    if actual_text is None:
+        return False
+    if field_name == "merchant_name":
+        expected = normalize_merchant_name(expected_value)
+        actual = normalize_merchant_name(actual_text)
+        return expected is not None and actual is not None and expected == actual
+    if field_name == "transaction_date":
+        expected = normalize_date_value(expected_value)
+        actual = normalize_date_value(actual_text)
+        return expected is not None and actual is not None and expected == actual
+    if field_name == "total_paid":
+        expected = first_numeric_token(expected_value)
+        actual = first_numeric_token(actual_text)
+        return expected is not None and actual is not None and expected == actual
+    if field_name == "total_paid_currency":
+        expected = normalize_currency_token(expected_value)
+        actual = normalize_currency_token(actual_text)
+        if expected is None or actual is None:
+            return False
+        return expected == actual or expected in normalize_field_value(actual_text)
+    return False
+
+
+def compare_expected_grounding(expected_fields: dict, transcription_path: Path) -> dict | None:
+    grounded_expected_fields = {
+        field_name: expected_value
+        for field_name, expected_value in expected_fields.items()
+        if field_name in GROUNDABLE_RECEIPT_FIELDS
+    }
+    if not grounded_expected_fields:
+        return None
+
+    transcription_payload = read_json(transcription_path)
+    region_texts = join_region_texts_by_id(transcription_payload)
+    field_results = []
+    match_count = 0
+
+    for field_name, expected_value in grounded_expected_fields.items():
+        candidates = region_texts.get(field_name) or []
+        matched_text = next(
+            (
+                candidate
+                for candidate in candidates
+                if grounding_field_matches(field_name, expected_value, candidate)
+            ),
+            None,
+        )
+        matched = matched_text is not None
+        match_count += int(matched)
+        field_results.append(
+            {
+                "field": field_name,
+                "expected": expected_value,
+                "region_count": len(candidates),
+                "actual_candidates": candidates,
+                "matched_candidate": matched_text,
+                "matched": matched,
+            }
+        )
+
+    return {
+        "geometry_available": bool(transcription_payload.get("metadata", {}).get("geometry_available")),
+        "geometry_source": transcription_payload.get("metadata", {}).get("geometry_source") or "none",
         "expected_field_count": len(field_results),
         "matched_field_count": match_count,
         "fields": field_results,
@@ -580,6 +691,12 @@ def evaluate_model(
     comparable_document_count = 0
     expected_field_count = 0
     matched_field_count = 0
+    grounding_document_count = 0
+    grounding_available_document_count = 0
+    grounding_fully_matched_document_count = 0
+    grounding_expected_field_count = 0
+    grounding_matched_field_count = 0
+    grounding_field_match_counts: Counter[str] = Counter()
     pass_comparison_document_count = 0
     pass_comparison_divergent_document_count = 0
     pass_comparison_disagreement_count = 0
@@ -633,6 +750,24 @@ def evaluate_model(
                 field_comparison = compare_expected_fields(expected_fields, facts_path)
                 expected_field_count += field_comparison["expected_field_count"]
                 matched_field_count += field_comparison["matched_field_count"]
+            grounding_comparison = compare_expected_grounding(
+                expected_fields,
+                transcription_path,
+            )
+            if grounding_comparison:
+                grounding_document_count += 1
+                grounding_available_document_count += int(
+                    grounding_comparison["geometry_available"]
+                )
+                grounding_expected_field_count += grounding_comparison["expected_field_count"]
+                grounding_matched_field_count += grounding_comparison["matched_field_count"]
+                grounding_fully_matched_document_count += int(
+                    grounding_comparison["expected_field_count"] > 0
+                    and grounding_comparison["expected_field_count"]
+                    == grounding_comparison["matched_field_count"]
+                )
+                for field in grounding_comparison["fields"]:
+                    grounding_field_match_counts[field["field"]] += int(field["matched"])
             pass_comparison = None
             if args.compare_passes and document["kind"] == "receipt":
                 pass_comparison = compare_receipt_passes(
@@ -663,6 +798,7 @@ def evaluate_model(
                     "relaxed_match": comparison["relaxed_match"] if comparison else None,
                     "content_match": comparison["content_match"] if comparison else None,
                     "expected_fields": field_comparison,
+                    "expected_grounding": grounding_comparison,
                     "ocr_pass_comparison": pass_comparison,
                 }
             )
@@ -692,6 +828,12 @@ def evaluate_model(
             "comparable_document_count": comparable_document_count,
             "expected_field_count": expected_field_count,
             "matched_field_count": matched_field_count,
+            "grounding_document_count": grounding_document_count,
+            "grounding_available_document_count": grounding_available_document_count,
+            "grounding_fully_matched_document_count": grounding_fully_matched_document_count,
+            "grounding_expected_field_count": grounding_expected_field_count,
+            "grounding_matched_field_count": grounding_matched_field_count,
+            "grounding_field_match_counts": dict(grounding_field_match_counts),
             "pass_comparison_document_count": pass_comparison_document_count,
             "pass_comparison_divergent_document_count": pass_comparison_divergent_document_count,
             "pass_comparison_disagreement_count": pass_comparison_disagreement_count,
@@ -727,6 +869,24 @@ def summarize_comparison(model_reports: list[dict]) -> dict:
                 "document_count": report["summary"]["document_count"],
                 "expected_field_count": report["summary"].get("expected_field_count", 0),
                 "matched_field_count": report["summary"].get("matched_field_count", 0),
+                "grounding_document_count": report["summary"].get(
+                    "grounding_document_count", 0
+                ),
+                "grounding_available_document_count": report["summary"].get(
+                    "grounding_available_document_count", 0
+                ),
+                "grounding_fully_matched_document_count": report["summary"].get(
+                    "grounding_fully_matched_document_count", 0
+                ),
+                "grounding_expected_field_count": report["summary"].get(
+                    "grounding_expected_field_count", 0
+                ),
+                "grounding_matched_field_count": report["summary"].get(
+                    "grounding_matched_field_count", 0
+                ),
+                "grounding_field_match_counts": report["summary"].get(
+                    "grounding_field_match_counts", {}
+                ),
                 "pass_comparison_document_count": report["summary"].get(
                     "pass_comparison_document_count", 0
                 ),
@@ -771,6 +931,12 @@ def failed_model_report(model: str, location: str, error: str) -> dict:
             "comparable_document_count": 0,
             "expected_field_count": 0,
             "matched_field_count": 0,
+            "grounding_document_count": 0,
+            "grounding_available_document_count": 0,
+            "grounding_fully_matched_document_count": 0,
+            "grounding_expected_field_count": 0,
+            "grounding_matched_field_count": 0,
+            "grounding_field_match_counts": {},
             "pass_comparison_document_count": 0,
             "pass_comparison_divergent_document_count": 0,
             "pass_comparison_disagreement_count": 0,
@@ -796,6 +962,11 @@ def render_model_report_markdown(report: dict) -> str:
         f"- comparable documents: {report['summary'].get('comparable_document_count', report['summary']['document_count'])}",
         f"- expected receipt fields: {report['summary'].get('expected_field_count', 0)}",
         f"- matched receipt fields: {report['summary'].get('matched_field_count', 0)}",
+        f"- grounded receipt docs: {report['summary'].get('grounding_document_count', 0)}",
+        f"- docs with OCR geometry: {report['summary'].get('grounding_available_document_count', 0)}",
+        f"- fully grounded docs: {report['summary'].get('grounding_fully_matched_document_count', 0)}",
+        f"- expected grounded fields: {report['summary'].get('grounding_expected_field_count', 0)}",
+        f"- matched grounded fields: {report['summary'].get('grounding_matched_field_count', 0)}",
         f"- pass comparisons: {report['summary'].get('pass_comparison_document_count', 0)}",
         f"- pass-comparison divergences: {report['summary'].get('pass_comparison_divergent_document_count', 0)}",
         f"- pass-comparison field disagreements: {report['summary'].get('pass_comparison_disagreement_count', 0)}",
@@ -815,6 +986,24 @@ def render_model_report_markdown(report: dict) -> str:
     lines.append("## Ledger State Counts")
     for key, value in sorted(report["summary"]["ledger_state_counts"].items()):
         lines.append(f"- {key}: {value}")
+    lines.append("")
+    lines.append("## OCR Grounding")
+    lines.append(
+        f"- grounded receipt docs: {report['summary'].get('grounding_document_count', 0)}"
+    )
+    lines.append(
+        f"- docs with OCR geometry: {report['summary'].get('grounding_available_document_count', 0)}"
+    )
+    lines.append(
+        f"- fully grounded docs: {report['summary'].get('grounding_fully_matched_document_count', 0)}"
+    )
+    lines.append(
+        f"- matched grounded fields: {report['summary'].get('grounding_matched_field_count', 0)}/{report['summary'].get('grounding_expected_field_count', 0)}"
+    )
+    grounding_counts = report["summary"].get("grounding_field_match_counts", {})
+    if grounding_counts:
+        for key, value in sorted(grounding_counts.items()):
+            lines.append(f"- {key}: {value}")
     lines.append("")
     lines.append("## OCR Pass Comparison")
     confidence_counts = report["summary"].get("pass_comparison_confidence_counts", {})
@@ -860,10 +1049,29 @@ def render_comparison_markdown(comparison: dict) -> str:
         lines.append(
             f"- {model['model']}: documents={model['document_count']}, "
             f"fields={model.get('matched_field_count', 0)}/{model.get('expected_field_count', 0)}, "
+            f"grounded={model.get('grounding_matched_field_count', 0)}/{model.get('grounding_expected_field_count', 0)}, "
             f"pass_disagreements={model.get('pass_comparison_disagreement_count', 0)}, "
             f"exact={model['exact_match_count']}, "
             f"relaxed={model['relaxed_match_count']}, "
             f"content={model['content_match_count']}"
+        )
+
+    lines.append("")
+    lines.append("## OCR Grounding")
+    for model in comparison["models"]:
+        if model.get("status") == "error":
+            lines.append(f"- {model['model']}: unavailable")
+            continue
+        field_counts = ", ".join(
+            f"{key}={value}"
+            for key, value in sorted(model.get("grounding_field_match_counts", {}).items())
+        )
+        lines.append(
+            f"- {model['model']}: grounded_docs={model.get('grounding_document_count', 0)}, "
+            f"geometry_docs={model.get('grounding_available_document_count', 0)}, "
+            f"fully_grounded_docs={model.get('grounding_fully_matched_document_count', 0)}, "
+            f"grounded_fields={model.get('grounding_matched_field_count', 0)}/{model.get('grounding_expected_field_count', 0)}, "
+            f"field_matches={field_counts or 'none'}"
         )
 
     lines.append("")
