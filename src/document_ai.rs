@@ -447,6 +447,7 @@ print(json.dumps({
 
         assert_eq!(document.engine, TranscriptionEngine::DocumentAi);
         assert_eq!(document.document_id, "mock_receipt");
+        assert_eq!(document.metadata.grounding_preprocess_variant, None);
         assert_eq!(document.metadata.geometry_source, OcrGeometrySource::DocumentAi);
         assert!(document.metadata.geometry_available);
         assert_eq!(document.pages[0].regions.len(), 1);

@@ -525,6 +525,20 @@ mod tests {
     }
 
     #[test]
+    fn primary_transcription_metadata_starts_without_grounding_variant() {
+        let metadata = TranscriptionMetadata::primary_for_engine(
+            TranscriptionEngine::VertexGeminiSdk,
+            "google_genai_sdk",
+            Some("gemini-3-flash-preview".to_owned()),
+        );
+
+        assert_eq!(metadata.preprocess_variant, OcrPreprocessVariant::Original);
+        assert_eq!(metadata.grounding_preprocess_variant, None);
+        assert_eq!(metadata.geometry_source, OcrGeometrySource::None);
+        assert!(!metadata.geometry_available);
+    }
+
+    #[test]
     fn transcribed_document_json_round_trips_with_metadata() {
         let document = TranscribedDocument {
             document_id: "sample".to_owned(),
