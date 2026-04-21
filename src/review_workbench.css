@@ -432,6 +432,12 @@ body {
   list-style: none;
 }
 
+.issues-subsection {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
 .issue-card,
 .copy-instance,
 .evidence-card,
@@ -458,6 +464,17 @@ body {
 .issue-card.manual-review {
   border-color: var(--forest);
   background: #edf5f1;
+}
+
+.issue-card.status-consensus,
+.issue-card.status-partial,
+.issue-card.status-missing {
+  border-color: rgba(171, 127, 44, 0.3);
+}
+
+.issue-card.status-divergent {
+  border-color: rgba(182, 108, 63, 0.3);
+  background: #fbebe4;
 }
 
 .issue-topline {
@@ -513,6 +530,16 @@ body {
   color: var(--accent);
   font-weight: 700;
   text-decoration: none;
+}
+
+.ocr-review-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.ocr-review-links .issue-link {
+  margin-top: 0;
 }
 
 .copy-panel {

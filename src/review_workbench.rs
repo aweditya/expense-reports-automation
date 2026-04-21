@@ -38,6 +38,14 @@ struct WorkbenchFieldOcrSignal {
     grounding_href: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct OcrReviewQueueItem {
+    path: String,
+    label: String,
+    target: String,
+    signal: WorkbenchFieldOcrSignal,
+}
+
 pub fn render_review_workbench_html(packet: &ReviewPacket) -> String {
     let index = build_workbench_index(packet);
     let grounding_lookup = build_grounding_lookup(packet);
@@ -60,7 +68,7 @@ pub fn render_review_workbench_html(packet: &ReviewPacket) -> String {
     render_toolbar(&mut html);
     render_document_snapshot_panel(&mut html, packet);
     html.push_str("<main class=\"workbench-grid\">\n");
-    render_issues_panel(&mut html, packet, &index);
+    render_issues_panel(&mut html, packet, &index, &grounding_lookup, &comparison_lookup);
     render_copy_panel(
         &mut html,
         packet,
@@ -172,7 +180,13 @@ fn render_toolbar(html: &mut String) {
     html.push_str("</section>\n");
 }
 
-fn render_issues_panel(html: &mut String, packet: &ReviewPacket, index: &WorkbenchIndex) {
+fn render_issues_panel(
+    html: &mut String,
+    packet: &ReviewPacket,
+    index: &WorkbenchIndex,
+    grounding_lookup: &BTreeMap<String, GroundingLinkTarget>,
+    comparison_lookup: &BTreeMap<String, ComparisonLinkTarget>,
+) {
     html.push_str("<section class=\"panel issues-panel\">\n");
     html.push_str(
         "<div class=\"panel-heading\"><p class=\"eyebrow\">Queue</p><h2>Issues</h2></div>\n",
@@ -219,6 +233,56 @@ fn render_issues_panel(html: &mut String, packet: &ReviewPacket, index: &Workben
             html.push_str("</li>\n");
         }
         html.push_str("</ul>\n");
+    }
+    let ocr_review_items = collect_ocr_review_items(packet, index, grounding_lookup, comparison_lookup);
+    if !ocr_review_items.is_empty() {
+        html.push_str(
+            "<div class=\"issues-subsection\"><p class=\"eyebrow\">OCR Review</p><h3>Fields To Double-Check</h3><ul class=\"issue-list ocr-review-list\">",
+        );
+        for item in ocr_review_items {
+            html.push_str("<li class=\"issue-card ocr-review-card ");
+            html.push_str(ocr_status_class(item.signal.status));
+            html.push_str("\">");
+            html.push_str("<div class=\"issue-topline\">");
+            html.push_str("<span class=\"issue-class\">");
+            html.push_str(ocr_status_label(item.signal.status));
+            html.push_str("</span>");
+            html.push_str("<span class=\"issue-source\">ocr ");
+            html.push_str(confidence_level_label(item.signal.confidence));
+            html.push_str("</span>");
+            if item.signal.grounded {
+                html.push_str("<span class=\"issue-source\">grounded</span>");
+            }
+            html.push_str("</div>");
+            html.push_str("<h3>");
+            html.push_str(&escape_html(&item.label));
+            html.push_str("</h3>");
+            html.push_str("<p class=\"issue-path\">");
+            html.push_str(&escape_html(&item.path));
+            html.push_str("</p>");
+            html.push_str("<p class=\"issue-message\">");
+            html.push_str(&escape_html(&item.signal.summary));
+            html.push_str("</p>");
+            html.push_str("<div class=\"ocr-review-links\">");
+            html.push_str("<a class=\"issue-link\" href=\"#");
+            html.push_str(&escape_html(&item.target));
+            html.push_str("\" onclick=\"jumpToField(event, '");
+            html.push_str(&escape_html_attribute(&item.target));
+            html.push_str("')\">Jump to field</a>");
+            if let Some(href) = item.signal.diff_href.as_deref() {
+                html.push_str("<a class=\"issue-link\" href=\"");
+                html.push_str(&escape_html_attribute(href));
+                html.push_str("\" target=\"_blank\" rel=\"noreferrer noopener\">Open OCR diff</a>");
+            }
+            if let Some(href) = item.signal.grounding_href.as_deref() {
+                html.push_str("<a class=\"issue-link\" href=\"");
+                html.push_str(&escape_html_attribute(href));
+                html.push_str("\" target=\"_blank\" rel=\"noreferrer noopener\">Open grounded source</a>");
+            }
+            html.push_str("</div>");
+            html.push_str("</li>");
+        }
+        html.push_str("</ul></div>");
     }
     html.push_str("</section>\n");
 }
@@ -934,6 +998,51 @@ fn build_comparison_lookup(packet: &ReviewPacket) -> BTreeMap<String, Comparison
             ))
         })
         .collect()
+}
+
+fn collect_ocr_review_items(
+    packet: &ReviewPacket,
+    index: &WorkbenchIndex,
+    grounding_lookup: &BTreeMap<String, GroundingLinkTarget>,
+    comparison_lookup: &BTreeMap<String, ComparisonLinkTarget>,
+) -> Vec<OcrReviewQueueItem> {
+    let mut items = Vec::new();
+    for section in &packet.copy_sections {
+        for instance in &section.instances {
+            for field in &instance.fields {
+                let Some(signal) = derive_field_ocr_signal(field, comparison_lookup, grounding_lookup) else {
+                    continue;
+                };
+                if !field_needs_ocr_review(&signal) {
+                    continue;
+                }
+                let target = index
+                    .field_targets
+                    .get(&field.path)
+                    .cloned()
+                    .unwrap_or_else(|| anchor_id("field", &field.path));
+                items.push(OcrReviewQueueItem {
+                    path: field.path.clone(),
+                    label: field.label.clone(),
+                    target,
+                    signal,
+                });
+            }
+        }
+    }
+    items.sort_by_key(|item| {
+        (
+            std::cmp::Reverse(ocr_status_rank(item.signal.status)),
+            confidence_level_rank(item.signal.confidence),
+            item.label.clone(),
+        )
+    });
+    items
+}
+
+fn field_needs_ocr_review(signal: &WorkbenchFieldOcrSignal) -> bool {
+    signal.status != crate::OcrComparisonStatus::Consensus
+        || signal.confidence != crate::ConfidenceLevel::High
 }
 
 fn derive_field_ocr_signal(
@@ -2137,6 +2246,8 @@ mod tests {
         assert!(rendered.contains("needs review"));
         assert!(rendered.contains("ocr Low"));
         assert!(rendered.contains("The linked receipt also failed an internal amount-consistency check."));
+        assert!(rendered.contains("Fields To Double-Check"));
+        assert!(rendered.contains("Jump to field"));
         assert!(rendered.contains("Open OCR diff"));
         assert!(rendered.contains("Open grounded source"));
         assert!(rendered.contains("Recovered via contrast_boosted preprocessing"));
