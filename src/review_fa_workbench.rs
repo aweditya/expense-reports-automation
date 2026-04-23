@@ -131,8 +131,8 @@ pub fn render_fa_workbench_html(packet: &ReviewPacket) -> String {
          function fieldNeedsReview(card){if(!card||card.dataset.needsReview!=='true'){return false;}if(fieldConfirmInput(card)?.checked){return false;}return !card.classList.contains('dirty');}\
          function fieldNeedsManualAttention(card){return fieldNeedsRequiredInput(card)||fieldNeedsReview(card);}\
          function updateFieldDirtyState(card){const control=fieldControl(card);const edited=control?!valuesEqual(initialFieldValue(control),normalizeFieldValue(control)):false;const confirmed=Boolean(fieldConfirmInput(card)?.checked);card.classList.toggle('dirty',edited||confirmed);const badge=card.querySelector('.field-dirty-badge');if(badge){badge.hidden=!(edited||confirmed);}}\
-         function refreshIssueQueue(){const issueCards=[...document.querySelectorAll('.issue-card')];let visibleIssues=0;for(const issueCard of issueCards){const targetId=issueCard.dataset.targetId||'';const targetCard=targetId?document.getElementById(targetId):null;const hide=targetCard?(!fieldNeedsManualAttention(targetCard)):false;issueCard.hidden=hide;if(!hide){visibleIssues+=1;}}const emptyState=document.getElementById('issue-queue-empty-state');const generatedCount=document.querySelectorAll('.field-card[data-generated-after-save=\"true\"]').length;if(emptyState){if(visibleIssues>0){emptyState.hidden=true;}else{emptyState.hidden=false;emptyState.textContent=generatedCount>0?`No manual review or data entry is left on this page. Save and recompute to generate ${generatedCount===1?'1 system field':`${generatedCount} system fields`} and refresh the preview.`:'All manual review items on this page are complete. Save and recompute, then open final preview.';}}const queueCount=document.getElementById('issue-queue-count');if(queueCount){queueCount.textContent=visibleIssues===0?'Nothing still needs attention':visibleIssues===1?'1 item still needs attention':`${visibleIssues} items still need attention`;}}\
-         function refreshLocalReadiness(){const actionableCards=[...document.querySelectorAll('.field-card')].filter(fieldNeedsManualAttention);const generatedCount=document.querySelectorAll('.field-card[data-generated-after-save=\"true\"]').length;const readiness=document.getElementById('action-queue-status');if(readiness){if(actionableCards.length>0){readiness.textContent=actionableCards.length===1?'1 field still needs attention before you save.':`${actionableCards.length} fields still need attention before you save.`;readiness.dataset.tone='attention';}else if(generatedCount>0){readiness.textContent=generatedCount===1?'All editable fields are complete. Save and recompute to generate 1 system field and refresh the preview.':`All editable fields are complete. Save and recompute to generate ${generatedCount} system fields and refresh the preview.`;readiness.dataset.tone='ready';}else{readiness.textContent='All required fields on this page are complete. Save and recompute, then open final preview.';readiness.dataset.tone='ready';}}refreshIssueQueue();}\
+         function refreshIssueQueue(){const actionableIssueCards=[...document.querySelectorAll('.issue-card[data-queue-group=\"actionable\"]')];let visibleActionableIssues=0;for(const issueCard of actionableIssueCards){const targetId=issueCard.dataset.targetId||'';const targetCard=targetId?document.getElementById(targetId):null;const hide=targetCard?(!fieldNeedsManualAttention(targetCard)):false;issueCard.hidden=hide;if(!hide){visibleActionableIssues+=1;}}const systemIssueCards=[...document.querySelectorAll('.issue-card[data-queue-group=\"system\"]')];const visibleSystemIssues=systemIssueCards.filter((card)=>!card.hidden).length;const actionableSection=document.getElementById('actionable-issues-section');if(actionableSection){actionableSection.hidden=visibleActionableIssues===0;}const systemSection=document.getElementById('system-issues-section');if(systemSection){systemSection.hidden=visibleSystemIssues===0;}const emptyState=document.getElementById('issue-queue-empty-state');const generatedCount=document.querySelectorAll('.field-card[data-generated-after-save=\"true\"]').length;if(emptyState){if(visibleActionableIssues>0||visibleSystemIssues>0){emptyState.hidden=true;}else{emptyState.hidden=false;emptyState.textContent=generatedCount>0?`No manual review or system items are currently listed here. Save and recompute to generate ${generatedCount===1?'1 system field':`${generatedCount} system fields`} and refresh the preview.`:'No queue items remain on this page. Save and recompute, then open final preview.';}}const queueCount=document.getElementById('issue-queue-count');if(queueCount){const totalVisible=visibleActionableIssues+visibleSystemIssues;queueCount.textContent=totalVisible===0?'Nothing still needs attention':totalVisible===1?'1 item still needs attention':`${totalVisible} items still need attention`;}const actionableCount=document.getElementById('actionable-issue-count');if(actionableCount){actionableCount.textContent=visibleActionableIssues===0?'No editable items still need attention':visibleActionableIssues===1?'1 editable item still needs attention':`${visibleActionableIssues} editable items still need attention`;}const systemCount=document.getElementById('system-issue-count');if(systemCount){systemCount.textContent=visibleSystemIssues===0?'No system items are waiting on recompute':visibleSystemIssues===1?'1 system item will refresh after save':`${visibleSystemIssues} system items will refresh after save`;}}\
+         function refreshLocalReadiness(){const actionableCards=[...document.querySelectorAll('.field-card')].filter(fieldNeedsManualAttention);const generatedCount=document.querySelectorAll('.field-card[data-generated-after-save=\"true\"]').length;const systemIssueCount=[...document.querySelectorAll('.issue-card[data-queue-group=\"system\"]')].filter((card)=>!card.hidden).length;const readiness=document.getElementById('action-queue-status');if(readiness){if(actionableCards.length>0){readiness.textContent=actionableCards.length===1?'1 field still needs attention before you save.':`${actionableCards.length} fields still need attention before you save.`;readiness.dataset.tone='attention';}else if(systemIssueCount>0){readiness.textContent=systemIssueCount===1?'All editable fields are complete. Save and recompute to refresh 1 remaining system item.':`All editable fields are complete. Save and recompute to refresh ${systemIssueCount} remaining system items.`;readiness.dataset.tone='ready';}else if(generatedCount>0){readiness.textContent=generatedCount===1?'All editable fields are complete. Save and recompute to generate 1 system field and refresh the preview.':`All editable fields are complete. Save and recompute to generate ${generatedCount} system fields and refresh the preview.`;readiness.dataset.tone='ready';}else{readiness.textContent='All required fields on this page are complete. Save and recompute, then open final preview.';readiness.dataset.tone='ready';}}refreshIssueQueue();}\
          function refreshDirtySummary(){const dirtyCards=[...document.querySelectorAll('.field-card.dirty')];const counter=document.getElementById('pending-change-count');if(counter){counter.textContent=issueCountLabel(dirtyCards.length);}const saveButton=document.getElementById('save-review-button');const resetButton=document.getElementById('reset-review-button');if(saveButton){saveButton.disabled=reviewSessionState.saveInFlight||dirtyCards.length===0;}if(resetButton){resetButton.disabled=reviewSessionState.saveInFlight||dirtyCards.length===0;}refreshLocalReadiness();}\
          function syncCardStateFromEventTarget(target){const card=target.closest('.field-card');if(!card){return;}updateFieldDirtyState(card);refreshDirtySummary();}\
          function structuredRowTemplate(editor,rowValues){const columns=parseJsonData(editor.dataset.columnsJson,[]);const row=document.createElement('div');row.className='structured-row';for(const column of columns){const cell=document.createElement('label');cell.className='structured-cell';const label=document.createElement('span');label.className='structured-cell-label';label.textContent=column.label;cell.appendChild(label);let input;if(column.control==='select'){input=document.createElement('select');const blank=document.createElement('option');blank.value='';blank.textContent='';input.appendChild(blank);for(const optionValue of column.allowed_values||[]){const option=document.createElement('option');option.value=optionValue;option.textContent=optionValue.replaceAll('_',' ');input.appendChild(option);}}else if(column.control==='checkbox'){input=document.createElement('select');[['','Unset'],['true','Yes'],['false','No']].forEach(([value,labelText])=>{const option=document.createElement('option');option.value=value;option.textContent=labelText;input.appendChild(option);});}else if(column.control==='date'){input=document.createElement('input');input.type='date';}else{input=document.createElement(column.control==='textarea'?'textarea':'input');if(input.tagName==='INPUT'){input.type='text';if(column.control==='currency'||column.control==='number'){input.inputMode='decimal';}}}input.className='structured-row-input';input.dataset.columnKey=column.key;input.dataset.columnControl=column.control;input.value=(rowValues&&rowValues[column.key])||'';input.addEventListener('input',()=>syncCardStateFromEventTarget(input));input.addEventListener('change',()=>syncCardStateFromEventTarget(input));cell.appendChild(input);row.appendChild(cell);}const removeButton=document.createElement('button');removeButton.type='button';removeButton.className='structured-row-remove';removeButton.textContent='Remove row';removeButton.addEventListener('click',()=>{row.remove();syncCardStateFromEventTarget(editor);});row.appendChild(removeButton);return row;}\
@@ -237,27 +237,50 @@ fn render_issues_panel(html: &mut String, packet: &ReviewPacket, index: &Workben
         .iter()
         .filter(|issue| issue_is_user_actionable(issue.path.as_str(), index))
         .collect::<Vec<_>>();
+    let system_issues = packet
+        .issues_queue
+        .iter()
+        .filter(|issue| !issue_is_user_actionable(issue.path.as_str(), index))
+        .collect::<Vec<_>>();
     html.push_str("<aside class=\"issues-panel\"><p class=\"eyebrow\">Action Queue</p><h2>What still needs attention</h2><p class=\"field-guidance\" id=\"issue-queue-count\">");
-    if actionable_issues.is_empty() {
+    let total_issue_count = actionable_issues.len() + system_issues.len();
+    if total_issue_count == 0 {
         html.push_str("Nothing still needs attention");
     } else {
         html.push_str(&format!(
             "{}",
-            if actionable_issues.len() == 1 {
+            if total_issue_count == 1 {
                 "1 item still needs attention".to_owned()
             } else {
-                format!("{} items still need attention", actionable_issues.len())
+                format!("{total_issue_count} items still need attention")
             }
         ));
     }
     html.push_str("</p>");
-    if actionable_issues.is_empty() {
-        html.push_str("<p class=\"field-guidance\" id=\"issue-queue-empty-state\">All manual review items on this page are complete. Save and recompute, then open final preview.</p>");
+    if total_issue_count == 0 {
+        html.push_str("<p class=\"field-guidance\" id=\"issue-queue-empty-state\">No queue items remain on this page. Save and recompute, then open final preview.</p>");
     } else {
-        html.push_str("<p class=\"field-guidance\" id=\"issue-queue-empty-state\" hidden></p><div class=\"issue-list\">");
+        html.push_str("<p class=\"field-guidance\" id=\"issue-queue-empty-state\" hidden></p>");
+        html.push_str("<section id=\"actionable-issues-section\"");
+        if actionable_issues.is_empty() {
+            html.push_str(" hidden");
+        }
+        html.push_str("><p class=\"field-guidance\" id=\"actionable-issue-count\">");
+        if actionable_issues.is_empty() {
+            html.push_str("No editable items still need attention");
+        } else if actionable_issues.len() == 1 {
+            html.push_str("1 editable item still needs attention");
+        } else {
+            html.push_str(&format!(
+                "{} editable items still need attention",
+                actionable_issues.len()
+            ));
+        }
+        html.push_str("</p><div class=\"issue-list\">");
         for issue in actionable_issues {
             let target = issue_target(issue.path.as_str(), index);
             html.push_str("<article class=\"issue-card\"");
+            html.push_str(" data-queue-group=\"actionable\"");
             if let Some(target) = target.as_deref() {
                 html.push_str(" data-target-id=\"");
                 html.push_str(&escape_html_attribute(target));
@@ -281,7 +304,50 @@ fn render_issues_panel(html: &mut String, packet: &ReviewPacket, index: &Workben
             html.push_str(&escape_html(&issue.message));
             html.push_str("</p></article>");
         }
-        html.push_str("</div>");
+        html.push_str("</div></section>");
+        html.push_str("<section id=\"system-issues-section\"");
+        if system_issues.is_empty() {
+            html.push_str(" hidden");
+        }
+        html.push_str("><p class=\"field-guidance\" id=\"system-issue-count\">");
+        if system_issues.is_empty() {
+            html.push_str("No system items are waiting on recompute");
+        } else if system_issues.len() == 1 {
+            html.push_str("1 system item will refresh after save");
+        } else {
+            html.push_str(&format!(
+                "{} system items will refresh after save",
+                system_issues.len()
+            ));
+        }
+        html.push_str("</p><div class=\"issue-list\">");
+        for issue in system_issues {
+            let target = issue_target(issue.path.as_str(), index);
+            html.push_str("<article class=\"issue-card\" data-queue-group=\"system\"");
+            if let Some(target) = target.as_deref() {
+                html.push_str(" data-target-id=\"");
+                html.push_str(&escape_html_attribute(target));
+                html.push('"');
+            }
+            html.push_str("><div class=\"issue-head\"><div><span class=\"issue-class ");
+            html.push_str(issue_badge_class(issue.class));
+            html.push_str("\">");
+            html.push_str(issue_label(issue.class));
+            html.push_str("</span><p class=\"issue-label\">");
+            html.push_str(&escape_html(&issue.label));
+            html.push_str("</p></div>");
+            if let Some(target) = target {
+                html.push_str("<a class=\"issue-link\" href=\"#");
+                html.push_str(&escape_html(&target));
+                html.push_str("\" onclick=\"jumpToField(event, '");
+                html.push_str(&escape_html_attribute(&target));
+                html.push_str("')\">Open field</a>");
+            }
+            html.push_str("</div><p class=\"issue-message\">");
+            html.push_str(&escape_html(&issue.message));
+            html.push_str("</p></article>");
+        }
+        html.push_str("</div></section>");
     }
     html.push_str("</aside>");
 }
@@ -1162,5 +1228,14 @@ mod tests {
         assert!(rendered.contains("function refreshIssueQueue()"));
         assert!(rendered.contains("All editable fields are complete. Save and recompute"));
         assert!(rendered.contains("id=\"issue-queue-empty-state\""));
+    }
+
+    #[test]
+    fn fa_workbench_keeps_system_queue_items_visible_when_no_editable_items_remain() {
+        let rendered = render_fa_workbench_html(&computed_only_packet());
+        assert!(rendered.contains("id=\"system-issues-section\""));
+        assert!(rendered.contains("data-queue-group=\"system\""));
+        assert!(rendered.contains("1 system item will refresh after save"));
+        assert!(rendered.contains(">1 item still needs attention</p>"));
     }
 }
