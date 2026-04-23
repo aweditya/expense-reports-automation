@@ -7425,14 +7425,6 @@
                 "origin": "bundle_synthesis.default_business_purpose_what"
               },
               {
-                "kind": "document_span",
-                "document_id": "hotel_folio_property_labeled",
-                "filename": "hotel_folio_property_labeled.md",
-                "page": 1,
-                "quote": "Property Location: Singapore, Singapore",
-                "origin": null
-              },
-              {
                 "kind": "system_generated",
                 "document_id": null,
                 "filename": null,
@@ -7454,7 +7446,7 @@
                 "filename": null,
                 "page": null,
                 "quote": null,
-                "origin": "bundle_synthesis.compute_business_purpose_key"
+                "origin": "ledger.recompute_business_purpose_key"
               }
             ],
             "needs_review": true,
@@ -9656,14 +9648,6 @@
                         "origin": "bundle_synthesis.default_business_purpose_what"
                       },
                       {
-                        "kind": "document_span",
-                        "document_id": "hotel_folio_property_labeled",
-                        "filename": "hotel_folio_property_labeled.md",
-                        "page": 1,
-                        "quote": "Property Location: Singapore, Singapore",
-                        "origin": null
-                      },
-                      {
                         "kind": "system_generated",
                         "document_id": null,
                         "filename": null,
@@ -9685,7 +9669,7 @@
                         "filename": null,
                         "page": null,
                         "quote": null,
-                        "origin": "bundle_synthesis.compute_business_purpose_key"
+                        "origin": "ledger.recompute_business_purpose_key"
                       }
                     ]
                   },
@@ -12463,14 +12447,6 @@
                 "origin": "bundle_synthesis.default_business_purpose_what"
               },
               {
-                "kind": "document_span",
-                "document_id": "hotel_folio_property_labeled",
-                "filename": "hotel_folio_property_labeled.md",
-                "page": 1,
-                "quote": "Property Location: Singapore, Singapore",
-                "origin": null
-              },
-              {
                 "kind": "system_generated",
                 "document_id": null,
                 "filename": null,
@@ -12492,7 +12468,7 @@
                 "filename": null,
                 "page": null,
                 "quote": null,
-                "origin": "bundle_synthesis.compute_business_purpose_key"
+                "origin": "ledger.recompute_business_purpose_key"
               }
             ],
             "needs_review": true,
@@ -14668,14 +14644,6 @@
                         "origin": "bundle_synthesis.default_business_purpose_what"
                       },
                       {
-                        "kind": "document_span",
-                        "document_id": "hotel_folio_property_labeled",
-                        "filename": "hotel_folio_property_labeled.md",
-                        "page": 1,
-                        "quote": "Property Location: Singapore, Singapore",
-                        "origin": null
-                      },
-                      {
                         "kind": "system_generated",
                         "document_id": null,
                         "filename": null,
@@ -14697,7 +14665,7 @@
                         "filename": null,
                         "page": null,
                         "quote": null,
-                        "origin": "bundle_synthesis.compute_business_purpose_key"
+                        "origin": "ledger.recompute_business_purpose_key"
                       }
                     ]
                   },

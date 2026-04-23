@@ -4,10 +4,11 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::bundle_synthesis::CanonicalExpenseBundle;
-use crate::draft::DraftReport;
+use crate::draft::{ConfidenceLevel, DraftReport, EvidenceKind, EvidenceReference, FieldMetadata};
 use crate::feedback::{
-    apply_user_input_override, capture_feedback, CorrectionAnnotation, FeedbackCapture,
-    FeedbackCategory, SubmissionFeedback, SubmissionStatus,
+    apply_system_generated_override, apply_user_input_override, capture_feedback,
+    clear_draft_field, CorrectionAnnotation, FeedbackCapture, FeedbackCategory,
+    SubmissionFeedback, SubmissionStatus,
 };
 use crate::ocr_compare::DocumentOcrComparisonSummary;
 use crate::ocr_grounding::DocumentOcrGroundingSummary;
@@ -278,6 +279,8 @@ pub fn apply_review_revision(
         });
     }
 
+    recompute_review_derived_fields(&mut draft).map_err(LedgerError::InvalidRevision)?;
+
     let mut confirmed_review_paths = base_version
         .confirmed_review_paths
         .iter()
@@ -395,6 +398,8 @@ pub fn ingest_submission_feedback(
                 note: edit.note.clone(),
             });
         }
+
+        recompute_review_derived_fields(&mut draft).map_err(LedgerError::InvalidRevision)?;
 
         let mut confirmed_review_paths = base_version
             .confirmed_review_paths
@@ -671,6 +676,156 @@ fn submission_attempt_state(status: SubmissionStatus) -> SubmissionAttemptState 
     }
 }
 
+fn recompute_review_derived_fields(draft: &mut DraftReport) -> Result<(), String> {
+    recompute_business_purpose_key(draft)
+}
+
+fn recompute_business_purpose_key(draft: &mut DraftReport) -> Result<(), String> {
+    let who_path = "expense_report.general_information.business_purpose.who";
+    let what_path = "expense_report.general_information.business_purpose.what";
+    let category_path = "expense_report.general_information.category";
+    let key_path = "expense_report.general_information.business_purpose.key_30char";
+
+    let who = value_text_at(&draft.report, who_path);
+    let what = value_text_at(&draft.report, what_path);
+    let category = value_text_at(&draft.report, category_path);
+
+    let Some(who_value) = who else {
+        return clear_draft_field(draft, key_path);
+    };
+    let Some(what_value) = what else {
+        return clear_draft_field(draft, key_path);
+    };
+    let Some(category_value) = category else {
+        return clear_draft_field(draft, key_path);
+    };
+
+    let key = truncate_chars(
+        &format!(
+            "{}{}{}",
+            compact_key_token(&who_value, 10),
+            compact_key_token(&what_value, 12),
+            compact_key_token(&category_value, 8),
+        ),
+        30,
+    );
+
+    let input_paths = [who_path, what_path, category_path];
+    let metadata = FieldMetadata {
+        confidence: lowest_confidence(
+            input_paths
+                .iter()
+                .filter_map(|path| draft.metadata.get(*path).map(|meta| meta.confidence)),
+        ),
+        evidence: combined_evidence(
+            input_paths
+                .iter()
+                .filter_map(|path| draft.metadata.get(*path))
+                .flat_map(|meta| meta.evidence.iter().cloned()),
+        ),
+        needs_review: input_paths
+            .iter()
+            .filter_map(|path| draft.metadata.get(*path))
+            .any(|meta| meta.needs_review),
+        flags: combined_flags(
+            input_paths
+                .iter()
+                .filter_map(|path| draft.metadata.get(*path))
+                .flat_map(|meta| meta.flags.iter().cloned()),
+        ),
+    };
+
+    apply_system_generated_override(draft, key_path, ReportValue::from(key), metadata_with_origin(metadata, "ledger.recompute_business_purpose_key"))
+}
+
+fn metadata_with_origin(mut metadata: FieldMetadata, origin: &str) -> FieldMetadata {
+    if metadata.evidence.is_empty() {
+        metadata.evidence.push(EvidenceReference {
+            kind: EvidenceKind::SystemGenerated,
+            document_id: None,
+            filename: None,
+            page: None,
+            quote: None,
+            origin: Some(origin.to_owned()),
+        });
+    } else {
+        metadata.evidence.push(EvidenceReference {
+            kind: EvidenceKind::SystemGenerated,
+            document_id: None,
+            filename: None,
+            page: None,
+            quote: None,
+            origin: Some(origin.to_owned()),
+        });
+    }
+    metadata
+}
+
+fn lowest_confidence(values: impl IntoIterator<Item = ConfidenceLevel>) -> ConfidenceLevel {
+    let mut lowest = ConfidenceLevel::High;
+    for value in values {
+        lowest = match (lowest, value) {
+            (ConfidenceLevel::Low, _) | (_, ConfidenceLevel::Low) => ConfidenceLevel::Low,
+            (ConfidenceLevel::Medium, _) | (_, ConfidenceLevel::Medium) => {
+                ConfidenceLevel::Medium
+            }
+            _ => ConfidenceLevel::High,
+        };
+    }
+    lowest
+}
+
+fn combined_evidence(values: impl IntoIterator<Item = EvidenceReference>) -> Vec<EvidenceReference> {
+    let mut seen = BTreeSet::new();
+    let mut output = Vec::new();
+    for evidence in values {
+        let key = (
+            evidence_kind_name(evidence.kind),
+            evidence.document_id.clone(),
+            evidence.filename.clone(),
+            evidence.page,
+            evidence.quote.clone(),
+            evidence.origin.clone(),
+        );
+        if seen.insert(key) {
+            output.push(evidence);
+        }
+    }
+    output
+}
+
+fn combined_flags(values: impl IntoIterator<Item = String>) -> Vec<String> {
+    values
+        .into_iter()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+fn evidence_kind_name(kind: EvidenceKind) -> &'static str {
+    match kind {
+        EvidenceKind::Document => "document",
+        EvidenceKind::DocumentSpan => "document_span",
+        EvidenceKind::SystemGenerated => "system_generated",
+        EvidenceKind::UserInput => "user_input",
+    }
+}
+
+fn compact_key_token(value: &str, max_chars: usize) -> String {
+    truncate_chars(
+        &value
+            .chars()
+            .filter(|ch| ch.is_ascii_alphanumeric())
+            .map(|ch| ch.to_ascii_uppercase())
+            .collect::<String>(),
+        max_chars,
+    )
+}
+
+fn truncate_chars(value: &str, max_chars: usize) -> String {
+    value.chars().take(max_chars).collect()
+}
+
 fn value_text_at(report: &ReportValue, path: &str) -> Option<String> {
     value_at(report, path).and_then(report_value_to_string)
 }
@@ -776,8 +931,8 @@ fn filing_status_name(status: FilingStatus) -> &'static str {
 mod tests {
     use super::{
         apply_review_revision, ingest_submission_feedback, initialize_review_submission_ledger,
-        record_submission_attempt, render_review_submission_ledger_markdown, ActorRole,
-        DraftRevisionInput, FeedbackCategory, FieldEditInput, LedgerState,
+        record_submission_attempt, render_review_submission_ledger_markdown, value_text_at,
+        ActorRole, DraftRevisionInput, FeedbackCategory, FieldEditInput, LedgerState,
     };
     use crate::bundle_synthesis::{synthesize_bundle_projection_with_fx, StaticFxRateProvider};
     use crate::feedback::{SubmissionFeedback, SubmissionFieldFeedback, SubmissionStatus};
@@ -893,6 +1048,108 @@ mod tests {
         );
         assert_eq!(ledger.review_actions.len(), 6);
         assert!(latest.feedback_from_parent.is_some());
+    }
+
+    #[test]
+    fn review_revision_recomputes_business_purpose_key_after_fa_edit() {
+        let projection = synthetic_projection();
+        let mut ledger = initialize_review_submission_ledger(
+            "synthetic-bundle",
+            &projection.bundle,
+            &projection.draft,
+            &projection.validation,
+        )
+        .expect("ledger should initialize");
+
+        let version_id = apply_review_revision(
+            &mut ledger,
+            1,
+            DraftRevisionInput {
+                actor_role: ActorRole::FinancialAdministrator,
+                label: "Updated business purpose".to_owned(),
+                field_edits: vec![FieldEditInput {
+                    path: "expense_report.general_information.business_purpose.what".to_owned(),
+                    value: ReportValue::from("Conference presentation in Singapore"),
+                    reason: Some(FeedbackCategory::Other),
+                    note: Some("Adjusted wording".to_owned()),
+                    origin: "ledger.tests".to_owned(),
+                }],
+                confirmed_review_paths: Vec::new(),
+                annotations: Vec::new(),
+            },
+        )
+        .expect("revision should apply");
+
+        let version = ledger
+            .draft_versions
+            .iter()
+            .find(|version| version.version_id == version_id)
+            .expect("new version should exist");
+        assert_eq!(
+            value_text_at(
+                &version.draft.report,
+                "expense_report.general_information.business_purpose.key_30char"
+            )
+            .as_deref(),
+            Some("OLIVIAPARKCONFERENCEPREXPENSES")
+        );
+        assert!(version
+            .draft
+            .metadata
+            .get("expense_report.general_information.business_purpose.key_30char")
+            .expect("recomputed key metadata should exist")
+            .evidence
+            .iter()
+            .any(|evidence| evidence.origin.as_deref()
+                == Some("ledger.recompute_business_purpose_key")));
+    }
+
+    #[test]
+    fn review_revision_clears_business_purpose_key_when_dependencies_are_removed() {
+        let projection = synthetic_projection();
+        let mut ledger = initialize_review_submission_ledger(
+            "synthetic-bundle",
+            &projection.bundle,
+            &projection.draft,
+            &projection.validation,
+        )
+        .expect("ledger should initialize");
+
+        let version_id = apply_review_revision(
+            &mut ledger,
+            1,
+            DraftRevisionInput {
+                actor_role: ActorRole::FinancialAdministrator,
+                label: "Removed business purpose what".to_owned(),
+                field_edits: vec![FieldEditInput {
+                    path: "expense_report.general_information.business_purpose.what".to_owned(),
+                    value: ReportValue::Null,
+                    reason: Some(FeedbackCategory::Other),
+                    note: Some("Testing derived-field cleanup".to_owned()),
+                    origin: "ledger.tests".to_owned(),
+                }],
+                confirmed_review_paths: Vec::new(),
+                annotations: Vec::new(),
+            },
+        )
+        .expect("revision should apply");
+
+        let version = ledger
+            .draft_versions
+            .iter()
+            .find(|version| version.version_id == version_id)
+            .expect("new version should exist");
+        assert!(
+            value_text_at(
+                &version.draft.report,
+                "expense_report.general_information.business_purpose.key_30char"
+            )
+            .is_none()
+        );
+        assert!(!version
+            .draft
+            .metadata
+            .contains_key("expense_report.general_information.business_purpose.key_30char"));
     }
 
     #[test]

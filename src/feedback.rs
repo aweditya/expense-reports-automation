@@ -432,6 +432,34 @@ pub(crate) fn apply_user_input_override(
     Ok(())
 }
 
+pub(crate) fn apply_system_generated_override(
+    draft: &mut DraftReport,
+    path: &str,
+    value: ReportValue,
+    metadata: FieldMetadata,
+) -> Result<(), String> {
+    let normalized_path = path
+        .strip_prefix("expense_report.")
+        .or_else(|| (path == "expense_report").then_some(""))
+        .ok_or_else(|| format!("override path must start with expense_report: {path}"))?;
+
+    set_value_at_path(&mut draft.report, normalized_path, value.clone())?;
+    clear_metadata_subtree(&mut draft.metadata, path);
+    insert_leaf_metadata(&mut draft.metadata, path, &value, &metadata);
+    Ok(())
+}
+
+pub(crate) fn clear_draft_field(draft: &mut DraftReport, path: &str) -> Result<(), String> {
+    let normalized_path = path
+        .strip_prefix("expense_report.")
+        .or_else(|| (path == "expense_report").then_some(""))
+        .ok_or_else(|| format!("override path must start with expense_report: {path}"))?;
+
+    remove_value_at_path(&mut draft.report, normalized_path)?;
+    clear_metadata_subtree(&mut draft.metadata, path);
+    Ok(())
+}
+
 fn build_field_correction(
     path: &str,
     original_value: Option<&ReportValue>,
@@ -754,6 +782,16 @@ fn set_value_at_path(root: &mut ReportValue, path: &str, value: ReportValue) -> 
     set_value_segments(root, &segments, value)
 }
 
+fn remove_value_at_path(root: &mut ReportValue, path: &str) -> Result<(), String> {
+    if path.is_empty() {
+        *root = ReportValue::Null;
+        return Ok(());
+    }
+
+    let segments = parse_path_segments(path)?;
+    remove_value_segments(root, &segments)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum PathSegment {
     Key(String),
@@ -864,6 +902,71 @@ fn set_value_segments(
                 array[*index] = next_container;
             }
             set_value_segments(&mut array[*index], &segments[1..], value)
+        }
+    }
+}
+
+fn remove_value_segments(current: &mut ReportValue, segments: &[PathSegment]) -> Result<(), String> {
+    if segments.is_empty() {
+        *current = ReportValue::Null;
+        return Ok(());
+    }
+
+    match &segments[0] {
+        PathSegment::Key(key) => {
+            let object = match current {
+                ReportValue::Object(object) => object,
+                ReportValue::Null => return Ok(()),
+                other => {
+                    return Err(format!(
+                        "expected object while clearing key {key}, found {:?}",
+                        other.kind()
+                    ))
+                }
+            };
+
+            if segments.len() == 1 {
+                object.remove(key);
+                return Ok(());
+            }
+
+            if let Some(child) = object.get_mut(key) {
+                remove_value_segments(child, &segments[1..])?;
+                if matches!(child, ReportValue::Object(map) if map.is_empty())
+                    || matches!(child, ReportValue::Array(values) if values.iter().all(|value| matches!(value, ReportValue::Null)))
+                    || matches!(child, ReportValue::Null)
+                {
+                    object.remove(key);
+                }
+            }
+            Ok(())
+        }
+        PathSegment::Index(index) => {
+            let array = match current {
+                ReportValue::Array(array) => array,
+                ReportValue::Null => return Ok(()),
+                other => {
+                    return Err(format!(
+                        "expected array while clearing index {index}, found {:?}",
+                        other.kind()
+                    ))
+                }
+            };
+
+            if *index >= array.len() {
+                return Ok(());
+            }
+
+            if segments.len() == 1 {
+                array[*index] = ReportValue::Null;
+            } else {
+                remove_value_segments(&mut array[*index], &segments[1..])?;
+            }
+
+            while array.last().is_some_and(|value| matches!(value, ReportValue::Null)) {
+                array.pop();
+            }
+            Ok(())
         }
     }
 }
