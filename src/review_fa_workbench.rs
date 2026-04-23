@@ -2,11 +2,14 @@ use std::collections::BTreeMap;
 
 use crate::draft::EvidenceReference;
 use crate::field_conventions::{FieldControl, FieldEntryMode};
-use crate::review_packet::{CopyCollectionColumn, CopyField, CopySection, FilingStatus, ReviewPacket};
+use crate::review_packet::{
+    CopyCollectionColumn, CopyField, CopySection, FilingStatus, ReviewPacket,
+};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct WorkbenchIndex {
     field_targets: BTreeMap<String, String>,
+    field_readonly: BTreeMap<String, bool>,
     instance_targets: BTreeMap<String, String>,
     section_targets: BTreeMap<String, String>,
 }
@@ -31,7 +34,7 @@ pub fn render_fa_workbench_html(packet: &ReviewPacket) -> String {
          h3{font-size:22px;line-height:1.18;}\
          h4{font-size:18px;line-height:1.2;}\
          .hero-status{margin-top:12px;font-size:18px;font-weight:700;color:#2c5845;text-transform:capitalize;}\
-         .hero-subtitle,.hero-copy,.field-source,.field-guidance,.issue-message,.toolbar-status,.toolbar-count,.source-status,.source-meta,.evidence-copy,.evidence-detail,.field-hint{color:#655a50;}\
+         .hero-subtitle,.hero-copy,.field-source,.field-guidance,.issue-message,.toolbar-status,.toolbar-count,.source-status,.source-meta,.evidence-copy,.evidence-detail,.field-hint,.computed-pending-copy{color:#655a50;}\
          .hero-subtitle{margin-top:8px;font-size:18px;}\
          .hero-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px;align-items:start;}\
          .summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}\
@@ -77,6 +80,9 @@ pub fn render_fa_workbench_html(packet: &ReviewPacket) -> String {
          .field-input, .structured-row-input, .field-reason-select, .field-note-input{width:100%;box-sizing:border-box;border:1px solid #d7c9b7;border-radius:12px;background:#fff;color:#1f1a17;font:inherit;padding:10px 12px;}\
          textarea.field-input,.field-note-input{min-height:108px;resize:vertical;}\
          .field-input[readonly], .field-input[disabled], .structured-row-input[disabled]{background:#f2ece3;color:#6d6258;}\
+         .computed-pending{padding:14px 16px;border:1px dashed #d7c9b7;border-radius:14px;background:#faf4eb;}\
+         .computed-pending-title{font-size:14px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#7d6e61;}\
+         .computed-pending-copy{margin-top:8px;font-size:15px;line-height:1.5;}\
          .field-guidance{margin-top:10px;font-size:14px;line-height:1.45;}\
          .field-actions{display:flex;justify-content:flex-end;margin-top:10px;}\
          .field-dirty-badge{display:inline-flex;}\
@@ -98,6 +104,10 @@ pub fn render_fa_workbench_html(packet: &ReviewPacket) -> String {
          .source-card{padding:15px;border:1px solid #eadfcd;border-radius:16px;background:#fbf7f0;box-shadow:none;}\
          .source-status{margin-top:8px;font-size:14px;line-height:1.4;}\
          .source-meta{margin-top:10px;font-size:14px;}\
+         #workbench-status[data-tone='success'],#action-queue-status[data-tone='ready']{color:#21472f;}\
+         #workbench-status[data-tone='error']{color:#7c3128;}\
+         #workbench-status[data-tone='saving']{color:#2b4f69;}\
+         #action-queue-status[data-tone='attention']{color:#7f511f;}\
          @media (max-width: 1200px){.layout{grid-template-columns:1fr;}.issues-panel{position:static;max-height:none;overflow-y:visible;}.hero-grid,.field-list,.source-grid{grid-template-columns:1fr;}}\
          @media (max-width: 760px){.shell{padding:18px 14px 28px;}.toolbar-main,.toolbar-subrow,.editor-header,.field-head,.issue-head,.source-head{display:grid;}.summary-grid{grid-template-columns:1fr;}.structured-row{grid-template-columns:1fr;}}",
     );
@@ -116,12 +126,18 @@ pub fn render_fa_workbench_html(packet: &ReviewPacket) -> String {
          function fieldReasonSelect(card){return card.querySelector('.field-reason-select');}\
          function fieldNoteInput(card){return card.querySelector('.field-note-input');}\
          function fieldConfirmInput(card){return card.querySelector('.field-confirm-input');}\
-         function updateFieldDirtyState(card){const control=fieldControl(card);if(!control){return;}const edited=!valuesEqual(initialFieldValue(control),normalizeFieldValue(control));const confirmed=Boolean(fieldConfirmInput(card)?.checked);card.classList.toggle('dirty',edited||confirmed);const badge=card.querySelector('.field-dirty-badge');if(badge){badge.hidden=!(edited||confirmed);}}\
-         function refreshDirtySummary(){const dirtyCards=[...document.querySelectorAll('.field-card.dirty')];const counter=document.getElementById('pending-change-count');if(counter){counter.textContent=issueCountLabel(dirtyCards.length);}const saveButton=document.getElementById('save-review-button');const resetButton=document.getElementById('reset-review-button');if(saveButton){saveButton.disabled=reviewSessionState.saveInFlight||dirtyCards.length===0;}if(resetButton){resetButton.disabled=reviewSessionState.saveInFlight||dirtyCards.length===0;}}\
+         function hasMeaningfulValue(value){if(value===null||value===undefined){return false;}if(Array.isArray(value)){return value.length>0;}if(typeof value==='string'){return value.trim().length>0;}if(typeof value==='object'){return Object.keys(value).length>0;}return true;}\
+         function fieldNeedsRequiredInput(card){if(!card||card.dataset.required!=='true'||card.dataset.readonly==='true'){return false;}return !hasMeaningfulValue(normalizeFieldValue(fieldControl(card)));}\
+         function fieldNeedsReview(card){if(!card||card.dataset.needsReview!=='true'){return false;}if(fieldConfirmInput(card)?.checked){return false;}return !card.classList.contains('dirty');}\
+         function fieldNeedsManualAttention(card){return fieldNeedsRequiredInput(card)||fieldNeedsReview(card);}\
+         function updateFieldDirtyState(card){const control=fieldControl(card);const edited=control?!valuesEqual(initialFieldValue(control),normalizeFieldValue(control)):false;const confirmed=Boolean(fieldConfirmInput(card)?.checked);card.classList.toggle('dirty',edited||confirmed);const badge=card.querySelector('.field-dirty-badge');if(badge){badge.hidden=!(edited||confirmed);}}\
+         function refreshIssueQueue(){const issueCards=[...document.querySelectorAll('.issue-card')];let visibleIssues=0;for(const issueCard of issueCards){const targetId=issueCard.dataset.targetId||'';const targetCard=targetId?document.getElementById(targetId):null;const hide=targetCard?(!fieldNeedsManualAttention(targetCard)):false;issueCard.hidden=hide;if(!hide){visibleIssues+=1;}}const emptyState=document.getElementById('issue-queue-empty-state');const generatedCount=document.querySelectorAll('.field-card[data-generated-after-save=\"true\"]').length;if(emptyState){if(visibleIssues>0){emptyState.hidden=true;}else{emptyState.hidden=false;emptyState.textContent=generatedCount>0?`No manual review or data entry is left on this page. Save and recompute to generate ${generatedCount===1?'1 system field':`${generatedCount} system fields`} and refresh the preview.`:'All manual review items on this page are complete. Save and recompute, then open final preview.';}}const queueCount=document.getElementById('issue-queue-count');if(queueCount){queueCount.textContent=visibleIssues===0?'Nothing still needs attention':visibleIssues===1?'1 item still needs attention':`${visibleIssues} items still need attention`;}}\
+         function refreshLocalReadiness(){const actionableCards=[...document.querySelectorAll('.field-card')].filter(fieldNeedsManualAttention);const generatedCount=document.querySelectorAll('.field-card[data-generated-after-save=\"true\"]').length;const readiness=document.getElementById('action-queue-status');if(readiness){if(actionableCards.length>0){readiness.textContent=actionableCards.length===1?'1 field still needs attention before you save.':`${actionableCards.length} fields still need attention before you save.`;readiness.dataset.tone='attention';}else if(generatedCount>0){readiness.textContent=generatedCount===1?'All editable fields are complete. Save and recompute to generate 1 system field and refresh the preview.':`All editable fields are complete. Save and recompute to generate ${generatedCount} system fields and refresh the preview.`;readiness.dataset.tone='ready';}else{readiness.textContent='All required fields on this page are complete. Save and recompute, then open final preview.';readiness.dataset.tone='ready';}}refreshIssueQueue();}\
+         function refreshDirtySummary(){const dirtyCards=[...document.querySelectorAll('.field-card.dirty')];const counter=document.getElementById('pending-change-count');if(counter){counter.textContent=issueCountLabel(dirtyCards.length);}const saveButton=document.getElementById('save-review-button');const resetButton=document.getElementById('reset-review-button');if(saveButton){saveButton.disabled=reviewSessionState.saveInFlight||dirtyCards.length===0;}if(resetButton){resetButton.disabled=reviewSessionState.saveInFlight||dirtyCards.length===0;}refreshLocalReadiness();}\
          function syncCardStateFromEventTarget(target){const card=target.closest('.field-card');if(!card){return;}updateFieldDirtyState(card);refreshDirtySummary();}\
          function structuredRowTemplate(editor,rowValues){const columns=parseJsonData(editor.dataset.columnsJson,[]);const row=document.createElement('div');row.className='structured-row';for(const column of columns){const cell=document.createElement('label');cell.className='structured-cell';const label=document.createElement('span');label.className='structured-cell-label';label.textContent=column.label;cell.appendChild(label);let input;if(column.control==='select'){input=document.createElement('select');const blank=document.createElement('option');blank.value='';blank.textContent='';input.appendChild(blank);for(const optionValue of column.allowed_values||[]){const option=document.createElement('option');option.value=optionValue;option.textContent=optionValue.replaceAll('_',' ');input.appendChild(option);}}else if(column.control==='checkbox'){input=document.createElement('select');[['','Unset'],['true','Yes'],['false','No']].forEach(([value,labelText])=>{const option=document.createElement('option');option.value=value;option.textContent=labelText;input.appendChild(option);});}else if(column.control==='date'){input=document.createElement('input');input.type='date';}else{input=document.createElement(column.control==='textarea'?'textarea':'input');if(input.tagName==='INPUT'){input.type='text';if(column.control==='currency'||column.control==='number'){input.inputMode='decimal';}}}input.className='structured-row-input';input.dataset.columnKey=column.key;input.dataset.columnControl=column.control;input.value=(rowValues&&rowValues[column.key])||'';input.addEventListener('input',()=>syncCardStateFromEventTarget(input));input.addEventListener('change',()=>syncCardStateFromEventTarget(input));cell.appendChild(input);row.appendChild(cell);}const removeButton=document.createElement('button');removeButton.type='button';removeButton.className='structured-row-remove';removeButton.textContent='Remove row';removeButton.addEventListener('click',()=>{row.remove();syncCardStateFromEventTarget(editor);});row.appendChild(removeButton);return row;}\
          function addStructuredListRow(button){const editor=button.closest('.structured-list-editor');if(!editor){return;}const rows=editor.querySelector('.structured-list-rows');if(!rows){return;}rows.appendChild(structuredRowTemplate(editor,{}));syncCardStateFromEventTarget(editor);}\
-         function resetReviewForm(){for(const card of document.querySelectorAll('.field-card')){const control=fieldControl(card);if(!control){continue;}const initial=initialFieldValue(control);if(control.classList.contains('structured-list-editor')){const rows=control.querySelector('.structured-list-rows');if(rows){rows.innerHTML='';for(const rowValues of Array.isArray(initial)?initial:[]){rows.appendChild(structuredRowTemplate(control,rowValues));}}}else if(control.dataset.control==='checkbox'){control.value=initial===null?'':String(initial);}else if('value' in control){control.value=initial??'';}const reason=fieldReasonSelect(card);const note=fieldNoteInput(card);const confirm=fieldConfirmInput(card);if(reason){reason.value='';}if(note){note.value='';}if(confirm){confirm.checked=false;}updateFieldDirtyState(card);}setWorkbenchStatus('Unsaved review edits cleared.','neutral');refreshDirtySummary();}\
+         function resetReviewForm(){for(const card of document.querySelectorAll('.field-card')){const control=fieldControl(card);if(control){const initial=initialFieldValue(control);if(control.classList.contains('structured-list-editor')){const rows=control.querySelector('.structured-list-rows');if(rows){rows.innerHTML='';for(const rowValues of Array.isArray(initial)?initial:[]){rows.appendChild(structuredRowTemplate(control,rowValues));}}}else if(control.dataset.control==='checkbox'){control.value=initial===null?'':String(initial);}else if('value' in control){control.value=initial??'';}}const reason=fieldReasonSelect(card);const note=fieldNoteInput(card);const confirm=fieldConfirmInput(card);if(reason){reason.value='';}if(note){note.value='';}if(confirm){confirm.checked=false;}updateFieldDirtyState(card);}setWorkbenchStatus('Unsaved review edits cleared.','neutral');refreshDirtySummary();}\
          async function loadReviewSessionSummary(){try{const response=await fetch('review-session',{headers:{'Accept':'application/json'}});if(!response.ok){throw new Error(`session lookup failed (${response.status})`);}const payload=await response.json();reviewSessionState.currentDraftVersionId=payload.current_draft_version_id;const versionLabel=document.getElementById('current-draft-version');if(versionLabel){versionLabel.textContent=`v${payload.current_draft_version_id}`;}const filingStatus=document.getElementById('current-filing-status');if(filingStatus){filingStatus.textContent=payload.filing_status.replaceAll('_',' ');}}catch(err){setWorkbenchStatus(`Unable to load review session metadata: ${err.message}`,'error');}}\
          function buildRevisionPayload(){const fieldEdits=[];const confirmedReviewPaths=[];const annotations=[];for(const card of document.querySelectorAll('.field-card')){const control=fieldControl(card);if(!control||card.classList.contains('readonly')){if(fieldConfirmInput(card)?.checked){confirmedReviewPaths.push(card.dataset.fieldPath||'');}continue;}const current=normalizeFieldValue(control);const initial=initialFieldValue(control);const changed=!valuesEqual(current,initial);const path=card.dataset.fieldPath||control.dataset.fieldPath||'';const reason=fieldReasonSelect(card)?.value||'';const note=(fieldNoteInput(card)?.value||'').trim();if(changed){fieldEdits.push({path,value:current,reason:reason||null,note:note||null,origin:'local_app.fa_workbench'});if(reason){annotations.push({path,reason,note:note||null});}}if(fieldConfirmInput(card)?.checked){confirmedReviewPaths.push(path);}}return {base_version_id:reviewSessionState.currentDraftVersionId,actor_role:'financial_administrator',label:'FA saved revision',field_edits:fieldEdits,confirmed_review_paths:[...new Set(confirmedReviewPaths.filter(Boolean))],annotations};}\
          function setWorkbenchStatus(message,tone){const target=document.getElementById('workbench-status');if(!target){return;}target.textContent=message;target.dataset.tone=tone;}\
@@ -175,7 +191,11 @@ fn render_header(html: &mut String, packet: &ReviewPacket) {
     summary_card(
         html,
         "Report Total USD",
-        packet.summary.report_total_usd.as_deref().unwrap_or("[missing]"),
+        packet
+            .summary
+            .report_total_usd
+            .as_deref()
+            .unwrap_or("[missing]"),
     );
     summary_card(
         html,
@@ -202,7 +222,7 @@ fn render_toolbar(html: &mut String) {
     html.push_str("<button class=\"secondary-button\" id=\"reset-review-button\" type=\"button\">Reset unsaved changes</button>");
     html.push_str("<button class=\"ghost-button\" id=\"reload-review-button\" type=\"button\">Reload</button>");
     html.push_str("</div></div>");
-    html.push_str("<div class=\"toolbar-subrow\"><p class=\"toolbar-status\" id=\"workbench-status\" data-tone=\"neutral\">Fill the missing values, adjust any fields that need review, then save to create a reviewed draft version.</p><p class=\"toolbar-count\" id=\"pending-change-count\">0 changes pending</p></div>");
+    html.push_str("<div class=\"toolbar-subrow\"><p class=\"toolbar-status\" id=\"workbench-status\" data-tone=\"neutral\">Fill the missing values, adjust any fields that need review, then save to create a reviewed draft version.</p><p class=\"toolbar-count\" id=\"action-queue-status\" data-tone=\"attention\">Checking what still needs attention…</p><p class=\"toolbar-count\" id=\"pending-change-count\">0 changes pending</p></div>");
     html.push_str("<div class=\"toolbar-links\">");
     html.push_str("<a class=\"nav-link\" href=\"preview\">Open final preview</a>");
     html.push_str("<a class=\"nav-link\" href=\"overview\">Bundle overview</a>");
@@ -212,14 +232,38 @@ fn render_toolbar(html: &mut String) {
 }
 
 fn render_issues_panel(html: &mut String, packet: &ReviewPacket, index: &WorkbenchIndex) {
-    html.push_str("<aside class=\"issues-panel\"><p class=\"eyebrow\">Action Queue</p><h2>What still needs attention</h2>");
-    if packet.issues_queue.is_empty() {
-        html.push_str("<p class=\"field-guidance\">No blocking or review items remain in the current packet.</p>");
+    let actionable_issues = packet
+        .issues_queue
+        .iter()
+        .filter(|issue| issue_is_user_actionable(issue.path.as_str(), index))
+        .collect::<Vec<_>>();
+    html.push_str("<aside class=\"issues-panel\"><p class=\"eyebrow\">Action Queue</p><h2>What still needs attention</h2><p class=\"field-guidance\" id=\"issue-queue-count\">");
+    if actionable_issues.is_empty() {
+        html.push_str("Nothing still needs attention");
     } else {
-        html.push_str("<div class=\"issue-list\">");
-        for issue in &packet.issues_queue {
+        html.push_str(&format!(
+            "{}",
+            if actionable_issues.len() == 1 {
+                "1 item still needs attention".to_owned()
+            } else {
+                format!("{} items still need attention", actionable_issues.len())
+            }
+        ));
+    }
+    html.push_str("</p>");
+    if actionable_issues.is_empty() {
+        html.push_str("<p class=\"field-guidance\" id=\"issue-queue-empty-state\">All manual review items on this page are complete. Save and recompute, then open final preview.</p>");
+    } else {
+        html.push_str("<p class=\"field-guidance\" id=\"issue-queue-empty-state\" hidden></p><div class=\"issue-list\">");
+        for issue in actionable_issues {
             let target = issue_target(issue.path.as_str(), index);
-            html.push_str("<article class=\"issue-card\"><div class=\"issue-head\"><div><span class=\"issue-class ");
+            html.push_str("<article class=\"issue-card\"");
+            if let Some(target) = target.as_deref() {
+                html.push_str(" data-target-id=\"");
+                html.push_str(&escape_html_attribute(target));
+                html.push('"');
+            }
+            html.push_str("><div class=\"issue-head\"><div><span class=\"issue-class ");
             html.push_str(issue_badge_class(issue.class));
             html.push_str("\">");
             html.push_str(issue_label(issue.class));
@@ -297,6 +341,22 @@ fn render_field(html: &mut String, field: &CopyField, index: &WorkbenchIndex) {
     html.push_str(&escape_html(&field_id));
     html.push_str("\" data-field-path=\"");
     html.push_str(&escape_html_attribute(&field.path));
+    html.push_str("\" data-required=\"");
+    html.push_str(if field.required { "true" } else { "false" });
+    html.push_str("\" data-needs-review=\"");
+    html.push_str(if field.needs_review { "true" } else { "false" });
+    html.push_str("\" data-readonly=\"");
+    html.push_str(if field_is_readonly(field) {
+        "true"
+    } else {
+        "false"
+    });
+    html.push_str("\" data-generated-after-save=\"");
+    html.push_str(if field_generated_after_save(field) {
+        "true"
+    } else {
+        "false"
+    });
     html.push_str("\">");
     html.push_str("<div class=\"field-head\"><div><p class=\"field-label\">");
     html.push_str(&escape_html(&field.label));
@@ -327,13 +387,23 @@ fn render_field_editor(html: &mut String, field: &CopyField, input_id: &str) {
     } else {
         field_placeholder(field)
     };
-    let readonly = if field_is_readonly(field) { " readonly" } else { "" };
-    let disabled = if field_is_readonly(field) { " disabled" } else { "" };
+    let readonly = if field_is_readonly(field) {
+        " readonly"
+    } else {
+        ""
+    };
+    let disabled = if field_is_readonly(field) {
+        " disabled"
+    } else {
+        ""
+    };
 
     html.push_str("<div class=\"field-editor\"><label class=\"field-editor-label\" for=\"");
     html.push_str(&escape_html(input_id));
     html.push_str("\">");
-    html.push_str(if field_is_readonly(field) {
+    html.push_str(if field_generated_after_save(field) {
+        "Generated after save"
+    } else if field_is_readonly(field) {
         "Review computed value"
     } else if field.present {
         "Check or edit value"
@@ -342,7 +412,11 @@ fn render_field_editor(html: &mut String, field: &CopyField, input_id: &str) {
     });
     html.push_str("</label>");
 
-    if field.control == FieldControl::StructuredList {
+    if field_generated_after_save(field) {
+        html.push_str("<div class=\"computed-pending\"><p class=\"computed-pending-title\">System generated</p><p class=\"computed-pending-copy\">");
+        html.push_str(&escape_html(computed_pending_copy(field)));
+        html.push_str("</p></div>");
+    } else if field.control == FieldControl::StructuredList {
         render_structured_list_editor(html, field, input_id);
     } else if field.control == FieldControl::Textarea {
         html.push_str("<textarea class=\"field-input field-control\" id=\"");
@@ -392,7 +466,9 @@ fn render_field_editor(html: &mut String, field: &CopyField, input_id: &str) {
         html.push_str("\" data-control=\"checkbox\" data-field-path=\"");
         html.push_str(&escape_html_attribute(&field.path));
         html.push_str("\" data-initial-json=\"");
-        html.push_str(&escape_html_attribute(&bool_initial_json(field.value.as_deref())));
+        html.push_str(&escape_html_attribute(&bool_initial_json(
+            field.value.as_deref(),
+        )));
         html.push_str("\"");
         html.push_str(disabled);
         html.push_str(">");
@@ -486,14 +562,12 @@ fn render_structured_list_row(
         );
         html.push_str("</label>");
     }
-    html.push_str("<button class=\"structured-row-remove\" type=\"button\">Remove row</button></div>");
+    html.push_str(
+        "<button class=\"structured-row-remove\" type=\"button\">Remove row</button></div>",
+    );
 }
 
-fn render_collection_column_control(
-    html: &mut String,
-    column: &CopyCollectionColumn,
-    value: &str,
-) {
+fn render_collection_column_control(html: &mut String, column: &CopyCollectionColumn, value: &str) {
     match column.control {
         FieldControl::Select => {
             html.push_str("<select class=\"structured-row-input\" data-column-key=\"");
@@ -604,7 +678,9 @@ fn render_inline_evidence(html: &mut String, field: &CopyField) {
         if let Some(document_href) = evidence_document_href(evidence) {
             html.push_str("<div class=\"evidence-actions\"><a class=\"doc-link\" href=\"");
             html.push_str(&escape_html_attribute(&document_href));
-            html.push_str("\" target=\"_blank\" rel=\"noreferrer noopener\">Open source document</a></div>");
+            html.push_str(
+                "\" target=\"_blank\" rel=\"noreferrer noopener\">Open source document</a></div>",
+            );
         }
         html.push_str("</article>");
     }
@@ -664,9 +740,11 @@ fn build_workbench_index(packet: &ReviewPacket) -> WorkbenchIndex {
                 .instance_targets
                 .insert(instance.path.clone(), anchor_id("instance", &instance.path));
             for field in &instance.fields {
+                let field_target = anchor_id("field", &field.path);
+                index.field_targets.insert(field.path.clone(), field_target);
                 index
-                    .field_targets
-                    .insert(field.path.clone(), anchor_id("field", &field.path));
+                    .field_readonly
+                    .insert(field.path.clone(), field_is_readonly(field));
             }
         }
     }
@@ -720,8 +798,14 @@ fn field_is_readonly(field: &CopyField) -> bool {
     field.entry_mode == FieldEntryMode::ComputedReadonly
 }
 
+fn field_generated_after_save(field: &CopyField) -> bool {
+    field_is_readonly(field) && !field.present
+}
+
 fn field_status_label(field: &CopyField) -> &'static str {
-    if !field.present && field.required {
+    if field_generated_after_save(field) {
+        "Generated after save"
+    } else if !field.present && field.required {
         "Needs your input"
     } else if field.needs_review {
         "Check this field"
@@ -733,7 +817,9 @@ fn field_status_label(field: &CopyField) -> &'static str {
 }
 
 fn field_status_class(field: &CopyField) -> &'static str {
-    if !field.present && field.required {
+    if field_generated_after_save(field) {
+        "status-computed"
+    } else if !field.present && field.required {
         "status-missing"
     } else if field.needs_review {
         "status-review"
@@ -763,13 +849,35 @@ fn issue_badge_class(class: crate::ReadinessIssueClass) -> &'static str {
 }
 
 fn field_guidance(field: &CopyField) -> &'static str {
-    if field_is_readonly(field) {
+    if field_generated_after_save(field) {
+        computed_pending_copy(field)
+    } else if field_is_readonly(field) {
         "This field is computed by the system. Review it, but only override it if the filing workflow requires a manual correction."
     } else if field.present {
         "A value is already present. Confirm it or edit it directly if the current value is incomplete or incorrect."
     } else {
         "This field is currently missing. Enter the value here so the filing packet can move forward."
     }
+}
+
+fn computed_pending_copy(field: &CopyField) -> &'static str {
+    match field.path.as_str() {
+        "expense_report.general_information.business_purpose.key_30char" => {
+            "You do not type this directly. Fill \"Who Is Involved\", \"What Happened\", and the report category, then click Save and recompute. The 30-character summary will be generated for you."
+        }
+        _ => {
+            "You do not type this directly. Fill the related inputs on this page, then click Save and recompute. The system will generate this value for the refreshed packet."
+        }
+    }
+}
+
+fn issue_is_user_actionable(path: &str, index: &WorkbenchIndex) -> bool {
+    index
+        .field_readonly
+        .get(path)
+        .copied()
+        .map(|readonly| !readonly)
+        .unwrap_or(true)
 }
 
 fn field_placeholder(field: &CopyField) -> String {
@@ -834,7 +942,10 @@ fn bool_initial_json(value: Option<&str>) -> String {
 fn correction_reason_options() -> &'static [(&'static str, &'static str)] {
     &[
         ("ocr_error", "OCR error"),
-        ("wrong_document_classification", "Wrong document classification"),
+        (
+            "wrong_document_classification",
+            "Wrong document classification",
+        ),
         (
             "wrong_expense_type_classification",
             "Wrong expense type classification",
@@ -847,7 +958,10 @@ fn correction_reason_options() -> &'static [(&'static str, &'static str)] {
             "stanford_site_workflow_mismatch",
             "Stanford site workflow mismatch",
         ),
-        ("unclear_or_undocumented_rule", "Unclear or undocumented rule"),
+        (
+            "unclear_or_undocumented_rule",
+            "Unclear or undocumented rule",
+        ),
         ("other", "Other"),
     ]
 }
@@ -912,7 +1026,13 @@ fn escape_html_attribute(value: &str) -> String {
 mod tests {
     use super::render_fa_workbench_html;
     use crate::bundle_synthesis::synthesize_bundle_projection_with_fx;
-    use crate::review_packet::build_review_packet;
+    use crate::field_conventions::{FieldControl, FieldEntryMode};
+    use crate::readiness::ReadinessIssueClass;
+    use crate::review_packet::{
+        build_review_packet, AttachmentChecklistItem, ConfidenceSummary, CopyField, CopySection,
+        CopySectionInstance, DocumentSnapshotCard, FilingStatus, PacketSummary, ReviewIssueEntry,
+        ReviewPacket, ReviewReadinessSummary,
+    };
     use crate::synthetic_documents::{generate_synthetic_packet, SyntheticVariant};
     use crate::StaticFxRateProvider;
 
@@ -923,8 +1043,75 @@ mod tests {
             .collect::<Vec<_>>();
         let projection =
             synthesize_bundle_projection_with_fx(&documents, &StaticFxRateProvider::demo());
-        build_review_packet(&projection.bundle, &projection.draft, &projection.validation)
-            .expect("review packet should build")
+        build_review_packet(
+            &projection.bundle,
+            &projection.draft,
+            &projection.validation,
+        )
+        .expect("review packet should build")
+    }
+
+    fn computed_only_packet() -> ReviewPacket {
+        ReviewPacket {
+            summary: PacketSummary {
+                filing_status: FilingStatus::UserInputRequired,
+                payee_name: Some("Unknown payee".to_owned()),
+                event_name: Some("Missing event name".to_owned()),
+                trip_window: None,
+                report_total_usd: None,
+                category: Some("Expenses Foreign".to_owned()),
+                transaction_type: None,
+                transaction_line_count: 0,
+                document_count: 0,
+                readiness: ReviewReadinessSummary {
+                    automation_gap_count: 0,
+                    user_input_gap_count: 1,
+                    manual_review_count: 0,
+                    other_warning_count: 0,
+                },
+                confidence: ConfidenceSummary {
+                    high: 0,
+                    medium: 0,
+                    low: 0,
+                    needs_review: 0,
+                },
+            },
+            issues_queue: vec![ReviewIssueEntry {
+                class: ReadinessIssueClass::UserInputRequired,
+                path: "expense_report.general_information.business_purpose.key_30char".to_owned(),
+                label: "Business Purpose Summary (30 Characters)".to_owned(),
+                source: None,
+                current_value: None,
+                message: "Required field is missing".to_owned(),
+            }],
+            copy_sections: vec![CopySection {
+                key: "general_information".to_owned(),
+                label: "General Information".to_owned(),
+                repeated: false,
+                instances: vec![CopySectionInstance {
+                    path: "expense_report.general_information".to_owned(),
+                    label: "General Information".to_owned(),
+                    fields: vec![CopyField {
+                        path: "expense_report.general_information.business_purpose.key_30char"
+                            .to_owned(),
+                        label: "Business Purpose Summary (30 Characters)".to_owned(),
+                        control: FieldControl::Textarea,
+                        allowed_values: Vec::new(),
+                        collection_columns: Vec::new(),
+                        collection_rows: Vec::new(),
+                        value: None,
+                        present: false,
+                        needs_review: false,
+                        required: true,
+                        source: Some("t2".to_owned()),
+                        entry_mode: FieldEntryMode::ComputedReadonly,
+                        evidence: Vec::new(),
+                    }],
+                }],
+            }],
+            attachment_checklist: Vec::<AttachmentChecklistItem>::new(),
+            document_snapshots: Vec::<DocumentSnapshotCard>::new(),
+        }
     }
 
     #[test]
@@ -955,5 +1142,25 @@ mod tests {
         assert!(!rendered.contains("class=\"issue-path\""));
         assert!(rendered.contains("Payee Name"));
         assert!(rendered.contains("Payee Affiliation"));
+    }
+
+    #[test]
+    fn fa_workbench_treats_missing_computed_fields_as_generated_after_save() {
+        let rendered = render_fa_workbench_html(&computed_only_packet());
+        assert!(rendered.contains("Generated after save"));
+        assert!(rendered.contains("You do not type this directly."));
+        assert!(!rendered.contains("Enter Business Purpose Summary (30 Characters)"));
+        assert!(!rendered.contains(
+            "<textarea class=\"field-input field-control\" id=\"field-expense-report-general-information-business-purpose-key-30char-input\""
+        ));
+    }
+
+    #[test]
+    fn fa_workbench_includes_live_queue_and_completion_status_signals() {
+        let rendered = render_fa_workbench_html(&computed_only_packet());
+        assert!(rendered.contains("id=\"action-queue-status\""));
+        assert!(rendered.contains("function refreshIssueQueue()"));
+        assert!(rendered.contains("All editable fields are complete. Save and recompute"));
+        assert!(rendered.contains("id=\"issue-queue-empty-state\""));
     }
 }
