@@ -1145,13 +1145,33 @@ class LocalAppHandler(http.server.BaseHTTPRequestHandler):
                 status=400,
             )
 
+    def _read_request_body(self) -> bytes:
+        """Read the full request body, handling both Content-Length and chunked transfer."""
+        content_length = self.headers.get("Content-Length")
+        if content_length is not None:
+            return self.rfile.read(int(content_length))
+        # No Content-Length (e.g. HTTP/2 via Cloud Run) — read chunked
+        transfer_encoding = self.headers.get("Transfer-Encoding", "")
+        if "chunked" in transfer_encoding.lower():
+            chunks = []
+            while True:
+                line = self.rfile.readline().strip()
+                chunk_size = int(line, 16)
+                if chunk_size == 0:
+                    self.rfile.readline()  # trailing CRLF
+                    break
+                chunks.append(self.rfile.read(chunk_size))
+                self.rfile.readline()  # trailing CRLF
+            return b"".join(chunks)
+        # Fallback: read whatever is available (up to 64 MB)
+        return self.rfile.read(64 * 1024 * 1024)
+
     def do_POST(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
         is_review_save = parsed.path.startswith("/bundle/") and parsed.path.endswith("/review-session/save")
         try:
             if parsed.path == "/upload":
-                content_length = int(self.headers.get("Content-Length", "0"))
-                body = self.rfile.read(content_length)
+                body = self._read_request_body()
                 request = parse_multipart_request(
                     self.headers.get("Content-Type", ""),
                     body,
@@ -1170,8 +1190,7 @@ class LocalAppHandler(http.server.BaseHTTPRequestHandler):
                     self.send_error(404, "Not found")
                     return
                 bundle_id = ensure_safe_bundle_id(urllib.parse.unquote(segments[1]))
-                content_length = int(self.headers.get("Content-Length", "0"))
-                payload = json.loads(self.rfile.read(content_length) or b"{}")
+                payload = json.loads(self._read_request_body() or b"{}")
                 result = handle_review_save_submission(
                     self.config.repo_root,
                     self.config.workspace_root,
