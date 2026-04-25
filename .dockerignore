@@ -1,0 +1,11 @@
+target/
+.venv/
+__pycache__/
+*.pyc
+.local_*/
+.local_runtime/
+.claude/
+.git/
+docs/
+reference/*.pdf
+reference/*.mp4

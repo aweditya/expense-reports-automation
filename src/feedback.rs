@@ -906,7 +906,10 @@ fn set_value_segments(
     }
 }
 
-fn remove_value_segments(current: &mut ReportValue, segments: &[PathSegment]) -> Result<(), String> {
+fn remove_value_segments(
+    current: &mut ReportValue,
+    segments: &[PathSegment],
+) -> Result<(), String> {
     if segments.is_empty() {
         *current = ReportValue::Null;
         return Ok(());
@@ -963,7 +966,10 @@ fn remove_value_segments(current: &mut ReportValue, segments: &[PathSegment]) ->
                 remove_value_segments(&mut array[*index], &segments[1..])?;
             }
 
-            while array.last().is_some_and(|value| matches!(value, ReportValue::Null)) {
+            while array
+                .last()
+                .is_some_and(|value| matches!(value, ReportValue::Null))
+            {
                 array.pop();
             }
             Ok(())

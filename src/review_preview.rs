@@ -115,9 +115,7 @@ fn render_action_bar(html: &mut String) {
     html.push_str("<nav class=\"action-bar\">");
     html.push_str("<a class=\"action-link\" href=\"workbench\">Back to FA workbench</a>");
     html.push_str("<a class=\"action-link secondary\" href=\"overview\">Bundle overview</a>");
-    html.push_str(
-        "<a class=\"action-link secondary\" href=\"developer\">Developer tools</a>",
-    );
+    html.push_str("<a class=\"action-link secondary\" href=\"developer\">Developer tools</a>");
     html.push_str(
         "<button class=\"action-button\" type=\"button\" onclick=\"window.print()\">Print / Save PDF</button>",
     );
@@ -147,7 +145,11 @@ fn render_summary_panel(html: &mut String, packet: &ReviewPacket) {
     summary_card(
         html,
         "Report Total USD",
-        packet.summary.report_total_usd.as_deref().unwrap_or("[missing]"),
+        packet
+            .summary
+            .report_total_usd
+            .as_deref()
+            .unwrap_or("[missing]"),
         packet.summary.report_total_usd.is_some(),
     );
     summary_card(
@@ -195,7 +197,9 @@ fn render_issues_panel(html: &mut String, packet: &ReviewPacket) {
     html.push_str("<section class=\"panel\">");
     html.push_str("<p class=\"eyebrow\">Open Items</p><h2>Unresolved Fields</h2>");
     if packet.issues_queue.is_empty() {
-        html.push_str("<p class=\"hero-note\">No unresolved fields remain in the current packet.</p>");
+        html.push_str(
+            "<p class=\"hero-note\">No unresolved fields remain in the current packet.</p>",
+        );
     } else {
         html.push_str("<div class=\"issue-list\">");
         for issue in &packet.issues_queue {
@@ -286,7 +290,9 @@ fn render_field(html: &mut String, field: &CopyField) {
             html.push_str(&escape_html_attribute(&document_id));
             html.push('/');
             html.push_str(&escape_html_attribute(&filename));
-            html.push_str("\" target=\"_blank\" rel=\"noreferrer noopener\">Open source document</a>");
+            html.push_str(
+                "\" target=\"_blank\" rel=\"noreferrer noopener\">Open source document</a>",
+            );
         }
         html.push_str("</div>");
     }
@@ -299,9 +305,7 @@ fn render_scalar_value(html: &mut String, field: &CopyField) {
         html.push_str(" placeholder");
     }
     html.push_str("\">");
-    html.push_str(&escape_html(
-        field.value.as_deref().unwrap_or("[missing]"),
-    ));
+    html.push_str(&escape_html(field.value.as_deref().unwrap_or("[missing]")));
     html.push_str("</p>");
 }
 
@@ -338,7 +342,9 @@ fn render_attachments_panel(html: &mut String, packet: &ReviewPacket) {
     html.push_str("<section class=\"panel\">");
     html.push_str("<p class=\"eyebrow\">Attachments</p><h2>Attachment Checklist</h2>");
     if packet.attachment_checklist.is_empty() {
-        html.push_str("<p class=\"hero-note\">No projected attachment checklist items are available yet.</p>");
+        html.push_str(
+            "<p class=\"hero-note\">No projected attachment checklist items are available yet.</p>",
+        );
     } else {
         html.push_str("<div class=\"attachment-grid\">");
         for item in &packet.attachment_checklist {
@@ -377,7 +383,9 @@ fn render_documents_panel(html: &mut String, packet: &ReviewPacket) {
     html.push_str("<section class=\"panel\">");
     html.push_str("<p class=\"eyebrow\">Source Documents</p><h2>Uploaded Evidence</h2>");
     if packet.document_snapshots.is_empty() {
-        html.push_str("<p class=\"hero-note\">No uploaded document snapshots are available yet.</p>");
+        html.push_str(
+            "<p class=\"hero-note\">No uploaded document snapshots are available yet.</p>",
+        );
     } else {
         html.push_str("<div class=\"document-grid\">");
         for document in &packet.document_snapshots {
@@ -421,11 +429,15 @@ fn render_documents_panel(html: &mut String, packet: &ReviewPacket) {
                 }
                 html.push_str("</ul>");
             }
-            html.push_str("<div class=\"document-actions\"><a class=\"document-link\" href=\"document/");
+            html.push_str(
+                "<div class=\"document-actions\"><a class=\"document-link\" href=\"document/",
+            );
             html.push_str(&escape_html_attribute(&document.document_id));
             html.push('/');
             html.push_str(&escape_html_attribute(&document.filename));
-            html.push_str("\" target=\"_blank\" rel=\"noreferrer noopener\">Open source document</a></div>");
+            html.push_str(
+                "\" target=\"_blank\" rel=\"noreferrer noopener\">Open source document</a></div>",
+            );
             html.push_str("</article>");
         }
         html.push_str("</div>");
@@ -496,19 +508,13 @@ fn filing_status_label(status: FilingStatus) -> &'static str {
     }
 }
 
-fn evidence_document_links(
-    evidence: &[crate::draft::EvidenceReference],
-) -> Vec<(String, String)> {
+fn evidence_document_links(evidence: &[crate::draft::EvidenceReference]) -> Vec<(String, String)> {
     let mut links = Vec::new();
     for item in evidence {
         let Some(document_id) = item.document_id.as_deref() else {
             continue;
         };
-        let filename = item
-            .filename
-            .as_deref()
-            .unwrap_or(document_id)
-            .to_owned();
+        let filename = item.filename.as_deref().unwrap_or(document_id).to_owned();
         let link = (document_id.to_owned(), filename);
         if !links.contains(&link) {
             links.push(link);
@@ -542,9 +548,14 @@ mod tests {
             .into_iter()
             .map(|fixture| fixture.expected_facts)
             .collect::<Vec<_>>();
-        let projection = synthesize_bundle_projection_with_fx(&documents, &StaticFxRateProvider::demo());
-        build_review_packet(&projection.bundle, &projection.draft, &projection.validation)
-            .expect("review packet should build")
+        let projection =
+            synthesize_bundle_projection_with_fx(&documents, &StaticFxRateProvider::demo());
+        build_review_packet(
+            &projection.bundle,
+            &projection.draft,
+            &projection.validation,
+        )
+        .expect("review packet should build")
     }
 
     #[test]

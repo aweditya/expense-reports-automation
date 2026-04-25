@@ -1471,7 +1471,9 @@ fn normalize_money_value_fragment(value: &str) -> String {
         let prefix = prefix.trim();
         let suffix = suffix.trim();
         let prefix_is_annotation = prefix.ends_with('%')
-            || prefix.chars().all(|ch| ch.is_ascii_digit() || matches!(ch, '.' | '%' | ' '));
+            || prefix
+                .chars()
+                .all(|ch| ch.is_ascii_digit() || matches!(ch, '.' | '%' | ' '));
         if prefix_is_annotation && sanitize_amount(suffix).is_some() {
             return suffix.to_owned();
         }

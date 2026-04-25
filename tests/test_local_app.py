@@ -1,8 +1,10 @@
 import importlib.util
 import json
+import os
 import socket
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 from subprocess import CompletedProcess
 
@@ -926,6 +928,56 @@ class LocalAppHttpTests(unittest.TestCase):
                 self.assertEqual(json.loads(payload)["error"], "bad review payload")
         finally:
             local_app.handle_review_save_submission = original
+
+
+class DeploymentTests(unittest.TestCase):
+    """Tests for Cloud Run deployment readiness: binary resolution and env-aware defaults."""
+
+    # -- Binary resolution: shutil.which finds pre-compiled binary --
+
+    def test_resolve_cli_command_uses_precompiled_binary_when_on_path(self):
+        with unittest.mock.patch("shutil.which", return_value="/usr/local/bin/ingest_bundle_workspace"):
+            result = local_app.resolve_cli_command(Path("/dummy"))
+        self.assertEqual(result, ["/usr/local/bin/ingest_bundle_workspace"])
+
+    def test_resolve_review_cli_command_uses_precompiled_binary_when_on_path(self):
+        with unittest.mock.patch("shutil.which", return_value="/usr/local/bin/apply_review_revision_to_artifacts"):
+            result = local_app.resolve_review_cli_command(Path("/dummy"))
+        self.assertEqual(result, ["/usr/local/bin/apply_review_revision_to_artifacts"])
+
+    def test_resolve_review_surface_cli_command_uses_precompiled_binary_when_on_path(self):
+        with unittest.mock.patch("shutil.which", return_value="/usr/local/bin/render_current_review_surface"):
+            result = local_app.resolve_review_surface_cli_command(Path("/dummy"))
+        self.assertEqual(result, ["/usr/local/bin/render_current_review_surface"])
+
+    # -- Binary resolution: cargo fallback when binary not on PATH --
+
+    def test_resolve_cli_command_falls_back_to_cargo_when_binary_not_found(self):
+        with unittest.mock.patch("shutil.which", return_value=None):
+            result = local_app.resolve_cli_command(Path("/dummy"))
+        self.assertEqual(result, ["cargo", "run", "--bin", "ingest_bundle_workspace", "--"])
+
+    def test_resolve_review_cli_command_falls_back_to_cargo_when_binary_not_found(self):
+        with unittest.mock.patch("shutil.which", return_value=None):
+            result = local_app.resolve_review_cli_command(Path("/dummy"))
+        self.assertEqual(result, ["cargo", "run", "--bin", "apply_review_revision_to_artifacts", "--"])
+
+    def test_resolve_review_surface_cli_command_falls_back_to_cargo_when_binary_not_found(self):
+        with unittest.mock.patch("shutil.which", return_value=None):
+            result = local_app.resolve_review_surface_cli_command(Path("/dummy"))
+        self.assertEqual(result, ["cargo", "run", "--bin", "render_current_review_surface", "--"])
+
+    # -- Environment variable defaults --
+
+    def test_default_port_reads_from_port_env_var(self):
+        with unittest.mock.patch.dict(os.environ, {"PORT": "9090"}):
+            reloaded = load_module()
+        self.assertEqual(reloaded.DEFAULT_PORT, 9090)
+
+    def test_default_host_reads_from_host_env_var(self):
+        with unittest.mock.patch.dict(os.environ, {"HOST": "0.0.0.0"}):
+            reloaded = load_module()
+        self.assertEqual(reloaded.DEFAULT_HOST, "0.0.0.0")
 
 
 if __name__ == "__main__":

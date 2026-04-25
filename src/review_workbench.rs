@@ -68,7 +68,13 @@ pub fn render_review_workbench_html(packet: &ReviewPacket) -> String {
     render_toolbar(&mut html);
     render_document_snapshot_panel(&mut html, packet);
     html.push_str("<main class=\"workbench-grid\">\n");
-    render_issues_panel(&mut html, packet, &index, &grounding_lookup, &comparison_lookup);
+    render_issues_panel(
+        &mut html,
+        packet,
+        &index,
+        &grounding_lookup,
+        &comparison_lookup,
+    );
     render_copy_panel(
         &mut html,
         packet,
@@ -234,7 +240,8 @@ fn render_issues_panel(
         }
         html.push_str("</ul>\n");
     }
-    let ocr_review_items = collect_ocr_review_items(packet, index, grounding_lookup, comparison_lookup);
+    let ocr_review_items =
+        collect_ocr_review_items(packet, index, grounding_lookup, comparison_lookup);
     if !ocr_review_items.is_empty() {
         html.push_str(
             "<div class=\"issues-subsection\"><p class=\"eyebrow\">OCR Review</p><h3>Fields To Double-Check</h3><ul class=\"issue-list ocr-review-list\">",
@@ -277,7 +284,9 @@ fn render_issues_panel(
             if let Some(href) = item.signal.grounding_href.as_deref() {
                 html.push_str("<a class=\"issue-link\" href=\"");
                 html.push_str(&escape_html_attribute(href));
-                html.push_str("\" target=\"_blank\" rel=\"noreferrer noopener\">Open grounded source</a>");
+                html.push_str(
+                    "\" target=\"_blank\" rel=\"noreferrer noopener\">Open grounded source</a>",
+                );
             }
             html.push_str("</div>");
             html.push_str("</li>");
@@ -832,7 +841,9 @@ fn render_document_snapshot_card(html: &mut String, document: &DocumentSnapshotC
         }
         if comparison.consistency_warning_count > 0 {
             html.push_str("<p class=\"document-snapshot-ocr-fields\">Consistency warnings: ");
-            html.push_str(&escape_html(&comparison.consistency_warning_count.to_string()));
+            html.push_str(&escape_html(
+                &comparison.consistency_warning_count.to_string(),
+            ));
             html.push_str("</p>");
         }
         if !comparison.consistency_notes.is_empty() {
@@ -1010,7 +1021,9 @@ fn collect_ocr_review_items(
     for section in &packet.copy_sections {
         for instance in &section.instances {
             for field in &instance.fields {
-                let Some(signal) = derive_field_ocr_signal(field, comparison_lookup, grounding_lookup) else {
+                let Some(signal) =
+                    derive_field_ocr_signal(field, comparison_lookup, grounding_lookup)
+                else {
                     continue;
                 };
                 if !field_needs_ocr_review(&signal) {
@@ -1117,7 +1130,9 @@ fn derive_field_ocr_signal(
             }
             confidences.push(matched.confidence);
             statuses.push(matched.status);
-            grounded |= matched_regions.iter().any(|region_id| region_id == &matched.field);
+            grounded |= matched_regions
+                .iter()
+                .any(|region_id| region_id == &matched.field);
         }
     }
 
@@ -1133,7 +1148,8 @@ fn derive_field_ocr_signal(
         .into_iter()
         .min_by_key(|value| confidence_level_rank(*value))
         .unwrap_or(crate::ConfidenceLevel::Medium);
-    let summary = workbench_field_ocr_summary(status, grounded, consistency_warning, &matched_labels);
+    let summary =
+        workbench_field_ocr_summary(status, grounded, consistency_warning, &matched_labels);
 
     Some(WorkbenchFieldOcrSignal {
         confidence,
@@ -1158,7 +1174,9 @@ fn matched_comparison_fields<'a>(
         .field_summaries
         .iter()
         .filter(|candidate| {
-            matched_regions.iter().any(|region_id| region_id == &candidate.field)
+            matched_regions
+                .iter()
+                .any(|region_id| region_id == &candidate.field)
                 || quote_value.is_some_and(|quote| {
                     comparison_value_matches(quote, candidate.consensus_value.as_deref())
                 })
@@ -1252,7 +1270,9 @@ fn render_field_ocr_signal(html: &mut String, signal: &WorkbenchFieldOcrSignal) 
     html.push_str("<p class=\"field-ocr-summary\">");
     html.push_str(&escape_html(&signal.summary));
     html.push_str("</p>");
-    if signal.diff_href.is_some() || signal.inspection_href.is_some() || signal.grounding_href.is_some()
+    if signal.diff_href.is_some()
+        || signal.inspection_href.is_some()
+        || signal.grounding_href.is_some()
     {
         html.push_str("<div class=\"field-ocr-links\">");
         if let Some(href) = signal.diff_href.as_deref() {
@@ -1263,12 +1283,16 @@ fn render_field_ocr_signal(html: &mut String, signal: &WorkbenchFieldOcrSignal) 
         if let Some(href) = signal.inspection_href.as_deref() {
             html.push_str("<a class=\"document-link\" href=\"");
             html.push_str(&escape_html_attribute(href));
-            html.push_str("\" target=\"_blank\" rel=\"noreferrer noopener\">Open OCR inspection</a>");
+            html.push_str(
+                "\" target=\"_blank\" rel=\"noreferrer noopener\">Open OCR inspection</a>",
+            );
         }
         if let Some(href) = signal.grounding_href.as_deref() {
             html.push_str("<a class=\"document-link\" href=\"");
             html.push_str(&escape_html_attribute(href));
-            html.push_str("\" target=\"_blank\" rel=\"noreferrer noopener\">Open grounded source</a>");
+            html.push_str(
+                "\" target=\"_blank\" rel=\"noreferrer noopener\">Open grounded source</a>",
+            );
         }
         html.push_str("</div>");
     }
@@ -2224,7 +2248,9 @@ mod tests {
                     document_id: "doc_receipt".to_owned(),
                     geometry_source: crate::OcrGeometrySource::Gemini,
                     geometry_available: true,
-                    grounding_preprocess_variant: Some(crate::OcrPreprocessVariant::ContrastBoosted),
+                    grounding_preprocess_variant: Some(
+                        crate::OcrPreprocessVariant::ContrastBoosted,
+                    ),
                     preview_href: Some(
                         "artifact/ocr_grounding/doc_receipt/grounded_preview.html".to_owned(),
                     ),
@@ -2245,7 +2271,8 @@ mod tests {
 
         assert!(rendered.contains("needs review"));
         assert!(rendered.contains("ocr Low"));
-        assert!(rendered.contains("The linked receipt also failed an internal amount-consistency check."));
+        assert!(rendered
+            .contains("The linked receipt also failed an internal amount-consistency check."));
         assert!(rendered.contains("Fields To Double-Check"));
         assert!(rendered.contains("Jump to field"));
         assert!(rendered.contains("Open OCR diff"));

@@ -1,0 +1,64 @@
+# CI/CD pipeline: test → build → deploy to Cloud Run
+#
+# Trigger: push to main branch
+# Gate: both Rust and Python tests must pass before deploy
+# Machine: E2_HIGHCPU_8 for fast Rust compilation
+
+steps:
+  # 1. Run Rust test suite
+  - name: 'rust:1.82-bookworm'
+    entrypoint: 'cargo'
+    args: ['test']
+    id: 'rust-tests'
+
+  # 2. Run Python test suite
+  - name: 'python:3.12-slim-bookworm'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        pip install --no-cache-dir -r deploy/requirements.txt 2>/dev/null
+        python3 -m unittest discover -s tests -p "test_*.py" -v
+    id: 'python-tests'
+
+  # 3. Build Docker image (only after both test steps pass)
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-f'
+      - 'deploy/Dockerfile'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/expense-reports:$COMMIT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/expense-reports:latest'
+      - '.'
+    id: 'docker-build'
+    waitFor: ['rust-tests', 'python-tests']
+
+  # 4. Push image to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '--all-tags', 'gcr.io/$PROJECT_ID/expense-reports']
+    id: 'docker-push'
+    waitFor: ['docker-build']
+
+  # 5. Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'expense-reports'
+      - '--image=gcr.io/$PROJECT_ID/expense-reports:$COMMIT_SHA'
+      - '--region=us-west1'
+      - '--platform=managed'
+      - '--max-instances=1'
+      - '--timeout=600'
+      - '--memory=2Gi'
+      - '--no-allow-unauthenticated'
+    id: 'deploy'
+    waitFor: ['docker-push']
+
+timeout: '1800s'
+
+options:
+  machineType: 'E2_HIGHCPU_8'

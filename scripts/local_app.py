@@ -20,8 +20,8 @@ from pathlib import Path
 from typing import Callable
 
 
-DEFAULT_HOST = "127.0.0.1"
-DEFAULT_PORT = 8765
+DEFAULT_HOST = os.environ.get("HOST", "127.0.0.1")
+DEFAULT_PORT = int(os.environ.get("PORT", "8765"))
 DEFAULT_MODEL = "gemini-3-flash-preview"
 DEFAULT_LOCATION = "global"
 EXPORTABLE_ARTIFACTS = {
@@ -502,15 +502,18 @@ def sanitize_filename(value: str) -> str:
 
 
 def resolve_cli_command(repo_root: Path) -> list[str]:
-    return ["cargo", "run", "--bin", "ingest_bundle_workspace", "--"]
+    binary = shutil.which("ingest_bundle_workspace")
+    return [binary] if binary else ["cargo", "run", "--bin", "ingest_bundle_workspace", "--"]
 
 
 def resolve_review_cli_command(repo_root: Path) -> list[str]:
-    return ["cargo", "run", "--bin", "apply_review_revision_to_artifacts", "--"]
+    binary = shutil.which("apply_review_revision_to_artifacts")
+    return [binary] if binary else ["cargo", "run", "--bin", "apply_review_revision_to_artifacts", "--"]
 
 
 def resolve_review_surface_cli_command(repo_root: Path) -> list[str]:
-    return ["cargo", "run", "--bin", "render_current_review_surface", "--"]
+    binary = shutil.which("render_current_review_surface")
+    return [binary] if binary else ["cargo", "run", "--bin", "render_current_review_surface", "--"]
 
 
 def build_ingest_command(

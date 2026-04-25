@@ -71,8 +71,8 @@ impl DocumentAiConfig {
             .or_else(|| std::env::var("DOCUMENT_AI_PROJECT_ID").ok())
             .or_else(|| std::env::var("VERTEX_PROJECT_ID").ok());
         let processor_id = processor_id.or_else(|| std::env::var("DOCUMENT_AI_PROCESSOR_ID").ok());
-        let processor_version = processor_version
-            .or_else(|| std::env::var("DOCUMENT_AI_PROCESSOR_VERSION").ok());
+        let processor_version =
+            processor_version.or_else(|| std::env::var("DOCUMENT_AI_PROCESSOR_VERSION").ok());
         let python_bin = python_bin
             .or_else(|| std::env::var("DOCUMENT_AI_PYTHON").ok().map(PathBuf::from))
             .unwrap_or_else(default_python_path);
@@ -108,7 +108,9 @@ impl fmt::Display for DocumentAiError {
             Self::Io(err) => write!(f, "I/O error: {err}"),
             Self::Json(err) => write!(f, "JSON error: {err}"),
             Self::MissingConfiguration(message) => write!(f, "{message}"),
-            Self::CommandFailed(message) => write!(f, "Document AI transcription failed: {message}"),
+            Self::CommandFailed(message) => {
+                write!(f, "Document AI transcription failed: {message}")
+            }
             Self::InvalidUtf8(message) => write!(f, "invalid UTF-8 output: {message}"),
             Self::InvalidResponse(message) => write!(f, "invalid Document AI response: {message}"),
         }
@@ -185,7 +187,11 @@ pub fn transcribe_document_path_with_document_ai(
     path: impl AsRef<Path>,
     config: &DocumentAiConfig,
 ) -> Result<TranscribedDocument, DocumentAiError> {
-    transcribe_document_path_with_document_ai_profile(path, config, &DocumentAiPassProfile::default())
+    transcribe_document_path_with_document_ai_profile(
+        path,
+        config,
+        &DocumentAiPassProfile::default(),
+    )
 }
 
 pub fn transcribe_document_path_with_document_ai_profile(
@@ -239,7 +245,9 @@ fn run_document_ai_command(
     String::from_utf8(output.stdout).map_err(|err| DocumentAiError::InvalidUtf8(err.to_string()))
 }
 
-fn parse_document_ai_transcribed_document(text: &str) -> Result<TranscribedDocument, DocumentAiError> {
+fn parse_document_ai_transcribed_document(
+    text: &str,
+) -> Result<TranscribedDocument, DocumentAiError> {
     let payload: RawTranscribedDocument = serde_json::from_str(text)?;
     if payload.pages.is_empty() {
         return Err(DocumentAiError::InvalidResponse(
@@ -299,9 +307,7 @@ fn parse_raw_transcription_metadata(raw: RawTranscriptionMetadata) -> Transcript
             .grounding_preprocess_variant
             .as_deref()
             .map(|value| parse_preprocess_variant(Some(value))),
-        producer: raw
-            .producer
-            .unwrap_or_else(|| "document_ai_sdk".to_owned()),
+        producer: raw.producer.unwrap_or_else(|| "document_ai_sdk".to_owned()),
         model: raw.model,
         geometry_source: parse_geometry_source(raw.geometry_source.as_deref()),
         geometry_available: raw.geometry_available.unwrap_or(false),
@@ -448,7 +454,10 @@ print(json.dumps({
         assert_eq!(document.engine, TranscriptionEngine::DocumentAi);
         assert_eq!(document.document_id, "mock_receipt");
         assert_eq!(document.metadata.grounding_preprocess_variant, None);
-        assert_eq!(document.metadata.geometry_source, OcrGeometrySource::DocumentAi);
+        assert_eq!(
+            document.metadata.geometry_source,
+            OcrGeometrySource::DocumentAi
+        );
         assert!(document.metadata.geometry_available);
         assert_eq!(document.pages[0].regions.len(), 1);
         assert!(document.pages[0].text.contains("TOTAL"));
@@ -530,7 +539,9 @@ print(json.dumps({
         )
         .expect_err("document ai transcription should fail");
 
-        assert!(error.to_string().contains("document ai failed intentionally"));
+        assert!(error
+            .to_string()
+            .contains("document ai failed intentionally"));
     }
 
     fn unique_temp_dir(prefix: &str) -> PathBuf {

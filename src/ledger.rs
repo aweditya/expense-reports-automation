@@ -7,8 +7,8 @@ use crate::bundle_synthesis::CanonicalExpenseBundle;
 use crate::draft::{ConfidenceLevel, DraftReport, EvidenceKind, EvidenceReference, FieldMetadata};
 use crate::feedback::{
     apply_system_generated_override, apply_user_input_override, capture_feedback,
-    clear_draft_field, CorrectionAnnotation, FeedbackCapture, FeedbackCategory,
-    SubmissionFeedback, SubmissionStatus,
+    clear_draft_field, CorrectionAnnotation, FeedbackCapture, FeedbackCategory, SubmissionFeedback,
+    SubmissionStatus,
 };
 use crate::ocr_compare::DocumentOcrComparisonSummary;
 use crate::ocr_grounding::DocumentOcrGroundingSummary;
@@ -735,7 +735,12 @@ fn recompute_business_purpose_key(draft: &mut DraftReport) -> Result<(), String>
         ),
     };
 
-    apply_system_generated_override(draft, key_path, ReportValue::from(key), metadata_with_origin(metadata, "ledger.recompute_business_purpose_key"))
+    apply_system_generated_override(
+        draft,
+        key_path,
+        ReportValue::from(key),
+        metadata_with_origin(metadata, "ledger.recompute_business_purpose_key"),
+    )
 }
 
 fn metadata_with_origin(mut metadata: FieldMetadata, origin: &str) -> FieldMetadata {
@@ -766,16 +771,16 @@ fn lowest_confidence(values: impl IntoIterator<Item = ConfidenceLevel>) -> Confi
     for value in values {
         lowest = match (lowest, value) {
             (ConfidenceLevel::Low, _) | (_, ConfidenceLevel::Low) => ConfidenceLevel::Low,
-            (ConfidenceLevel::Medium, _) | (_, ConfidenceLevel::Medium) => {
-                ConfidenceLevel::Medium
-            }
+            (ConfidenceLevel::Medium, _) | (_, ConfidenceLevel::Medium) => ConfidenceLevel::Medium,
             _ => ConfidenceLevel::High,
         };
     }
     lowest
 }
 
-fn combined_evidence(values: impl IntoIterator<Item = EvidenceReference>) -> Vec<EvidenceReference> {
+fn combined_evidence(
+    values: impl IntoIterator<Item = EvidenceReference>,
+) -> Vec<EvidenceReference> {
     let mut seen = BTreeSet::new();
     let mut output = Vec::new();
     for evidence in values {
@@ -1139,13 +1144,11 @@ mod tests {
             .iter()
             .find(|version| version.version_id == version_id)
             .expect("new version should exist");
-        assert!(
-            value_text_at(
-                &version.draft.report,
-                "expense_report.general_information.business_purpose.key_30char"
-            )
-            .is_none()
-        );
+        assert!(value_text_at(
+            &version.draft.report,
+            "expense_report.general_information.business_purpose.key_30char"
+        )
+        .is_none());
         assert!(!version
             .draft
             .metadata

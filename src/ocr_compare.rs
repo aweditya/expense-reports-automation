@@ -404,7 +404,10 @@ pub fn render_ocr_comparison_html(comparison: &OcrComparisonResult) -> String {
     html.push_str("<section class=\"section\"><div class=\"section-heading\"><div><p class=\"eyebrow\">Passes</p><h2>Per-pass extraction</h2></div><p class=\"section-copy\">Each card shows the structured extraction produced by one OCR pass after its own preprocess lane. This is the fastest way to see whether disagreement comes from the OCR itself or from downstream reconciliation.</p></div><div class=\"pass-grid\">");
     for pass in &comparison.passes {
         html.push_str("<article class=\"pass-card\"><header><div class=\"pass-card-title\">");
-        html.push_str(&format!("<h3><code>{}</code></h3>", escape_html(&pass.pass_id)));
+        html.push_str(&format!(
+            "<h3><code>{}</code></h3>",
+            escape_html(&pass.pass_id)
+        ));
         html.push_str(&format!(
             "<p class=\"pass-meta\">{} pass · {} preprocess · {} · {:?}</p>",
             escape_html(pass.pass_kind.as_str()),
@@ -419,9 +422,18 @@ pub fn render_ocr_comparison_html(comparison: &OcrComparisonResult) -> String {
             escape_html(confidence_label(pass.classification_confidence))
         ));
         html.push_str("</header><div class=\"pass-details\">");
-        html.push_str(&detail_row("Merchant", pass.merchant_name.as_deref().unwrap_or("[missing]")));
-        html.push_str(&detail_row("Date", pass.transaction_date.as_deref().unwrap_or("[missing]")));
-        html.push_str(&detail_row("Total", pass.total_paid.as_deref().unwrap_or("[missing]")));
+        html.push_str(&detail_row(
+            "Merchant",
+            pass.merchant_name.as_deref().unwrap_or("[missing]"),
+        ));
+        html.push_str(&detail_row(
+            "Date",
+            pass.transaction_date.as_deref().unwrap_or("[missing]"),
+        ));
+        html.push_str(&detail_row(
+            "Total",
+            pass.total_paid.as_deref().unwrap_or("[missing]"),
+        ));
         html.push_str(&detail_row(
             "Currency",
             pass.total_paid_currency.as_deref().unwrap_or("[missing]"),
@@ -436,7 +448,10 @@ pub fn render_ocr_comparison_html(comparison: &OcrComparisonResult) -> String {
         for check in &comparison.consistency_checks {
             html.push_str("<article class=\"field\">");
             html.push_str("<header>");
-            html.push_str(&format!("<h3><code>{}</code></h3>", escape_html(&check.check)));
+            html.push_str(&format!(
+                "<h3><code>{}</code></h3>",
+                escape_html(&check.check)
+            ));
             html.push_str(&format!(
                 "<span class=\"badge {}\">{}</span>",
                 consistency_status_class(check.status),
@@ -456,7 +471,10 @@ pub fn render_ocr_comparison_html(comparison: &OcrComparisonResult) -> String {
     for field in &comparison.fields {
         html.push_str("<article class=\"field\">");
         html.push_str("<header>");
-        html.push_str(&format!("<h3><code>{}</code></h3>", escape_html(&field.field)));
+        html.push_str(&format!(
+            "<h3><code>{}</code></h3>",
+            escape_html(&field.field)
+        ));
         html.push_str("<div class=\"field-topline\">");
         html.push_str(&format!(
             "<span class=\"badge {}\">{}</span>",
@@ -481,11 +499,18 @@ pub fn render_ocr_comparison_html(comparison: &OcrComparisonResult) -> String {
         }
         html.push_str("<div class=\"candidate-grid\">");
         for candidate in &field.candidates {
-            let card_class = if candidate.value.is_some() { "" } else { " missing" };
+            let card_class = if candidate.value.is_some() {
+                ""
+            } else {
+                " missing"
+            };
             html.push_str("<article class=\"candidate-card");
             html.push_str(card_class);
             html.push_str("\"><header><div>");
-            html.push_str(&format!("<h3><code>{}</code></h3>", escape_html(&candidate.pass_id)));
+            html.push_str(&format!(
+                "<h3><code>{}</code></h3>",
+                escape_html(&candidate.pass_id)
+            ));
             html.push_str("</div>");
             html.push_str(&format!(
                 "<span class=\"badge {}\">{}</span>",
@@ -502,7 +527,9 @@ pub fn render_ocr_comparison_html(comparison: &OcrComparisonResult) -> String {
             ));
             html.push_str("</header>");
             html.push_str("<p class=\"candidate-value\">");
-            html.push_str(&escape_html(candidate.value.as_deref().unwrap_or("[missing]")));
+            html.push_str(&escape_html(
+                candidate.value.as_deref().unwrap_or("[missing]"),
+            ));
             html.push_str("</p>");
             html.push_str("<p class=\"candidate-meta\">");
             html.push_str("Pass-specific extracted value");
@@ -754,7 +781,10 @@ fn aggregate_consistency_check(
     }
 
     let (status, message) = if evaluated_passes == 0 {
-        (OcrConsistencyStatus::Unavailable, unavailable_message.to_owned())
+        (
+            OcrConsistencyStatus::Unavailable,
+            unavailable_message.to_owned(),
+        )
     } else if failures.is_empty() {
         (OcrConsistencyStatus::Pass, pass_message.to_owned())
     } else {
@@ -1444,7 +1474,10 @@ fn strip_common_merchant_prefix<'a>(value: &'a str) -> &'a str {
 }
 
 fn collapse_alphanumeric(value: &str) -> String {
-    value.chars().filter(|ch| ch.is_ascii_alphanumeric()).collect()
+    value
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .collect()
 }
 
 fn merchant_name_equivalent(left: &str, right: &str) -> bool {

@@ -478,7 +478,9 @@ fn build_issue_queue(
         .map(|issue| {
             let label = ui_field_for_issue(ui_map, issue)
                 .map(|field| friendly_field_label(&issue.path, &field.label))
-                .unwrap_or_else(|| friendly_field_label(&issue.path, &humanize_path_tail(&issue.schema_path)));
+                .unwrap_or_else(|| {
+                    friendly_field_label(&issue.path, &humanize_path_tail(&issue.schema_path))
+                });
             ReviewIssueEntry {
                 class: issue.class,
                 path: issue.path.clone(),
@@ -664,7 +666,10 @@ fn collect_collection_helper_specs(section: &UiSection) -> Vec<CollectionHelperS
         let Some((parent_path, child_key)) = collection_parent_and_key(&field.path) else {
             continue;
         };
-        let parent_label = friendly_field_label(&parent_path, &title_case_label(&humanize_path_tail(&parent_path)));
+        let parent_label = friendly_field_label(
+            &parent_path,
+            &title_case_label(&humanize_path_tail(&parent_path)),
+        );
         let entry = grouped
             .entry(parent_path.clone())
             .or_insert_with(|| CollectionHelperSpec {
@@ -1484,8 +1489,8 @@ mod tests {
     use crate::readiness::summarize_validation_readiness;
     use crate::readiness::{ReadinessIssue, ReadinessIssueClass, ReadinessReport};
     use crate::synthetic_documents::{generate_synthetic_packet, SyntheticVariant};
-    use crate::FieldControl;
     use crate::validator::{ValidationIssueKind, ValidationSeverity};
+    use crate::FieldControl;
 
     fn synthetic_documents() -> Vec<crate::ExtractedDocumentFacts> {
         generate_synthetic_packet(SyntheticVariant::Baseline)
@@ -1613,14 +1618,12 @@ mod tests {
             .find(|section| section.key == "general_information")
             .expect("general information section should exist");
         let general_fields = &general_information.instances[0].fields;
-        assert!(general_fields
-            .iter()
-            .any(|field| field.path == "expense_report.general_information.payee.name"
-                && field.label == "Payee Name"));
-        assert!(general_fields
-            .iter()
-            .any(|field| field.path == "expense_report.general_information.business_purpose.who"
-                && field.label == "Who Is Involved"));
+        assert!(general_fields.iter().any(|field| field.path
+            == "expense_report.general_information.payee.name"
+            && field.label == "Payee Name"));
+        assert!(general_fields.iter().any(|field| field.path
+            == "expense_report.general_information.business_purpose.who"
+            && field.label == "Who Is Involved"));
         let transaction_summary = packet
             .copy_sections
             .iter()
@@ -1629,8 +1632,10 @@ mod tests {
         assert!(transaction_summary.instances[0]
             .fields
             .iter()
-            .any(|field| field.path == "expense_report.transaction_summary.total_usd"
-                && field.label == "Total USD"));
+            .any(
+                |field| field.path == "expense_report.transaction_summary.total_usd"
+                    && field.label == "Total USD"
+            ));
     }
 
     #[test]
@@ -1675,12 +1680,9 @@ mod tests {
                 && field.required
                 && !field.present
                 && field.control == FieldControl::Textarea));
-        assert!(packet
-            .issues_queue
-            .iter()
-            .any(|issue| issue.path
-                == "expense_report.general_information.student_certification.other_explanation"
-                && issue.label == "Other Justification Details"));
+        assert!(packet.issues_queue.iter().any(|issue| issue.path
+            == "expense_report.general_information.student_certification.other_explanation"
+            && issue.label == "Other Justification Details"));
     }
 
     #[test]
