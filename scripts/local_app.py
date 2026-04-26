@@ -616,7 +616,7 @@ def handle_upload_submission(
             completed = command_runner(command, config.repo_root)
             if completed.returncode != 0:
                 raise LocalAppError((completed.stderr or completed.stdout).strip() or "pipeline failed")
-            return request.fields.get("bundle_id") or default_bundle_id(input_paths)
+            return bundle_id
     finally:
         release_bundle_inflight_lock(marker_path)
 
@@ -1146,11 +1146,14 @@ class LocalAppHandler(http.server.BaseHTTPRequestHandler):
             )
 
     def _read_request_body(self) -> bytes:
-        """Read the full request body, handling both Content-Length and chunked transfer."""
+        """Read the full request body.
+
+        Cloud Run always forwards HTTP/1.1 with Content-Length to containers,
+        but we handle chunked transfer as a safety net.
+        """
         content_length = self.headers.get("Content-Length")
         if content_length is not None:
             return self.rfile.read(int(content_length))
-        # No Content-Length (e.g. HTTP/2 via Cloud Run) — read chunked
         transfer_encoding = self.headers.get("Transfer-Encoding", "")
         if "chunked" in transfer_encoding.lower():
             chunks = []
@@ -1158,13 +1161,12 @@ class LocalAppHandler(http.server.BaseHTTPRequestHandler):
                 line = self.rfile.readline().strip()
                 chunk_size = int(line, 16)
                 if chunk_size == 0:
-                    self.rfile.readline()  # trailing CRLF
+                    self.rfile.readline()
                     break
                 chunks.append(self.rfile.read(chunk_size))
-                self.rfile.readline()  # trailing CRLF
+                self.rfile.readline()
             return b"".join(chunks)
-        # Fallback: read whatever is available (up to 64 MB)
-        return self.rfile.read(64 * 1024 * 1024)
+        return b""
 
     def do_POST(self) -> None:
         parsed = urllib.parse.urlparse(self.path)

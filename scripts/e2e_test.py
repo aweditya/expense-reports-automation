@@ -95,61 +95,51 @@ def upload_documents(
     headers: dict[str, str] | None = None,
 ) -> str:
     """Upload documents to the app. Returns the bundle ID from the redirect."""
-    boundary = "----E2ETestBoundary9876543210"
-    fields: dict[str, str] = {}
-    if bundle_id:
-        fields["bundle_id"] = bundle_id
-    if engine:
-        fields["engine"] = engine
+    import re
+    import html as htmlmod
 
-    body = build_multipart_body(files, fields, boundary)
-
-    url = f"{base_url.rstrip('/')}/upload"
-    req = urllib.request.Request(
-        url,
-        data=body,
-        method="POST",
-        headers={
-            "Content-Type": f"multipart/form-data; boundary={boundary}",
-            **(headers or {}),
-        },
-    )
-
-    # Follow redirects manually to extract bundle ID
-    opener = urllib.request.build_opener(NoRedirectHandler())
     try:
-        response = opener.open(req)
-    except urllib.error.HTTPError as e:
-        if e.code == 303:
-            location = e.headers.get("Location", "")
-            # Location is like /bundle/some_bundle_id
-            bid = urllib.parse.unquote(location.split("/bundle/")[-1].split("/")[0])
-            return bid
-        body_text = e.read().decode("utf-8", errors="replace")[:500]
-        print(f"ERROR: Upload failed with HTTP {e.code}")
-        print(f"  Response: {body_text}")
+        import requests as req_lib
+    except ImportError:
+        print("ERROR: 'requests' library required. Install with: pip install requests")
         sys.exit(1)
 
-    # If we got a 200 instead of 303, something unexpected happened
-    body_text = response.read().decode("utf-8", errors="replace")[:500]
-    print(f"WARNING: Expected 303 redirect, got {response.status}")
-    print(f"  Response: {body_text}")
+    url = f"{base_url.rstrip('/')}/upload"
+    data: dict[str, str] = {}
+    if bundle_id:
+        data["bundle_id"] = bundle_id
+    if engine:
+        data["engine"] = engine
+
+    upload_files = [
+        ("documents", (f.name, f.read_bytes(), "application/octet-stream"))
+        for f in files
+    ]
+
+    resp = req_lib.post(
+        url,
+        files=upload_files,
+        data=data,
+        headers=headers or {},
+        allow_redirects=False,
+        timeout=300,
+    )
+
+    if resp.status_code == 303:
+        location = resp.headers.get("Location", "")
+        bid = urllib.parse.unquote(location.split("/bundle/")[-1].split("/")[0])
+        return bid
+
+    print(f"ERROR: Upload failed with HTTP {resp.status_code}")
+    for m in re.finditer(r'<p class="notice">(.*?)</p>', resp.text, re.DOTALL):
+        print(f"  Server: {htmlmod.unescape(m.group(1).strip())}")
     sys.exit(1)
 
 
-class NoRedirectHandler(urllib.request.HTTPErrorProcessor):
-    def http_response(self, request, response):
-        if response.status == 303:
-            raise urllib.error.HTTPError(
-                request.full_url,
-                303,
-                "See Other",
-                response.headers,
-                response,
-            )
-        return super().http_response(request, response)
-
-    https_response = http_response
+def _get(url: str, headers: dict[str, str] | None = None):
+    """HTTP GET using requests library."""
+    import requests as req_lib
+    return req_lib.get(url, headers=headers or {}, timeout=30)
 
 
 def check_bundle_manifest(
@@ -159,14 +149,11 @@ def check_bundle_manifest(
 ) -> dict:
     """Fetch the bundle manifest."""
     url = f"{base_url.rstrip('/')}/bundle/{urllib.parse.quote(bundle_id)}/manifest"
-    req = urllib.request.Request(url, headers=headers or {})
-    try:
-        with urllib.request.urlopen(req) as resp:
-            return json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")[:500]
-        print(f"ERROR: Failed to fetch manifest (HTTP {e.code}): {body}")
+    resp = _get(url, headers)
+    if resp.status_code != 200:
+        print(f"ERROR: Failed to fetch manifest (HTTP {resp.status_code})")
         sys.exit(1)
+    return resp.json()
 
 
 def check_review_session(
@@ -176,14 +163,11 @@ def check_review_session(
 ) -> dict:
     """Fetch the review session state."""
     url = f"{base_url.rstrip('/')}/bundle/{urllib.parse.quote(bundle_id)}/review-session"
-    req = urllib.request.Request(url, headers=headers or {})
-    try:
-        with urllib.request.urlopen(req) as resp:
-            return json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")[:500]
-        print(f"ERROR: Failed to fetch review session (HTTP {e.code}): {body}")
+    resp = _get(url, headers)
+    if resp.status_code != 200:
+        print(f"ERROR: Failed to fetch review session (HTTP {resp.status_code})")
         sys.exit(1)
+    return resp.json()
 
 
 def check_artifact_exists(
@@ -197,13 +181,8 @@ def check_artifact_exists(
         f"{base_url.rstrip('/')}/bundle/{urllib.parse.quote(bundle_id)}"
         f"/artifact/{urllib.parse.quote(artifact_name)}"
     )
-    req = urllib.request.Request(url, headers=headers or {})
-    try:
-        with urllib.request.urlopen(req) as resp:
-            resp.read()
-            return True
-    except urllib.error.HTTPError:
-        return False
+    resp = _get(url, headers)
+    return resp.status_code == 200
 
 
 def main():

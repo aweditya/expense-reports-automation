@@ -18,7 +18,12 @@ RUN cargo build --release \
 # Stage 2: Python runtime with pre-compiled Rust binaries
 FROM python:3.12-slim-bookworm
 
-RUN apt-get update && apt-get install -y --no-install-recommends perl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    perl \
+    poppler-utils \
+    curl \
+    openssl \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY deploy/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.txt
