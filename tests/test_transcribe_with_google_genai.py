@@ -126,6 +126,19 @@ class TranscribeWithGoogleGenAiTests(unittest.TestCase):
             ],
         )
 
+    def test_normalize_pages_accepts_bare_list_payload(self):
+        payload = [
+            {"page_number": 1, "text": "## Receipt\n- Total: USD 25.00"},
+            {"page_number": 2, "text": "## Page 2\n- Tax: USD 2.50"},
+        ]
+
+        pages = transcribe.normalize_pages(payload)
+
+        self.assertEqual(len(pages), 2)
+        self.assertEqual(pages[0]["page_number"], 1)
+        self.assertEqual(pages[0]["text"], "## Receipt\n- Total: USD 25.00")
+        self.assertEqual(pages[1]["page_number"], 2)
+
     def test_normalize_extractor_markdown_merges_wrapped_pipe_rows(self):
         input_text = (
             "### charges\n"

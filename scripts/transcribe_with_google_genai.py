@@ -172,21 +172,37 @@ def extract_payload_text(response) -> str:
     raise SystemExit("Gemini response did not contain text")
 
 
-def normalize_pages(payload: dict) -> list[dict]:
-    pages = payload.get("pages") or payload.get("document_markdown_pages")
-    if not pages:
-        text = payload.get("markdown") or payload.get("text")
-        if text:
-            pages = [{"page_number": 1, "text": text}]
+def normalize_pages(payload) -> list[dict]:
+    if isinstance(payload, list):
+        pages = payload
+    elif isinstance(payload, dict):
+        pages = payload.get("pages") or payload.get("document_markdown_pages")
+        if not pages:
+            text = payload.get("markdown") or payload.get("text")
+            if text:
+                pages = [{"page_number": 1, "text": text}]
+    else:
+        pages = None
     if not pages:
         raise SystemExit("Gemini response JSON did not contain pages or markdown/text")
 
     normalized = []
     for index, page in enumerate(pages, start=1):
+        if isinstance(page, str):
+            text = page
+        elif isinstance(page, dict):
+            text = (
+                page.get("text")
+                or page.get("markdown")
+                or page.get("content")
+                or ""
+            )
+        else:
+            text = str(page)
         normalized.append(
             {
-                "page_number": page.get("page_number") or index,
-                "text": normalize_extractor_markdown(page["text"]),
+                "page_number": page.get("page_number") or index if isinstance(page, dict) else index,
+                "text": normalize_extractor_markdown(text),
                 "dimensions": None,
                 "regions": [],
             }
