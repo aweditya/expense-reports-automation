@@ -369,6 +369,12 @@ body {
   text-decoration: none;
 }
 
+.toolbar-links a.link-disabled {
+  opacity: 0.4;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
 .primary-button,
 .secondary-button,
 .ghost-button,

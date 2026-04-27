@@ -194,6 +194,8 @@ def main():
     parser.add_argument("--cloud-run-url", help="Direct Cloud Run URL (bypasses IAP)")
     parser.add_argument("--bundle-id", help="Explicit bundle ID")
     parser.add_argument("--engine", help="Ingestion engine (builtin or vertex-gemini-sdk)")
+    parser.add_argument("--verify-lifecycle", action="store_true",
+                        help="After upload, verify the preview gate is active and filing status is correct")
     args = parser.parse_args()
 
     # Validate files exist
@@ -255,9 +257,33 @@ def main():
         status = "OK" if exists else "MISSING"
         print(f"   {status} — {artifact}")
 
+    # Step 5: Verify preview gate (optional)
+    lifecycle_ok = True
+    if args.verify_lifecycle:
+        print(f"\n5. Verifying preview gate...")
+        preview_url = (
+            f"{effective_target.rstrip('/')}/bundle/{urllib.parse.quote(bundle_id)}/preview"
+        )
+        preview_resp = _get(preview_url, headers)
+        if preview_resp.status_code != 200:
+            print(f"   ERROR: Preview returned HTTP {preview_resp.status_code}")
+            lifecycle_ok = False
+        elif filing_status == "ready_to_file":
+            if "Preview Not Yet Available" in preview_resp.text:
+                print(f"   FAIL: Preview gate is blocking but filing_status is ready_to_file")
+                lifecycle_ok = False
+            else:
+                print(f"   OK — Preview is accessible (filing_status is ready_to_file)")
+        else:
+            if "Preview Not Yet Available" in preview_resp.text:
+                print(f"   OK — Preview correctly gated: {filing_status}, {session.get('issue_count', '?')} issues remaining")
+            else:
+                print(f"   FAIL: Preview should be gated but is serving content (filing_status: {filing_status})")
+                lifecycle_ok = False
+
     # Summary
     print(f"\n{'='*50}")
-    all_ok = all(results.values()) and run_count >= 1
+    all_ok = all(results.values()) and run_count >= 1 and lifecycle_ok
     if all_ok:
         print(f"PASS: Bundle '{bundle_id}' processed successfully")
         print(f"  View: {effective_target}/bundle/{urllib.parse.quote(bundle_id)}/workbench")

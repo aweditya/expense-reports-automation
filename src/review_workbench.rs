@@ -60,7 +60,7 @@ pub fn render_review_workbench_html(packet: &ReviewPacket) -> String {
     html.push_str(include_str!("review_workbench.css"));
     html.push_str("\n</style>\n");
     html.push_str(
-        "<script>\nconst reviewSessionState={currentDraftVersionId:null,saveInFlight:false};\nfunction fieldControl(card){return card?card.querySelector('.field-control'):null;}\nfunction issueCountLabel(count){return count===1?'1 change pending':`${count} changes pending`;}\nfunction openAncestorDetails(target){let current=target?.parentElement;while(current){if(current.tagName==='DETAILS'){current.open=true;}current=current.parentElement;}}\nfunction revealHashTarget(){const rawHash=window.location.hash||'';if(!rawHash||rawHash==='#'){return;}const target=document.getElementById(rawHash.slice(1));if(!target){return;}openAncestorDetails(target);target.scrollIntoView({behavior:'smooth',block:'center'});const focusTarget=target.matches('.field-card')?target.querySelector('.field-control, .structured-row-input'):target.querySelector?.('.field-control, .structured-row-input');if(focusTarget){focusTarget.focus();if(typeof focusTarget.select==='function'){focusTarget.select();}}}\nfunction jumpToField(event,targetId){const target=document.getElementById(targetId);if(!target){return;}event.preventDefault();openAncestorDetails(target);target.scrollIntoView({behavior:'smooth',block:'center'});window.location.hash=targetId;const focusTarget=target.querySelector('.field-control, .structured-row-input');if(focusTarget){focusTarget.focus();if(typeof focusTarget.select==='function'){focusTarget.select();}}}\nfunction flashCopy(button){button.textContent='Copied';setTimeout(()=>{button.textContent='Copy';},900);}\nfunction structuredRowsPayload(editor){if(!editor){return [];}const rows=[];for(const row of editor.querySelectorAll('.structured-row')){const values={};let hasAnyValue=false;for(const input of row.querySelectorAll('.structured-row-input')){const key=input.dataset.columnKey||'';let value=('value' in input)?input.value:'';if(input.dataset.columnControl==='checkbox'){value=input.value;}if(value!==''&&value!==null){hasAnyValue=true;}values[key]=value;}if(hasAnyValue){rows.push(values);}}return rows;}\nfunction valueForCopy(card){const control=fieldControl(card);if(!control){return '';}if(control.classList.contains('structured-list-editor')){const rows=structuredRowsPayload(control);if(rows.length===0){return '';}return rows.map((row,index)=>`${index+1}. `+Object.entries(row).filter(([,value])=>value!==''&&value!==null).map(([key,value])=>`${key}: ${value}`).join(' | ')).join('\\n');}if(control.tagName==='SELECT'){return control.value||'';}if('value' in control){return control.value||'';}return '';} \nfunction copyFieldValue(button){const card=button.closest('.field-card');if(!card){return;}const value=valueForCopy(card);if(!value){return;}navigator.clipboard.writeText(value);flashCopy(button);} \nfunction parseJsonData(value,fallback){if(!value){return fallback;}try{return JSON.parse(value);}catch(_err){return fallback;}}\nfunction normalizeFieldValue(control){if(!control){return null;}if(control.classList.contains('structured-list-editor')){const columns=parseJsonData(control.dataset.columnsJson,'[]');const rows=structuredRowsPayload(control).map((row)=>{const obj={};for(const column of columns){const raw=row[column.key]??'';if(raw===''){continue;}if(column.control==='checkbox'){obj[column.key]=raw==='true';}else{obj[column.key]=raw;}}return obj;});return rows.length===0?[]:rows;}if(control.dataset.control==='checkbox'){if(control.value===''){return null;}return control.value==='true';}if('value' in control){return control.value===''?null:control.value;}return null;}\nfunction initialFieldValue(control){if(!control){return null;}const fallback=control.classList.contains('structured-list-editor')?[]:null;return parseJsonData(control.dataset.initialJson,fallback);} \nfunction valuesEqual(left,right){return JSON.stringify(left)===JSON.stringify(right);} \nfunction fieldReasonSelect(card){return card.querySelector('.field-reason-select');}\nfunction fieldNoteInput(card){return card.querySelector('.field-note-input');}\nfunction fieldConfirmInput(card){return card.querySelector('.field-confirm-input');}\nfunction updateFieldDirtyState(card){const control=fieldControl(card);if(!control){return;}const edited=!valuesEqual(initialFieldValue(control),normalizeFieldValue(control));const confirmed=Boolean(fieldConfirmInput(card)?.checked);card.classList.toggle('dirty',edited||confirmed);const badge=card.querySelector('.field-dirty-badge');if(badge){badge.hidden=!(edited||confirmed);}}\nfunction refreshDirtySummary(){const dirtyCards=[...document.querySelectorAll('.field-card.dirty')];const counter=document.getElementById('pending-change-count');if(counter){counter.textContent=issueCountLabel(dirtyCards.length);}const saveButton=document.getElementById('save-review-button');const resetButton=document.getElementById('reset-review-button');if(saveButton){saveButton.disabled=reviewSessionState.saveInFlight||dirtyCards.length===0;}if(resetButton){resetButton.disabled=reviewSessionState.saveInFlight||dirtyCards.length===0;}}\nfunction syncCardStateFromEventTarget(target){const card=target.closest('.field-card');if(!card){return;}updateFieldDirtyState(card);refreshDirtySummary();}\nfunction structuredRowTemplate(editor,rowValues){const columns=parseJsonData(editor.dataset.columnsJson,[]);const row=document.createElement('div');row.className='structured-row';for(const column of columns){const cell=document.createElement('label');cell.className='structured-cell';const label=document.createElement('span');label.className='structured-cell-label';label.textContent=column.label;cell.appendChild(label);let input;if(column.control==='select'){input=document.createElement('select');const blank=document.createElement('option');blank.value='';blank.textContent='';input.appendChild(blank);for(const optionValue of column.allowed_values||[]){const option=document.createElement('option');option.value=optionValue;option.textContent=optionValue.replaceAll('_',' ');input.appendChild(option);}}else if(column.control==='checkbox'){input=document.createElement('select');[['','Unset'],['true','Yes'],['false','No']].forEach(([value,labelText])=>{const option=document.createElement('option');option.value=value;option.textContent=labelText;input.appendChild(option);});}else if(column.control==='date'){input=document.createElement('input');input.type='date';}else{input=document.createElement(column.control==='textarea'?'textarea':'input');if(input.tagName==='INPUT'){input.type='text';if(column.control==='currency'||column.control==='number'){input.inputMode='decimal';}}}input.className='structured-row-input';input.dataset.columnKey=column.key;input.dataset.columnControl=column.control;input.value=(rowValues&&rowValues[column.key])||'';input.addEventListener('input',()=>syncCardStateFromEventTarget(input));input.addEventListener('change',()=>syncCardStateFromEventTarget(input));cell.appendChild(input);row.appendChild(cell);}const removeButton=document.createElement('button');removeButton.type='button';removeButton.className='structured-row-remove';removeButton.textContent='Remove row';removeButton.addEventListener('click',()=>{row.remove();syncCardStateFromEventTarget(editor);});row.appendChild(removeButton);return row;}\nfunction addStructuredListRow(button){const editor=button.closest('.structured-list-editor');if(!editor){return;}const rows=editor.querySelector('.structured-list-rows');if(!rows){return;}rows.appendChild(structuredRowTemplate(editor,{}));syncCardStateFromEventTarget(editor);} \nfunction resetReviewForm(){for(const card of document.querySelectorAll('.field-card')){const control=fieldControl(card);if(!control){continue;}const initial=initialFieldValue(control);if(control.classList.contains('structured-list-editor')){const rows=control.querySelector('.structured-list-rows');if(rows){rows.innerHTML='';for(const rowValues of Array.isArray(initial)?initial:[]){rows.appendChild(structuredRowTemplate(control,rowValues));}}}else if(control.dataset.control==='checkbox'){control.value=initial===null?'':String(initial);}else if('value' in control){control.value=initial??'';}const reason=fieldReasonSelect(card);const note=fieldNoteInput(card);const confirm=fieldConfirmInput(card);if(reason){reason.value='';}if(note){note.value='';}if(confirm){confirm.checked=false;}updateFieldDirtyState(card);}setWorkbenchStatus('Unsaved review edits cleared.','neutral');refreshDirtySummary();revealHashTarget();}\nasync function loadReviewSessionSummary(){try{const response=await fetch('review-session',{headers:{'Accept':'application/json'}});if(!response.ok){throw new Error(`session lookup failed (${response.status})`);}const payload=await response.json();reviewSessionState.currentDraftVersionId=payload.current_draft_version_id;const versionLabel=document.getElementById('current-draft-version');if(versionLabel){versionLabel.textContent=`v${payload.current_draft_version_id}`;}const filingStatus=document.getElementById('current-filing-status');if(filingStatus){filingStatus.textContent=payload.filing_status.replaceAll('_',' ');} }catch(err){setWorkbenchStatus(`Unable to load review session metadata: ${err.message}`,'error');}}\nfunction buildRevisionPayload(){const fieldEdits=[];const confirmedReviewPaths=[];const annotations=[];for(const card of document.querySelectorAll('.field-card')){const control=fieldControl(card);if(!control||card.classList.contains('readonly')){if(fieldConfirmInput(card)?.checked){confirmedReviewPaths.push(card.dataset.fieldPath||'');}continue;}const current=normalizeFieldValue(control);const initial=initialFieldValue(control);const changed=!valuesEqual(current,initial);const path=card.dataset.fieldPath||control.dataset.fieldPath||'';const reason=fieldReasonSelect(card)?.value||'';const note=(fieldNoteInput(card)?.value||'').trim();if(changed){fieldEdits.push({path,value:current,reason:reason||null,note:note||null,origin:'local_app.review_workbench'});if(reason){annotations.push({path,reason,note:note||null});}}if(fieldConfirmInput(card)?.checked){confirmedReviewPaths.push(path);}}\nreturn {base_version_id:reviewSessionState.currentDraftVersionId,actor_role:'financial_administrator',label:'FA saved revision',field_edits:fieldEdits,confirmed_review_paths:[...new Set(confirmedReviewPaths.filter(Boolean))],annotations};}\nfunction setWorkbenchStatus(message,tone){const target=document.getElementById('workbench-status');if(!target){return;}target.textContent=message;target.dataset.tone=tone;}\nasync function saveReviewChanges(){if(reviewSessionState.saveInFlight){return;}const payload=buildRevisionPayload();if(payload.field_edits.length===0&&payload.confirmed_review_paths.length===0){setWorkbenchStatus('No review changes to save.','neutral');return;}reviewSessionState.saveInFlight=true;setWorkbenchStatus('Saving review changes and recomputing readiness…','saving');refreshDirtySummary();try{const response=await fetch('review-session/save',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(payload)});const result=await response.json();if(!response.ok){throw new Error(result.error||`save failed (${response.status})`);}sessionStorage.setItem('reviewWorkbenchFlash',`Saved review revision v${result.version_id}. Readiness recomputed.`);window.location.reload();}catch(err){setWorkbenchStatus(`Save failed: ${err.message}`,'error');reviewSessionState.saveInFlight=false;refreshDirtySummary();}}\nfunction initializeReviewWorkbench(){for(const control of document.querySelectorAll('.field-control, .structured-row-input')){control.addEventListener('input',()=>syncCardStateFromEventTarget(control));control.addEventListener('change',()=>syncCardStateFromEventTarget(control));}\nfor(const editor of document.querySelectorAll('.structured-list-editor')){const rows=editor.querySelector('.structured-list-rows');const initial=parseJsonData(editor.dataset.initialJson,[]);if(rows&&rows.children.length===0&&Array.isArray(initial)){for(const rowValues of initial){rows.appendChild(structuredRowTemplate(editor,rowValues));}}}\nfor(const card of document.querySelectorAll('.field-card')){updateFieldDirtyState(card);}refreshDirtySummary();loadReviewSessionSummary();const flash=sessionStorage.getItem('reviewWorkbenchFlash');if(flash){setWorkbenchStatus(flash,'success');sessionStorage.removeItem('reviewWorkbenchFlash');}const saveButton=document.getElementById('save-review-button');const resetButton=document.getElementById('reset-review-button');const refreshButton=document.getElementById('reload-review-button');if(saveButton){saveButton.addEventListener('click',saveReviewChanges);}if(resetButton){resetButton.addEventListener('click',resetReviewForm);}if(refreshButton){refreshButton.addEventListener('click',()=>window.location.reload());}revealHashTarget();window.addEventListener('hashchange',revealHashTarget);}\nfunction hasDirtyFields(){return document.querySelectorAll('.field-card.dirty').length>0;}\nwindow.addEventListener('beforeunload',function(event){if(hasDirtyFields()&&!reviewSessionState.saveInFlight){event.preventDefault();event.returnValue='';}});\ndocument.addEventListener('keydown',function(event){if((event.metaKey||event.ctrlKey)&&event.key==='s'){event.preventDefault();saveReviewChanges();}});\ndocument.addEventListener('DOMContentLoaded',initializeReviewWorkbench);\n</script>\n",
+        "<script>\nconst reviewSessionState={currentDraftVersionId:null,saveInFlight:false};\nfunction fieldControl(card){return card?card.querySelector('.field-control'):null;}\nfunction issueCountLabel(count){return count===1?'1 change pending':`${count} changes pending`;}\nfunction openAncestorDetails(target){let current=target?.parentElement;while(current){if(current.tagName==='DETAILS'){current.open=true;}current=current.parentElement;}}\nfunction revealHashTarget(){const rawHash=window.location.hash||'';if(!rawHash||rawHash==='#'){return;}const target=document.getElementById(rawHash.slice(1));if(!target){return;}openAncestorDetails(target);target.scrollIntoView({behavior:'smooth',block:'center'});const focusTarget=target.matches('.field-card')?target.querySelector('.field-control, .structured-row-input'):target.querySelector?.('.field-control, .structured-row-input');if(focusTarget){focusTarget.focus();if(typeof focusTarget.select==='function'){focusTarget.select();}}}\nfunction jumpToField(event,targetId){const target=document.getElementById(targetId);if(!target){return;}event.preventDefault();openAncestorDetails(target);target.scrollIntoView({behavior:'smooth',block:'center'});window.location.hash=targetId;const focusTarget=target.querySelector('.field-control, .structured-row-input');if(focusTarget){focusTarget.focus();if(typeof focusTarget.select==='function'){focusTarget.select();}}}\nfunction flashCopy(button){button.textContent='Copied';setTimeout(()=>{button.textContent='Copy';},900);}\nfunction structuredRowsPayload(editor){if(!editor){return [];}const rows=[];for(const row of editor.querySelectorAll('.structured-row')){const values={};let hasAnyValue=false;for(const input of row.querySelectorAll('.structured-row-input')){const key=input.dataset.columnKey||'';let value=('value' in input)?input.value:'';if(input.dataset.columnControl==='checkbox'){value=input.value;}if(value!==''&&value!==null){hasAnyValue=true;}values[key]=value;}if(hasAnyValue){rows.push(values);}}return rows;}\nfunction valueForCopy(card){const control=fieldControl(card);if(!control){return '';}if(control.classList.contains('structured-list-editor')){const rows=structuredRowsPayload(control);if(rows.length===0){return '';}return rows.map((row,index)=>`${index+1}. `+Object.entries(row).filter(([,value])=>value!==''&&value!==null).map(([key,value])=>`${key}: ${value}`).join(' | ')).join('\\n');}if(control.tagName==='SELECT'){return control.value||'';}if('value' in control){return control.value||'';}return '';} \nfunction copyFieldValue(button){const card=button.closest('.field-card');if(!card){return;}const value=valueForCopy(card);if(!value){return;}navigator.clipboard.writeText(value);flashCopy(button);} \nfunction parseJsonData(value,fallback){if(!value){return fallback;}try{return JSON.parse(value);}catch(_err){return fallback;}}\nfunction normalizeFieldValue(control){if(!control){return null;}if(control.classList.contains('structured-list-editor')){const columns=parseJsonData(control.dataset.columnsJson,'[]');const rows=structuredRowsPayload(control).map((row)=>{const obj={};for(const column of columns){const raw=row[column.key]??'';if(raw===''){continue;}if(column.control==='checkbox'){obj[column.key]=raw==='true';}else{obj[column.key]=raw;}}return obj;});return rows.length===0?[]:rows;}if(control.dataset.control==='checkbox'){if(control.value===''){return null;}return control.value==='true';}if('value' in control){return control.value===''?null:control.value;}return null;}\nfunction initialFieldValue(control){if(!control){return null;}const fallback=control.classList.contains('structured-list-editor')?[]:null;return parseJsonData(control.dataset.initialJson,fallback);} \nfunction valuesEqual(left,right){return JSON.stringify(left)===JSON.stringify(right);} \nfunction fieldReasonSelect(card){return card.querySelector('.field-reason-select');}\nfunction fieldNoteInput(card){return card.querySelector('.field-note-input');}\nfunction fieldConfirmInput(card){return card.querySelector('.field-confirm-input');}\nfunction updateFieldDirtyState(card){const control=fieldControl(card);if(!control){return;}const edited=!valuesEqual(initialFieldValue(control),normalizeFieldValue(control));const confirmed=Boolean(fieldConfirmInput(card)?.checked);card.classList.toggle('dirty',edited||confirmed);const badge=card.querySelector('.field-dirty-badge');if(badge){badge.hidden=!(edited||confirmed);}}\nfunction refreshDirtySummary(){const dirtyCards=[...document.querySelectorAll('.field-card.dirty')];const counter=document.getElementById('pending-change-count');if(counter){counter.textContent=issueCountLabel(dirtyCards.length);}const saveButton=document.getElementById('save-review-button');const resetButton=document.getElementById('reset-review-button');if(saveButton){saveButton.disabled=reviewSessionState.saveInFlight||dirtyCards.length===0;}if(resetButton){resetButton.disabled=reviewSessionState.saveInFlight||dirtyCards.length===0;}}\nfunction syncCardStateFromEventTarget(target){const card=target.closest('.field-card');if(!card){return;}updateFieldDirtyState(card);refreshDirtySummary();}\nfunction structuredRowTemplate(editor,rowValues){const columns=parseJsonData(editor.dataset.columnsJson,[]);const row=document.createElement('div');row.className='structured-row';for(const column of columns){const cell=document.createElement('label');cell.className='structured-cell';const label=document.createElement('span');label.className='structured-cell-label';label.textContent=column.label;cell.appendChild(label);let input;if(column.control==='select'){input=document.createElement('select');const blank=document.createElement('option');blank.value='';blank.textContent='';input.appendChild(blank);for(const optionValue of column.allowed_values||[]){const option=document.createElement('option');option.value=optionValue;option.textContent=optionValue.replaceAll('_',' ');input.appendChild(option);}}else if(column.control==='checkbox'){input=document.createElement('select');[['','Unset'],['true','Yes'],['false','No']].forEach(([value,labelText])=>{const option=document.createElement('option');option.value=value;option.textContent=labelText;input.appendChild(option);});}else if(column.control==='date'){input=document.createElement('input');input.type='date';}else{input=document.createElement(column.control==='textarea'?'textarea':'input');if(input.tagName==='INPUT'){input.type='text';if(column.control==='currency'||column.control==='number'){input.inputMode='decimal';}}}input.className='structured-row-input';input.dataset.columnKey=column.key;input.dataset.columnControl=column.control;input.value=(rowValues&&rowValues[column.key])||'';input.addEventListener('input',()=>syncCardStateFromEventTarget(input));input.addEventListener('change',()=>syncCardStateFromEventTarget(input));cell.appendChild(input);row.appendChild(cell);}const removeButton=document.createElement('button');removeButton.type='button';removeButton.className='structured-row-remove';removeButton.textContent='Remove row';removeButton.addEventListener('click',()=>{row.remove();syncCardStateFromEventTarget(editor);});row.appendChild(removeButton);return row;}\nfunction addStructuredListRow(button){const editor=button.closest('.structured-list-editor');if(!editor){return;}const rows=editor.querySelector('.structured-list-rows');if(!rows){return;}rows.appendChild(structuredRowTemplate(editor,{}));syncCardStateFromEventTarget(editor);} \nfunction resetReviewForm(){for(const card of document.querySelectorAll('.field-card')){const control=fieldControl(card);if(!control){continue;}const initial=initialFieldValue(control);if(control.classList.contains('structured-list-editor')){const rows=control.querySelector('.structured-list-rows');if(rows){rows.innerHTML='';for(const rowValues of Array.isArray(initial)?initial:[]){rows.appendChild(structuredRowTemplate(control,rowValues));}}}else if(control.dataset.control==='checkbox'){control.value=initial===null?'':String(initial);}else if('value' in control){control.value=initial??'';}const reason=fieldReasonSelect(card);const note=fieldNoteInput(card);const confirm=fieldConfirmInput(card);if(reason){reason.value='';}if(note){note.value='';}if(confirm){confirm.checked=false;}updateFieldDirtyState(card);}setWorkbenchStatus('Unsaved review edits cleared.','neutral');refreshDirtySummary();revealHashTarget();}\nasync function loadReviewSessionSummary(){try{const response=await fetch('review-session',{headers:{'Accept':'application/json'}});if(!response.ok){throw new Error(`session lookup failed (${response.status})`);}const payload=await response.json();reviewSessionState.currentDraftVersionId=payload.current_draft_version_id;const versionLabel=document.getElementById('current-draft-version');if(versionLabel){versionLabel.textContent=`v${payload.current_draft_version_id}`;}const filingStatus=document.getElementById('current-filing-status');if(filingStatus){filingStatus.textContent=payload.filing_status.replaceAll('_',' ');}const previewLink=document.getElementById('preview-link');if(previewLink){if(payload.filing_status==='ready_to_file'){previewLink.classList.remove('link-disabled');}else{previewLink.classList.add('link-disabled');}} }catch(err){setWorkbenchStatus(`Unable to load review session metadata: ${err.message}`,'error');}}\nfunction buildRevisionPayload(){const fieldEdits=[];const confirmedReviewPaths=[];const annotations=[];for(const card of document.querySelectorAll('.field-card')){const control=fieldControl(card);if(!control||card.classList.contains('readonly')){if(fieldConfirmInput(card)?.checked){confirmedReviewPaths.push(card.dataset.fieldPath||'');}continue;}const current=normalizeFieldValue(control);const initial=initialFieldValue(control);const changed=!valuesEqual(current,initial);const path=card.dataset.fieldPath||control.dataset.fieldPath||'';const reason=fieldReasonSelect(card)?.value||'';const note=(fieldNoteInput(card)?.value||'').trim();if(changed){fieldEdits.push({path,value:current,reason:reason||null,note:note||null,origin:'local_app.review_workbench'});if(reason){annotations.push({path,reason,note:note||null});}}if(fieldConfirmInput(card)?.checked){confirmedReviewPaths.push(path);}}\nreturn {base_version_id:reviewSessionState.currentDraftVersionId,actor_role:'financial_administrator',label:'FA saved revision',field_edits:fieldEdits,confirmed_review_paths:[...new Set(confirmedReviewPaths.filter(Boolean))],annotations};}\nfunction setWorkbenchStatus(message,tone){const target=document.getElementById('workbench-status');if(!target){return;}target.textContent=message;target.dataset.tone=tone;}\nasync function saveReviewChanges(){if(reviewSessionState.saveInFlight){return;}const payload=buildRevisionPayload();if(payload.field_edits.length===0&&payload.confirmed_review_paths.length===0){setWorkbenchStatus('No review changes to save.','neutral');return;}reviewSessionState.saveInFlight=true;setWorkbenchStatus('Saving review changes and recomputing readiness…','saving');refreshDirtySummary();try{const response=await fetch('review-session/save',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(payload)});const result=await response.json();if(!response.ok){throw new Error(result.error||`save failed (${response.status})`);}sessionStorage.setItem('reviewWorkbenchFlash',`Saved review revision v${result.version_id}. Readiness recomputed.`);window.location.reload();}catch(err){setWorkbenchStatus(`Save failed: ${err.message}`,'error');reviewSessionState.saveInFlight=false;refreshDirtySummary();}}\nfunction initializeReviewWorkbench(){for(const control of document.querySelectorAll('.field-control, .structured-row-input')){control.addEventListener('input',()=>syncCardStateFromEventTarget(control));control.addEventListener('change',()=>syncCardStateFromEventTarget(control));}\nfor(const editor of document.querySelectorAll('.structured-list-editor')){const rows=editor.querySelector('.structured-list-rows');const initial=parseJsonData(editor.dataset.initialJson,[]);if(rows&&rows.children.length===0&&Array.isArray(initial)){for(const rowValues of initial){rows.appendChild(structuredRowTemplate(editor,rowValues));}}}\nfor(const card of document.querySelectorAll('.field-card')){updateFieldDirtyState(card);}refreshDirtySummary();loadReviewSessionSummary();const flash=sessionStorage.getItem('reviewWorkbenchFlash');if(flash){setWorkbenchStatus(flash,'success');sessionStorage.removeItem('reviewWorkbenchFlash');}const saveButton=document.getElementById('save-review-button');const resetButton=document.getElementById('reset-review-button');const refreshButton=document.getElementById('reload-review-button');if(saveButton){saveButton.addEventListener('click',saveReviewChanges);}if(resetButton){resetButton.addEventListener('click',resetReviewForm);}if(refreshButton){refreshButton.addEventListener('click',()=>window.location.reload());}revealHashTarget();window.addEventListener('hashchange',revealHashTarget);}\nfunction hasDirtyFields(){return document.querySelectorAll('.field-card.dirty').length>0;}\nwindow.addEventListener('beforeunload',function(event){if(hasDirtyFields()&&!reviewSessionState.saveInFlight){event.preventDefault();event.returnValue='';}});\ndocument.addEventListener('keydown',function(event){if((event.metaKey||event.ctrlKey)&&event.key==='s'){event.preventDefault();saveReviewChanges();}});\ndocument.addEventListener('DOMContentLoaded',initializeReviewWorkbench);\n</script>\n",
     );
     html.push_str("</head>\n<body>\n<div class=\"shell\">\n");
 
@@ -135,7 +135,7 @@ fn render_header(html: &mut String, packet: &ReviewPacket) {
         html,
         "Readiness",
         &format!(
-            "{} automation · {} user input · {} review",
+            "{} to extract · {} to fill in · {} to review",
             packet.summary.readiness.automation_gap_count,
             packet.summary.readiness.user_input_gap_count,
             packet.summary.readiness.manual_review_count
@@ -170,18 +170,8 @@ fn render_toolbar(html: &mut String) {
     html.push_str("<p class=\"toolbar-count\" id=\"pending-change-count\">0 changes pending</p>");
     html.push_str("</div>");
     html.push_str("<div class=\"toolbar-links\">");
+    html.push_str("<a href=\"preview\" id=\"preview-link\" class=\"link-disabled\" data-requires-ready=\"true\">Final Preview</a>");
     html.push_str("<a href=\"overview\">Bundle Overview</a>");
-    html.push_str(
-        "<a href=\"artifact/draft.yaml\" target=\"_blank\" rel=\"noreferrer\">Draft YAML</a>",
-    );
-    html.push_str("<a href=\"artifact/review_packet.json\" target=\"_blank\" rel=\"noreferrer\">Review Packet JSON</a>");
-    html.push_str(
-        "<a href=\"artifact/ledger.json\" target=\"_blank\" rel=\"noreferrer\">Ledger JSON</a>",
-    );
-    html.push_str(
-        "<a href=\"review-session\" target=\"_blank\" rel=\"noreferrer\">Session Summary</a>",
-    );
-    html.push_str("<a href=\"manifest\" target=\"_blank\" rel=\"noreferrer\">Bundle Manifest</a>");
     html.push_str("</div>");
     html.push_str("</section>\n");
 }
@@ -207,7 +197,7 @@ fn render_issues_panel(
             html.push_str("\">\n");
             html.push_str("<div class=\"issue-topline\">");
             html.push_str("<span class=\"issue-class\">");
-            html.push_str(&escape_html(issue_class_name(issue.class)));
+            html.push_str(&escape_html(issue_class_label(issue.class)));
             html.push_str("</span>");
             if let Some(source) = issue.source.as_deref() {
                 html.push_str("<span class=\"issue-source\">");
@@ -1649,6 +1639,15 @@ fn issue_class_name(class: crate::ReadinessIssueClass) -> &'static str {
     }
 }
 
+fn issue_class_label(class: crate::ReadinessIssueClass) -> &'static str {
+    match class {
+        crate::ReadinessIssueClass::AutomationGap => "could not extract",
+        crate::ReadinessIssueClass::UserInputRequired => "needs your input",
+        crate::ReadinessIssueClass::ManualReview => "review required",
+        crate::ReadinessIssueClass::OtherWarning => "warning",
+    }
+}
+
 fn escape_html(value: &str) -> String {
     value
         .replace('&', "&amp;")
@@ -2278,5 +2277,229 @@ mod tests {
         assert!(rendered.contains("Open OCR diff"));
         assert!(rendered.contains("Open grounded source"));
         assert!(rendered.contains("Recovered via contrast_boosted preprocessing"));
+    }
+
+    #[test]
+    fn toolbar_contains_preview_link_with_requires_ready_attribute() {
+        let provider = StaticFxRateProvider::demo();
+        let projection = synthesize_bundle_projection_with_fx(&synthetic_documents(), &provider);
+        let packet = build_review_packet(
+            &projection.bundle,
+            &projection.draft,
+            &projection.validation,
+        )
+        .expect("review packet should build");
+        let rendered = render_review_workbench_html(&packet);
+
+        assert!(
+            rendered.contains("id=\"preview-link\""),
+            "toolbar must contain a preview link with id"
+        );
+        assert!(
+            rendered.contains("data-requires-ready=\"true\""),
+            "preview link must have data-requires-ready attribute"
+        );
+        assert!(
+            rendered.contains("Final Preview"),
+            "preview link must say 'Final Preview'"
+        );
+    }
+
+    #[test]
+    fn toolbar_preview_link_starts_disabled() {
+        let provider = StaticFxRateProvider::demo();
+        let projection = synthesize_bundle_projection_with_fx(&synthetic_documents(), &provider);
+        let packet = build_review_packet(
+            &projection.bundle,
+            &projection.draft,
+            &projection.validation,
+        )
+        .expect("review packet should build");
+        let rendered = render_review_workbench_html(&packet);
+
+        assert!(
+            rendered.contains("class=\"link-disabled\""),
+            "preview link must start with link-disabled class"
+        );
+    }
+
+    #[test]
+    fn toolbar_preview_link_href_is_relative() {
+        let provider = StaticFxRateProvider::demo();
+        let projection = synthesize_bundle_projection_with_fx(&synthetic_documents(), &provider);
+        let packet = build_review_packet(
+            &projection.bundle,
+            &projection.draft,
+            &projection.validation,
+        )
+        .expect("review packet should build");
+        let rendered = render_review_workbench_html(&packet);
+
+        assert!(
+            rendered.contains("href=\"preview\""),
+            "preview link href must be relative 'preview'"
+        );
+    }
+
+    #[test]
+    fn css_contains_link_disabled_style() {
+        let provider = StaticFxRateProvider::demo();
+        let projection = synthesize_bundle_projection_with_fx(&synthetic_documents(), &provider);
+        let packet = build_review_packet(
+            &projection.bundle,
+            &projection.draft,
+            &projection.validation,
+        )
+        .expect("review packet should build");
+        let rendered = render_review_workbench_html(&packet);
+
+        assert!(
+            rendered.contains(".link-disabled"),
+            "CSS must include a .link-disabled rule"
+        );
+        assert!(
+            rendered.contains("pointer-events: none"),
+            ".link-disabled must disable pointer events"
+        );
+    }
+
+    #[test]
+    fn issues_panel_shows_empty_state_when_no_issues() {
+        let packet = crate::review_packet::ReviewPacket {
+            summary: crate::review_packet::PacketSummary {
+                filing_status: crate::review_packet::FilingStatus::ReadyToFile,
+                payee_name: Some("Test User".to_owned()),
+                event_name: Some("Test Event".to_owned()),
+                trip_window: None,
+                report_total_usd: None,
+                category: None,
+                transaction_type: None,
+                transaction_line_count: 0,
+                document_count: 0,
+                readiness: crate::review_packet::ReviewReadinessSummary {
+                    automation_gap_count: 0,
+                    user_input_gap_count: 0,
+                    manual_review_count: 0,
+                    other_warning_count: 0,
+                },
+                confidence: crate::review_packet::ConfidenceSummary {
+                    high: 0,
+                    medium: 0,
+                    low: 0,
+                    needs_review: 0,
+                },
+            },
+            issues_queue: Vec::new(),
+            copy_sections: Vec::new(),
+            attachment_checklist: Vec::new(),
+            document_snapshots: Vec::new(),
+        };
+        let rendered = render_review_workbench_html(&packet);
+
+        assert!(
+            rendered.contains("No blocking or review issues"),
+            "empty issues queue should show the empty-state message"
+        );
+    }
+
+    #[test]
+    fn issues_panel_renders_all_issue_classes() {
+        use crate::review_packet::*;
+        use crate::ReadinessIssueClass;
+
+        let packet = ReviewPacket {
+            summary: PacketSummary {
+                filing_status: FilingStatus::AutomationBlocked,
+                payee_name: Some("Test".to_owned()),
+                event_name: Some("Test".to_owned()),
+                trip_window: None,
+                report_total_usd: None,
+                category: None,
+                transaction_type: None,
+                transaction_line_count: 0,
+                document_count: 0,
+                readiness: ReviewReadinessSummary {
+                    automation_gap_count: 1,
+                    user_input_gap_count: 1,
+                    manual_review_count: 1,
+                    other_warning_count: 0,
+                },
+                confidence: ConfidenceSummary {
+                    high: 0,
+                    medium: 0,
+                    low: 0,
+                    needs_review: 0,
+                },
+            },
+            issues_queue: vec![
+                ReviewIssueEntry {
+                    class: ReadinessIssueClass::AutomationGap,
+                    label: "Missing FX rate".to_owned(),
+                    path: "expense_report.total_usd".to_owned(),
+                    message: "Cannot compute total USD".to_owned(),
+                    source: None,
+                    current_value: None,
+                },
+                ReviewIssueEntry {
+                    class: ReadinessIssueClass::UserInputRequired,
+                    label: "Authorized By required".to_owned(),
+                    path: "expense_report.general_information.authorized_by".to_owned(),
+                    message: "Must be filled by FA".to_owned(),
+                    source: None,
+                    current_value: None,
+                },
+                ReviewIssueEntry {
+                    class: ReadinessIssueClass::ManualReview,
+                    label: "Review total".to_owned(),
+                    path: "expense_report.total".to_owned(),
+                    message: "Please verify".to_owned(),
+                    source: None,
+                    current_value: None,
+                },
+            ],
+            copy_sections: Vec::new(),
+            attachment_checklist: Vec::new(),
+            document_snapshots: Vec::new(),
+        };
+        let rendered = render_review_workbench_html(&packet);
+
+        assert!(
+            rendered.contains("automation-gap"),
+            "must render automation-gap issue class"
+        );
+        assert!(
+            rendered.contains("user-input-required"),
+            "must render user-input-required issue class"
+        );
+        assert!(
+            rendered.contains("manual-review"),
+            "must render manual-review issue class"
+        );
+    }
+
+    #[test]
+    fn js_toggles_preview_link_based_on_filing_status() {
+        let provider = StaticFxRateProvider::demo();
+        let projection = synthesize_bundle_projection_with_fx(&synthetic_documents(), &provider);
+        let packet = build_review_packet(
+            &projection.bundle,
+            &projection.draft,
+            &projection.validation,
+        )
+        .expect("review packet should build");
+        let rendered = render_review_workbench_html(&packet);
+
+        assert!(
+            rendered.contains("preview-link"),
+            "JS must reference preview-link element"
+        );
+        assert!(
+            rendered.contains("ready_to_file"),
+            "JS must check for ready_to_file status"
+        );
+        assert!(
+            rendered.contains("link-disabled"),
+            "JS must toggle link-disabled class"
+        );
     }
 }

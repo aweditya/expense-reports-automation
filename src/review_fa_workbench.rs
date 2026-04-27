@@ -19,7 +19,7 @@ pub fn render_fa_workbench_html(packet: &ReviewPacket) -> String {
     let mut html = String::new();
     html.push_str("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n");
     html.push_str(
-        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>FA Workbench</title>\n",
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>Expense Report Workbench</title>\n",
     );
     html.push_str("<style>\n");
     html.push_str(
@@ -131,8 +131,8 @@ pub fn render_fa_workbench_html(packet: &ReviewPacket) -> String {
          function fieldNeedsReview(card){if(!card||card.dataset.needsReview!=='true'){return false;}if(fieldConfirmInput(card)?.checked){return false;}return !card.classList.contains('dirty');}\
          function fieldNeedsManualAttention(card){return fieldNeedsRequiredInput(card)||fieldNeedsReview(card);}\
          function updateFieldDirtyState(card){const control=fieldControl(card);const edited=control?!valuesEqual(initialFieldValue(control),normalizeFieldValue(control)):false;const confirmed=Boolean(fieldConfirmInput(card)?.checked);card.classList.toggle('dirty',edited||confirmed);const badge=card.querySelector('.field-dirty-badge');if(badge){badge.hidden=!(edited||confirmed);}}\
-         function refreshIssueQueue(){const actionableIssueCards=[...document.querySelectorAll('.issue-card[data-queue-group=\"actionable\"]')];let visibleActionableIssues=0;for(const issueCard of actionableIssueCards){const targetId=issueCard.dataset.targetId||'';const targetCard=targetId?document.getElementById(targetId):null;const hide=targetCard?(!fieldNeedsManualAttention(targetCard)):false;issueCard.hidden=hide;if(!hide){visibleActionableIssues+=1;}}const systemIssueCards=[...document.querySelectorAll('.issue-card[data-queue-group=\"system\"]')];const visibleSystemIssues=systemIssueCards.filter((card)=>!card.hidden).length;const actionableSection=document.getElementById('actionable-issues-section');if(actionableSection){actionableSection.hidden=visibleActionableIssues===0;}const systemSection=document.getElementById('system-issues-section');if(systemSection){systemSection.hidden=visibleSystemIssues===0;}const emptyState=document.getElementById('issue-queue-empty-state');const generatedCount=document.querySelectorAll('.field-card[data-generated-after-save=\"true\"]').length;if(emptyState){if(visibleActionableIssues>0||visibleSystemIssues>0){emptyState.hidden=true;}else{emptyState.hidden=false;emptyState.textContent=generatedCount>0?`No manual review or system items are currently listed here. Save and recompute to generate ${generatedCount===1?'1 system field':`${generatedCount} system fields`} and refresh the preview.`:'No queue items remain on this page. Save and recompute, then open final preview.';}}const queueCount=document.getElementById('issue-queue-count');if(queueCount){const totalVisible=visibleActionableIssues+visibleSystemIssues;queueCount.textContent=totalVisible===0?'Nothing still needs attention':totalVisible===1?'1 item still needs attention':`${totalVisible} items still need attention`;}const actionableCount=document.getElementById('actionable-issue-count');if(actionableCount){actionableCount.textContent=visibleActionableIssues===0?'No editable items still need attention':visibleActionableIssues===1?'1 editable item still needs attention':`${visibleActionableIssues} editable items still need attention`;}const systemCount=document.getElementById('system-issue-count');if(systemCount){systemCount.textContent=visibleSystemIssues===0?'No system items are waiting on recompute':visibleSystemIssues===1?'1 system item will refresh after save':`${visibleSystemIssues} system items will refresh after save`;}}\
-         function refreshLocalReadiness(){const actionableCards=[...document.querySelectorAll('.field-card')].filter(fieldNeedsManualAttention);const generatedCount=document.querySelectorAll('.field-card[data-generated-after-save=\"true\"]').length;const systemIssueCount=[...document.querySelectorAll('.issue-card[data-queue-group=\"system\"]')].filter((card)=>!card.hidden).length;const readiness=document.getElementById('action-queue-status');if(readiness){if(actionableCards.length>0){readiness.textContent=actionableCards.length===1?'1 field still needs attention before you save.':`${actionableCards.length} fields still need attention before you save.`;readiness.dataset.tone='attention';}else if(systemIssueCount>0){readiness.textContent=systemIssueCount===1?'All editable fields are complete. Save and recompute to refresh 1 remaining system item.':`All editable fields are complete. Save and recompute to refresh ${systemIssueCount} remaining system items.`;readiness.dataset.tone='ready';}else if(generatedCount>0){readiness.textContent=generatedCount===1?'All editable fields are complete. Save and recompute to generate 1 system field and refresh the preview.':`All editable fields are complete. Save and recompute to generate ${generatedCount} system fields and refresh the preview.`;readiness.dataset.tone='ready';}else{readiness.textContent='All required fields on this page are complete. Save and recompute, then open final preview.';readiness.dataset.tone='ready';}}refreshIssueQueue();}\
+         function refreshIssueQueue(){const actionableIssueCards=[...document.querySelectorAll('.issue-card[data-queue-group=\"actionable\"]')];let visibleActionableIssues=0;for(const issueCard of actionableIssueCards){const targetId=issueCard.dataset.targetId||'';const targetCard=targetId?document.getElementById(targetId):null;const hide=targetCard?(!fieldNeedsManualAttention(targetCard)):false;issueCard.hidden=hide;if(!hide){visibleActionableIssues+=1;}}const systemIssueCards=[...document.querySelectorAll('.issue-card[data-queue-group=\"system\"]')];const visibleSystemIssues=systemIssueCards.filter((card)=>!card.hidden).length;const actionableSection=document.getElementById('actionable-issues-section');if(actionableSection){actionableSection.hidden=visibleActionableIssues===0;}const systemSection=document.getElementById('system-issues-section');if(systemSection){systemSection.hidden=visibleSystemIssues===0;}const emptyState=document.getElementById('issue-queue-empty-state');const generatedCount=document.querySelectorAll('.field-card[data-generated-after-save=\"true\"]').length;if(emptyState){if(visibleActionableIssues>0||visibleSystemIssues>0){emptyState.hidden=true;}else{emptyState.hidden=false;emptyState.textContent=generatedCount>0?`All items you can edit are complete. Save Changes to generate ${generatedCount===1?'1 computed field':`${generatedCount} computed fields`} and refresh the preview.`:'Everything looks good. Save Changes, then open the final preview.';}}const queueCount=document.getElementById('issue-queue-count');if(queueCount){const totalVisible=visibleActionableIssues+visibleSystemIssues;queueCount.textContent=totalVisible===0?'Nothing still needs attention':totalVisible===1?'1 item still needs attention':`${totalVisible} items still need attention`;}const actionableCount=document.getElementById('actionable-issue-count');if(actionableCount){actionableCount.textContent=visibleActionableIssues===0?'No editable items still need attention':visibleActionableIssues===1?'1 editable item still needs attention':`${visibleActionableIssues} editable items still need attention`;}const systemCount=document.getElementById('system-issue-count');if(systemCount){systemCount.textContent=visibleSystemIssues===0?'No additional items pending':visibleSystemIssues===1?'1 item will update after you save':`${visibleSystemIssues} items will update after you save`;}}\
+         function refreshLocalReadiness(){const actionableCards=[...document.querySelectorAll('.field-card')].filter(fieldNeedsManualAttention);const generatedCount=document.querySelectorAll('.field-card[data-generated-after-save=\"true\"]').length;const systemIssueCount=[...document.querySelectorAll('.issue-card[data-queue-group=\"system\"]')].filter((card)=>!card.hidden).length;const readiness=document.getElementById('action-queue-status');if(readiness){if(actionableCards.length>0){readiness.textContent=actionableCards.length===1?'1 field still needs attention before you save.':`${actionableCards.length} fields still need attention before you save.`;readiness.dataset.tone='attention';}else if(systemIssueCount>0){readiness.textContent=systemIssueCount===1?'All editable fields are complete. Save Changes to update 1 remaining item.':`All editable fields are complete. Save Changes to refresh ${systemIssueCount} remaining items.`;readiness.dataset.tone='ready';}else if(generatedCount>0){readiness.textContent=generatedCount===1?'All editable fields are complete. Save Changes to generate 1 computed field and refresh the preview.':`All editable fields are complete. Save Changes to generate ${generatedCount} computed fields and refresh the preview.`;readiness.dataset.tone='ready';}else{readiness.textContent='All required fields on this page are complete. Save Changes, then open final preview.';readiness.dataset.tone='ready';}}refreshIssueQueue();}\
          function refreshDirtySummary(){const dirtyCards=[...document.querySelectorAll('.field-card.dirty')];const counter=document.getElementById('pending-change-count');if(counter){counter.textContent=issueCountLabel(dirtyCards.length);}const saveButton=document.getElementById('save-review-button');const resetButton=document.getElementById('reset-review-button');if(saveButton){saveButton.disabled=reviewSessionState.saveInFlight||dirtyCards.length===0;}if(resetButton){resetButton.disabled=reviewSessionState.saveInFlight||dirtyCards.length===0;}refreshLocalReadiness();}\
          function syncCardStateFromEventTarget(target){const card=target.closest('.field-card');if(!card){return;}updateFieldDirtyState(card);refreshDirtySummary();}\
          function structuredRowTemplate(editor,rowValues){const columns=parseJsonData(editor.dataset.columnsJson,[]);const row=document.createElement('div');row.className='structured-row';for(const column of columns){const cell=document.createElement('label');cell.className='structured-cell';const label=document.createElement('span');label.className='structured-cell-label';label.textContent=column.label;cell.appendChild(label);let input;if(column.control==='select'){input=document.createElement('select');const blank=document.createElement('option');blank.value='';blank.textContent='';input.appendChild(blank);for(const optionValue of column.allowed_values||[]){const option=document.createElement('option');option.value=optionValue;option.textContent=optionValue.replaceAll('_',' ');input.appendChild(option);}}else if(column.control==='checkbox'){input=document.createElement('select');[['','Unset'],['true','Yes'],['false','No']].forEach(([value,labelText])=>{const option=document.createElement('option');option.value=value;option.textContent=labelText;input.appendChild(option);});}else if(column.control==='date'){input=document.createElement('input');input.type='date';}else{input=document.createElement(column.control==='textarea'?'textarea':'input');if(input.tagName==='INPUT'){input.type='text';if(column.control==='currency'||column.control==='number'){input.inputMode='decimal';}}}input.className='structured-row-input';input.dataset.columnKey=column.key;input.dataset.columnControl=column.control;input.value=(rowValues&&rowValues[column.key])||'';input.addEventListener('input',()=>syncCardStateFromEventTarget(input));input.addEventListener('change',()=>syncCardStateFromEventTarget(input));cell.appendChild(input);row.appendChild(cell);}const removeButton=document.createElement('button');removeButton.type='button';removeButton.className='structured-row-remove';removeButton.textContent='Remove row';removeButton.addEventListener('click',()=>{row.remove();syncCardStateFromEventTarget(editor);});row.appendChild(removeButton);return row;}\
@@ -141,7 +141,7 @@ pub fn render_fa_workbench_html(packet: &ReviewPacket) -> String {
          async function loadReviewSessionSummary(){try{const response=await fetch('review-session',{headers:{'Accept':'application/json'}});if(!response.ok){throw new Error(`session lookup failed (${response.status})`);}const payload=await response.json();reviewSessionState.currentDraftVersionId=payload.current_draft_version_id;const versionLabel=document.getElementById('current-draft-version');if(versionLabel){versionLabel.textContent=`v${payload.current_draft_version_id}`;}const filingStatus=document.getElementById('current-filing-status');if(filingStatus){filingStatus.textContent=payload.filing_status.replaceAll('_',' ');}}catch(err){setWorkbenchStatus(`Unable to load review session metadata: ${err.message}`,'error');}}\
          function buildRevisionPayload(){const fieldEdits=[];const confirmedReviewPaths=[];const annotations=[];for(const card of document.querySelectorAll('.field-card')){const control=fieldControl(card);if(!control||card.classList.contains('readonly')){if(fieldConfirmInput(card)?.checked){confirmedReviewPaths.push(card.dataset.fieldPath||'');}continue;}const current=normalizeFieldValue(control);const initial=initialFieldValue(control);const changed=!valuesEqual(current,initial);const path=card.dataset.fieldPath||control.dataset.fieldPath||'';const reason=fieldReasonSelect(card)?.value||'';const note=(fieldNoteInput(card)?.value||'').trim();if(changed){fieldEdits.push({path,value:current,reason:reason||null,note:note||null,origin:'local_app.fa_workbench'});if(reason){annotations.push({path,reason,note:note||null});}}if(fieldConfirmInput(card)?.checked){confirmedReviewPaths.push(path);}}return {base_version_id:reviewSessionState.currentDraftVersionId,actor_role:'financial_administrator',label:'FA saved revision',field_edits:fieldEdits,confirmed_review_paths:[...new Set(confirmedReviewPaths.filter(Boolean))],annotations};}\
          function setWorkbenchStatus(message,tone){const target=document.getElementById('workbench-status');if(!target){return;}target.textContent=message;target.dataset.tone=tone;}\
-         async function saveReviewChanges(){if(reviewSessionState.saveInFlight){return;}const payload=buildRevisionPayload();if(payload.field_edits.length===0&&payload.confirmed_review_paths.length===0){setWorkbenchStatus('No review changes to save.','neutral');return;}reviewSessionState.saveInFlight=true;setWorkbenchStatus('Saving review changes and recomputing readiness…','saving');refreshDirtySummary();try{const response=await fetch('review-session/save',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(payload)});const result=await response.json();if(!response.ok){throw new Error(result.error||`save failed (${response.status})`);}sessionStorage.setItem('reviewWorkbenchFlash',`Saved review revision v${result.version_id}. Readiness recomputed.`);window.location.reload();}catch(err){setWorkbenchStatus(`Save failed: ${err.message}`,'error');reviewSessionState.saveInFlight=false;refreshDirtySummary();}}\
+         async function saveReviewChanges(){if(reviewSessionState.saveInFlight){return;}const payload=buildRevisionPayload();if(payload.field_edits.length===0&&payload.confirmed_review_paths.length===0){setWorkbenchStatus('No review changes to save.','neutral');return;}reviewSessionState.saveInFlight=true;setWorkbenchStatus('Saving your changes…','saving');refreshDirtySummary();try{const response=await fetch('review-session/save',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(payload)});const result=await response.json();if(!response.ok){throw new Error(result.error||`save failed (${response.status})`);}sessionStorage.setItem('reviewWorkbenchFlash',`Changes saved (v${result.version_id}). Status updated.`);window.location.reload();}catch(err){setWorkbenchStatus(`Save failed: ${err.message}`,'error');reviewSessionState.saveInFlight=false;refreshDirtySummary();}}\
          function initializeReviewWorkbench(){for(const control of document.querySelectorAll('.field-control, .structured-row-input')){control.addEventListener('input',()=>syncCardStateFromEventTarget(control));control.addEventListener('change',()=>syncCardStateFromEventTarget(control));}for(const editor of document.querySelectorAll('.structured-list-editor')){const rows=editor.querySelector('.structured-list-rows');const initial=parseJsonData(editor.dataset.initialJson,[]);if(rows&&rows.children.length===0&&Array.isArray(initial)){for(const rowValues of initial){rows.appendChild(structuredRowTemplate(editor,rowValues));}}}for(const card of document.querySelectorAll('.field-card')){updateFieldDirtyState(card);}refreshDirtySummary();loadReviewSessionSummary();const flash=sessionStorage.getItem('reviewWorkbenchFlash');if(flash){setWorkbenchStatus(flash,'success');sessionStorage.removeItem('reviewWorkbenchFlash');}document.getElementById('save-review-button')?.addEventListener('click',saveReviewChanges);document.getElementById('reset-review-button')?.addEventListener('click',resetReviewForm);document.getElementById('reload-review-button')?.addEventListener('click',()=>window.location.reload());}\
          function hasDirtyFields(){return document.querySelectorAll('.field-card.dirty').length>0;}\
          window.addEventListener('beforeunload',function(event){if(hasDirtyFields()&&!reviewSessionState.saveInFlight){event.preventDefault();event.returnValue='';}});\
@@ -162,7 +162,9 @@ pub fn render_fa_workbench_html(packet: &ReviewPacket) -> String {
 
 fn render_header(html: &mut String, packet: &ReviewPacket) {
     html.push_str("<header class=\"hero\"><div class=\"hero-grid\"><div>");
-    html.push_str("<p class=\"eyebrow\">FA Filing Surface</p><h1>Expense Report Workbench</h1>");
+    html.push_str(
+        "<p class=\"eyebrow\">Stanford Expense Reports</p><h1>Expense Report Workbench</h1>",
+    );
     html.push_str("<p class=\"hero-status\">");
     html.push_str(filing_status_label(packet.summary.filing_status));
     html.push_str("</p><p class=\"hero-subtitle\">");
@@ -216,18 +218,17 @@ fn render_header(html: &mut String, packet: &ReviewPacket) {
 
 fn render_toolbar(html: &mut String) {
     html.push_str("<section class=\"toolbar\">");
-    html.push_str("<div class=\"toolbar-main\"><div><p class=\"eyebrow\">Review Session</p><h2>Editable filing surface</h2><p class=\"toolbar-meta\">Current draft <span id=\"current-draft-version\">v?</span> · filing status <span id=\"current-filing-status\">loading…</span></p></div>");
+    html.push_str("<div class=\"toolbar-main\"><div><p class=\"eyebrow\">Review Session</p><h2>Your Expense Report</h2><p class=\"toolbar-meta\">Draft <span id=\"current-draft-version\">v?</span> · <span id=\"current-filing-status\">loading…</span></p></div>");
     html.push_str("<div class=\"toolbar-actions\">");
-    html.push_str("<button class=\"primary-button\" id=\"save-review-button\" type=\"button\">Save and recompute</button>");
-    html.push_str("<button class=\"secondary-button\" id=\"reset-review-button\" type=\"button\">Reset unsaved changes</button>");
+    html.push_str("<button class=\"primary-button\" id=\"save-review-button\" type=\"button\">Save Changes</button>");
+    html.push_str("<button class=\"secondary-button\" id=\"reset-review-button\" type=\"button\" onclick=\"if(!confirm('Discard all unsaved changes?'))event.stopImmediatePropagation()\">Reset unsaved changes</button>");
     html.push_str("<button class=\"ghost-button\" id=\"reload-review-button\" type=\"button\">Reload</button>");
     html.push_str("</div></div>");
-    html.push_str("<div class=\"toolbar-subrow\"><p class=\"toolbar-status\" id=\"workbench-status\" data-tone=\"neutral\">Fill the missing values, adjust any fields that need review, then save to create a reviewed draft version.</p><p class=\"toolbar-count\" id=\"action-queue-status\" data-tone=\"attention\">Checking what still needs attention…</p><p class=\"toolbar-count\" id=\"pending-change-count\">0 changes pending</p></div>");
+    html.push_str("<div class=\"toolbar-subrow\"><p class=\"toolbar-status\" id=\"workbench-status\" data-tone=\"neutral\">Fill in the highlighted fields below, then click Save Changes when you are done.</p><p class=\"toolbar-count\" id=\"action-queue-status\" data-tone=\"attention\">Checking what still needs attention…</p><p class=\"toolbar-count\" id=\"pending-change-count\">0 changes pending</p></div>");
     html.push_str("<div class=\"toolbar-links\">");
-    html.push_str("<a class=\"nav-link\" href=\"preview\">Open final preview</a>");
-    html.push_str("<a class=\"nav-link\" href=\"overview\">Bundle overview</a>");
-    html.push_str("<a class=\"nav-link\" href=\"artifact/draft.yaml\" target=\"_blank\" rel=\"noreferrer\">Draft YAML</a>");
-    html.push_str("<a class=\"nav-link\" href=\"review-session\" target=\"_blank\" rel=\"noreferrer\">Session summary</a>");
+    html.push_str("<a class=\"nav-link\" href=\"preview\">Final Preview</a>");
+    html.push_str("<a class=\"nav-link\" href=\"overview\">Report Overview</a>");
+    html.push_str("<a class=\"nav-link\" href=\"/\">Upload New Report</a>");
     html.push_str("</div></section>");
 }
 
@@ -258,7 +259,7 @@ fn render_issues_panel(html: &mut String, packet: &ReviewPacket, index: &Workben
     }
     html.push_str("</p>");
     if total_issue_count == 0 {
-        html.push_str("<p class=\"field-guidance\" id=\"issue-queue-empty-state\">No queue items remain on this page. Save and recompute, then open final preview.</p>");
+        html.push_str("<p class=\"field-guidance\" id=\"issue-queue-empty-state\">Everything looks good. Save Changes, then open the final preview.</p>");
     } else {
         html.push_str("<p class=\"field-guidance\" id=\"issue-queue-empty-state\" hidden></p>");
         html.push_str("<section id=\"actionable-issues-section\"");
@@ -301,7 +302,7 @@ fn render_issues_panel(html: &mut String, packet: &ReviewPacket, index: &Workben
                 html.push_str("')\">Jump to field</a>");
             }
             html.push_str("</div><p class=\"issue-message\">");
-            html.push_str(&escape_html(&issue.message));
+            html.push_str(&escape_html(&friendly_issue_message(&issue.message)));
             html.push_str("</p></article>");
         }
         html.push_str("</div></section>");
@@ -311,12 +312,12 @@ fn render_issues_panel(html: &mut String, packet: &ReviewPacket, index: &Workben
         }
         html.push_str("><p class=\"field-guidance\" id=\"system-issue-count\">");
         if system_issues.is_empty() {
-            html.push_str("No system items are waiting on recompute");
+            html.push_str("No additional items pending");
         } else if system_issues.len() == 1 {
-            html.push_str("1 system item will refresh after save");
+            html.push_str("1 item will update after you save");
         } else {
             html.push_str(&format!(
-                "{} system items will refresh after save",
+                "{} items will update after you save",
                 system_issues.len()
             ));
         }
@@ -344,7 +345,7 @@ fn render_issues_panel(html: &mut String, packet: &ReviewPacket, index: &Workben
                 html.push_str("')\">Open field</a>");
             }
             html.push_str("</div><p class=\"issue-message\">");
-            html.push_str(&escape_html(&issue.message));
+            html.push_str(&escape_html(&friendly_issue_message(&issue.message)));
             html.push_str("</p></article>");
         }
         html.push_str("</div></section>");
@@ -353,7 +354,7 @@ fn render_issues_panel(html: &mut String, packet: &ReviewPacket, index: &Workben
 }
 
 fn render_editor_panel(html: &mut String, packet: &ReviewPacket, index: &WorkbenchIndex) {
-    html.push_str("<section class=\"editor-panel\"><div class=\"editor-header\"><div><p class=\"eyebrow\">Filing Form</p><h2>Sections to complete</h2></div><p class=\"field-hint\">Use the queue on the left to jump to open items. Missing fields need your input, “Check this field” means a value exists but should be confirmed, and computed fields are system-generated.</p></div>");
+    html.push_str("<section class=\"editor-panel\"><div class=\"editor-header\"><div><p class=\"eyebrow\">Filing Form</p><h2>Sections to complete</h2></div><p class=\"field-hint\">Use the queue on the left to jump to open items. Missing fields need your input, “Please review” means a value was extracted but should be confirmed, and computed fields are system-generated.</p></div>");
     html.push_str("<div class=\"section-stack\">");
     for section in &packet.copy_sections {
         render_section(html, section, index);
@@ -710,7 +711,7 @@ fn render_review_controls(html: &mut String, field: &CopyField) {
             html.push_str("</option>");
         }
         html.push_str("</select></label>");
-        html.push_str("<label class=\"field-hint\">Review note<textarea class=\"field-note-input\" placeholder=\"Optional note for the ledger and feedback history\" oninput=\"syncCardStateFromEventTarget(this)\"></textarea></label></div>");
+        html.push_str("<label class=\"field-hint\">Review note<textarea class=\"field-note-input\" placeholder=\"Optional note about this change\" oninput=\"syncCardStateFromEventTarget(this)\"></textarea></label></div>");
     }
     html.push_str("</details>");
 }
@@ -731,11 +732,8 @@ fn render_inline_evidence(html: &mut String, field: &CopyField) {
             html.push_str(&escape_html(source));
             html.push_str("</p>");
         }
-        if let Some(origin) = evidence.origin.as_deref() {
-            html.push_str("<p class=\"evidence-detail\">Origin: ");
-            html.push_str(&escape_html(origin));
-            html.push_str("</p>");
-        }
+        // Origin string is already reflected in the friendly evidence title;
+        // omit the raw origin to keep the FA view clean.
         if let Some(quote) = evidence.quote.as_deref() {
             html.push_str("<p class=\"evidence-copy\">");
             html.push_str(&escape_html(quote));
@@ -763,7 +761,9 @@ fn render_source_documents_panel(html: &mut String, packet: &ReviewPacket) {
             html.push_str("<article class=\"source-card\"><div class=\"source-head\"><div><h4>");
             html.push_str(&escape_html(&document.filename));
             html.push_str("</h4><p class=\"source-status\">");
-            html.push_str(&escape_html(&document.status_label));
+            html.push_str(&escape_html(&friendly_document_status(
+                &document.status_label,
+            )));
             html.push_str("</p></div><span class=\"badge ");
             html.push_str(if document.projected_to_filing {
                 "status-ready"
@@ -874,7 +874,7 @@ fn field_status_label(field: &CopyField) -> &'static str {
     } else if !field.present && field.required {
         "Needs your input"
     } else if field.needs_review {
-        "Check this field"
+        "Please review"
     } else if field_is_readonly(field) {
         "Computed"
     } else {
@@ -898,9 +898,9 @@ fn field_status_class(field: &CopyField) -> &'static str {
 
 fn issue_label(class: crate::ReadinessIssueClass) -> &'static str {
     match class {
-        crate::ReadinessIssueClass::AutomationGap => "Automation gap",
+        crate::ReadinessIssueClass::AutomationGap => "Could not read from receipt",
         crate::ReadinessIssueClass::UserInputRequired => "Needs your input",
-        crate::ReadinessIssueClass::ManualReview => "Check this field",
+        crate::ReadinessIssueClass::ManualReview => "Please review",
         crate::ReadinessIssueClass::OtherWarning => "Warning",
     }
 }
@@ -929,10 +929,10 @@ fn field_guidance(field: &CopyField) -> &'static str {
 fn computed_pending_copy(field: &CopyField) -> &'static str {
     match field.path.as_str() {
         "expense_report.general_information.business_purpose.key_30char" => {
-            "You do not type this directly. Fill \"Who Is Involved\", \"What Happened\", and the report category, then click Save and recompute. The 30-character summary will be generated for you."
+            "You do not type this directly. Fill \"Who Is Involved\", \"What Happened\", and the report category, then click Save Changes. The 30-character summary will be generated for you."
         }
         _ => {
-            "You do not type this directly. Fill the related inputs on this page, then click Save and recompute. The system will generate this value for the refreshed packet."
+            "You do not type this directly. Fill the related inputs on this page, then click Save Changes. The system will generate this value for the refreshed packet."
         }
     }
 }
@@ -965,11 +965,40 @@ fn evidence_title(evidence: &EvidenceReference) -> String {
             .page
             .map(|page| format!("Page {page}"))
             .unwrap_or_else(|| "Full document".to_owned()),
-        crate::draft::EvidenceKind::SystemGenerated => evidence
-            .origin
-            .clone()
-            .unwrap_or_else(|| "Derived value".to_owned()),
-        crate::draft::EvidenceKind::UserInput => "User-provided value".to_owned(),
+        crate::draft::EvidenceKind::SystemGenerated => {
+            friendly_evidence_origin(evidence.origin.as_deref().unwrap_or("system"))
+        }
+        crate::draft::EvidenceKind::UserInput => "Your input".to_owned(),
+    }
+}
+
+fn friendly_document_status(raw: &str) -> String {
+    match raw {
+        "ocr captured, not yet supported" => "Document scanned".to_owned(),
+        "ocr captured, not projected" => "Document scanned".to_owned(),
+        other => other.to_owned(),
+    }
+}
+
+fn friendly_evidence_origin(origin: &str) -> String {
+    // Strip "bundle_synthesis." prefix and convert to human-readable label
+    let key = origin.strip_prefix("bundle_synthesis.").unwrap_or(origin);
+    match key {
+        "default_rush_processing" => "System default: no rush processing".to_owned(),
+        "default_payment_method" => "System default: standard payment".to_owned(),
+        "default_other_beneficiaries_false" => "System default: no other beneficiaries".to_owned(),
+        "heuristic_meal_classification" => "Detected from receipt content".to_owned(),
+        "detect_receipt_alcohol" => "Checked receipt for alcohol items".to_owned(),
+        "inferred_destination" | "projected_destination" => {
+            "Inferred from travel documents".to_owned()
+        }
+        "projected_trip_window" | "inferred_trip_window" => "Inferred from travel dates".to_owned(),
+        "projected_airfare" => "Extracted from flight itinerary".to_owned(),
+        "fx_conversion" | "fx_enrichment" => "Currency conversion applied".to_owned(),
+        _ => {
+            // Generic fallback: remove underscores and title-case
+            key.replace('_', " ")
+        }
     }
 }
 
@@ -1007,36 +1036,24 @@ fn bool_initial_json(value: Option<&str>) -> String {
 
 fn correction_reason_options() -> &'static [(&'static str, &'static str)] {
     &[
-        ("ocr_error", "OCR error"),
-        (
-            "wrong_document_classification",
-            "Wrong document classification",
-        ),
+        ("ocr_error", "Misread from document"),
+        ("missing_required_field", "Missing required field"),
         (
             "wrong_expense_type_classification",
-            "Wrong expense type classification",
+            "Wrong expense category",
         ),
-        ("wrong_cross_document_merge", "Wrong cross-document merge"),
-        ("missing_required_field", "Missing required field"),
-        ("wrong_derived_field", "Wrong derived field"),
-        ("stanford_policy_mismatch", "Stanford policy mismatch"),
-        (
-            "stanford_site_workflow_mismatch",
-            "Stanford site workflow mismatch",
-        ),
-        (
-            "unclear_or_undocumented_rule",
-            "Unclear or undocumented rule",
-        ),
+        ("stanford_policy_mismatch", "Stanford policy correction"),
+        ("stanford_site_workflow_mismatch", "Stanford workflow issue"),
+        ("unclear_or_undocumented_rule", "Unclear rule or policy"),
         ("other", "Other"),
     ]
 }
 
 fn filing_status_label(status: FilingStatus) -> &'static str {
     match status {
-        FilingStatus::AutomationBlocked => "automation blocked",
-        FilingStatus::UserInputRequired => "user input required",
-        FilingStatus::ManualReviewRequired => "manual review required",
+        FilingStatus::AutomationBlocked => "some fields need attention",
+        FilingStatus::UserInputRequired => "your input is needed",
+        FilingStatus::ManualReviewRequired => "ready for your review",
         FilingStatus::ReadyToFile => "ready to file",
     }
 }
@@ -1059,6 +1076,50 @@ fn humanize_machine_label(value: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+/// Clean up validation messages for FA display by replacing raw dotted schema
+/// paths like `general_information.payee.affiliation` with a human-readable
+/// version of the final segment (e.g. "Affiliation").
+fn friendly_issue_message(raw: &str) -> String {
+    let mut result = String::with_capacity(raw.len());
+    let chars: Vec<char> = raw.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        // Look for a dotted identifier path: segments of [a-z0-9_] joined by dots
+        if chars[i].is_ascii_lowercase() {
+            let start = i;
+            let mut dot_count = 0;
+            let mut j = i;
+            while j < chars.len() {
+                if chars[j].is_ascii_alphanumeric() || chars[j] == '_' {
+                    j += 1;
+                } else if chars[j] == '.'
+                    && j + 1 < chars.len()
+                    && chars[j + 1].is_ascii_lowercase()
+                {
+                    dot_count += 1;
+                    j += 1;
+                } else {
+                    break;
+                }
+            }
+            if dot_count >= 1 {
+                // It's a dotted path — take the last segment and humanize it
+                let path: String = chars[start..j].iter().collect();
+                let last = path.rsplit('.').next().unwrap_or(&path);
+                result.push_str(&humanize_machine_label(last));
+                i = j;
+            } else {
+                result.push(chars[i]);
+                i += 1;
+            }
+        } else {
+            result.push(chars[i]);
+            i += 1;
+        }
+    }
+    result
 }
 
 fn anchor_id(prefix: &str, value: &str) -> String {
@@ -1090,7 +1151,7 @@ fn escape_html_attribute(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::render_fa_workbench_html;
+    use super::{field_status_label, friendly_issue_message, render_fa_workbench_html};
     use crate::bundle_synthesis::synthesize_bundle_projection_with_fx;
     use crate::field_conventions::{FieldControl, FieldEntryMode};
     use crate::readiness::ReadinessIssueClass;
@@ -1183,8 +1244,8 @@ mod tests {
     #[test]
     fn fa_workbench_is_editable_and_preview_linked() {
         let rendered = render_fa_workbench_html(&synthetic_packet());
-        assert!(rendered.contains("Open final preview"));
-        assert!(rendered.contains("Save and recompute"));
+        assert!(rendered.contains("Final Preview"));
+        assert!(rendered.contains("Save Changes"));
         assert!(rendered.contains("Add this value"));
         assert!(rendered.contains("Choose an option"));
         assert!(rendered.contains("Check or edit value"));
@@ -1226,7 +1287,7 @@ mod tests {
         let rendered = render_fa_workbench_html(&computed_only_packet());
         assert!(rendered.contains("id=\"action-queue-status\""));
         assert!(rendered.contains("function refreshIssueQueue()"));
-        assert!(rendered.contains("All editable fields are complete. Save and recompute"));
+        assert!(rendered.contains("All editable fields are complete. Save Changes"));
         assert!(rendered.contains("id=\"issue-queue-empty-state\""));
     }
 
@@ -1235,7 +1296,49 @@ mod tests {
         let rendered = render_fa_workbench_html(&computed_only_packet());
         assert!(rendered.contains("id=\"system-issues-section\""));
         assert!(rendered.contains("data-queue-group=\"system\""));
-        assert!(rendered.contains("1 system item will refresh after save"));
+        assert!(rendered.contains("1 item will update after you save"));
         assert!(rendered.contains(">1 item still needs attention</p>"));
+    }
+
+    #[test]
+    fn friendly_issue_message_replaces_dotted_paths() {
+        let msg = "Dependent field \"general_information.payee.affiliation\" is missing";
+        let friendly = friendly_issue_message(msg);
+        assert!(
+            friendly.contains("Affiliation"),
+            "expected human label, got: {friendly}"
+        );
+        assert!(
+            !friendly.contains("general_information.payee.affiliation"),
+            "raw path should be gone"
+        );
+    }
+
+    #[test]
+    fn friendly_issue_message_preserves_plain_text() {
+        let msg = "Required field is missing";
+        assert_eq!(friendly_issue_message(msg), msg);
+    }
+
+    #[test]
+    fn field_status_label_uses_please_review() {
+        let mut field = CopyField {
+            path: "test.field".to_owned(),
+            label: "Test".to_owned(),
+            control: FieldControl::Textarea,
+            allowed_values: Vec::new(),
+            collection_columns: Vec::new(),
+            collection_rows: Vec::new(),
+            value: Some("some value".to_owned()),
+            present: true,
+            needs_review: true,
+            required: false,
+            source: None,
+            entry_mode: FieldEntryMode::ModelPrefillReview,
+            evidence: Vec::new(),
+        };
+        assert_eq!(field_status_label(&field), "Please review");
+        field.needs_review = false;
+        assert_eq!(field_status_label(&field), "Filled in");
     }
 }
