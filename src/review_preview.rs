@@ -74,7 +74,9 @@ pub fn render_review_preview_html(packet: &ReviewPacket) -> String {
     render_header(&mut html, packet);
     render_action_bar(&mut html);
     render_summary_panel(&mut html, packet);
-    render_issues_panel(&mut html, packet);
+    if !packet.issues_queue.is_empty() {
+        render_issues_panel(&mut html, packet);
+    }
     render_sections(&mut html, packet);
     render_attachments_panel(&mut html, packet);
     render_documents_panel(&mut html, packet);
@@ -169,25 +171,29 @@ fn render_summary_panel(html: &mut String, packet: &ReviewPacket) {
     html.push_str("</section>");
 
     html.push_str("<section class=\"panel\">");
-    html.push_str("<p class=\"eyebrow\">Packet Summary</p><h2>Readiness Snapshot</h2>");
+    html.push_str("<p class=\"eyebrow\">Packet Summary</p><h2>Final Checklist</h2>");
     html.push_str("<ul class=\"summary-list\">");
     html.push_str(&format!(
         "<li>{} document(s) and {} transaction line(s)</li>",
         packet.summary.document_count, packet.summary.transaction_line_count
     ));
-    html.push_str(&format!(
-        "<li>{} system item(s), {} field(s) need your input, {} field(s) need review, {} warning(s)</li>",
-        packet.summary.readiness.automation_gap_count,
-        packet.summary.readiness.user_input_gap_count,
-        packet.summary.readiness.manual_review_count,
-        packet.summary.readiness.other_warning_count
-    ));
-    html.push_str(&format!(
-        "<li>{} high-confidence, {} medium-confidence, {} low-confidence fields</li>",
-        packet.summary.confidence.high,
-        packet.summary.confidence.medium,
-        packet.summary.confidence.low
-    ));
+    let outstanding_items = packet.summary.readiness.automation_gap_count
+        + packet.summary.readiness.user_input_gap_count
+        + packet.summary.readiness.manual_review_count
+        + packet.summary.readiness.other_warning_count;
+    if outstanding_items > 0 {
+        html.push_str(&format!(
+            "<li>{} system item(s), {} field(s) need your input, {} field(s) need review, {} warning(s)</li>",
+            packet.summary.readiness.automation_gap_count,
+            packet.summary.readiness.user_input_gap_count,
+            packet.summary.readiness.manual_review_count,
+            packet.summary.readiness.other_warning_count
+        ));
+    } else {
+        html.push_str(
+            "<li>All required fields are complete and this packet is ready for final review.</li>",
+        );
+    }
     html.push_str("</ul></section>");
 }
 
@@ -579,5 +585,6 @@ mod tests {
         assert!(!rendered.contains("Source tier:"));
         assert!(!rendered.contains("class=\"field-path\""));
         assert!(!rendered.contains("expense_report."));
+        assert!(!rendered.contains("high-confidence"));
     }
 }

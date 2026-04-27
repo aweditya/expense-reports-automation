@@ -1035,6 +1035,18 @@ def render_index_page(config: LocalAppConfig, bundles: list[BundleListEntry], me
       return input.files.length > 0;
     }}
 
+    function setProcessingState(active) {{
+      const submit = document.querySelector('#upload-form button[type="submit"]');
+      const note = document.getElementById('processing-note');
+      if (submit) {{
+        submit.disabled = active;
+        submit.textContent = active ? 'Processing…' : 'Upload & Process';
+      }}
+      if (note) {{
+        note.hidden = !active;
+      }}
+    }}
+
     document.addEventListener("DOMContentLoaded", () => {{
       const form = document.getElementById("upload-form");
       const input = document.getElementById("documents-input");
@@ -1046,7 +1058,11 @@ def render_index_page(config: LocalAppConfig, bundles: list[BundleListEntry], me
         if (!syncPendingFilesToInput(input)) {{
           event.preventDefault();
           setDocumentError("Select at least one document before running the pipeline.");
+          setProcessingState(false);
+          return;
         }}
+        clearDocumentError();
+        setProcessingState(true);
       }});
       renderPendingUploads();
     }});
@@ -1077,6 +1093,7 @@ def render_index_page(config: LocalAppConfig, bundles: list[BundleListEntry], me
             <p class="meta">Pending uploads. You can reopen the file picker and selections will accumulate until you submit.</p>
             <ul id="pending-documents"><li>No documents selected yet.</li></ul>
             <p id="document-error" class="error-text" hidden></p>
+            <p id="processing-note" class="meta" hidden>Processing your documents. This can take a minute for PDFs and larger uploads. Keep this tab open.</p>
           </div>
           {advanced_config}
           <button type="submit">Upload &amp; Process</button>

@@ -672,6 +672,8 @@ class LocalAppTests(unittest.TestCase):
         self.assertIn('id="pending-documents"', page)
         self.assertIn("pendingFiles", page)
         self.assertIn("DataTransfer()", page)
+        self.assertIn("setProcessingState", page)
+        self.assertIn("Processing your documents.", page)
         self.assertNotIn("Service Account Key", page)
         self.assertIn("Accepts PDF files and text documents", page)
         self.assertNotIn("Recent Bundles", page)
