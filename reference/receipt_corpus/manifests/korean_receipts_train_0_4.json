@@ -1,0 +1,77 @@
+{
+  "corpus_name": "korean_receipts_train_0_4",
+  "documents": [
+    {
+      "document_id": "train_0",
+      "packet_id": "train_0",
+      "kind": "receipt",
+      "source_name": "Korean_Receipts_Dataset",
+      "source_url": "https://huggingface.co/datasets/HumynLabs/Korean_Receipts_Dataset",
+      "license": "cc-by-4.0",
+      "input_path": "assets/korean_receipts/train_0.png",
+      "expected_fields": {
+        "classification_kind": "receipt"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "korean_receipts",
+        "train"
+      ]
+    },
+    {
+      "document_id": "train_1",
+      "packet_id": "train_1",
+      "kind": "receipt",
+      "source_name": "Korean_Receipts_Dataset",
+      "source_url": "https://huggingface.co/datasets/HumynLabs/Korean_Receipts_Dataset",
+      "license": "cc-by-4.0",
+      "input_path": "assets/korean_receipts/train_1.png",
+      "expected_fields": {
+        "classification_kind": "receipt"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "korean_receipts",
+        "train"
+      ]
+    },
+    {
+      "document_id": "train_2",
+      "packet_id": "train_2",
+      "kind": "receipt",
+      "source_name": "Korean_Receipts_Dataset",
+      "source_url": "https://huggingface.co/datasets/HumynLabs/Korean_Receipts_Dataset",
+      "license": "cc-by-4.0",
+      "input_path": "assets/korean_receipts/train_2.png",
+      "expected_fields": {
+        "classification_kind": "receipt"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "korean_receipts",
+        "train"
+      ]
+    },
+    {
+      "document_id": "train_3",
+      "packet_id": "train_3",
+      "kind": "receipt",
+      "source_name": "Korean_Receipts_Dataset",
+      "source_url": "https://huggingface.co/datasets/HumynLabs/Korean_Receipts_Dataset",
+      "license": "cc-by-4.0",
+      "input_path": "assets/korean_receipts/train_3.png",
+      "expected_fields": {
+        "classification_kind": "receipt"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "korean_receipts",
+        "train"
+      ]
+    }
+  ]
+}
