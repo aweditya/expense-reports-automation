@@ -669,14 +669,14 @@ class LocalAppTests(unittest.TestCase):
 
         self.assertIn('id="upload-form"', page)
         self.assertIn('id="documents-input"', page)
-        self.assertIn('accept=".pdf,.png,.jpg,.jpeg,.txt,.md,.markdown"', page)
+        self.assertIn('accept=".pdf,.png,.jpg,.jpeg,.heic,.heif,.txt,.md,.markdown"', page)
         self.assertIn('id="pending-documents"', page)
         self.assertIn("pendingFiles", page)
         self.assertIn("DataTransfer()", page)
         self.assertIn("setProcessingState", page)
         self.assertIn("Processing your documents.", page)
         self.assertNotIn("Service Account Key", page)
-        self.assertIn("Accepts PDF, PNG, JPG, and text documents", page)
+        self.assertIn("Accepts PDF, PNG, JPG, HEIC, and text documents", page)
         self.assertNotIn("Recent Bundles", page)
         self.assertIn("What Happens Next", page)
 

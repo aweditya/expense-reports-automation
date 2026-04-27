@@ -3,6 +3,7 @@ import io
 import json
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 def load_module():
@@ -29,6 +30,15 @@ class TranscribeWithGoogleGenAiTests(unittest.TestCase):
         image = Image.new("RGB", (8, 8), color=(220, 220, 220))
         buffer = io.BytesIO()
         image.save(buffer, format="PNG")
+        return buffer.getvalue()
+
+    @staticmethod
+    def make_jpeg_bytes(size=(8, 8)) -> bytes:
+        from PIL import Image
+
+        image = Image.new("RGB", size, color=(220, 220, 220))
+        buffer = io.BytesIO()
+        image.save(buffer, format="JPEG")
         return buffer.getvalue()
 
     def test_generate_content_with_retries_recovers_from_transient_failure(self):
@@ -221,6 +231,13 @@ class TranscribeWithGoogleGenAiTests(unittest.TestCase):
         self.assertIn("total_paid", prompt)
         self.assertIn("normalized 0-1000 coordinates", prompt)
 
+    def test_build_receipt_localization_prompt_targets_outer_boundary(self):
+        prompt = transcribe.build_receipt_localization_prompt("receipt.png")
+
+        self.assertIn("outer boundary", prompt)
+        self.assertIn("Exclude the desk, background", prompt)
+        self.assertIn("box_2d", prompt)
+
     def test_normalize_grounding_regions_converts_box_coordinates(self):
         normalized = transcribe.normalize_grounding_regions(
             {
@@ -235,22 +252,50 @@ class TranscribeWithGoogleGenAiTests(unittest.TestCase):
             }
         )
 
+    def test_normalize_localization_bbox_converts_box_coordinates(self):
+        normalized = transcribe.normalize_localization_bbox(
+            {"box_2d": [100, 200, 900, 800]}
+        )
+
         self.assertEqual(
             normalized,
-            [
-                {
-                    "region_id": "total_paid",
-                    "kind": "value_candidate",
-                    "text": "MYR 80.90",
-                    "bbox": {
-                        "left": 0.2,
-                        "top": 0.1,
-                        "width": 0.32,
-                        "height": 0.06,
-                    },
-                }
-            ],
+            {
+                "left": 0.2,
+                "top": 0.1,
+                "right": 0.8,
+                "bottom": 0.9,
+            },
         )
+
+    def test_detect_mime_type_prefers_heif_signature_over_extension(self):
+        heif_bytes = b"\x00\x00\x00\x18ftypheic\x00\x00\x00\x00"
+
+        detected = transcribe.detect_mime_type(Path("receipt.png"), heif_bytes)
+
+        self.assertEqual(detected, "image/heic")
+
+    def test_preprocess_document_bytes_original_normalizes_image_uploads(self):
+        jpeg_bytes = self.make_jpeg_bytes()
+
+        processed_bytes, processed_mime = transcribe.preprocess_document_bytes(
+            Path("receipt.jpg"),
+            jpeg_bytes,
+            "image/jpeg",
+            "original",
+        )
+
+        self.assertEqual(processed_mime, "image/png")
+        self.assertNotEqual(processed_bytes, jpeg_bytes)
+
+    def test_canonicalize_document_bytes_for_ocr_surfaces_decode_errors_cleanly(self):
+        with self.assertRaises(SystemExit) as context:
+            transcribe.canonicalize_document_bytes_for_ocr(
+                Path("receipt.png"),
+                b"not-a-real-image",
+                "image/png",
+            )
+
+        self.assertIn("could not decode image upload", str(context.exception))
 
     def test_maybe_ground_key_receipt_fields_skips_non_image_inputs(self):
         pages = [{"page_number": 1, "text": "# Merchant Receipt", "dimensions": None, "regions": []}]
@@ -270,6 +315,79 @@ class TranscribeWithGoogleGenAiTests(unittest.TestCase):
         self.assertEqual(geometry_source, "none")
         self.assertFalse(geometry_available)
         self.assertIsNone(grounding_variant)
+
+    def test_maybe_localize_receipt_content_skips_small_receipts(self):
+        small_png = self.make_png_bytes()
+
+        localized_bytes, localized_mime, applied, bbox = (
+            transcribe.maybe_localize_receipt_content(
+                object(),
+                model="gemini-3-flash-preview",
+                filename="receipt.png",
+                document_path=Path("receipt.png"),
+                file_bytes=small_png,
+                mime_type="image/png",
+            )
+        )
+
+        self.assertEqual(localized_bytes, small_png)
+        self.assertEqual(localized_mime, "image/png")
+        self.assertFalse(applied)
+        self.assertIsNone(bbox)
+
+    def test_maybe_localize_receipt_content_crops_large_images_when_bbox_found(self):
+        large_jpeg = self.make_jpeg_bytes(size=(3000, 2000))
+        attempted = []
+
+        def fake_generate(_client, **kwargs):
+            attempted.append(kwargs["contents"][0])
+            return type(
+                "Response",
+                (),
+                {"text": json.dumps({"box_2d": [50, 100, 950, 700]})},
+            )()
+
+        localized_bytes, localized_mime, applied, bbox = (
+            transcribe.maybe_localize_receipt_content(
+                object(),
+                model="gemini-3-flash-preview",
+                filename="receipt.jpg",
+                document_path=Path("receipt.jpg"),
+                file_bytes=large_jpeg,
+                mime_type="image/jpeg",
+                generate_fn=fake_generate,
+                part_factory=lambda data, detected_mime: (data, detected_mime),
+            )
+        )
+
+        self.assertEqual(localized_mime, "image/png")
+        self.assertTrue(applied)
+        self.assertEqual(bbox["left"], 0.1)
+        self.assertEqual(len(attempted), 1)
+        self.assertNotEqual(localized_bytes, large_jpeg)
+
+    def test_maybe_localize_receipt_content_falls_back_when_localization_fails(self):
+        large_jpeg = self.make_jpeg_bytes(size=(3000, 2000))
+
+        localized_bytes, localized_mime, applied, bbox = (
+            transcribe.maybe_localize_receipt_content(
+                object(),
+                model="gemini-3-flash-preview",
+                filename="receipt.jpg",
+                document_path=Path("receipt.jpg"),
+                file_bytes=large_jpeg,
+                mime_type="image/jpeg",
+                generate_fn=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                    RuntimeError("localization failed")
+                ),
+                part_factory=lambda data, detected_mime: (data, detected_mime),
+            )
+        )
+
+        self.assertEqual(localized_bytes, large_jpeg)
+        self.assertEqual(localized_mime, "image/jpeg")
+        self.assertFalse(applied)
+        self.assertIsNone(bbox)
 
     def test_grounding_retry_variants_try_primary_then_unique_fallbacks(self):
         self.assertEqual(
@@ -434,6 +552,27 @@ class TranscribeWithGoogleGenAiTests(unittest.TestCase):
         self.assertEqual(processed_mime, "image/png")
         self.assertGreater(len(processed_bytes), 0)
         self.assertNotEqual(processed_bytes, buffer.getvalue())
+
+    def test_preprocess_document_bytes_accepts_heif_via_optional_opener(self):
+        with mock.patch.object(
+            transcribe,
+            "register_optional_heif_support",
+        ) as _register, mock.patch.object(
+            transcribe,
+            "open_image_for_ocr",
+        ) as open_image:
+            from PIL import Image
+
+            open_image.return_value = Image.new("RGB", (12, 12), color=(200, 200, 200))
+            processed_bytes, processed_mime = transcribe.preprocess_document_bytes(
+                Path("receipt.png"),
+                b"\x00\x00\x00\x18ftypheic\x00\x00\x00\x00payload",
+                "image/heic",
+                "original",
+            )
+
+        self.assertEqual(processed_mime, "image/png")
+        self.assertGreater(len(processed_bytes), 0)
 
     def test_preprocess_document_bytes_leaves_pdf_bytes_unchanged(self):
         pdf_bytes = b"%PDF-1.4 mock"

@@ -10,8 +10,25 @@ from pathlib import Path
 DEFAULT_MODEL = "gemini-3-flash-preview"
 CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
 DEFAULT_GENERATE_RETRIES = 3
-GROUNDABLE_IMAGE_MIME_TYPES = {"image/png", "image/jpeg"}
+GROUNDABLE_IMAGE_MIME_TYPES = {
+    "image/png",
+    "image/jpeg",
+    "image/heic",
+    "image/heif",
+}
 GROUNDING_FALLBACK_VARIANTS = ("contrast_boosted", "binarized", "grayscale")
+HEIF_FILE_TYPE_BRANDS = {
+    b"heic",
+    b"heix",
+    b"hevc",
+    b"hevx",
+    b"heim",
+    b"heis",
+    b"mif1",
+    b"msf1",
+}
+LOCALIZATION_MIN_LONG_EDGE = 2500
+LOCALIZATION_MIN_PIXEL_AREA = 3_000_000
 
 
 def parse_args() -> argparse.Namespace:
@@ -56,7 +73,11 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def detect_mime_type(path: Path) -> str:
+def detect_mime_type(path: Path, file_bytes: bytes | None = None) -> str:
+    if file_bytes:
+        sniffed = sniff_mime_type_from_bytes(file_bytes)
+        if sniffed:
+            return sniffed
     extension = path.suffix.lower()
     if extension == ".pdf":
         return "application/pdf"
@@ -64,7 +85,23 @@ def detect_mime_type(path: Path) -> str:
         return "image/png"
     if extension in {".jpg", ".jpeg"}:
         return "image/jpeg"
+    if extension in {".heic", ".heif"}:
+        return "image/heic"
     raise SystemExit(f"unsupported document format: {path.suffix}")
+
+
+def sniff_mime_type_from_bytes(file_bytes: bytes) -> str | None:
+    if file_bytes.startswith(b"%PDF-"):
+        return "application/pdf"
+    if file_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if file_bytes.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if len(file_bytes) >= 12 and file_bytes[4:8] == b"ftyp":
+        major_brand = file_bytes[8:12]
+        if major_brand in HEIF_FILE_TYPE_BRANDS:
+            return "image/heic"
+    return None
 
 
 def build_prompt(filename: str, mime_type: str, pass_kind: str) -> str:
@@ -103,9 +140,66 @@ def build_prompt(filename: str, mime_type: str, pass_kind: str) -> str:
     return prompt
 
 
+def build_receipt_localization_prompt(filename: str) -> str:
+    return (
+        "Locate the outer boundary of the primary receipt or financial document in this image and return only JSON.\n"
+        "Use this schema exactly:\n"
+        "{\"box_2d\":[y_min,x_min,y_max,x_max]}\n"
+        "Rules:\n"
+        "- box_2d must use normalized 0-1000 coordinates in [y_min, x_min, y_max, x_max] order.\n"
+        "- Include the full visible receipt/document, not just the text body.\n"
+        "- Exclude the desk, background, shadows, and surrounding scene when possible.\n"
+        "- If the image is already tightly cropped to the receipt, return the full-image box.\n"
+        "- If you cannot confidently identify one primary receipt/document, return {}.\n"
+        f"Filename: {filename}\n"
+    )
+
+
+def register_optional_heif_support() -> None:
+    try:
+        import pillow_heif
+    except ImportError:
+        return
+    pillow_heif.register_heif_opener()
+
+
+def open_image_for_ocr(file_bytes: bytes):
+    from PIL import Image, ImageOps
+
+    register_optional_heif_support()
+    image = Image.open(io.BytesIO(file_bytes))
+    image.load()
+    return ImageOps.exif_transpose(image)
+
+
+def canonicalize_document_bytes_for_ocr(
+    document_path: Path, file_bytes: bytes, mime_type: str
+) -> tuple[bytes, str]:
+    if mime_type == "application/pdf":
+        return file_bytes, mime_type
+    if mime_type not in GROUNDABLE_IMAGE_MIME_TYPES:
+        return file_bytes, mime_type
+
+    try:
+        image = open_image_for_ocr(file_bytes)
+    except Exception as exc:
+        raise SystemExit(
+            f"could not decode image upload {document_path.name!r}: {exc}"
+        ) from exc
+
+    output = io.BytesIO()
+    image.save(output, format="PNG")
+    return output.getvalue(), "image/png"
+
+
 def preprocess_document_bytes(
     document_path: Path, file_bytes: bytes, mime_type: str, preprocess_variant: str
 ) -> tuple[bytes, str]:
+    file_bytes, mime_type = canonicalize_document_bytes_for_ocr(
+        document_path,
+        file_bytes,
+        mime_type,
+    )
     if preprocess_variant == "original" or mime_type == "application/pdf":
         return file_bytes, mime_type
 
@@ -113,14 +207,13 @@ def preprocess_document_bytes(
         return file_bytes, mime_type
 
     try:
-        from PIL import Image, ImageEnhance
+        from PIL import ImageEnhance
     except ImportError as exc:  # pragma: no cover - dependency exists in repo venv
         raise SystemExit(
             f"Pillow is required for preprocess variant {preprocess_variant}: {exc}"
         ) from exc
 
-    image = Image.open(io.BytesIO(file_bytes))
-    image.load()
+    image = open_image_for_ocr(file_bytes)
 
     if preprocess_variant == "contrast_boosted":
         image = ImageEnhance.Contrast(image).enhance(1.8)
@@ -264,18 +357,161 @@ def normalize_grounding_regions(payload: dict) -> list[dict]:
     return normalized
 
 
+def normalize_localization_bbox(payload: dict) -> dict | None:
+    if not isinstance(payload, dict):
+        return None
+    raw_box = payload.get("box_2d")
+    if not isinstance(raw_box, list) or len(raw_box) != 4:
+        return None
+    try:
+        y_min, x_min, y_max, x_max = [float(value) for value in raw_box]
+    except (TypeError, ValueError):
+        return None
+    if y_max <= y_min or x_max <= x_min:
+        return None
+    return {
+        "left": max(0.0, min(1.0, x_min / 1000.0)),
+        "top": max(0.0, min(1.0, y_min / 1000.0)),
+        "right": max(0.0, min(1.0, x_max / 1000.0)),
+        "bottom": max(0.0, min(1.0, y_max / 1000.0)),
+    }
+
+
 def image_page_dimensions(file_bytes: bytes, mime_type: str) -> dict | None:
     if mime_type not in GROUNDABLE_IMAGE_MIME_TYPES:
         return None
     try:
-        from PIL import Image
+        image = open_image_for_ocr(file_bytes)
     except ImportError as exc:  # pragma: no cover - dependency exists in repo venv
         raise SystemExit(f"Pillow is required to inspect image dimensions: {exc}") from exc
-
-    image = Image.open(io.BytesIO(file_bytes))
-    image.load()
     width, height = image.size
     return {"width": width, "height": height}
+
+
+def should_attempt_receipt_localization(dimensions: dict | None) -> bool:
+    if not dimensions:
+        return False
+    width = int(dimensions.get("width") or 0)
+    height = int(dimensions.get("height") or 0)
+    return (
+        max(width, height) >= LOCALIZATION_MIN_LONG_EDGE
+        or width * height >= LOCALIZATION_MIN_PIXEL_AREA
+    )
+
+
+def attempt_receipt_localization(
+    client,
+    *,
+    model: str,
+    filename: str,
+    file_bytes: bytes,
+    mime_type: str,
+    generate_fn=None,
+    part_factory=None,
+) -> dict | None:
+    if generate_fn is None:
+        generate_fn = generate_content_with_retries
+    config = {
+        "temperature": 0,
+        "response_mime_type": "application/json",
+        "max_output_tokens": 1024,
+    }
+    if part_factory is None:
+        from google.genai import types
+
+        part_factory = lambda data, detected_mime: types.Part.from_bytes(  # noqa: E731
+            data=data, mime_type=detected_mime
+        )
+        config = types.GenerateContentConfig(**config)
+
+    response = generate_fn(
+        client,
+        model=model,
+        contents=[
+            build_receipt_localization_prompt(filename),
+            part_factory(file_bytes, mime_type),
+        ],
+        config=config,
+    )
+    payload = json.loads(extract_payload_text(response))
+    return normalize_localization_bbox(payload)
+
+
+def crop_image_bytes_to_bbox(
+    document_path: Path,
+    file_bytes: bytes,
+    mime_type: str,
+    bbox: dict,
+    padding_ratio: float = 0.02,
+) -> tuple[bytes, str]:
+    if mime_type not in GROUNDABLE_IMAGE_MIME_TYPES:
+        return file_bytes, mime_type
+
+    image = open_image_for_ocr(file_bytes)
+    width, height = image.size
+    pad_x = round(width * padding_ratio)
+    pad_y = round(height * padding_ratio)
+
+    left = max(0, round(width * float(bbox["left"])) - pad_x)
+    top = max(0, round(height * float(bbox["top"])) - pad_y)
+    right = min(width, round(width * float(bbox["right"])) + pad_x)
+    bottom = min(height, round(height * float(bbox["bottom"])) + pad_y)
+    if right <= left or bottom <= top:
+        return file_bytes, mime_type
+
+    cropped = image.crop((left, top, right, bottom))
+    output = io.BytesIO()
+    cropped.save(output, format="PNG")
+    return output.getvalue(), "image/png"
+
+
+def maybe_localize_receipt_content(
+    client,
+    *,
+    model: str,
+    filename: str,
+    document_path: Path,
+    file_bytes: bytes,
+    mime_type: str,
+    generate_fn=None,
+    part_factory=None,
+) -> tuple[bytes, str, bool, dict | None]:
+    if mime_type not in GROUNDABLE_IMAGE_MIME_TYPES:
+        return file_bytes, mime_type, False, None
+    dimensions = image_page_dimensions(file_bytes, mime_type)
+    if not should_attempt_receipt_localization(dimensions):
+        return file_bytes, mime_type, False, None
+
+    try:
+        bbox = attempt_receipt_localization(
+            client,
+            model=model,
+            filename=filename,
+            file_bytes=file_bytes,
+            mime_type=mime_type,
+            generate_fn=generate_fn,
+            part_factory=part_factory,
+        )
+    except Exception:
+        return file_bytes, mime_type, False, None
+
+    if not bbox:
+        return file_bytes, mime_type, False, None
+
+    width = max(0.0, float(bbox["right"]) - float(bbox["left"]))
+    height = max(0.0, float(bbox["bottom"]) - float(bbox["top"]))
+    if width * height < 0.15:
+        return file_bytes, mime_type, False, bbox
+    if width >= 0.98 and height >= 0.98:
+        return file_bytes, mime_type, False, bbox
+
+    cropped_bytes, cropped_mime = crop_image_bytes_to_bbox(
+        document_path,
+        file_bytes,
+        mime_type,
+        bbox,
+    )
+    return cropped_bytes, cropped_mime, True, bbox
 
 
 def grounding_retry_variants(primary_variant: str) -> list[str]:
@@ -647,8 +883,26 @@ def main() -> int:
         credentials=credentials,
     )
 
-    source_mime_type = detect_mime_type(document_path)
     source_file_bytes = document_path.read_bytes()
+    source_mime_type = detect_mime_type(document_path, source_file_bytes)
+    source_file_bytes, source_mime_type = canonicalize_document_bytes_for_ocr(
+        document_path,
+        source_file_bytes,
+        source_mime_type,
+    )
+    (
+        source_file_bytes,
+        source_mime_type,
+        localization_applied,
+        localization_bbox,
+    ) = maybe_localize_receipt_content(
+        client,
+        model=args.model,
+        filename=document_path.name,
+        document_path=document_path,
+        file_bytes=source_file_bytes,
+        mime_type=source_mime_type,
+    )
     file_bytes, mime_type = preprocess_document_bytes(
         document_path,
         source_file_bytes,
@@ -715,6 +969,9 @@ def main() -> int:
             "model": args.model,
             "geometry_source": geometry_source,
             "geometry_available": geometry_available,
+            "localization_applied": localization_applied,
+            "localization_source": "gemini_receipt_boundary" if localization_applied else "none",
+            **({"localization_bbox": localization_bbox} if localization_bbox else {}),
         },
         "pages": normalized_pages,
     }
