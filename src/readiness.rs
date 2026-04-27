@@ -70,11 +70,16 @@ pub fn summarize_validation_readiness_with_confirmations(
     validation: &ValidationReport,
     confirmed_paths: &BTreeSet<String>,
 ) -> ReadinessReport {
+    let active_issue_paths = validation
+        .issues
+        .iter()
+        .map(|issue| issue.path.clone())
+        .collect::<BTreeSet<_>>();
     ReadinessReport {
         issues: validation
             .issues
             .iter()
-            .map(classify_validation_issue)
+            .filter_map(|issue| classify_validation_issue(issue, &active_issue_paths))
             .filter(|issue| !issue_is_confirmed(issue, confirmed_paths))
             .collect(),
     }
@@ -89,7 +94,14 @@ fn issue_is_confirmed(issue: &ReadinessIssue, confirmed_paths: &BTreeSet<String>
         .any(|path| issue.path == *path || issue.schema_path == *path)
 }
 
-fn classify_validation_issue(issue: &ValidationIssue) -> ReadinessIssue {
+fn classify_validation_issue(
+    issue: &ValidationIssue,
+    active_issue_paths: &BTreeSet<String>,
+) -> Option<ReadinessIssue> {
+    if issue_is_deferred_derived_gap(issue, active_issue_paths) {
+        return None;
+    }
+
     let class = match issue.kind {
         ValidationIssueKind::ManualReviewRequired
         | ValidationIssueKind::LowConfidenceWithoutReview => ReadinessIssueClass::ManualReview,
@@ -109,7 +121,7 @@ fn classify_validation_issue(issue: &ValidationIssue) -> ReadinessIssue {
         .map(source_tier_name)
         .map(str::to_owned);
 
-    ReadinessIssue {
+    Some(ReadinessIssue {
         class,
         severity: issue.severity,
         kind: issue.kind,
@@ -117,10 +129,14 @@ fn classify_validation_issue(issue: &ValidationIssue) -> ReadinessIssue {
         schema_path: issue.schema_path.clone(),
         source,
         message: issue.message.clone(),
-    }
+    })
 }
 
 fn issue_is_user_input(issue: &ValidationIssue) -> bool {
+    if contextual_user_input_schema_path(&issue.schema_path) {
+        return true;
+    }
+
     let Some(rule) = field_rule(&issue.schema_path) else {
         return false;
     };
@@ -140,6 +156,42 @@ fn issue_is_user_input(issue: &ValidationIssue) -> bool {
                 )
             })
         })
+}
+
+fn contextual_user_input_schema_path(path: &str) -> bool {
+    matches!(
+        path,
+        "expense_report.general_information.category"
+            | "expense_report.general_information.payee"
+            | "expense_report.general_information.payee.name"
+            | "expense_report.general_information.business_purpose.who"
+            | "expense_report.general_information.business_purpose.what"
+            | "expense_report.general_information.business_purpose.where"
+            | "expense_report.general_information.business_purpose.why"
+            | "expense_report.general_information.event_name"
+    )
+}
+
+fn issue_is_deferred_derived_gap(
+    issue: &ValidationIssue,
+    active_issue_paths: &BTreeSet<String>,
+) -> bool {
+    if issue.kind != ValidationIssueKind::MissingRequiredField {
+        return false;
+    }
+
+    match issue.path.as_str() {
+        "expense_report.general_information.business_purpose.key_30char" => {
+            active_issue_paths.contains("expense_report.general_information.business_purpose.who")
+                || active_issue_paths
+                    .contains("expense_report.general_information.business_purpose.what")
+                || active_issue_paths.contains("expense_report.general_information.category")
+        }
+        "expense_report.transaction_summary.transaction_type" => {
+            active_issue_paths.contains("expense_report.general_information.category")
+        }
+        _ => false,
+    }
 }
 
 fn rule_is_user_input(
@@ -189,6 +241,7 @@ mod tests {
         synthesize_bundle_projection, synthesize_bundle_projection_with_fx, StaticFxRateProvider,
     };
     use crate::synthetic_documents::{generate_synthetic_packet, SyntheticVariant};
+    use crate::validator::{ValidationIssue, ValidationIssueKind, ValidationReport, ValidationSeverity};
 
     fn synthetic_documents() -> Vec<crate::ExtractedDocumentFacts> {
         generate_synthetic_packet(SyntheticVariant::Baseline)
@@ -241,5 +294,117 @@ mod tests {
         assert!(readiness.issues.iter().any(|issue| issue.class
             == ReadinessIssueClass::UserInputRequired
             && issue.path == "expense_report.general_information.authorized_by"));
+    }
+
+    #[test]
+    fn receipt_only_context_fields_become_user_input_and_deferred_derivations_disappear() {
+        let validation = ValidationReport {
+            issues: vec![
+                ValidationIssue {
+                    severity: ValidationSeverity::Error,
+                    kind: ValidationIssueKind::MissingRequiredField,
+                    path: "expense_report.general_information.category".to_owned(),
+                    schema_path: "expense_report.general_information.category".to_owned(),
+                    message: "Required field is missing".to_owned(),
+                },
+                ValidationIssue {
+                    severity: ValidationSeverity::Error,
+                    kind: ValidationIssueKind::MissingRequiredField,
+                    path: "expense_report.general_information.payee".to_owned(),
+                    schema_path: "expense_report.general_information.payee".to_owned(),
+                    message: "Required field is missing".to_owned(),
+                },
+                ValidationIssue {
+                    severity: ValidationSeverity::Error,
+                    kind: ValidationIssueKind::MissingRequiredField,
+                    path: "expense_report.general_information.business_purpose.who".to_owned(),
+                    schema_path: "expense_report.general_information.business_purpose.who"
+                        .to_owned(),
+                    message: "Required field is missing".to_owned(),
+                },
+                ValidationIssue {
+                    severity: ValidationSeverity::Error,
+                    kind: ValidationIssueKind::MissingRequiredField,
+                    path: "expense_report.general_information.business_purpose.what".to_owned(),
+                    schema_path: "expense_report.general_information.business_purpose.what"
+                        .to_owned(),
+                    message: "Required field is missing".to_owned(),
+                },
+                ValidationIssue {
+                    severity: ValidationSeverity::Error,
+                    kind: ValidationIssueKind::MissingRequiredField,
+                    path: "expense_report.general_information.event_name".to_owned(),
+                    schema_path: "expense_report.general_information.event_name".to_owned(),
+                    message: "Required field is missing".to_owned(),
+                },
+                ValidationIssue {
+                    severity: ValidationSeverity::Error,
+                    kind: ValidationIssueKind::MissingRequiredField,
+                    path: "expense_report.general_information.business_purpose.key_30char"
+                        .to_owned(),
+                    schema_path:
+                        "expense_report.general_information.business_purpose.key_30char"
+                            .to_owned(),
+                    message: "Required field is missing".to_owned(),
+                },
+                ValidationIssue {
+                    severity: ValidationSeverity::Error,
+                    kind: ValidationIssueKind::MissingRequiredField,
+                    path: "expense_report.transaction_summary.transaction_type".to_owned(),
+                    schema_path: "expense_report.transaction_summary.transaction_type"
+                        .to_owned(),
+                    message: "Required field is missing".to_owned(),
+                },
+            ],
+        };
+
+        let readiness = summarize_validation_readiness(&validation);
+
+        assert_eq!(readiness.automation_gap_count(), 0);
+        assert_eq!(readiness.user_input_required_count(), 5);
+        assert!(readiness
+            .issues
+            .iter()
+            .all(|issue| issue.class == ReadinessIssueClass::UserInputRequired));
+        assert!(!readiness.issues.iter().any(|issue| issue.path
+            == "expense_report.general_information.business_purpose.key_30char"));
+        assert!(!readiness
+            .issues
+            .iter()
+            .any(|issue| issue.path == "expense_report.transaction_summary.transaction_type"));
+    }
+
+    #[test]
+    fn derived_fields_stay_automation_gaps_once_prerequisites_are_present() {
+        let validation = ValidationReport {
+            issues: vec![
+                ValidationIssue {
+                    severity: ValidationSeverity::Error,
+                    kind: ValidationIssueKind::MissingRequiredField,
+                    path: "expense_report.general_information.business_purpose.key_30char"
+                        .to_owned(),
+                    schema_path:
+                        "expense_report.general_information.business_purpose.key_30char"
+                            .to_owned(),
+                    message: "Required field is missing".to_owned(),
+                },
+                ValidationIssue {
+                    severity: ValidationSeverity::Error,
+                    kind: ValidationIssueKind::MissingRequiredField,
+                    path: "expense_report.transaction_summary.transaction_type".to_owned(),
+                    schema_path: "expense_report.transaction_summary.transaction_type"
+                        .to_owned(),
+                    message: "Required field is missing".to_owned(),
+                },
+            ],
+        };
+
+        let readiness = summarize_validation_readiness(&validation);
+
+        assert_eq!(readiness.automation_gap_count(), 2);
+        assert!(readiness
+            .issues
+            .iter()
+            .all(|issue| issue.class == ReadinessIssueClass::AutomationGap));
     }
 }
