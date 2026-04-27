@@ -369,6 +369,53 @@ class TranscribeWithGoogleGenAiTests(unittest.TestCase):
         self.assertFalse(geometry_available)
         self.assertIsNone(grounding_variant)
 
+    def test_maybe_ground_key_receipt_fields_tolerates_dimension_probe_failure(self):
+        pages = [{"page_number": 1, "text": "# Merchant Receipt", "dimensions": None, "regions": []}]
+
+        def fake_generate(_, **_kwargs):
+            return type(
+                "Response",
+                (),
+                {
+                    "text": json.dumps(
+                        {
+                            "regions": [
+                                {
+                                    "region_id": "merchant_name",
+                                    "kind": "value_candidate",
+                                    "text": "Corner Store",
+                                    "box_2d": [50, 70, 110, 520],
+                                }
+                            ]
+                        }
+                    )
+                },
+            )()
+
+        grounded_pages, geometry_source, geometry_available, grounding_variant = (
+            transcribe.maybe_ground_key_receipt_fields(
+                object(),
+                model="gemini-3-flash-preview",
+                filename="receipt.png",
+                file_bytes=b"not-a-real-image",
+                mime_type="image/png",
+                normalized_pages=pages,
+                document_path=Path("receipt.png"),
+                source_file_bytes=b"not-a-real-image",
+                source_mime_type="image/png",
+                preprocess_variant="original",
+                grounding_variants=["original"],
+                generate_fn=fake_generate,
+                preprocess_fn=lambda *_args: (b"retry-bytes", "image/png"),
+                part_factory=lambda data, detected_mime: (data, detected_mime),
+            )
+        )
+
+        self.assertEqual(geometry_source, "gemini")
+        self.assertTrue(geometry_available)
+        self.assertEqual(grounding_variant, "original")
+        self.assertEqual(grounded_pages[0]["regions"][0]["region_id"], "merchant_name")
+
     def test_preprocess_document_bytes_binarized_renders_png(self):
         from PIL import Image
 

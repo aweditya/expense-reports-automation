@@ -350,13 +350,16 @@ def maybe_ground_key_receipt_fields(
     if document_path is None:
         document_path = Path(filename)
 
-    dimensions = image_page_dimensions(source_bytes, source_mime)
     enriched_pages = [dict(page) for page in normalized_pages]
+    try:
+        dimensions = image_page_dimensions(source_bytes, source_mime)
+    except Exception:
+        dimensions = None
     if dimensions:
         enriched_pages[0] = dict(enriched_pages[0])
         enriched_pages[0]["dimensions"] = dimensions
 
-    prompt = build_grounding_prompt(filename, enriched_pages[0]["text"])
+    prompt = build_grounding_prompt(filename, str(enriched_pages[0].get("text") or ""))
     attempt_variants = grounding_variants or grounding_retry_variants(preprocess_variant)
 
     for attempt_variant in attempt_variants:
@@ -670,23 +673,28 @@ def main() -> int:
     payload = json.loads(extract_payload_text(response))
 
     normalized_pages = normalize_pages(payload)
-    (
-        normalized_pages,
-        geometry_source,
-        geometry_available,
-        grounding_preprocess_variant,
-    ) = maybe_ground_key_receipt_fields(
-        client,
-        model=args.model,
-        filename=document_path.name,
-        file_bytes=file_bytes,
-        mime_type=mime_type,
-        normalized_pages=normalized_pages,
-        document_path=document_path,
-        source_file_bytes=source_file_bytes,
-        source_mime_type=source_mime_type,
-        preprocess_variant=args.preprocess_variant,
-    )
+    try:
+        (
+            normalized_pages,
+            geometry_source,
+            geometry_available,
+            grounding_preprocess_variant,
+        ) = maybe_ground_key_receipt_fields(
+            client,
+            model=args.model,
+            filename=document_path.name,
+            file_bytes=file_bytes,
+            mime_type=mime_type,
+            normalized_pages=normalized_pages,
+            document_path=document_path,
+            source_file_bytes=source_file_bytes,
+            source_mime_type=source_mime_type,
+            preprocess_variant=args.preprocess_variant,
+        )
+    except Exception:
+        geometry_source = "none"
+        geometry_available = False
+        grounding_preprocess_variant = None
 
     result = {
         "document_id": sanitize_identifier(document_path.stem),
