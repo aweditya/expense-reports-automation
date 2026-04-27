@@ -51,13 +51,19 @@ def read_json(path: Path) -> dict[str, Any]:
 
 def resolve_manifest_document_paths(manifest_path: Path) -> list[dict[str, Any]]:
     manifest_root = manifest_path.parent.resolve()
+    corpus_root = manifest_root.parent
     manifest = read_json(manifest_path)
     documents = manifest.get("documents") or []
     resolved = []
     for index, document in enumerate(documents):
         input_path = Path(document["input_path"])
         if not input_path.is_absolute():
-            input_path = (manifest_root / input_path).resolve()
+            direct = (manifest_root / input_path).resolve()
+            corpus_relative = (corpus_root / input_path).resolve()
+            if direct.exists():
+                input_path = direct
+            else:
+                input_path = corpus_relative
         resolved.append(
             {
                 "index": index,

@@ -38,6 +38,34 @@ class HostedReceiptFlowEvalTests(unittest.TestCase):
             self.assertEqual(documents[0]["document_id"], "receipt_1")
             self.assertEqual(documents[0]["input_path"], receipt_path.resolve())
 
+    def test_resolve_manifest_document_paths_falls_back_to_corpus_root(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            manifest_dir = root / "manifests"
+            assets_dir = root / "assets" / "demo"
+            manifest_dir.mkdir(parents=True)
+            assets_dir.mkdir(parents=True)
+            receipt_path = assets_dir / "receipt.png"
+            receipt_path.write_bytes(b"fake")
+            manifest_path = manifest_dir / "demo.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "corpus_name": "demo",
+                        "documents": [
+                            {
+                                "document_id": "receipt_2",
+                                "input_path": "assets/demo/receipt.png",
+                            }
+                        ],
+                    }
+                )
+            )
+
+            documents = hosted_eval.resolve_manifest_document_paths(manifest_path)
+
+            self.assertEqual(documents[0]["input_path"], receipt_path.resolve())
+
     def test_draft_line_summaries_extracts_projected_fields(self):
         draft_yaml = """
 expense_report:
