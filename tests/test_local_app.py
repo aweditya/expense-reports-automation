@@ -56,7 +56,38 @@ def build_manifest(bundle_id: str, *, updated_at_epoch_ms: int = 1000) -> dict:
     }
 
 
-def build_ledger_fixture() -> dict:
+def build_ledger_fixture(*, ready: bool = False) -> dict:
+    if ready:
+        return {
+            "summary": {
+                "current_state": "ready_to_file",
+                "current_draft_version_id": 2,
+            },
+            "draft_versions": [
+                {
+                    "version_id": 1,
+                    "review_packet": {
+                        "summary": {"filing_status": "user_input_required"},
+                        "issues_queue": [{"class": "user_input_required", "label": "Missing", "path": "a", "message": "fill"}],
+                    },
+                    "readiness": {
+                        "issues": [
+                            {"class": "user_input_required"},
+                        ]
+                    },
+                },
+                {
+                    "version_id": 2,
+                    "review_packet": {
+                        "summary": {"filing_status": "ready_to_file"},
+                        "issues_queue": [],
+                    },
+                    "readiness": {
+                        "issues": []
+                    },
+                },
+            ],
+        }
     return {
         "summary": {
             "current_state": "user_input_required",
@@ -65,7 +96,10 @@ def build_ledger_fixture() -> dict:
         "draft_versions": [
             {
                 "version_id": 1,
-                "review_packet": {"summary": {"filing_status": "user_input_required"}},
+                "review_packet": {
+                    "summary": {"filing_status": "user_input_required"},
+                    "issues_queue": [{"class": "user_input_required", "label": "Missing", "path": "a", "message": "fill"}],
+                },
                 "readiness": {
                     "issues": [
                         {"class": "manual_review"},
@@ -75,7 +109,10 @@ def build_ledger_fixture() -> dict:
             },
             {
                 "version_id": 2,
-                "review_packet": {"summary": {"filing_status": "ready_to_file"}},
+                "review_packet": {
+                    "summary": {"filing_status": "ready_to_file"},
+                    "issues_queue": [{"class": "user_input_required", "label": "Missing", "path": "b", "message": "fill"}],
+                },
                 "readiness": {
                     "issues": [
                         {"class": "user_input_required"},
@@ -524,9 +561,8 @@ class LocalAppTests(unittest.TestCase):
                 local_app.load_bundle_manifest(workspace_root, "demo_bundle"),
             )
 
-            self.assertIn("Workbench availability:</strong> ready", page)
-            self.assertIn("/bundle/demo_bundle/overview", page)
-            self.assertIn("/bundle/demo_bundle/preview", page)
+            self.assertIn("Workbench:</strong> Ready", page)
+            self.assertIn("Open Final Preview (not yet available)", page)
             self.assertIn("/bundle/demo_bundle/developer", page)
             self.assertIn("/bundle/demo_bundle/document/doc_receipt/receipt.png", page)
             self.assertIn("/bundle/demo_bundle/review-session", page)
@@ -637,7 +673,9 @@ class LocalAppTests(unittest.TestCase):
         self.assertIn("pendingFiles", page)
         self.assertIn("DataTransfer()", page)
         self.assertNotIn("Service Account Key", page)
-        self.assertIn("Configured ingestion", page)
+        self.assertIn("Accepts PDF files and text documents", page)
+        self.assertNotIn("Recent Bundles", page)
+        self.assertIn("What Happens Next", page)
 
     def test_render_index_page_can_show_advanced_config_overrides(self):
         config = build_config(
@@ -651,6 +689,7 @@ class LocalAppTests(unittest.TestCase):
 
         self.assertIn("Technical overrides", page)
         self.assertIn("Service Account Key", page)
+        self.assertIn("Recent Bundles", page)
 
     def test_ensure_safe_bundle_id_rejects_path_traversal(self):
         with self.assertRaises(local_app.LocalAppError):
@@ -680,6 +719,159 @@ class LocalAppTests(unittest.TestCase):
         finally:
             local_app.parse_args = original_parse_args
             local_app.run_server = original_run_server
+
+
+class FriendlyStageLabelTests(unittest.TestCase):
+    """Tests for friendly_stage_label() which maps internal stage strings to user-facing text."""
+
+    def test_known_stages(self):
+        cases = {
+            "automation_blocked": "Action Required",
+            "user_input_required": "Needs Your Input",
+            "manual_review_required": "Ready for Review",
+            "ready_to_file": "Ready to File",
+            "submitted": "Submitted",
+            "accepted": "Accepted",
+            "returned": "Returned",
+            "rejected": "Rejected",
+        }
+        for stage, expected in cases.items():
+            with self.subTest(stage=stage):
+                self.assertEqual(local_app.friendly_stage_label(stage), expected)
+
+    def test_unknown_stage_falls_back_to_title_case(self):
+        self.assertEqual(local_app.friendly_stage_label("some_new_stage"), "Some New Stage")
+
+    def test_empty_string(self):
+        self.assertEqual(local_app.friendly_stage_label(""), "")
+
+
+class SanitizeIdentifierTests(unittest.TestCase):
+    """Tests for sanitize_identifier() security hardening."""
+
+    def test_ascii_alphanumeric_passes_through(self):
+        self.assertEqual(local_app.sanitize_identifier("hello123"), "hello123")
+
+    def test_unicode_letters_are_stripped(self):
+        result = local_app.sanitize_identifier("报告_2024")
+        self.assertTrue(result.isascii(), f"Expected ASCII-only, got {result!r}")
+        self.assertEqual(result, "2024")
+
+    def test_long_identifier_is_truncated(self):
+        long_id = "a" * 500
+        result = local_app.sanitize_identifier(long_id)
+        self.assertLessEqual(len(result), local_app.MAX_IDENTIFIER_LENGTH)
+
+    def test_path_traversal_stripped(self):
+        self.assertEqual(local_app.sanitize_identifier("../../etc/passwd"), "etc_passwd")
+
+    def test_xss_payload_stripped(self):
+        self.assertEqual(local_app.sanitize_identifier("<script>alert(1)</script>"), "script_alert_1_script")
+
+
+class EnsureSafeBundleIdTests(unittest.TestCase):
+    """Tests for ensure_safe_bundle_id() validation."""
+
+    def test_rejects_empty(self):
+        with self.assertRaises(local_app.LocalAppError):
+            local_app.ensure_safe_bundle_id("")
+
+    def test_rejects_too_long(self):
+        with self.assertRaises(local_app.LocalAppError) as ctx:
+            local_app.ensure_safe_bundle_id("a" * 300)
+        self.assertIn("too long", str(ctx.exception))
+
+    def test_truncates_reflected_invalid_id_in_error(self):
+        with self.assertRaises(local_app.LocalAppError) as ctx:
+            local_app.ensure_safe_bundle_id("bad-name")
+        msg = str(ctx.exception)
+        self.assertIn("invalid bundle identifier", msg)
+        self.assertLessEqual(len(msg), 200)
+
+    def test_accepts_valid_id(self):
+        self.assertEqual(local_app.ensure_safe_bundle_id("valid_id_123"), "valid_id_123")
+
+
+class SanitizePipelineErrorTests(unittest.TestCase):
+    """Tests for sanitize_pipeline_error() which strips internals from stderr."""
+
+    def test_strips_cargo_output(self):
+        raw = (
+            "   Compiling expense_report_schema v0.1.0\n"
+            "    Finished `dev` profile [unoptimized + debuginfo]\n"
+            "     Running `target/debug/ingest_bundle_workspace`\n"
+            "pdfinfo failed: not a PDF file\n"
+        )
+        result = local_app.sanitize_pipeline_error(raw)
+        self.assertNotIn("Compiling", result)
+        self.assertNotIn("Finished", result)
+        self.assertNotIn("Running `", result)
+        self.assertIn("pdfinfo failed", result)
+
+    def test_scrubs_filesystem_paths(self):
+        raw = "Error reading /Users/adityasriram/Labs/project/file.pdf"
+        result = local_app.sanitize_pipeline_error(raw)
+        self.assertNotIn("/Users/adityasriram", result)
+        self.assertIn("[path]", result)
+
+    def test_truncates_long_messages(self):
+        raw = "error: " + "x" * 1000
+        result = local_app.sanitize_pipeline_error(raw)
+        self.assertLessEqual(len(result), 510)
+
+    def test_empty_input_gives_default_message(self):
+        result = local_app.sanitize_pipeline_error("")
+        self.assertIn("could not be processed", result)
+
+    def test_scrubs_tmp_paths(self):
+        raw = "failed to read /tmp/stress_test_workspace/bundles/test/uploads/file.pdf"
+        result = local_app.sanitize_pipeline_error(raw)
+        self.assertNotIn("/tmp/stress_test", result)
+
+
+class FormatHelperTests(unittest.TestCase):
+    """Tests for format_file_size(), pluralize(), format_epoch_ms()."""
+
+    def test_format_file_size_bytes(self):
+        self.assertEqual(local_app.format_file_size(500), "500 bytes")
+
+    def test_format_file_size_kb(self):
+        self.assertEqual(local_app.format_file_size(2048), "2.0 KB")
+
+    def test_format_file_size_mb(self):
+        self.assertEqual(local_app.format_file_size(2_500_000), "2.4 MB")
+
+    def test_pluralize_singular(self):
+        self.assertEqual(local_app.pluralize(1, "document"), "1 document")
+
+    def test_pluralize_plural(self):
+        self.assertEqual(local_app.pluralize(3, "document"), "3 documents")
+
+    def test_pluralize_zero(self):
+        self.assertEqual(local_app.pluralize(0, "item"), "0 items")
+
+    def test_format_epoch_ms(self):
+        result = local_app.format_epoch_ms(1714200000000)
+        self.assertIn("2024", result)
+
+
+class ErrorPageTests(unittest.TestCase):
+    """Tests for render_error_page() and custom error handling."""
+
+    def test_render_404_page_is_branded(self):
+        page = local_app.render_error_page(404, "Not found")
+        self.assertIn("Page Not Found", page)
+        self.assertIn("Back to upload page", page)
+        self.assertNotIn("Error code explanation", page)
+
+    def test_render_405_page(self):
+        page = local_app.render_error_page(405, "Method Not Allowed")
+        self.assertIn("Method Not Allowed", page)
+
+    def test_error_page_escapes_html(self):
+        page = local_app.render_error_page(400, "<script>alert(1)</script>")
+        self.assertNotIn("<script>alert(1)</script>", page)
+        self.assertIn("&lt;script&gt;", page)
 
 
 class LocalAppHttpTests(unittest.TestCase):
@@ -773,7 +965,7 @@ class LocalAppHttpTests(unittest.TestCase):
                     response_headers["Cache-Control"],
                     "no-store, no-cache, must-revalidate, max-age=0",
                 )
-                self.assertIn(b"Local FA Intake App", payload)
+                self.assertIn(b"Upload &amp; Process", payload)
 
                 status, response_headers, payload = self.request(config, "GET", "/bundle/demo_bundle")
                 self.assertEqual(status, 303)
@@ -782,7 +974,7 @@ class LocalAppHttpTests(unittest.TestCase):
 
                 status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/overview")
                 self.assertEqual(status, 200)
-                self.assertIn(b"Managed bundle", payload)
+                self.assertIn(b"Expense Report", payload)
 
                 status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/manifest")
                 self.assertEqual(status, 200)
@@ -802,7 +994,7 @@ class LocalAppHttpTests(unittest.TestCase):
 
                 status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/preview")
                 self.assertEqual(status, 200)
-                self.assertIn(b"Dynamic Preview", payload)
+                self.assertIn(b"Preview Not Yet Available", payload)
 
                 status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/developer")
                 self.assertEqual(status, 200)
@@ -928,6 +1120,369 @@ class LocalAppHttpTests(unittest.TestCase):
                 self.assertEqual(json.loads(payload)["error"], "bad review payload")
         finally:
             local_app.handle_review_save_submission = original
+
+
+    def test_preview_route_serves_preview_when_ready_to_file(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            write_bundle_fixture(workspace_root, "demo_bundle", with_workbench=True)
+            # Overwrite ledger with ready-to-file state
+            artifacts_dir = workspace_root / "bundles" / "demo_bundle" / "runs" / "demo_run" / "artifacts"
+            (artifacts_dir / "ledger.json").write_text(
+                json.dumps(build_ledger_fixture(ready=True), indent=2)
+            )
+            config = self.make_config(workspace_root)
+            original_render = local_app.render_current_review_surface_html
+            local_app.render_current_review_surface_html = (
+                lambda repo_root, workspace_root, bundle_id, surface, command_runner=local_app.run_pipeline_command: (
+                    "<!DOCTYPE html><html><body><h1>Dynamic Preview</h1></body></html>"
+                )
+            )
+            try:
+                status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/preview")
+                self.assertEqual(status, 200)
+                self.assertIn(b"Dynamic Preview", payload)
+                self.assertNotIn(b"Preview Not Yet Available", payload)
+            finally:
+                local_app.render_current_review_surface_html = original_render
+
+    def test_preview_route_returns_gate_page_when_not_ready_to_file(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            write_bundle_fixture(workspace_root, "demo_bundle", with_workbench=True)
+            config = self.make_config(workspace_root)
+
+            status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/preview")
+            self.assertEqual(status, 200)
+            self.assertIn(b"Preview Not Yet Available", payload)
+            self.assertIn(b"Needs Your Input", payload)
+            self.assertIn(b"Open Workbench", payload)
+            self.assertNotIn(b"Dynamic Preview", payload)
+
+    def test_preview_route_keeps_gate_when_session_is_inconsistent(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            write_bundle_fixture(workspace_root, "demo_bundle", with_workbench=True)
+            config = self.make_config(workspace_root)
+            original_load_session = local_app.load_review_session_state
+            original_render = local_app.render_current_review_surface_html
+            local_app.load_review_session_state = lambda _workspace_root, _bundle_id: {
+                "filing_status": "ready_to_file",
+                "issue_count": 2,
+                "readiness": {
+                    "automation_gap_count": 1,
+                    "user_input_gap_count": 0,
+                    "manual_review_count": 0,
+                    "other_warning_count": 0,
+                },
+            }
+            local_app.render_current_review_surface_html = (
+                lambda repo_root, workspace_root, bundle_id, surface, command_runner=local_app.run_pipeline_command: (
+                    "<!DOCTYPE html><html><body><h1>Dynamic Preview</h1></body></html>"
+                )
+            )
+            try:
+                status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/preview")
+                self.assertEqual(status, 200)
+                self.assertIn(b"Preview Not Yet Available", payload)
+                self.assertNotIn(b"Dynamic Preview", payload)
+            finally:
+                local_app.load_review_session_state = original_load_session
+                local_app.render_current_review_surface_html = original_render
+
+    def test_preview_gate_page_shows_readiness_counts(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            write_bundle_fixture(workspace_root, "demo_bundle", with_workbench=True)
+            session = local_app.load_review_session_state(workspace_root, "demo_bundle")
+            config = build_config(Path(temp_dir), workspace_root)
+
+            page = local_app.render_preview_gate_page(config, "demo_bundle", session)
+
+            self.assertIn("Could Not Extract", page)
+            self.assertIn("Needs Your Input", page)
+            self.assertIn("Review Required", page)
+            self.assertIn("/bundle/demo_bundle/workbench", page)
+            self.assertIn("/bundle/demo_bundle/overview", page)
+
+    def test_preview_gate_page_links_back_to_workbench(self):
+        session = {
+            "filing_status": "user_input_required",
+            "issue_count": 3,
+            "readiness": {
+                "automation_gap_count": 0,
+                "user_input_gap_count": 2,
+                "manual_review_count": 1,
+            },
+        }
+        config = build_config(Path("/tmp/repo"), Path("/tmp/workspace"))
+
+        page = local_app.render_preview_gate_page(config, "test_bundle", session)
+
+        self.assertIn("/bundle/test_bundle/workbench", page)
+        self.assertIn("Open Workbench", page)
+        self.assertIn("/bundle/test_bundle/overview", page)
+
+
+    def test_custom_404_page_for_unknown_route(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = self.make_config(Path(temp_dir))
+            status, _, payload = self.request(config, "GET", "/nonexistent")
+            self.assertEqual(status, 404)
+            self.assertIn(b"Page Not Found", payload)
+            self.assertIn(b"Back to upload page", payload)
+            self.assertNotIn(b"Error code explanation", payload)
+
+    def test_post_to_index_returns_405(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = self.make_config(Path(temp_dir))
+            status, _, payload = self.request(config, "POST", "/")
+            self.assertEqual(status, 405)
+            self.assertIn(b"Method Not Allowed", payload)
+
+    def test_server_version_header_hides_python_version(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = self.make_config(Path(temp_dir))
+            _, headers, _ = self.request(config, "GET", "/")
+            server = headers.get("Server", "")
+            self.assertNotIn("Python", server)
+            self.assertIn("ExpenseLocalApp", server)
+
+    def test_head_request_returns_headers_without_body(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = self.make_config(Path(temp_dir))
+            status, headers, payload = self.request(config, "HEAD", "/")
+            self.assertEqual(status, 200)
+            self.assertEqual(payload, b"")
+
+    def test_debug_metrics_endpoint(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            write_bundle_fixture(workspace_root, "demo_bundle", with_workbench=True)
+            config = self.make_config(workspace_root)
+            status, headers, payload = self.request(config, "GET", "/debug/metrics")
+            self.assertEqual(status, 200)
+            self.assertEqual(headers["Content-Type"], "application/json; charset=utf-8")
+            data = json.loads(payload)
+            self.assertEqual(data["bundle_count"], 1)
+            self.assertIn("stages", data)
+            self.assertIn("workspace_size_human", data)
+
+    def test_debug_bundles_endpoint(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            write_bundle_fixture(workspace_root, "demo_bundle", with_workbench=True)
+            config = self.make_config(workspace_root)
+            status, _, payload = self.request(config, "GET", "/debug/bundles")
+            self.assertEqual(status, 200)
+            data = json.loads(payload)
+            self.assertIsInstance(data, list)
+            self.assertEqual(len(data), 1)
+            self.assertEqual(data[0]["bundle_id"], "demo_bundle")
+            self.assertIn("review_session", data[0])
+
+    def test_debug_unknown_returns_404(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = self.make_config(Path(temp_dir))
+            status, _, _ = self.request(config, "GET", "/debug/unknown")
+            self.assertEqual(status, 404)
+
+    def test_bundle_overview_shows_file_sizes_formatted(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            write_bundle_fixture(workspace_root, "demo_bundle", with_workbench=True)
+            config = self.make_config(workspace_root)
+            status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/overview")
+            self.assertEqual(status, 200)
+            self.assertIn(b"42 bytes", payload)
+            self.assertNotIn(b"image/png", payload)
+
+    def test_bundle_overview_shows_formatted_timestamp(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            write_bundle_fixture(workspace_root, "demo_bundle", with_workbench=True)
+            config = self.make_config(workspace_root)
+            status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/overview")
+            self.assertEqual(status, 200)
+            self.assertIn(b"Last processed:", payload)
+            self.assertNotIn(b"demo_run", payload)
+
+    def test_bundle_overview_uses_check_for_updates_button(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            write_bundle_fixture(workspace_root, "demo_bundle", with_workbench=True)
+            config = self.make_config(workspace_root)
+            status, _, payload = self.request(config, "GET", "/bundle/demo_bundle/overview")
+            self.assertIn(b"Check for Updates", payload)
+            self.assertNotIn(b"Refresh This Page", payload)
+
+
+class PreviewGateTests(unittest.TestCase):
+    """Tests for the preview gate logic and bundle overview link styling."""
+
+    def test_filing_status_from_counts_returns_automation_blocked(self):
+        self.assertEqual(
+            local_app.filing_status_from_counts({
+                "automation_gap_count": 1,
+                "user_input_gap_count": 0,
+                "manual_review_count": 0,
+            }),
+            "automation_blocked",
+        )
+
+    def test_filing_status_from_counts_returns_user_input_required(self):
+        self.assertEqual(
+            local_app.filing_status_from_counts({
+                "automation_gap_count": 0,
+                "user_input_gap_count": 2,
+                "manual_review_count": 0,
+            }),
+            "user_input_required",
+        )
+
+    def test_filing_status_from_counts_returns_manual_review_required(self):
+        self.assertEqual(
+            local_app.filing_status_from_counts({
+                "automation_gap_count": 0,
+                "user_input_gap_count": 0,
+                "manual_review_count": 1,
+            }),
+            "manual_review_required",
+        )
+
+    def test_filing_status_from_counts_returns_ready_to_file(self):
+        self.assertEqual(
+            local_app.filing_status_from_counts({
+                "automation_gap_count": 0,
+                "user_input_gap_count": 0,
+                "manual_review_count": 0,
+            }),
+            "ready_to_file",
+        )
+
+    def test_filing_status_priority_automation_over_user_input(self):
+        self.assertEqual(
+            local_app.filing_status_from_counts({
+                "automation_gap_count": 1,
+                "user_input_gap_count": 3,
+                "manual_review_count": 2,
+            }),
+            "automation_blocked",
+        )
+
+    def test_filing_status_priority_user_input_over_manual_review(self):
+        self.assertEqual(
+            local_app.filing_status_from_counts({
+                "automation_gap_count": 0,
+                "user_input_gap_count": 1,
+                "manual_review_count": 5,
+            }),
+            "user_input_required",
+        )
+
+    def test_preview_is_available_requires_ready_status_and_no_remaining_items(self):
+        self.assertTrue(
+            local_app.preview_is_available(
+                {
+                    "filing_status": "ready_to_file",
+                    "issue_count": 0,
+                    "readiness": {
+                        "automation_gap_count": 0,
+                        "user_input_gap_count": 0,
+                        "manual_review_count": 0,
+                    },
+                }
+            )
+        )
+        self.assertFalse(
+            local_app.preview_is_available(
+                {
+                    "filing_status": "ready_to_file",
+                    "issue_count": 1,
+                    "readiness": {
+                        "automation_gap_count": 0,
+                        "user_input_gap_count": 0,
+                        "manual_review_count": 0,
+                    },
+                }
+            )
+        )
+        self.assertFalse(
+            local_app.preview_is_available(
+                {
+                    "filing_status": "automation_blocked",
+                    "issue_count": 0,
+                    "readiness": {
+                        "automation_gap_count": 0,
+                        "user_input_gap_count": 0,
+                        "manual_review_count": 0,
+                    },
+                }
+            )
+        )
+
+    def test_load_review_session_state_computes_correct_readiness(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            write_bundle_fixture(workspace_root, "demo_bundle")
+
+            session = local_app.load_review_session_state(workspace_root, "demo_bundle")
+
+            self.assertEqual(session["current_draft_version_id"], 2)
+            self.assertEqual(session["filing_status"], "user_input_required")
+            self.assertEqual(session["readiness"]["user_input_gap_count"], 1)
+            self.assertEqual(session["readiness"]["other_warning_count"], 1)
+            self.assertEqual(session["readiness"]["automation_gap_count"], 0)
+            self.assertEqual(session["readiness"]["manual_review_count"], 0)
+
+    def test_load_review_session_state_ready_to_file(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            write_bundle_fixture(workspace_root, "demo_bundle")
+            artifacts_dir = workspace_root / "bundles" / "demo_bundle" / "runs" / "demo_run" / "artifacts"
+            (artifacts_dir / "ledger.json").write_text(
+                json.dumps(build_ledger_fixture(ready=True), indent=2)
+            )
+
+            session = local_app.load_review_session_state(workspace_root, "demo_bundle")
+
+            self.assertEqual(session["filing_status"], "ready_to_file")
+            self.assertEqual(session["readiness"]["user_input_gap_count"], 0)
+            self.assertEqual(session["readiness"]["manual_review_count"], 0)
+            self.assertEqual(session["issue_count"], 0)
+
+    def test_bundle_overview_shows_muted_preview_link_when_not_ready(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            write_bundle_fixture(workspace_root, "demo_bundle")
+            config = build_config(Path(temp_dir), workspace_root)
+            manifest = local_app.load_bundle_manifest(workspace_root, "demo_bundle")
+
+            page = local_app.render_bundle_page(config, manifest)
+
+            self.assertIn("not yet available", page)
+            self.assertIn('opacity: 0.5', page)
+
+    def test_bundle_overview_shows_active_preview_link_when_ready(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            write_bundle_fixture(workspace_root, "demo_bundle")
+            # Update manifest and ledger to reflect a fully ready packet
+            manifest_path = workspace_root / "bundles" / "demo_bundle" / "bundle_manifest.json"
+            manifest = json.loads(manifest_path.read_text())
+            manifest["runs"][0]["filing_status"] = "ready_to_file"
+            manifest_path.write_text(json.dumps(manifest, indent=2))
+            artifacts_dir = workspace_root / "bundles" / "demo_bundle" / "runs" / "demo_run" / "artifacts"
+            (artifacts_dir / "ledger.json").write_text(
+                json.dumps(build_ledger_fixture(ready=True), indent=2)
+            )
+            config = build_config(Path(temp_dir), workspace_root)
+            manifest = local_app.load_bundle_manifest(workspace_root, "demo_bundle")
+
+            page = local_app.render_bundle_page(config, manifest)
+
+            self.assertIn("Open Final Preview", page)
+            self.assertNotIn("not yet available", page)
 
 
 class DeploymentTests(unittest.TestCase):

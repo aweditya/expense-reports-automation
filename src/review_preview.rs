@@ -18,7 +18,7 @@ pub fn render_review_preview_html(packet: &ReviewPacket) -> String {
          h1{font-size:42px;line-height:1.05;}\
          h2{font-size:28px;line-height:1.15;}\
          h3{font-size:20px;line-height:1.2;}\
-         .hero-subtitle,.hero-note,.summary-card p,.field-path,.field-note,.field-source,.summary-list,.issue-card p,.attachment-card p,.document-card p,.field-value,.field-label,.field-source-link,.placeholder,.document-field-label,.document-field-value{margin:0;}\
+         .hero-subtitle,.hero-note,.summary-card p,.field-note,.field-source,.summary-list,.issue-card p,.attachment-card p,.document-card p,.field-value,.field-label,.field-source-link,.placeholder,.document-field-label,.document-field-value{margin:0;}\
          .hero-status{margin:10px 0 0;font-size:18px;font-weight:700;color:#2d5a46;text-transform:capitalize;}\
          .hero-subtitle{margin-top:8px;font-size:18px;color:#645a4f;}\
          .hero-note{margin-top:14px;color:#645a4f;max-width:780px;line-height:1.5;}\
@@ -44,7 +44,6 @@ pub fn render_review_preview_html(packet: &ReviewPacket) -> String {
          .field-card{padding:15px 16px;border:1px solid #e6dece;border-radius:16px;background:#fff;}\
          .field-topline{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px;}\
          .field-label{font-size:18px;font-weight:700;}\
-         .field-path{font-size:12px;color:#8a7c6d;}\
          .field-value{margin-top:10px;font-size:18px;line-height:1.4;white-space:pre-wrap;word-break:break-word;}\
          .placeholder{color:#8d5b35;font-style:italic;}\
          .field-note,.field-source{margin-top:10px;color:#645a4f;font-size:14px;line-height:1.45;}\
@@ -114,8 +113,7 @@ fn render_header(html: &mut String, packet: &ReviewPacket) {
 fn render_action_bar(html: &mut String) {
     html.push_str("<nav class=\"action-bar\">");
     html.push_str("<a class=\"action-link\" href=\"workbench\">Back to FA workbench</a>");
-    html.push_str("<a class=\"action-link secondary\" href=\"overview\">Bundle overview</a>");
-    html.push_str("<a class=\"action-link secondary\" href=\"developer\">Developer tools</a>");
+    html.push_str("<a class=\"action-link secondary\" href=\"overview\">Report overview</a>");
     html.push_str(
         "<button class=\"action-button\" type=\"button\" onclick=\"window.print()\">Print / Save PDF</button>",
     );
@@ -178,7 +176,7 @@ fn render_summary_panel(html: &mut String, packet: &ReviewPacket) {
         packet.summary.document_count, packet.summary.transaction_line_count
     ));
     html.push_str(&format!(
-        "<li>{} automation gap(s), {} user-input gap(s), {} review item(s), {} warning(s)</li>",
+        "<li>{} system item(s), {} field(s) need your input, {} field(s) need review, {} warning(s)</li>",
         packet.summary.readiness.automation_gap_count,
         packet.summary.readiness.user_input_gap_count,
         packet.summary.readiness.manual_review_count,
@@ -206,8 +204,6 @@ fn render_issues_panel(html: &mut String, packet: &ReviewPacket) {
             html.push_str("<article class=\"issue-card\">");
             html.push_str("<div class=\"field-topline\"><div><p class=\"issue-label\">");
             html.push_str(&escape_html(&issue.label));
-            html.push_str("</p><p class=\"issue-meta\">");
-            html.push_str(&escape_html(&issue.path));
             html.push_str("</p></div><span class=\"status-pill ");
             html.push_str(issue_class_name(issue.class));
             html.push_str("\">");
@@ -240,9 +236,7 @@ fn render_sections(html: &mut String, packet: &ReviewPacket) {
             html.push_str("<section class=\"instance-card\">");
             html.push_str("<div class=\"instance-heading\"><div><h3>");
             html.push_str(&escape_html(&instance.label));
-            html.push_str("</h3><p class=\"field-path\">");
-            html.push_str(&escape_html(&instance.path));
-            html.push_str("</p></div>");
+            html.push_str("</h3></div>");
             html.push_str("<span class=\"status-pill ready\">Read-only preview</span></div>");
             html.push_str("<div class=\"field-stack\">");
             for field in &instance.fields {
@@ -259,8 +253,6 @@ fn render_field(html: &mut String, field: &CopyField) {
     html.push_str("<article class=\"field-card\">");
     html.push_str("<div class=\"field-topline\"><div><p class=\"field-label\">");
     html.push_str(&escape_html(&field.label));
-    html.push_str("</p><p class=\"field-path\">");
-    html.push_str(&escape_html(&field.path));
     html.push_str("</p></div><span class=\"status-pill ");
     html.push_str(field_status_class(field));
     html.push_str("\">");
@@ -272,11 +264,6 @@ fn render_field(html: &mut String, field: &CopyField) {
         _ => render_scalar_value(html, field),
     }
 
-    if let Some(source) = field.source.as_deref() {
-        html.push_str("<p class=\"field-source\">Source tier: ");
-        html.push_str(&escape_html(source));
-        html.push_str("</p>");
-    }
     if field.needs_review {
         html.push_str("<p class=\"field-note\">This field is present, but the current packet still marks it for review.</p>");
     } else if !field.present && field.required {
@@ -392,10 +379,12 @@ fn render_documents_panel(html: &mut String, packet: &ReviewPacket) {
             html.push_str("<article class=\"document-card\">");
             html.push_str("<div class=\"field-topline\"><div><h3>");
             html.push_str(&escape_html(&document.filename));
-            html.push_str("</h3><p class=\"field-path\">");
-            html.push_str(&escape_html(&document.kind));
+            html.push_str("</h3><p class=\"field-note\">");
+            html.push_str(&escape_html(&friendly_document_kind(&document.kind)));
             html.push_str(" · ");
-            html.push_str(&escape_html(&document.status_label));
+            html.push_str(&escape_html(&friendly_document_status(
+                &document.status_label,
+            )));
             html.push_str("</p></div><span class=\"status-pill ");
             html.push_str(if document.projected_to_filing {
                 "ready"
@@ -406,11 +395,11 @@ fn render_documents_panel(html: &mut String, packet: &ReviewPacket) {
             });
             html.push_str("\">");
             html.push_str(if document.projected_to_filing {
-                "Used in filing"
+                "Used in report"
             } else if document.used_in_bundle {
-                "Bundle context"
+                "Used to prepare report"
             } else {
-                "Captured only"
+                "Captured from upload"
             });
             html.push_str("</span></div>");
             for field in &document.summary_fields {
@@ -420,15 +409,6 @@ fn render_documents_panel(html: &mut String, packet: &ReviewPacket) {
                 html.push_str(&escape_html(&field.value));
                 html.push_str("</p></div>");
             }
-            if !document.issue_messages.is_empty() {
-                html.push_str("<ul class=\"attachment-files\">");
-                for issue in &document.issue_messages {
-                    html.push_str("<li>");
-                    html.push_str(&escape_html(issue));
-                    html.push_str("</li>");
-                }
-                html.push_str("</ul>");
-            }
             html.push_str(
                 "<div class=\"document-actions\"><a class=\"document-link\" href=\"document/",
             );
@@ -436,7 +416,7 @@ fn render_documents_panel(html: &mut String, packet: &ReviewPacket) {
             html.push('/');
             html.push_str(&escape_html_attribute(&document.filename));
             html.push_str(
-                "\" target=\"_blank\" rel=\"noreferrer noopener\">Open source document</a></div>",
+                "\" target=\"_blank\" rel=\"noreferrer noopener\">Open uploaded document</a></div>",
             );
             html.push_str("</article>");
         }
@@ -483,7 +463,7 @@ fn field_status_class(field: &CopyField) -> &'static str {
 
 fn issue_label(class: crate::ReadinessIssueClass) -> &'static str {
     match class {
-        crate::ReadinessIssueClass::AutomationGap => "Automation gap",
+        crate::ReadinessIssueClass::AutomationGap => "Needs another source",
         crate::ReadinessIssueClass::UserInputRequired => "Needs your input",
         crate::ReadinessIssueClass::ManualReview => "Check this field",
         crate::ReadinessIssueClass::OtherWarning => "Warning",
@@ -501,11 +481,25 @@ fn issue_class_name(class: crate::ReadinessIssueClass) -> &'static str {
 
 fn filing_status_label(status: FilingStatus) -> &'static str {
     match status {
-        FilingStatus::AutomationBlocked => "automation blocked",
-        FilingStatus::UserInputRequired => "user input required",
-        FilingStatus::ManualReviewRequired => "manual review required",
+        FilingStatus::AutomationBlocked => "action required",
+        FilingStatus::UserInputRequired => "needs your input",
+        FilingStatus::ManualReviewRequired => "ready for review",
         FilingStatus::ReadyToFile => "ready to file",
     }
+}
+
+fn friendly_document_status(raw: &str) -> String {
+    match raw {
+        "ocr captured, not yet supported" | "ocr captured, not projected" => {
+            "Document scanned".to_owned()
+        }
+        "parsed for bundle context only" => "Used to prepare report".to_owned(),
+        other => other.to_owned(),
+    }
+}
+
+fn friendly_document_kind(kind: &str) -> String {
+    kind.replace('_', " ")
 }
 
 fn evidence_document_links(evidence: &[crate::draft::EvidenceReference]) -> Vec<(String, String)> {
@@ -574,7 +568,16 @@ mod tests {
         let rendered = render_review_preview_html(&synthetic_packet());
         assert!(rendered.contains("Attachment Checklist"));
         assert!(rendered.contains("Uploaded Evidence"));
-        assert!(rendered.contains("Open source document"));
+        assert!(rendered.contains("Open uploaded document"));
         assert!(rendered.contains("General Information"));
+    }
+
+    #[test]
+    fn review_preview_omits_developer_and_schema_details() {
+        let rendered = render_review_preview_html(&synthetic_packet());
+        assert!(!rendered.contains("Developer tools"));
+        assert!(!rendered.contains("Source tier:"));
+        assert!(!rendered.contains("class=\"field-path\""));
+        assert!(!rendered.contains("expense_report."));
     }
 }

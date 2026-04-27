@@ -24,6 +24,14 @@ DEFAULT_HOST = os.environ.get("HOST", "127.0.0.1")
 DEFAULT_PORT = int(os.environ.get("PORT", "8765"))
 DEFAULT_MODEL = "gemini-3-flash-preview"
 DEFAULT_LOCATION = "global"
+FAVICON_LINK = (
+    '<link rel="icon" href="data:image/svg+xml,'
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>"
+    "<rect rx='20' width='100' height='100' fill='%232f5b53'/>"
+    "<text x='50' y='68' text-anchor='middle' fill='white' font-size='52' font-family='Georgia'>$</text>"
+    "</svg>\">"
+)
+
 EXPORTABLE_ARTIFACTS = {
     "draft.yaml",
     "validation.json",
@@ -80,8 +88,10 @@ class LocalAppError(RuntimeError):
 def ensure_safe_bundle_id(bundle_id: str) -> str:
     if not bundle_id:
         raise LocalAppError("bundle identifier is required")
+    if len(bundle_id) > MAX_IDENTIFIER_LENGTH:
+        raise LocalAppError(f"bundle identifier is too long (max {MAX_IDENTIFIER_LENGTH} characters)")
     if sanitize_identifier(bundle_id) != bundle_id:
-        raise LocalAppError(f"invalid bundle identifier: {bundle_id}")
+        raise LocalAppError(f"invalid bundle identifier: {bundle_id[:80]}")
     return bundle_id
 
 
@@ -242,7 +252,12 @@ def bundle_inflight_marker_path(workspace_root: Path, bundle_id: str) -> Path:
 
 def acquire_bundle_inflight_lock(workspace_root: Path, bundle_id: str) -> Path:
     bundle_root = bundle_root_path(workspace_root, bundle_id)
-    bundle_root.mkdir(parents=True, exist_ok=True)
+    try:
+        bundle_root.mkdir(parents=True, exist_ok=True)
+    except OSError as err:
+        raise LocalAppError(
+            f"could not create bundle directory: {err.strerror}"
+        ) from err
     marker_path = bundle_inflight_marker_path(workspace_root, bundle_id)
     payload = {
         "bundle_id": bundle_id,
@@ -597,6 +612,40 @@ def build_render_surface_command(
     ]
 
 
+def sanitize_pipeline_error(raw_output: str) -> str:
+    """Extract a user-safe error message from pipeline stderr.
+
+    Strips cargo build output, absolute filesystem paths, and internal
+    command details that should not be shown to end users.
+    """
+    import re
+
+    lines = raw_output.strip().splitlines()
+    filtered = []
+    for line in lines:
+        stripped = line.strip()
+        # Skip cargo compilation/build output
+        if stripped.startswith(("Compiling ", "Finished ", "Running `", "warning: ", "Downloading ", "Downloaded ")):
+            continue
+        # Skip empty lines at the start
+        if not filtered and not stripped:
+            continue
+        filtered.append(stripped)
+
+    if not filtered:
+        return "The uploaded document could not be processed. Please check that it is a valid PDF."
+
+    message = "\n".join(filtered)
+    # Scrub absolute file paths (Unix-style)
+    message = re.sub(r"/(?:Users|home|tmp|var|private)[/\w._-]*", "[path]", message)
+    # Scrub Windows-style paths just in case
+    message = re.sub(r"[A-Z]:\\[\w\\._-]+", "[path]", message)
+    # Truncate overly long messages
+    if len(message) > 500:
+        message = message[:500] + "…"
+    return message
+
+
 def handle_upload_submission(
     config: LocalAppConfig,
     request: UploadRequest,
@@ -615,7 +664,7 @@ def handle_upload_submission(
             command = build_ingest_command(config, request.fields, input_paths)
             completed = command_runner(command, config.repo_root)
             if completed.returncode != 0:
-                raise LocalAppError((completed.stderr or completed.stdout).strip() or "pipeline failed")
+                raise LocalAppError(sanitize_pipeline_error(completed.stderr or completed.stdout or ""))
             return bundle_id
     finally:
         release_bundle_inflight_lock(marker_path)
@@ -746,28 +795,90 @@ def filing_status_from_counts(readiness_counts: dict[str, int]) -> str:
     return "ready_to_file"
 
 
+def preview_is_available(session: dict) -> bool:
+    readiness = session.get("readiness", {})
+    return (
+        session.get("filing_status") == "ready_to_file"
+        and session.get("issue_count", 0) == 0
+        and readiness.get("automation_gap_count", 0) == 0
+        and readiness.get("user_input_gap_count", 0) == 0
+        and readiness.get("manual_review_count", 0) == 0
+    )
+
+
 def time_now_epoch_ms() -> int:
     return int(time.time() * 1000)
 
 
 def configured_ingestion_label(config: LocalAppConfig) -> str:
     if config.default_engine == "vertex-gemini-sdk":
-        return f"Live Gemini OCR · {config.default_model} · {config.default_location}"
-    return "Builtin text/PDF ingestion"
+        return "AI Document Processing"
+    return "Built-in text extraction"
+
+
+def friendly_stage_label(stage: str) -> str:
+    labels = {
+        "automation_blocked": "Action Required",
+        "user_input_required": "Needs Your Input",
+        "manual_review_required": "Ready for Review",
+        "ready_to_file": "Ready to File",
+        "submitted": "Submitted",
+        "accepted": "Accepted",
+        "returned": "Returned",
+        "rejected": "Rejected",
+    }
+    return labels.get(stage, stage.replace("_", " ").title())
+
+
+def format_file_size(byte_count: int) -> str:
+    if byte_count < 1024:
+        return f"{byte_count} bytes"
+    if byte_count < 1024 * 1024:
+        return f"{byte_count / 1024:.1f} KB"
+    return f"{byte_count / (1024 * 1024):.1f} MB"
+
+
+def pluralize(count: int, singular: str, plural: str | None = None) -> str:
+    word = singular if count == 1 else (plural or f"{singular}s")
+    return f"{count} {word}"
+
+
+def format_epoch_ms(epoch_ms: int) -> str:
+    """Format an epoch-millisecond timestamp as a human-readable date/time."""
+    ts = time.localtime(epoch_ms / 1000)
+    return time.strftime("%b %d, %Y at %I:%M %p", ts)
 
 
 def render_index_page(config: LocalAppConfig, bundles: list[BundleListEntry], message: str | None = None) -> str:
     items = []
     for bundle in bundles[:30]:
         items.append(
-            "<li><a href=\"/bundle/{bundle_id}\">{bundle_id}</a> · {stage} · {documents} docs · {runs} run(s)</li>".format(
+            "<li><a href=\"/bundle/{bundle_id}\">{bundle_id}</a> · {stage} · {documents}</li>".format(
                 bundle_id=html.escape(bundle.bundle_id),
-                stage=html.escape(bundle.current_stage),
-                documents=bundle.document_count,
-                runs=bundle.run_count,
+                stage=html.escape(friendly_stage_label(bundle.current_stage)),
+                documents=pluralize(bundle.document_count, "document"),
             )
         )
     bundles_html = "\n".join(items) or "<li>No bundles yet.</li>"
+    if config.show_advanced_config:
+        secondary_panel = f"""
+      <div class="card">
+        <p class="meta">Workspace</p>
+        <h2>Recent Bundles</h2>
+        <ul>{bundles_html}</ul>
+      </div>"""
+    else:
+        secondary_panel = """
+      <div class="card">
+        <p class="meta">What Happens Next</p>
+        <h2>Review before filing</h2>
+        <ol style="margin: 0; padding-left: 18px; line-height: 1.65;">
+          <li>Upload your receipts and travel documents.</li>
+          <li>Review the extracted fields in the workbench.</li>
+          <li>Fill any missing information and save your changes.</li>
+          <li>Open the final preview and print or save it as a PDF.</li>
+        </ol>
+      </div>"""
 
     notice = (
         f"<p class=\"notice\">{html.escape(message)}</p>\n" if message else ""
@@ -817,7 +928,8 @@ def render_index_page(config: LocalAppConfig, bundles: list[BundleListEntry], me
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Expense Reports Local App</title>
+  <title>Stanford Expense Reports</title>
+  {FAVICON_LINK}
   <style>
     body {{ font-family: Georgia, 'Times New Roman', serif; margin: 0; background: linear-gradient(180deg, #f7f2e8 0%, #efe6d6 100%); color: #1f1a17; }}
     .shell {{ max-width: 1120px; margin: 0 auto; padding: 32px 24px 48px; }}
@@ -851,7 +963,9 @@ def render_index_page(config: LocalAppConfig, bundles: list[BundleListEntry], me
     const pendingFiles = [];
 
     function pendingLabel(file) {{
-      return `${{file.name}} (${{file.size}} bytes)`;
+      const sz = file.size;
+      const label = sz < 1024 ? sz + ' bytes' : sz < 1048576 ? (sz/1024).toFixed(1) + ' KB' : (sz/1048576).toFixed(1) + ' MB';
+      return `${{file.name}} (${{label}})`;
     }}
 
     function renderPendingUploads() {{
@@ -942,22 +1056,22 @@ def render_index_page(config: LocalAppConfig, bundles: list[BundleListEntry], me
   <div class="shell">
     <section class="hero">
       <div class="card">
-        <p class="meta">Expense Reports Automation</p>
-        <h1>Local FA Intake App</h1>
-        <p>This app uploads documents into the managed bundle workspace, runs the ingestion pipeline, and then opens the editable FA workbench for review and filing.</p>
-        <p class="ingestion-chip">Configured ingestion: {html.escape(configured_ingestion_label(config))}</p>
+        <p class="meta">Expense Reports</p>
+        <h1>Upload & Process</h1>
+        <p>Upload travel receipts and documents. The system will extract key fields and open an editable workbench for review before filing.</p>
+        <p class="ingestion-chip">Accepts PDF files and text documents</p>
         {notice}
         <form id="upload-form" method="post" action="/upload" enctype="multipart/form-data">
           <div class="grid">
-            <label>Expense Packet ID
-              <input name="bundle_id" placeholder="optional_bundle_id">
+            <label>Report Name
+              <input name="bundle_id" placeholder="e.g. ICLR 2025 trip">
             </label>
-            <label>Requester / FA ID
+            <label>Your Name or ID
               <input name="user_id" placeholder="fa_or_requester_id">
             </label>
           </div>
           <label>Documents
-            <input id="documents-input" type="file" name="documents" multiple>
+            <input id="documents-input" type="file" name="documents" multiple accept=".pdf,.txt,.md,.markdown">
           </label>
           <div class="pending-uploads">
             <p class="meta">Pending uploads. You can reopen the file picker and selections will accumulate until you submit.</p>
@@ -965,15 +1079,10 @@ def render_index_page(config: LocalAppConfig, bundles: list[BundleListEntry], me
             <p id="document-error" class="error-text" hidden></p>
           </div>
           {advanced_config}
-          <button type="submit">Run Intake Pipeline</button>
+          <button type="submit">Upload &amp; Process</button>
         </form>
       </div>
-      <div class="card">
-        <p class="meta">Workspace</p>
-        <h2>Recent Bundles</h2>
-        <ul>{bundles_html}</ul>
-        <p class="meta" style="margin-top: 16px;">Workspace root: {html.escape(str(config.workspace_root))}</p>
-      </div>
+      {secondary_panel}
     </section>
   </div>
 </body>
@@ -1000,8 +1109,19 @@ def render_bundle_page(config: LocalAppConfig, bundle_manifest: dict) -> str:
     packet_href = f"/bundle/{urllib.parse.quote(bundle_id)}/artifact/review_packet.json"
     ledger_href = f"/bundle/{urllib.parse.quote(bundle_id)}/artifact/ledger.json"
     workbench_available = latest_ledger_path(config.workspace_root, bundle_id) is not None
+    filing_status = "unknown"
+    preview_available = False
+    if workbench_available:
+        try:
+            session = load_review_session_state(config.workspace_root, bundle_id)
+            filing_status = session.get("filing_status", "unknown")
+            preview_available = preview_is_available(session)
+        except LocalAppError:
+            pass
+    elif latest_run and latest_run.get("filing_status"):
+        filing_status = ledger_state_to_workspace_stage(latest_run["filing_status"])
     docs = "\n".join(
-        "<li><a href=\"{href}\" target=\"_blank\" rel=\"noreferrer\">{name}</a> · {media} · {size} bytes</li>".format(
+        "<li><a href=\"{href}\" target=\"_blank\" rel=\"noreferrer\">{name}</a> · {size}</li>".format(
             href=html.escape(
                 bundle_document_href(
                     bundle_id,
@@ -1010,20 +1130,18 @@ def render_bundle_page(config: LocalAppConfig, bundle_manifest: dict) -> str:
                 )
             ),
             name=html.escape(document["stored_filename"]),
-            media=html.escape(document["media_type"]),
-            size=document["byte_count"],
+            size=format_file_size(document["byte_count"]),
         )
         for document in bundle_manifest.get("documents", [])
     )
     if not docs:
         docs = "<li>No documents in bundle.</li>"
 
+    updated_label = format_epoch_ms(bundle_manifest.get("updated_at_epoch_ms", 0))
     run_summary = (
-        f"<p><strong>Latest run:</strong> {html.escape(latest_run['run_id'])} · "
-        f"{html.escape(latest_run['config']['engine'])} · "
-        f"{html.escape(latest_run['filing_status'])}</p>"
+        f"<p><strong>Last processed:</strong> {html.escape(updated_label)}</p>"
         if latest_run
-        else "<p><strong>Latest run:</strong> none</p>"
+        else "<p><strong>Last processed:</strong> not yet</p>"
     )
 
     return f"""<!DOCTYPE html>
@@ -1031,7 +1149,8 @@ def render_bundle_page(config: LocalAppConfig, bundle_manifest: dict) -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{html.escape(bundle_id)} · Expense Local App</title>
+  <title>{html.escape(bundle_id)} — Stanford Expense Reports</title>
+  {FAVICON_LINK}
   <style>
     body {{ font-family: Georgia, 'Times New Roman', serif; margin: 0; background: #faf7f0; color: #1f1a17; }}
     .shell {{ max-width: 1200px; margin: 0 auto; padding: 24px; }}
@@ -1049,50 +1168,218 @@ def render_bundle_page(config: LocalAppConfig, bundle_manifest: dict) -> str:
   <div class="shell">
     <div class="topbar">
       <div>
-        <p style="margin: 0; color: #6b6156;">Managed bundle</p>
+        <p style="margin: 0; color: #6b6156;">Expense Report</p>
         <h1 style="margin: 0;">{html.escape(bundle_id)}</h1>
       </div>
       <p><a href="/">Back to upload</a></p>
     </div>
     <div class="grid">
       <aside class="panel">
-        <p><strong>Current stage:</strong> {html.escape(bundle_manifest['current_stage'])}</p>
+        <p><strong>Status:</strong> {html.escape(friendly_stage_label(filing_status if filing_status != "unknown" else bundle_manifest['current_stage']))}</p>
         {run_summary}
-        <p><a class="primary-link" href="{workbench_href}">Open FA workbench</a></p>
-        <p><a href="{preview_href}">Open final preview</a></p>
-        <p><a href="{developer_href}">Open developer tools</a></p>
-        <p><a href="{overview_href}">Refresh this overview</a></p>
-        <p><a href="{manifest_href}">Bundle manifest JSON</a></p>
-        <p><a href="{session_href}">Review session JSON</a></p>
-        <p><a href="{draft_href}">Export current draft YAML</a></p>
-        <p><a href="{packet_href}">Export current review packet JSON</a></p>
-        <p><a href="{ledger_href}">Export current ledger JSON</a></p>
+        <p><a class="primary-link" href="{workbench_href}">Open Workbench</a></p>
+        <p>{"<a href=\"" + preview_href + "\">Open Final Preview</a>" if preview_available else "<span style=\"opacity: 0.5;\">Open Final Preview (not yet available)</span>"}</p>
+        <p style="margin-top: 8px;"><button onclick="location.reload()" style="cursor: pointer; font: inherit; background: transparent; color: #204c63; border: 1px solid #c9bca8; border-radius: 999px; padding: 6px 14px;">Check for Updates</button></p>
+        <details style="margin-top: 14px; padding: 10px 12px; border: 1px solid #dbcdb7; border-radius: 12px; background: rgba(247,241,229,0.72);">
+          <summary style="cursor: pointer; font-weight: 600; color: #6b6156;">Advanced Tools</summary>
+          <div style="margin-top: 8px;">
+            <p><a href="{developer_href}">Open developer workbench</a></p>
+            <p><a href="{manifest_href}">Bundle manifest JSON</a></p>
+            <p><a href="{session_href}">Review session JSON</a></p>
+            <p><a href="{draft_href}">Export current draft YAML</a></p>
+            <p><a href="{packet_href}">Export review packet JSON</a></p>
+            <p><a href="{ledger_href}">Export ledger JSON</a></p>
+          </div>
+        </details>
         <h2>Documents</h2>
         <ul>{docs}</ul>
       </aside>
       <section class="panel meta-grid">
         <div>
-          <p style="margin: 0; color: #6b6156;">Default landing behavior</p>
-          <h2 style="margin: 0 0 12px;">Bundles now separate FA, preview, and developer surfaces</h2>
-          <p>Use the FA workbench for editing, the final preview for print/PDF export, and the developer tools page for OCR inspection and debugging.</p>
-        </div>
-        <div>
-          <p><strong>Configured ingestion:</strong> {html.escape(configured_ingestion_label(config))}</p>
-          <p><strong>Workbench availability:</strong> {"ready" if workbench_available else "not yet generated"}</p>
-          <p><strong>Document count:</strong> {len(bundle_manifest.get("documents", []))}</p>
-          <p><strong>Run count:</strong> {len(bundle_manifest.get("runs", []))}</p>
-        </div>
-        <div>
-          <p style="margin: 0 0 6px;"><strong>Recommended flow</strong></p>
+          <p style="margin: 0 0 6px;"><strong>How to complete your report</strong></p>
           <ol style="margin: 0; padding-left: 18px;">
-            <li>Open the FA workbench and resolve missing or review fields.</li>
-            <li>Save edits to create a reviewed draft version.</li>
-            <li>Open the final preview and confirm the packet looks filing-ready.</li>
-            <li>Print or save the preview as a PDF when needed.</li>
+            <li>Open the workbench and fill in any missing fields.</li>
+            <li>Click Save Changes when you are done.</li>
+            <li>Open the final preview to check everything looks correct.</li>
+            <li>Print or save the preview as a PDF for your records.</li>
           </ol>
+        </div>
+        <div>
+          <p><strong>Workbench:</strong> {"Ready" if workbench_available else "Not yet generated"}</p>
+          <p><strong>Documents:</strong> {pluralize(len(bundle_manifest.get("documents", [])), "file")}</p>
         </div>
       </section>
     </div>
+  </div>
+</body>
+</html>"""
+
+
+def render_preview_gate_page(config: LocalAppConfig, bundle_id: str, session: dict) -> str:
+    readiness = session.get("readiness", {})
+    workbench_href = f"/bundle/{urllib.parse.quote(bundle_id)}/workbench"
+    overview_href = f"/bundle/{urllib.parse.quote(bundle_id)}/overview"
+    status_label = friendly_stage_label(session.get("filing_status", "unknown"))
+    issue_count = session.get("issue_count", 0)
+    automation = readiness.get("automation_gap_count", 0)
+    user_input = readiness.get("user_input_gap_count", 0)
+    manual_review = readiness.get("manual_review_count", 0)
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Preview Not Available — {html.escape(bundle_id)}</title>
+  {FAVICON_LINK}
+  <style>
+    body {{ font-family: Georgia, 'Times New Roman', serif; margin: 0; background: #faf7f0; color: #1f1a17; }}
+    .shell {{ max-width: 680px; margin: 0 auto; padding: 48px 24px; }}
+    .card {{ background: white; border: 1px solid #e4dac9; border-radius: 18px; padding: 28px; box-shadow: 0 10px 20px rgba(0,0,0,0.04); }}
+    h1 {{ margin: 0 0 8px; }}
+    p {{ line-height: 1.6; }}
+    .status-chip {{ display: inline-block; padding: 6px 14px; border-radius: 999px; background: #fef3cd; color: #856404; font-weight: 600; font-size: 0.95rem; }}
+    .readiness-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 18px 0; }}
+    .readiness-item {{ padding: 14px; border-radius: 12px; background: #f8f5ee; text-align: center; }}
+    .readiness-item .count {{ font-size: 1.8rem; font-weight: 700; color: #2f5b53; }}
+    .readiness-item .label {{ font-size: 0.85rem; color: #6b6156; margin-top: 4px; }}
+    a {{ color: #204c63; }}
+    .primary-link {{ display: inline-flex; margin-top: 14px; padding: 10px 16px; border-radius: 999px; background: #2f5b53; color: white; text-decoration: none; font-weight: 700; }}
+    .meta {{ color: #6b6156; font-size: 0.95rem; }}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="card">
+      <p class="meta">Report: {html.escape(bundle_id)}</p>
+      <h1>Preview Not Yet Available</h1>
+      <p>The final preview is available once all required fields are filled and all items are reviewed. The current status is <span class="status-chip">{html.escape(status_label)}</span> with {pluralize(issue_count, "item")} remaining.</p>
+      <div class="readiness-grid">
+        <div class="readiness-item">
+          <div class="count">{automation}</div>
+          <div class="label">Could Not Extract</div>
+        </div>
+        <div class="readiness-item">
+          <div class="count">{user_input}</div>
+          <div class="label">Needs Your Input</div>
+        </div>
+        <div class="readiness-item">
+          <div class="count">{manual_review}</div>
+          <div class="label">Review Required</div>
+        </div>
+      </div>
+      <p>Open the workbench to fill in missing fields and review flagged items, then return here to preview the final filing.</p>
+      <a class="primary-link" href="{workbench_href}">Open Workbench</a>
+      <p style="margin-top: 16px;"><a href="{overview_href}">Back to bundle overview</a></p>
+    </div>
+  </div>
+</body>
+</html>"""
+
+
+def build_debug_metrics(config: LocalAppConfig) -> dict:
+    """Build a metrics summary for the /debug/metrics endpoint."""
+    bundles = list_bundles(config.workspace_root)
+    stage_counts: dict[str, int] = {}
+    total_documents = 0
+    for b in bundles:
+        stage_counts[b.current_stage] = stage_counts.get(b.current_stage, 0) + 1
+        total_documents += b.document_count
+
+    workspace_size = 0
+    bundles_dir = config.workspace_root / "bundles"
+    if bundles_dir.exists():
+        for f in bundles_dir.rglob("*"):
+            if f.is_file():
+                try:
+                    workspace_size += f.stat().st_size
+                except OSError:
+                    pass
+
+    return {
+        "bundle_count": len(bundles),
+        "total_documents": total_documents,
+        "stages": stage_counts,
+        "workspace_size_bytes": workspace_size,
+        "workspace_size_human": format_file_size(workspace_size),
+        "engine": config.default_engine,
+        "server_time": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+    }
+
+
+def build_debug_bundles(config: LocalAppConfig) -> list[dict]:
+    """Build detailed bundle state for the /debug/bundles endpoint."""
+    bundles = list_bundles(config.workspace_root)
+    result = []
+    for b in bundles:
+        try:
+            manifest = load_bundle_manifest(config.workspace_root, b.bundle_id)
+        except LocalAppError:
+            manifest = {}
+
+        runs = manifest.get("runs", [])
+        entry: dict = {
+            "bundle_id": b.bundle_id,
+            "current_stage": b.current_stage,
+            "document_count": b.document_count,
+            "run_count": len(runs),
+            "updated_at": format_epoch_ms(b.updated_at_epoch_ms),
+            "updated_at_epoch_ms": b.updated_at_epoch_ms,
+        }
+        if runs:
+            latest = runs[-1]
+            entry["latest_run"] = {
+                "run_id": latest.get("run_id"),
+                "engine": latest.get("config", {}).get("engine"),
+                "filing_status": latest.get("filing_status"),
+            }
+
+        try:
+            session = load_review_session_state(config.workspace_root, b.bundle_id)
+            entry["review_session"] = {
+                "filing_status": session.get("filing_status"),
+                "issue_count": session.get("issue_count"),
+                "readiness": session.get("readiness"),
+                "version_count": session.get("version_count"),
+            }
+        except LocalAppError:
+            entry["review_session"] = None
+
+        result.append(entry)
+    return result
+
+
+def render_error_page(status_code: int, message: str) -> str:
+    """Render a branded error page that replaces Python's default."""
+    friendly = {
+        400: "Bad Request",
+        404: "Page Not Found",
+        405: "Method Not Allowed",
+        500: "Internal Server Error",
+    }
+    title = friendly.get(status_code, f"Error {status_code}")
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{status_code} — {html.escape(title)}</title>
+  {FAVICON_LINK}
+  <style>
+    body {{ font-family: Georgia, 'Times New Roman', serif; margin: 0; background: #faf7f0; color: #1f1a17; }}
+    .shell {{ max-width: 560px; margin: 0 auto; padding: 80px 24px; text-align: center; }}
+    .code {{ font-size: 4rem; font-weight: 700; color: #2f5b53; margin: 0; }}
+    h1 {{ margin: 8px 0 16px; }}
+    p {{ line-height: 1.6; color: #5d5349; }}
+    a {{ color: #204c63; }}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <p class="code">{status_code}</p>
+    <h1>{html.escape(title)}</h1>
+    <p>{html.escape(message)}</p>
+    <p><a href="/">Back to upload page</a></p>
   </div>
 </body>
 </html>"""
@@ -1103,25 +1390,52 @@ def default_bundle_id(input_paths: list[Path]) -> str:
     return sanitize_identifier(stem)
 
 
+MAX_IDENTIFIER_LENGTH = 200
+
+
 def sanitize_identifier(value: str) -> str:
     cleaned = []
     previous_separator = False
     for char in value:
-        if char.isalnum():
+        if char.isascii() and char.isalnum():
             cleaned.append(char.lower())
             previous_separator = False
         elif not previous_separator:
             cleaned.append("_")
             previous_separator = True
-    return "".join(cleaned).strip("_") or "bundle"
+    result = "".join(cleaned).strip("_") or "bundle"
+    return result[:MAX_IDENTIFIER_LENGTH]
 
 
 class LocalAppHandler(http.server.BaseHTTPRequestHandler):
-    server_version = "ExpenseLocalApp/0.1"
+    server_version = "ExpenseLocalApp"
+
+    def version_string(self) -> str:
+        return self.server_version
 
     @property
     def config(self) -> LocalAppConfig:
         return self.server.config  # type: ignore[attr-defined]
+
+    def do_HEAD(self) -> None:
+        """Handle HEAD requests by running GET logic with body suppressed."""
+        self._suppress_body = True
+        try:
+            self.do_GET()
+        finally:
+            self._suppress_body = False
+
+    def send_error(self, code: int, message: str | None = None, explain: str | None = None) -> None:
+        """Send a styled error page instead of Python's default."""
+        short_msg = message or "Error"
+        body = render_error_page(code, short_msg)
+        payload = body.encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(payload)
 
     def do_GET(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
@@ -1130,6 +1444,9 @@ class LocalAppHandler(http.server.BaseHTTPRequestHandler):
                 self.respond_html(
                     render_index_page(self.config, list_bundles(self.config.workspace_root))
                 )
+                return
+            if parsed.path.startswith("/debug/"):
+                self.handle_debug_get(parsed.path)
                 return
             if parsed.path.startswith("/bundle/"):
                 self.handle_bundle_get(parsed.path)
@@ -1201,7 +1518,7 @@ class LocalAppHandler(http.server.BaseHTTPRequestHandler):
                 )
                 self.respond_json(result)
                 return
-            self.send_error(404, "Not found")
+            self.send_error(405, "This endpoint does not accept POST requests")
         except LocalAppError as err:
             if is_review_save:
                 self.respond_json({"error": str(err)}, status=400)
@@ -1255,6 +1572,12 @@ class LocalAppHandler(http.server.BaseHTTPRequestHandler):
             self.respond_html(body)
             return
         if len(segments) == 3 and segments[2] == "preview":
+            session = load_review_session_state(self.config.workspace_root, bundle_id)
+            if not preview_is_available(session):
+                self.respond_html(
+                    render_preview_gate_page(self.config, bundle_id, session)
+                )
+                return
             body = render_current_review_surface_html(
                 self.config.repo_root,
                 self.config.workspace_root,
@@ -1303,6 +1626,16 @@ class LocalAppHandler(http.server.BaseHTTPRequestHandler):
             return
         self.send_error(404, "Not found")
 
+    def handle_debug_get(self, path: str) -> None:
+        segments = [s for s in path.split("/") if s]
+        if len(segments) == 2 and segments[1] == "metrics":
+            self.respond_json(build_debug_metrics(self.config))
+            return
+        if len(segments) == 2 and segments[1] == "bundles":
+            self.respond_json(build_debug_bundles(self.config))
+            return
+        self.send_error(404, "Not found")
+
     def respond_html(self, body: str, status: int = 200) -> None:
         payload = body.encode("utf-8")
         self.send_response(status)
@@ -1310,7 +1643,8 @@ class LocalAppHandler(http.server.BaseHTTPRequestHandler):
         self.send_cache_busting_headers()
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
-        self.wfile.write(payload)
+        if not getattr(self, "_suppress_body", False):
+            self.wfile.write(payload)
 
     def respond_json(self, payload, status: int = 200) -> None:
         encoded = json.dumps(payload, indent=2).encode("utf-8")
@@ -1319,7 +1653,8 @@ class LocalAppHandler(http.server.BaseHTTPRequestHandler):
         self.send_cache_busting_headers()
         self.send_header("Content-Length", str(len(encoded)))
         self.end_headers()
-        self.wfile.write(encoded)
+        if not getattr(self, "_suppress_body", False):
+            self.wfile.write(encoded)
 
     def respond_file(self, path: Path, content_type: str | None = None) -> None:
         payload = path.read_bytes()
@@ -1329,7 +1664,8 @@ class LocalAppHandler(http.server.BaseHTTPRequestHandler):
         self.send_cache_busting_headers()
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
-        self.wfile.write(payload)
+        if not getattr(self, "_suppress_body", False):
+            self.wfile.write(payload)
 
     def send_cache_busting_headers(self) -> None:
         self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
