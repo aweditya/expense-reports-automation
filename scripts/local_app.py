@@ -1075,7 +1075,7 @@ def render_index_page(config: LocalAppConfig, bundles: list[BundleListEntry], me
         <p class="meta">Expense Reports</p>
         <h1>Upload & Process</h1>
         <p>Upload travel receipts and documents. The system will extract key fields and open an editable workbench for review before filing.</p>
-        <p class="ingestion-chip">Accepts PDF files and text documents</p>
+        <p class="ingestion-chip">Accepts PDF, PNG, JPG, and text documents</p>
         {notice}
         <form id="upload-form" method="post" action="/upload" enctype="multipart/form-data">
           <div class="grid">
@@ -1087,13 +1087,13 @@ def render_index_page(config: LocalAppConfig, bundles: list[BundleListEntry], me
             </label>
           </div>
           <label>Documents
-            <input id="documents-input" type="file" name="documents" multiple accept=".pdf,.txt,.md,.markdown">
+            <input id="documents-input" type="file" name="documents" multiple accept=".pdf,.png,.jpg,.jpeg,.txt,.md,.markdown">
           </label>
           <div class="pending-uploads">
             <p class="meta">Pending uploads. You can reopen the file picker and selections will accumulate until you submit.</p>
             <ul id="pending-documents"><li>No documents selected yet.</li></ul>
             <p id="document-error" class="error-text" hidden></p>
-            <p id="processing-note" class="meta" hidden>Processing your documents. This can take a minute for PDFs and larger uploads. Keep this tab open.</p>
+            <p id="processing-note" class="meta" hidden>Processing your documents. This can take a minute for PDFs, images, and larger uploads. Keep this tab open.</p>
           </div>
           {advanced_config}
           <button type="submit">Upload &amp; Process</button>
