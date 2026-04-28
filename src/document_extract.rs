@@ -556,6 +556,7 @@ fn extract_receipt(
         &["merchant location", "location"],
         ConfidenceLevel::High,
     );
+    let currency_hint = receipt_currency_hint(lines);
     let transaction_date = observed_receipt_date(
         document,
         lines,
@@ -571,10 +572,28 @@ fn extract_receipt(
         ConfidenceLevel::High,
     );
     let tip_amount = observed_money(document, lines, &["tip"], ConfidenceLevel::High);
-    let total_paid = observed_receipt_total(document, lines, ConfidenceLevel::High).or_else(|| {
-        infer_receipt_total(subtotal.as_ref(), tax_amount.as_ref(), tip_amount.as_ref())
-    })
-    .or_else(|| grounded_receipt_total_paid(document));
+    let subtotal = with_money_currency_hint(
+        subtotal,
+        currency_hint.as_deref(),
+        "document_extract.receipt_currency_hint",
+    );
+    let tax_amount = with_money_currency_hint(
+        tax_amount,
+        currency_hint.as_deref(),
+        "document_extract.receipt_currency_hint",
+    );
+    let tip_amount = with_money_currency_hint(
+        tip_amount,
+        currency_hint.as_deref(),
+        "document_extract.receipt_currency_hint",
+    );
+    let total_paid = with_money_currency_hint(
+        observed_receipt_total(document, lines, ConfidenceLevel::High)
+            .or_else(|| infer_receipt_total(subtotal.as_ref(), tax_amount.as_ref(), tip_amount.as_ref()))
+            .or_else(|| grounded_receipt_total_paid(document)),
+        currency_hint.as_deref(),
+        "document_extract.receipt_currency_hint",
+    );
     let section_rows = collect_section_rows(
         lines,
         &["line items", "items", "purchased items", "items purchased"],
@@ -1124,6 +1143,37 @@ fn observed_receipt_total(
         }
     }
 
+    lines.iter()
+        .find_map(|line| observed_receipt_total_from_candidate_line(document, line, confidence))
+}
+
+fn observed_receipt_total_from_candidate_line(
+    document: &TranscribedDocument,
+    line: &LineRef,
+    confidence: ConfidenceLevel,
+) -> Option<Observed<MoneyAmount>> {
+    let normalized = normalize_key(&normalize_bullet_content(&line.raw));
+    let is_candidate = normalized.starts_with("cash")
+        || normalized.starts_with("grand total")
+        || normalized.starts_with("final total")
+        || normalized.starts_with("rounded total")
+        || normalized.starts_with("total amt rounded")
+        || normalized.starts_with("total incl");
+    if !is_candidate {
+        return None;
+    }
+    let money = parse_last_money_from_line(&line.raw)?;
+    Some(observed_from_line(line, money, confidence, document))
+}
+
+fn parse_last_money_from_line(line: &str) -> Option<MoneyAmount> {
+    let content = normalize_bullet_content(line);
+    for token in content.split_whitespace().rev() {
+        if sanitize_amount(token).is_none() {
+            continue;
+        }
+        return parse_money_with_line_context(line, token);
+    }
     None
 }
 
@@ -1385,6 +1435,12 @@ fn strip_label_value(line: &str, labels: &[&str], allow_loose_prefix: bool) -> O
                     | "amount"
                     | "paid"
                     | "due"
+                    | "item"
+                    | "items"
+                    | "incl"
+                    | "including"
+                    | "excl"
+                    | "excluding"
                     | "rounded"
                     | "rounding"
                     | "adj"
@@ -1459,6 +1515,12 @@ fn strip_label_value_strict(line: &str, labels: &[&str]) -> Option<String> {
                     | "amount"
                     | "paid"
                     | "due"
+                    | "item"
+                    | "items"
+                    | "incl"
+                    | "including"
+                    | "excl"
+                    | "excluding"
                     | "rounded"
                     | "rounding"
                     | "adj"
@@ -1632,10 +1694,30 @@ fn sanitize_amount(value: &str) -> Option<String> {
         .replace(',', "");
     if normalized.is_empty() {
         None
-    } else if normalized.contains('.') {
-        Some(normalized)
     } else {
-        Some(format!("{normalized}.00"))
+        let normalized = if normalized.contains('.') {
+            let parts = normalized.split('.').collect::<Vec<_>>();
+            if parts.len() > 2 {
+                let fractional = parts.last()?.trim();
+                if fractional.is_empty() {
+                    return None;
+                }
+                let whole = parts[..parts.len() - 1].join("");
+                format!("{whole}.{fractional}")
+            } else {
+                normalized
+            }
+        } else {
+            format!("{normalized}.00")
+        };
+        let normalized = normalized.trim_start_matches('.').to_owned();
+        if normalized.is_empty() {
+            None
+        } else if normalized.starts_with('.') {
+            Some(format!("0{normalized}"))
+        } else {
+            Some(normalized)
+        }
     }
 }
 
@@ -1663,6 +1745,27 @@ fn extract_currency_hint(value: &str) -> Option<String> {
             )
         })
         .map(normalize_currency_code)
+}
+
+fn receipt_currency_hint(lines: &[LineRef]) -> Option<String> {
+    lines
+        .iter()
+        .find_map(|line| extract_currency_hint(&line.raw))
+}
+
+fn with_money_currency_hint(
+    value: Option<Observed<MoneyAmount>>,
+    currency_hint: Option<&str>,
+    origin: &str,
+) -> Option<Observed<MoneyAmount>> {
+    let mut value = value?;
+    let currency_hint = currency_hint?;
+    if value.value.currency.is_some() {
+        return Some(value);
+    }
+    value.value.currency = Some(normalize_currency_code(currency_hint));
+    value.evidence.push(system_generated_evidence(origin));
+    Some(value)
 }
 
 fn parse_date_range(value: &str) -> Option<DateRange> {
@@ -2648,6 +2751,83 @@ GOODS SOLD ARE NOT RETURNABLE.
                         .as_ref()
                         .map(|value| value.value.as_str()),
                     Some("25/01/2018")
+                );
+            }
+            other => panic!("unexpected payload: {other:?}"),
+        }
+
+        remove_fixture_dir(&path);
+    }
+
+    #[test]
+    fn receipt_extractor_ignores_total_excl_and_preserves_rm_total() {
+        let markdown = "\
+# Merchant Receipt
+
+- Merchant: HOME MASTER HARDWARE & ELECTRICAL
+
+- Date: 22/12/2017 14:03
+- Total Excl. Of GST 15.00
+- Total Incl. Of GST RM 15.90
+- Total Amt Rounded 15.90
+";
+        let path = write_fixture(markdown, "receipt_total_excl_guard.md");
+        let actual = extract_document_facts_path(&path).expect("fixture should transcribe");
+
+        match actual.facts {
+            DocumentFactsPayload::Receipt(facts) => {
+                assert_eq!(
+                    facts
+                        .total_paid
+                        .as_ref()
+                        .map(|value| value.value.amount.as_str()),
+                    Some("15.90")
+                );
+                assert_eq!(
+                    facts
+                        .total_paid
+                        .as_ref()
+                        .and_then(|value| value.value.currency.as_deref()),
+                    Some("MYR")
+                );
+            }
+            other => panic!("unexpected payload: {other:?}"),
+        }
+
+        remove_fixture_dir(&path);
+    }
+
+    #[test]
+    fn receipt_extractor_ignores_total_items_when_selecting_payable_total() {
+        let markdown = "\
+# Merchant Receipt
+
+- Merchant: RESTORAN HASSANBISTRO
+
+- Date: 12/28/2017 10:17:32 PM
+- Total Items = 1.00
+- Total Qty = 1.00
+- Total Incl. 6% GST RM 15.00
+- CASH RM 15.00
+";
+        let path = write_fixture(markdown, "receipt_total_items_guard.md");
+        let actual = extract_document_facts_path(&path).expect("fixture should transcribe");
+
+        match actual.facts {
+            DocumentFactsPayload::Receipt(facts) => {
+                assert_eq!(
+                    facts
+                        .total_paid
+                        .as_ref()
+                        .map(|value| value.value.amount.as_str()),
+                    Some("15.00")
+                );
+                assert_eq!(
+                    facts
+                        .total_paid
+                        .as_ref()
+                        .and_then(|value| value.value.currency.as_deref()),
+                    Some("MYR")
                 );
             }
             other => panic!("unexpected payload: {other:?}"),

@@ -203,6 +203,14 @@ impl StaticFxRateProvider {
 
         for (date, rates) in [
             (
+                "2017-06-01",
+                [("MYR", "0.24"), ("SGD", "0.73"), ("JPY", "0.0088")].as_slice(),
+            ),
+            (
+                "2017-11-01",
+                [("MYR", "0.24"), ("SGD", "0.73"), ("JPY", "0.0088")].as_slice(),
+            ),
+            (
                 "2017-12-01",
                 [("MYR", "0.24"), ("SGD", "0.73"), ("JPY", "0.0088")].as_slice(),
             ),
@@ -1547,17 +1555,38 @@ fn synthesize_meal_line(
         original_amount: amount.map(number_observed_from_money),
         expense_type,
         remarks,
-        country_of_activity: facts.merchant_location.as_ref().and_then(|location| {
-            location.value.country.as_ref().map(|country| {
-                system_observed(
-                    country.clone(),
-                    location.confidence,
-                    location.evidence.clone(),
-                    "bundle_synthesis.project_country_of_activity",
-                    location.flags.clone(),
-                )
+        country_of_activity: facts
+            .merchant_location
+            .as_ref()
+            .and_then(|location| {
+                location.value.country.as_ref().map(|country| {
+                    system_observed(
+                        country.clone(),
+                        location.confidence,
+                        location.evidence.clone(),
+                        "bundle_synthesis.project_country_of_activity",
+                        location.flags.clone(),
+                    )
+                })
             })
-        }),
+            .or_else(|| {
+                trip.region
+                    .as_ref()
+                    .filter(|region| region.value == TravelRegion::Foreign)
+                    .and_then(|_| {
+                        trip.destination.as_ref().and_then(|destination| {
+                            destination.value.country.as_ref().map(|country| {
+                                system_observed(
+                                    country.clone(),
+                                    destination.confidence,
+                                    destination.evidence.clone(),
+                                    "bundle_synthesis.project_country_of_activity",
+                                    destination.flags.clone(),
+                                )
+                            })
+                        })
+                    })
+            }),
         foreign_activity_type,
         source_documents: vec![BundleSourceDocument {
             document_id: document.document_id.clone(),
@@ -3588,6 +3617,19 @@ mod tests {
     }
 
     #[test]
+    fn foreign_meal_projection_falls_back_to_trip_destination_country() {
+        let result = synthesize_bundle_projection(&synthetic_docs());
+        assert_eq!(
+            get_path(
+                &result.draft.report,
+                "transaction_lines[2].common.country_of_activity"
+            )
+            .and_then(ReportValue::as_text),
+            Some("Singapore")
+        );
+    }
+
+    #[test]
     fn generic_receipt_projects_into_schema_transaction_line() {
         let mut documents = synthetic_docs();
         let DocumentFactsPayload::Receipt(facts) = &mut documents[2].facts else {
@@ -3673,6 +3715,12 @@ mod tests {
     #[test]
     fn static_fx_provider_normalizes_non_iso_receipt_dates() {
         let provider = StaticFxRateProvider::demo();
+        let june = provider
+            .usd_rate_for("MYR", "15/06/2017")
+            .expect("early summer historical date should resolve");
+        let november = provider
+            .usd_rate_for("MYR", "20/11/2017")
+            .expect("late fall historical date should resolve");
         let early = provider
             .usd_rate_for("MYR", "29-12-2017")
             .expect("early hyphenated receipt date should resolve");
@@ -3688,6 +3736,10 @@ mod tests {
         let third = provider
             .usd_rate_for("MYR", "19/10/2018")
             .expect("older slash-formatted date should resolve against earlier anchor");
+        assert_eq!(june.usd_per_unit, "0.24");
+        assert_eq!(june.date, "2017-06-01");
+        assert_eq!(november.usd_per_unit, "0.24");
+        assert_eq!(november.date, "2017-11-01");
         assert_eq!(early.usd_per_unit, "0.24");
         assert_eq!(early.date, "2017-12-01");
         assert_eq!(february.usd_per_unit, "0.24");
