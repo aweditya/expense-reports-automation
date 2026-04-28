@@ -542,6 +542,78 @@ class TranscribeWithGoogleGenAiTests(unittest.TestCase):
 
         self.assertIn("Gemini response did not contain text", str(context.exception))
 
+    def test_transcribe_pages_with_fallbacks_retries_full_variant_cycle_once_more(self):
+        source_png = self.make_png_bytes()
+        attempted_payloads = []
+        attempt_variants = transcribe.ocr_retry_variants("original", "image/png")
+        calls_per_variant = transcribe.EMPTY_TRANSCRIPTION_RESPONSE_RETRIES
+        first_cycle_calls = len(attempt_variants) * calls_per_variant
+
+        def fake_generate(_, **kwargs):
+            image_part = kwargs["contents"][1]
+            attempted_payloads.append(image_part)
+            if len(attempted_payloads) <= first_cycle_calls:
+                return type("Response", (), {"text": ""})()
+            return type(
+                "Response",
+                (),
+                {
+                    "text": json.dumps(
+                        {
+                            "pages": [
+                                {
+                                    "page_number": 1,
+                                    "text": "# Merchant Receipt\n- Total: USD 12.40",
+                                }
+                            ]
+                        }
+                    )
+                },
+            )()
+
+        def fake_preprocess(document_path, file_bytes, mime_type, variant):
+            self.assertEqual(document_path, Path("receipt.png"))
+            self.assertEqual(file_bytes, source_png)
+            self.assertEqual(mime_type, "image/png")
+            return f"{variant}-bytes".encode(), "image/png"
+
+        pages, variant, file_bytes, mime_type = transcribe.transcribe_pages_with_fallbacks(
+            object(),
+            model="gemini-3-flash-preview",
+            prompt=transcribe.build_prompt("receipt.png", "image/png", "primary"),
+            document_path=Path("receipt.png"),
+            source_file_bytes=source_png,
+            source_mime_type="image/png",
+            primary_file_bytes=source_png,
+            primary_mime_type="image/png",
+            preprocess_variant="original",
+            generate_fn=fake_generate,
+            preprocess_fn=fake_preprocess,
+            part_factory=lambda data, detected_mime: (data, detected_mime),
+        )
+
+        self.assertEqual(
+            attempted_payloads[:calls_per_variant],
+            [(source_png, "image/png")] * calls_per_variant,
+        )
+        self.assertEqual(
+            attempted_payloads[calls_per_variant : calls_per_variant * 2],
+            [(b"contrast_boosted-bytes", "image/png")] * calls_per_variant,
+        )
+        self.assertEqual(
+            attempted_payloads[calls_per_variant * 2 : calls_per_variant * 3],
+            [(b"binarized-bytes", "image/png")] * calls_per_variant,
+        )
+        self.assertEqual(
+            attempted_payloads[calls_per_variant * 3 : first_cycle_calls],
+            [(b"grayscale-bytes", "image/png")] * calls_per_variant,
+        )
+        self.assertEqual(attempted_payloads[first_cycle_calls], (source_png, "image/png"))
+        self.assertEqual(variant, "original")
+        self.assertEqual(file_bytes, source_png)
+        self.assertEqual(mime_type, "image/png")
+        self.assertEqual(pages[0]["text"], "# Merchant Receipt\n- Total: USD 12.40")
+
     def test_maybe_ground_key_receipt_fields_retries_fallback_variant(self):
         pages = [{"page_number": 1, "text": "# Merchant Receipt", "dimensions": None, "regions": []}]
         attempted_payloads = []

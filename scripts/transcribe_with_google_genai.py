@@ -11,6 +11,7 @@ DEFAULT_MODEL = "gemini-3-flash-preview"
 CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
 DEFAULT_GENERATE_RETRIES = 3
 EMPTY_TRANSCRIPTION_RESPONSE_RETRIES = 3
+FULL_VARIANT_TRANSCRIPTION_CYCLES = 2
 GROUNDABLE_IMAGE_MIME_TYPES = {
     "image/png",
     "image/jpeg",
@@ -616,33 +617,36 @@ def transcribe_pages_with_fallbacks(
     attempt_variants = ocr_retry_variants(preprocess_variant, source_mime_type)
     last_error: BaseException | None = None
 
-    for attempt_variant in attempt_variants:
-        try:
-            if attempt_variant == preprocess_variant:
-                attempt_bytes = primary_file_bytes
-                attempt_mime = primary_mime_type
-            else:
-                attempt_bytes, attempt_mime = preprocess_fn(
-                    document_path,
-                    source_file_bytes,
-                    source_mime_type,
-                    attempt_variant,
+    for _cycle in range(FULL_VARIANT_TRANSCRIPTION_CYCLES):
+        for attempt_variant in attempt_variants:
+            try:
+                if attempt_variant == preprocess_variant:
+                    attempt_bytes = primary_file_bytes
+                    attempt_mime = primary_mime_type
+                else:
+                    attempt_bytes, attempt_mime = preprocess_fn(
+                        document_path,
+                        source_file_bytes,
+                        source_mime_type,
+                        attempt_variant,
+                    )
+                pages = attempt_transcription_pages(
+                    client,
+                    model=model,
+                    prompt=prompt,
+                    file_bytes=attempt_bytes,
+                    mime_type=attempt_mime,
+                    generate_fn=generate_fn,
+                    part_factory=part_factory,
                 )
-            pages = attempt_transcription_pages(
-                client,
-                model=model,
-                prompt=prompt,
-                file_bytes=attempt_bytes,
-                mime_type=attempt_mime,
-                generate_fn=generate_fn,
-                part_factory=part_factory,
-            )
-            return pages, attempt_variant, attempt_bytes, attempt_mime
-        except KeyboardInterrupt:
-            raise
-        except BaseException as exc:
-            last_error = exc
-            continue
+                return pages, attempt_variant, attempt_bytes, attempt_mime
+            except KeyboardInterrupt:
+                raise
+            except BaseException as exc:
+                last_error = exc
+                continue
+        if last_error is not None and not is_retryable_transcription_error(last_error):
+            break
 
     if isinstance(last_error, SystemExit):
         raise last_error
