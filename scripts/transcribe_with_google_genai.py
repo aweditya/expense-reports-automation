@@ -265,6 +265,16 @@ def extract_payload_text(response) -> str:
     raise SystemExit("Gemini response did not contain text")
 
 
+def ocr_retry_variants(primary_variant: str, mime_type: str) -> list[str]:
+    variants = [primary_variant or "original"]
+    if mime_type not in GROUNDABLE_IMAGE_MIME_TYPES:
+        return variants
+    for candidate in GROUNDING_FALLBACK_VARIANTS:
+        if candidate not in variants:
+            variants.append(candidate)
+    return variants
+
+
 def normalize_pages(payload) -> list[dict]:
     if isinstance(payload, list):
         pages = payload
@@ -520,6 +530,99 @@ def grounding_retry_variants(primary_variant: str) -> list[str]:
         if candidate not in variants:
             variants.append(candidate)
     return variants
+
+
+def attempt_transcription_pages(
+    client,
+    *,
+    model: str,
+    prompt: str,
+    file_bytes: bytes,
+    mime_type: str,
+    generate_fn=None,
+    part_factory=None,
+) -> list[dict]:
+    if generate_fn is None:
+        generate_fn = generate_content_with_retries
+    config = {
+        "temperature": 0,
+        "response_mime_type": "application/json",
+        "max_output_tokens": 16384,
+    }
+    if part_factory is None:
+        from google.genai import types
+
+        part_factory = lambda data, detected_mime: types.Part.from_bytes(  # noqa: E731
+            data=data, mime_type=detected_mime
+        )
+        config = types.GenerateContentConfig(**config)
+
+    response = generate_fn(
+        client,
+        model=model,
+        contents=[
+            prompt,
+            part_factory(file_bytes, mime_type),
+        ],
+        config=config,
+    )
+    payload = json.loads(extract_payload_text(response))
+    return normalize_pages(payload)
+
+
+def transcribe_pages_with_fallbacks(
+    client,
+    *,
+    model: str,
+    prompt: str,
+    document_path: Path,
+    source_file_bytes: bytes,
+    source_mime_type: str,
+    primary_file_bytes: bytes,
+    primary_mime_type: str,
+    preprocess_variant: str,
+    generate_fn=None,
+    preprocess_fn=preprocess_document_bytes,
+    part_factory=None,
+) -> tuple[list[dict], str, bytes, str]:
+    attempt_variants = ocr_retry_variants(preprocess_variant, source_mime_type)
+    last_error: BaseException | None = None
+
+    for attempt_variant in attempt_variants:
+        try:
+            if attempt_variant == preprocess_variant:
+                attempt_bytes = primary_file_bytes
+                attempt_mime = primary_mime_type
+            else:
+                attempt_bytes, attempt_mime = preprocess_fn(
+                    document_path,
+                    source_file_bytes,
+                    source_mime_type,
+                    attempt_variant,
+                )
+            pages = attempt_transcription_pages(
+                client,
+                model=model,
+                prompt=prompt,
+                file_bytes=attempt_bytes,
+                mime_type=attempt_mime,
+                generate_fn=generate_fn,
+                part_factory=part_factory,
+            )
+            return pages, attempt_variant, attempt_bytes, attempt_mime
+        except KeyboardInterrupt:
+            raise
+        except BaseException as exc:
+            last_error = exc
+            continue
+
+    if isinstance(last_error, SystemExit):
+        raise last_error
+    if last_error is not None:
+        raise SystemExit(
+            f"Gemini transcription failed for all preprocess variants: {last_error}"
+        ) from last_error
+    raise SystemExit("Gemini transcription failed for all preprocess variants")
 
 
 def attempt_grounding_regions(
@@ -911,22 +1014,22 @@ def main() -> int:
     )
     prompt = build_prompt(document_path.name, mime_type, args.pass_kind)
 
-    response = generate_content_with_retries(
-        client,
-        model=args.model,
-        contents=[
-            prompt,
-            types.Part.from_bytes(data=file_bytes, mime_type=mime_type),
-        ],
-        config=types.GenerateContentConfig(
-            temperature=0,
-            response_mime_type="application/json",
-            max_output_tokens=16384,
-        ),
+    normalized_pages, effective_preprocess_variant, file_bytes, mime_type = (
+        transcribe_pages_with_fallbacks(
+            client,
+            model=args.model,
+            prompt=prompt,
+            document_path=document_path,
+            source_file_bytes=source_file_bytes,
+            source_mime_type=source_mime_type,
+            primary_file_bytes=file_bytes,
+            primary_mime_type=mime_type,
+            preprocess_variant=args.preprocess_variant,
+            part_factory=lambda data, detected_mime: types.Part.from_bytes(
+                data=data, mime_type=detected_mime
+            ),
+        )
     )
-    payload = json.loads(extract_payload_text(response))
-
-    normalized_pages = normalize_pages(payload)
     try:
         (
             normalized_pages,
@@ -943,7 +1046,7 @@ def main() -> int:
             document_path=document_path,
             source_file_bytes=source_file_bytes,
             source_mime_type=source_mime_type,
-            preprocess_variant=args.preprocess_variant,
+            preprocess_variant=effective_preprocess_variant,
         )
     except Exception:
         geometry_source = "none"
@@ -957,9 +1060,14 @@ def main() -> int:
         "engine": "vertex_gemini_sdk",
         "metadata": {
             "pass_id": args.pass_id
-            or f"{sanitize_identifier(document_path.stem)}_{args.pass_kind}_{args.preprocess_variant}",
+            or f"{sanitize_identifier(document_path.stem)}_{args.pass_kind}_{effective_preprocess_variant}",
             "pass_kind": args.pass_kind,
-            "preprocess_variant": args.preprocess_variant,
+            "preprocess_variant": effective_preprocess_variant,
+            **(
+                {"requested_preprocess_variant": args.preprocess_variant}
+                if effective_preprocess_variant != args.preprocess_variant
+                else {}
+            ),
             **(
                 {"grounding_preprocess_variant": grounding_preprocess_variant}
                 if grounding_preprocess_variant

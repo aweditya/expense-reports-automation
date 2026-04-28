@@ -174,27 +174,48 @@ def evaluate_document(
 ) -> dict[str, Any]:
     bundle_id = f"{bundle_prefix}_{document['document_id']}"
     started = time.time()
-    created_bundle_id = e2e_test.upload_documents(
-        base_url,
-        [document["input_path"]],
-        bundle_id=bundle_id,
-        headers=headers,
-    )
-    upload_seconds = round(time.time() - started, 1)
-    manifest = e2e_test.check_bundle_manifest(base_url, created_bundle_id, headers=headers)
-    review_session = e2e_test.check_review_session(base_url, created_bundle_id, headers=headers)
-    draft_yaml_text = fetch_artifact_text(
-        base_url,
-        created_bundle_id,
-        "draft.yaml",
-        headers=headers,
-    )
-    draft_lines = draft_line_summaries(draft_yaml_text)
-    classification = classify_hosted_result(
-        filing_status=review_session.get("filing_status", "unknown"),
-        readiness=review_session.get("readiness") or {},
-        draft_lines=draft_lines,
-    )
+    try:
+        created_bundle_id = e2e_test.upload_documents(
+            base_url,
+            [document["input_path"]],
+            bundle_id=bundle_id,
+            headers=headers,
+        )
+        upload_seconds = round(time.time() - started, 1)
+        manifest = e2e_test.check_bundle_manifest(base_url, created_bundle_id, headers=headers)
+        review_session = e2e_test.check_review_session(base_url, created_bundle_id, headers=headers)
+        draft_yaml_text = fetch_artifact_text(
+            base_url,
+            created_bundle_id,
+            "draft.yaml",
+            headers=headers,
+        )
+        draft_lines = draft_line_summaries(draft_yaml_text)
+        classification = classify_hosted_result(
+            filing_status=review_session.get("filing_status", "unknown"),
+            readiness=review_session.get("readiness") or {},
+            draft_lines=draft_lines,
+        )
+        error = None
+    except KeyboardInterrupt:
+        raise
+    except BaseException as exc:
+        created_bundle_id = bundle_id
+        upload_seconds = round(time.time() - started, 1)
+        manifest = {}
+        review_session = {}
+        draft_lines = []
+        classification = classify_hosted_result(
+            filing_status="automation_blocked",
+            readiness={
+                "automation_gap_count": 1,
+                "user_input_gap_count": 0,
+                "manual_review_count": 0,
+            },
+            draft_lines=[],
+        )
+        error = str(exc)
+
     return {
         "document_id": document["document_id"],
         "input_path": str(document["input_path"]),
@@ -209,6 +230,7 @@ def evaluate_document(
         "manifest_run_count": len(manifest.get("runs") or []),
         "draft_lines": draft_lines,
         "classification": classification,
+        "error": error,
     }
 
 
@@ -242,6 +264,7 @@ def render_markdown(results: list[dict[str, Any]], report: dict[str, Any]) -> st
                 f"- Hosted OCR OK: `{c['hosted_ocr_ok']}`",
                 f"- Schema projected: `{c['schema_projected']}`",
                 f"- Ready for FA completion: `{c['ready_for_fa_completion']}`",
+                *([f"- Error: `{result['error']}`"] if result.get("error") else []),
                 "",
             ]
         )

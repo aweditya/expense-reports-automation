@@ -399,6 +399,101 @@ class TranscribeWithGoogleGenAiTests(unittest.TestCase):
             ["binarized", "contrast_boosted", "grayscale"],
         )
 
+    def test_ocr_retry_variants_only_use_primary_for_non_images(self):
+        self.assertEqual(
+            transcribe.ocr_retry_variants("original", "application/pdf"),
+            ["original"],
+        )
+
+    def test_ocr_retry_variants_try_primary_then_unique_fallbacks_for_images(self):
+        self.assertEqual(
+            transcribe.ocr_retry_variants("original", "image/png"),
+            ["original", "contrast_boosted", "binarized", "grayscale"],
+        )
+        self.assertEqual(
+            transcribe.ocr_retry_variants("binarized", "image/png"),
+            ["binarized", "contrast_boosted", "grayscale"],
+        )
+
+    def test_transcribe_pages_with_fallbacks_retries_after_empty_text_response(self):
+        source_png = self.make_png_bytes()
+        attempted_payloads = []
+
+        def fake_generate(_, **kwargs):
+            prompt, image_part = kwargs["contents"]
+            self.assertIn("Transcribe this financial document", prompt)
+            attempted_payloads.append(image_part)
+            image_bytes, _mime = image_part
+            if image_bytes == source_png:
+                return type("Response", (), {"text": ""})()
+            return type(
+                "Response",
+                (),
+                {
+                    "text": json.dumps(
+                        {
+                            "pages": [
+                                {
+                                    "page_number": 1,
+                                    "text": "# Merchant Receipt\n- Total: USD 12.40",
+                                }
+                            ]
+                        }
+                    )
+                },
+            )()
+
+        def fake_preprocess(document_path, file_bytes, mime_type, variant):
+            self.assertEqual(document_path, Path("receipt.png"))
+            self.assertEqual(file_bytes, source_png)
+            self.assertEqual(mime_type, "image/png")
+            return f"{variant}-bytes".encode(), "image/png"
+
+        pages, variant, file_bytes, mime_type = transcribe.transcribe_pages_with_fallbacks(
+            object(),
+            model="gemini-3-flash-preview",
+            prompt=transcribe.build_prompt("receipt.png", "image/png", "primary"),
+            document_path=Path("receipt.png"),
+            source_file_bytes=source_png,
+            source_mime_type="image/png",
+            primary_file_bytes=source_png,
+            primary_mime_type="image/png",
+            preprocess_variant="original",
+            generate_fn=fake_generate,
+            preprocess_fn=fake_preprocess,
+            part_factory=lambda data, detected_mime: (data, detected_mime),
+        )
+
+        self.assertEqual(
+            attempted_payloads,
+            [(source_png, "image/png"), (b"contrast_boosted-bytes", "image/png")],
+        )
+        self.assertEqual(variant, "contrast_boosted")
+        self.assertEqual(file_bytes, b"contrast_boosted-bytes")
+        self.assertEqual(mime_type, "image/png")
+        self.assertEqual(pages[0]["text"], "# Merchant Receipt\n- Total: USD 12.40")
+
+    def test_transcribe_pages_with_fallbacks_raises_after_all_variants_fail(self):
+        source_png = self.make_png_bytes()
+
+        with self.assertRaises(SystemExit) as context:
+            transcribe.transcribe_pages_with_fallbacks(
+                object(),
+                model="gemini-3-flash-preview",
+                prompt=transcribe.build_prompt("receipt.png", "image/png", "primary"),
+                document_path=Path("receipt.png"),
+                source_file_bytes=source_png,
+                source_mime_type="image/png",
+                primary_file_bytes=source_png,
+                primary_mime_type="image/png",
+                preprocess_variant="original",
+                generate_fn=lambda *_args, **_kwargs: type("Response", (), {"text": ""})(),
+                preprocess_fn=lambda *_args: (b"retry-bytes", "image/png"),
+                part_factory=lambda data, detected_mime: (data, detected_mime),
+            )
+
+        self.assertIn("Gemini response did not contain text", str(context.exception))
+
     def test_maybe_ground_key_receipt_fields_retries_fallback_variant(self):
         pages = [{"page_number": 1, "text": "# Merchant Receipt", "dimensions": None, "regions": []}]
         attempted_payloads = []

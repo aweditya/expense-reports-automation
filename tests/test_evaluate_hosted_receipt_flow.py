@@ -2,6 +2,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import scripts.evaluate_hosted_receipt_flow as hosted_eval
 
@@ -137,6 +138,30 @@ expense_report:
         self.assertFalse(result["schema_projected"])
         self.assertFalse(result["projected_without_automation_gaps"])
         self.assertFalse(result["ready_for_fa_completion"])
+
+    def test_evaluate_document_records_upload_failure_instead_of_aborting(self):
+        document = {
+            "document_id": "receipt_3",
+            "input_path": Path("/fake/receipt.png"),
+            "expected_fields": {},
+        }
+
+        with mock.patch.object(
+            hosted_eval.e2e_test,
+            "upload_documents",
+            side_effect=SystemExit("upload failed"),
+        ):
+            result = hosted_eval.evaluate_document(
+                base_url="https://example.com",
+                headers={},
+                document=document,
+                bundle_prefix="hosted-test",
+            )
+
+        self.assertEqual(result["bundle_id"], "hosted-test_receipt_3")
+        self.assertEqual(result["classification"]["automation_gap_count"], 1)
+        self.assertFalse(result["classification"]["hosted_ocr_ok"])
+        self.assertEqual(result["error"], "upload failed")
 
 
 if __name__ == "__main__":
