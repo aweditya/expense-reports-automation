@@ -273,7 +273,6 @@ def render_markdown(results: list[dict[str, Any]], report: dict[str, Any]) -> st
 
 def main() -> int:
     args = parse_args()
-    headers = build_auth_headers(args.cloud_run_url, args.sa_key)
     documents = resolve_manifest_document_paths(args.corpus_manifest)
     if args.limit is not None:
         documents = documents[: args.limit]
@@ -282,6 +281,7 @@ def main() -> int:
     results = []
     for document in documents:
         print(f"Evaluating hosted receipt flow for {document['document_id']} ({document['input_path'].name})")
+        headers = build_auth_headers(args.cloud_run_url, args.sa_key)
         results.append(
             evaluate_document(
                 base_url=args.cloud_run_url,

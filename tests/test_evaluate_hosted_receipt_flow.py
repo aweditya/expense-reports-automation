@@ -163,6 +163,108 @@ expense_report:
         self.assertFalse(result["classification"]["hosted_ocr_ok"])
         self.assertEqual(result["error"], "upload failed")
 
+    def test_main_refreshes_cloud_run_auth_headers_for_each_document(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            manifest_path = root / "corpus.json"
+            output_dir = root / "out"
+            receipt_a = root / "a.png"
+            receipt_b = root / "b.png"
+            receipt_a.write_bytes(b"a")
+            receipt_b.write_bytes(b"b")
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "corpus_name": "demo",
+                        "documents": [
+                            {"document_id": "a", "input_path": str(receipt_a)},
+                            {"document_id": "b", "input_path": str(receipt_b)},
+                        ],
+                    }
+                )
+            )
+
+            seen_headers = []
+
+            def fake_evaluate_document(*, base_url, headers, document, bundle_prefix):
+                seen_headers.append(headers)
+                return {
+                    "document_id": document["document_id"],
+                    "input_path": str(document["input_path"]),
+                    "source_name": None,
+                    "source_url": None,
+                    "expected_fields": {},
+                    "bundle_id": f"{bundle_prefix}_{document['document_id']}",
+                    "upload_seconds": 1.0,
+                    "filing_status": "user_input_required",
+                    "readiness": {
+                        "automation_gap_count": 0,
+                        "user_input_gap_count": 1,
+                        "manual_review_count": 0,
+                    },
+                    "manifest_document_count": 1,
+                    "manifest_run_count": 1,
+                    "draft_lines": [
+                        {
+                            "expense_type": "other_business_expense",
+                            "date": "2026-04-27",
+                            "line_amount_usd": "10.00",
+                            "original_amount": "10.00",
+                            "original_currency": "USD",
+                            "remarks": "demo",
+                        }
+                    ],
+                    "classification": {
+                        "transaction_line_count": 1,
+                        "expense_types": ["other_business_expense"],
+                        "projected_core_fields": {
+                            "date": True,
+                            "line_amount_usd": True,
+                            "original_amount": True,
+                            "remarks": True,
+                        },
+                        "automation_gap_count": 0,
+                        "user_input_gap_count": 1,
+                        "manual_review_count": 0,
+                        "hosted_ocr_ok": True,
+                        "schema_projected": True,
+                        "projected_without_automation_gaps": True,
+                        "ready_for_fa_completion": True,
+                    },
+                    "error": None,
+                }
+
+            with mock.patch("sys.argv", [
+                "evaluate_hosted_receipt_flow.py",
+                "--cloud-run-url", "https://example.run.app",
+                "--sa-key", "fake-key.json",
+                "--corpus-manifest", str(manifest_path),
+                "--output-dir", str(output_dir),
+                "--bundle-prefix", "hosted-test",
+            ]), mock.patch.object(
+                hosted_eval,
+                "build_auth_headers",
+                side_effect=[
+                    {"Authorization": "Bearer token-a"},
+                    {"Authorization": "Bearer token-b"},
+                ],
+            ) as build_headers, mock.patch.object(
+                hosted_eval,
+                "evaluate_document",
+                side_effect=fake_evaluate_document,
+            ):
+                exit_code = hosted_eval.main()
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(
+                seen_headers,
+                [
+                    {"Authorization": "Bearer token-a"},
+                    {"Authorization": "Bearer token-b"},
+                ],
+            )
+            self.assertEqual(build_headers.call_count, 2)
+
 
 if __name__ == "__main__":
     unittest.main()
