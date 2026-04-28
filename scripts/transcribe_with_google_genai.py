@@ -142,6 +142,36 @@ def build_prompt(filename: str, mime_type: str, pass_kind: str) -> str:
     return prompt
 
 
+def build_markdown_fallback_prompt(filename: str, mime_type: str, pass_kind: str) -> str:
+    prompt = (
+        "Transcribe this financial document into extractor-friendly markdown and return only markdown.\n"
+        "Rules:\n"
+        "- Preserve amounts, currencies, dates, names, confirmation codes, and IDs exactly.\n"
+        "- Do not invent values or infer missing fields.\n"
+        "- Use markdown headings and bullet points.\n"
+        "- Prefer `Label: Value` bullets for standalone facts.\n"
+        "- For repeated rows, use one bullet per row or pipe-delimited lines.\n"
+        "- Keep each pipe-delimited row on a single logical line; do not split one row into multiple bullets or lines.\n"
+        "- Keep the top heading faithful to the source document.\n"
+        "- For receipts, prefer `# Merchant Receipt` when the source has no clear title, and prefer sections like `## Purchase Summary`, `## Line Items`, and `## Totals` when they are visually evident.\n"
+        f"Filename: {filename}\n"
+        f"Mime type: {mime_type}\n"
+    )
+    if pass_kind == "table_focused":
+        prompt += (
+            "Additional instructions for this OCR pass:\n"
+            "- Prioritize preserving table rows, aligned amounts, and totals exactly.\n"
+            "- Keep item descriptions attached to their amount columns whenever possible.\n"
+        )
+    elif pass_kind == "verification":
+        prompt += (
+            "Additional instructions for this OCR pass:\n"
+            "- Prioritize exactness for merchant name, date, currency, and total.\n"
+            "- If text is faint or ambiguous, preserve the most faithful literal transcription.\n"
+        )
+    return prompt
+
+
 def build_receipt_localization_prompt(filename: str) -> str:
     return (
         "Locate the outer boundary of the primary receipt or financial document in this image and return only JSON.\n"
@@ -599,11 +629,76 @@ def attempt_transcription_pages(
     raise SystemExit("Gemini transcription did not stabilize")
 
 
+def attempt_markdown_transcription_pages(
+    client,
+    *,
+    model: str,
+    prompt: str,
+    file_bytes: bytes,
+    mime_type: str,
+    generate_fn=None,
+    part_factory=None,
+) -> list[dict]:
+    if generate_fn is None:
+        generate_fn = generate_content_with_retries
+    config = {
+        "temperature": 0,
+        "response_mime_type": "text/plain",
+        "max_output_tokens": 16384,
+    }
+    if part_factory is None:
+        from google.genai import types
+
+        part_factory = lambda data, detected_mime: types.Part.from_bytes(  # noqa: E731
+            data=data, mime_type=detected_mime
+        )
+        config = types.GenerateContentConfig(**config)
+
+    last_error: BaseException | None = None
+    for _ in range(EMPTY_TRANSCRIPTION_RESPONSE_RETRIES):
+        response = generate_fn(
+            client,
+            model=model,
+            contents=[
+                prompt,
+                part_factory(file_bytes, mime_type),
+            ],
+            config=config,
+        )
+        try:
+            text = extract_payload_text(response).strip()
+            if not text:
+                raise SystemExit("Gemini response did not contain text")
+            return [
+                {
+                    "page_number": 1,
+                    "text": normalize_extractor_markdown(text),
+                    "dimensions": None,
+                    "regions": [],
+                }
+            ]
+        except KeyboardInterrupt:
+            raise
+        except BaseException as exc:
+            if not is_retryable_transcription_error(exc):
+                raise
+            last_error = exc
+
+    if isinstance(last_error, SystemExit):
+        raise last_error
+    if last_error is not None:
+        raise SystemExit(
+            f"Gemini markdown transcription did not stabilize: {last_error}"
+        ) from last_error
+    raise SystemExit("Gemini markdown transcription did not stabilize")
+
+
 def transcribe_pages_with_fallbacks(
     client,
     *,
     model: str,
     prompt: str,
+    markdown_fallback_prompt: str,
     document_path: Path,
     source_file_bytes: bytes,
     source_mime_type: str,
@@ -647,6 +742,35 @@ def transcribe_pages_with_fallbacks(
                 continue
         if last_error is not None and not is_retryable_transcription_error(last_error):
             break
+
+    if last_error is not None and is_retryable_transcription_error(last_error):
+        for attempt_variant in attempt_variants:
+            try:
+                if attempt_variant == preprocess_variant:
+                    attempt_bytes = primary_file_bytes
+                    attempt_mime = primary_mime_type
+                else:
+                    attempt_bytes, attempt_mime = preprocess_fn(
+                        document_path,
+                        source_file_bytes,
+                        source_mime_type,
+                        attempt_variant,
+                    )
+                pages = attempt_markdown_transcription_pages(
+                    client,
+                    model=model,
+                    prompt=markdown_fallback_prompt,
+                    file_bytes=attempt_bytes,
+                    mime_type=attempt_mime,
+                    generate_fn=generate_fn,
+                    part_factory=part_factory,
+                )
+                return pages, attempt_variant, attempt_bytes, attempt_mime
+            except KeyboardInterrupt:
+                raise
+            except BaseException as exc:
+                last_error = exc
+                continue
 
     if isinstance(last_error, SystemExit):
         raise last_error
@@ -1045,12 +1169,18 @@ def main() -> int:
         args.preprocess_variant,
     )
     prompt = build_prompt(document_path.name, mime_type, args.pass_kind)
+    markdown_fallback_prompt = build_markdown_fallback_prompt(
+        document_path.name,
+        mime_type,
+        args.pass_kind,
+    )
 
     normalized_pages, effective_preprocess_variant, file_bytes, mime_type = (
         transcribe_pages_with_fallbacks(
             client,
             model=args.model,
             prompt=prompt,
+            markdown_fallback_prompt=markdown_fallback_prompt,
             document_path=document_path,
             source_file_bytes=source_file_bytes,
             source_mime_type=source_mime_type,

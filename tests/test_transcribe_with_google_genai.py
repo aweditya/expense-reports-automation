@@ -496,6 +496,9 @@ class TranscribeWithGoogleGenAiTests(unittest.TestCase):
             object(),
             model="gemini-3-flash-preview",
             prompt=transcribe.build_prompt("receipt.png", "image/png", "primary"),
+            markdown_fallback_prompt=transcribe.build_markdown_fallback_prompt(
+                "receipt.png", "image/png", "primary"
+            ),
             document_path=Path("receipt.png"),
             source_file_bytes=source_png,
             source_mime_type="image/png",
@@ -529,6 +532,9 @@ class TranscribeWithGoogleGenAiTests(unittest.TestCase):
                 object(),
                 model="gemini-3-flash-preview",
                 prompt=transcribe.build_prompt("receipt.png", "image/png", "primary"),
+                markdown_fallback_prompt=transcribe.build_markdown_fallback_prompt(
+                    "receipt.png", "image/png", "primary"
+                ),
                 document_path=Path("receipt.png"),
                 source_file_bytes=source_png,
                 source_mime_type="image/png",
@@ -581,6 +587,9 @@ class TranscribeWithGoogleGenAiTests(unittest.TestCase):
             object(),
             model="gemini-3-flash-preview",
             prompt=transcribe.build_prompt("receipt.png", "image/png", "primary"),
+            markdown_fallback_prompt=transcribe.build_markdown_fallback_prompt(
+                "receipt.png", "image/png", "primary"
+            ),
             document_path=Path("receipt.png"),
             source_file_bytes=source_png,
             source_mime_type="image/png",
@@ -609,6 +618,46 @@ class TranscribeWithGoogleGenAiTests(unittest.TestCase):
             [(b"grayscale-bytes", "image/png")] * calls_per_variant,
         )
         self.assertEqual(attempted_payloads[first_cycle_calls], (source_png, "image/png"))
+        self.assertEqual(variant, "original")
+        self.assertEqual(file_bytes, source_png)
+        self.assertEqual(mime_type, "image/png")
+        self.assertEqual(pages[0]["text"], "# Merchant Receipt\n- Total: USD 12.40")
+
+    def test_transcribe_pages_with_fallbacks_falls_back_to_markdown_transcription(self):
+        source_png = self.make_png_bytes()
+        markdown_seen = []
+
+        def fake_generate(_, **kwargs):
+            config = kwargs["config"]
+            response_mime = config["response_mime_type"]
+            if response_mime == "application/json":
+                return type("Response", (), {"text": ""})()
+            markdown_seen.append(kwargs["contents"][1])
+            return type(
+                "Response",
+                (),
+                {"text": "# Merchant Receipt\n- Total: USD 12.40"},
+            )()
+
+        pages, variant, file_bytes, mime_type = transcribe.transcribe_pages_with_fallbacks(
+            object(),
+            model="gemini-3-flash-preview",
+            prompt=transcribe.build_prompt("receipt.png", "image/png", "primary"),
+            markdown_fallback_prompt=transcribe.build_markdown_fallback_prompt(
+                "receipt.png", "image/png", "primary"
+            ),
+            document_path=Path("receipt.png"),
+            source_file_bytes=source_png,
+            source_mime_type="image/png",
+            primary_file_bytes=source_png,
+            primary_mime_type="image/png",
+            preprocess_variant="original",
+            generate_fn=fake_generate,
+            preprocess_fn=lambda *_args: (b"retry-bytes", "image/png"),
+            part_factory=lambda data, detected_mime: (data, detected_mime),
+        )
+
+        self.assertGreaterEqual(len(markdown_seen), 1)
         self.assertEqual(variant, "original")
         self.assertEqual(file_bytes, source_png)
         self.assertEqual(mime_type, "image/png")
