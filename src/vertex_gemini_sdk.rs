@@ -11,6 +11,7 @@ use crate::transcribe::{
 };
 
 const DEFAULT_GEMINI_MODEL: &str = "gemini-3-flash-preview";
+const SDK_EMPTY_RESPONSE_COMMAND_RETRIES: usize = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VertexGeminiSdkConfig {
@@ -206,36 +207,53 @@ fn run_sdk_transcription_command(
     config: &VertexGeminiSdkConfig,
     profile: &VertexGeminiSdkPassProfile,
 ) -> Result<String, VertexGeminiSdkError> {
-    let mut command = Command::new(&config.python_bin);
-    command.arg(&config.script_path);
-    command.arg("--service-account-key");
-    command.arg(&config.service_account_key_path);
-    command.arg("--location");
-    command.arg(&config.location);
-    command.arg("--model");
-    command.arg(&config.model);
-    command.arg("--pass-kind");
-    command.arg(profile.pass_kind.as_str());
-    command.arg("--preprocess-variant");
-    command.arg(profile.preprocess_variant.as_str());
-    if let Some(pass_id) = &profile.pass_id {
-        command.arg("--pass-id");
-        command.arg(pass_id);
-    }
-    if let Some(project_id) = &config.project_id {
-        command.arg("--project");
-        command.arg(project_id);
-    }
-    command.arg(path);
+    let mut last_error = None;
 
-    let output = command.output()?;
-    if !output.status.success() {
+    for _attempt in 0..SDK_EMPTY_RESPONSE_COMMAND_RETRIES {
+        let mut command = Command::new(&config.python_bin);
+        command.arg(&config.script_path);
+        command.arg("--service-account-key");
+        command.arg(&config.service_account_key_path);
+        command.arg("--location");
+        command.arg(&config.location);
+        command.arg("--model");
+        command.arg(&config.model);
+        command.arg("--pass-kind");
+        command.arg(profile.pass_kind.as_str());
+        command.arg("--preprocess-variant");
+        command.arg(profile.preprocess_variant.as_str());
+        if let Some(pass_id) = &profile.pass_id {
+            command.arg("--pass-id");
+            command.arg(pass_id);
+        }
+        if let Some(project_id) = &config.project_id {
+            command.arg("--project");
+            command.arg(project_id);
+        }
+        command.arg(path);
+
+        let output = command.output()?;
+        if output.status.success() {
+            return String::from_utf8(output.stdout)
+                .map_err(|err| VertexGeminiSdkError::InvalidUtf8(err.to_string()));
+        }
+
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
-        return Err(VertexGeminiSdkError::CommandFailed(stderr));
+        if !is_retryable_sdk_command_failure(&stderr) {
+            return Err(VertexGeminiSdkError::CommandFailed(stderr));
+        }
+        last_error = Some(stderr);
     }
 
-    String::from_utf8(output.stdout)
-        .map_err(|err| VertexGeminiSdkError::InvalidUtf8(err.to_string()))
+    Err(VertexGeminiSdkError::CommandFailed(last_error.unwrap_or_else(
+        || "Gemini SDK transcription failed without stderr output".to_owned(),
+    )))
+}
+
+fn is_retryable_sdk_command_failure(stderr: &str) -> bool {
+    stderr.contains("Gemini response did not contain text")
+        || stderr.contains("Gemini response JSON did not contain pages or markdown/text")
+        || stderr.contains("Gemini transcription failed for all preprocess variants")
 }
 
 fn parse_sdk_transcribed_document(text: &str) -> Result<TranscribedDocument, VertexGeminiSdkError> {
@@ -546,6 +564,59 @@ print(json.dumps({
         .expect_err("sdk transcription should fail");
 
         assert!(error.to_string().contains("sdk failed intentionally"));
+    }
+
+    #[test]
+    fn sdk_transcriber_retries_retryable_empty_response_failures() {
+        let temp_dir = unique_temp_dir("vertex_sdk_retry");
+        let script_path = temp_dir.join("mock_retry.py");
+        let key_path = temp_dir.join("service_account.json");
+        let doc_path = temp_dir.join("receipt.png");
+        let state_path = temp_dir.join("state.txt");
+        fs::write(&key_path, "{}").expect("key should write");
+        fs::write(&doc_path, b"png-bytes").expect("doc should write");
+        fs::write(
+            &script_path,
+            format!(
+                r###"import json, pathlib, sys
+state = pathlib.Path(r"{state_path}")
+count = int(state.read_text()) if state.exists() else 0
+state.write_text(str(count + 1))
+if count == 0:
+    sys.stderr.write("Gemini response did not contain text\n")
+    sys.exit(2)
+doc = pathlib.Path(sys.argv[-1])
+print(json.dumps({{
+  "document_id": "mock_receipt",
+  "filename": doc.name,
+  "source_path": str(doc),
+  "pages": [{{"page_number": 1, "text": "# Merchant Receipt"}}]
+}}))
+"###
+            ,
+                state_path = state_path.display(),
+            ),
+        )
+        .expect("mock script should write");
+
+        let document = transcribe_document_path_with_vertex_sdk(
+            &doc_path,
+            &VertexGeminiSdkConfig {
+                project_id: None,
+                location: "global".to_owned(),
+                model: "gemini-3-flash-preview".to_owned(),
+                service_account_key_path: key_path,
+                python_bin: PathBuf::from("python3"),
+                script_path,
+            },
+        )
+        .expect("sdk transcription should retry and succeed");
+
+        assert_eq!(document.document_id, "mock_receipt");
+        assert_eq!(
+            fs::read_to_string(state_path).expect("state should exist").trim(),
+            "2"
+        );
     }
 
     #[test]
