@@ -223,6 +223,7 @@ impl StaticFxRateProvider {
                 [
                     ("SGD", "0.74"),
                     ("MYR", "0.23"),
+                    ("KRW", "0.00070"),
                     ("JPY", "0.0067"),
                     ("GBP", "1.25"),
                     ("EUR", "1.08"),
@@ -1361,6 +1362,20 @@ fn synthesize_receipt_line(
         return synthesize_meal_line(document, facts, trip);
     }
 
+    let foreign_activity_type = trip
+        .region
+        .as_ref()
+        .filter(|region| region.value == TravelRegion::Foreign)
+        .map(|region| {
+            system_observed(
+                "other".to_owned(),
+                ConfidenceLevel::Low,
+                region.evidence.clone(),
+                "bundle_synthesis.default_foreign_activity_type",
+                vec!["requires_activity_review".to_owned()],
+            )
+        });
+
     CanonicalExpenseLine {
         line_id: format!("{}::receipt", document.document_id),
         kind: CanonicalExpenseKind::GenericReceipt,
@@ -1373,7 +1388,18 @@ fn synthesize_receipt_line(
             .as_ref()
             .and_then(currency_observed_from_money),
         original_amount: facts.total_paid.as_ref().map(number_observed_from_money),
-        expense_type: None,
+        expense_type: Some(system_observed(
+            "other_business_expense".to_owned(),
+            ConfidenceLevel::Low,
+            facts.total_paid
+                .as_ref()
+                .map(|value| value.evidence.clone())
+                .or_else(|| facts.transaction_date.as_ref().map(|value| value.evidence.clone()))
+                .or_else(|| facts.merchant_name.as_ref().map(|value| value.evidence.clone()))
+                .unwrap_or_default(),
+            "bundle_synthesis.classify_generic_receipt_expense_type",
+            vec!["generic_receipt_projection".to_owned()],
+        )),
         remarks: facts.merchant_name.as_ref().map(|merchant| {
             system_observed(
                 format!("Receipt from {}", merchant.value),
@@ -1394,7 +1420,7 @@ fn synthesize_receipt_line(
                 )
             })
         }),
-        foreign_activity_type: None,
+        foreign_activity_type,
         source_documents: vec![BundleSourceDocument {
             document_id: document.document_id.clone(),
             filename: document.filename.clone(),
@@ -1403,7 +1429,7 @@ fn synthesize_receipt_line(
         airfare_details: None,
         lodging_details: None,
         meal_details: None,
-        projection_supported: false,
+        projection_supported: true,
     }
 }
 
@@ -1540,7 +1566,7 @@ fn synthesize_meal_line(
 fn project_transaction_lines(
     bundle: &CanonicalExpenseBundle,
     metadata: &mut BTreeMap<String, FieldMetadata>,
-    issues: &mut Vec<BundleIssue>,
+    _issues: &mut Vec<BundleIssue>,
 ) -> Vec<ReportValue> {
     let mut lines = Vec::new();
 
@@ -1947,18 +1973,7 @@ fn project_transaction_lines(
                 }
                 line_object.insert("meal_details".to_owned(), ReportValue::Object(meal_details));
             }
-            CanonicalExpenseKind::GenericReceipt => {
-                issues.push(bundle_issue(
-                    BundleIssueSeverity::Warning,
-                    BundleIssueKind::UnprojectedDocument,
-                    format!(
-                        "Document {} is present in the bundle but not projected into a schema line",
-                        line.document_id
-                    ),
-                    vec![line.document_id.clone()],
-                    Vec::new(),
-                ));
-            }
+            CanonicalExpenseKind::GenericReceipt => {}
         }
 
         lines.push(ReportValue::Object(line_object));
@@ -2768,8 +2783,13 @@ fn normalize_text(value: &str) -> String {
 }
 
 fn canonical_currency_code(value: &str) -> String {
+    if value.contains('원') || value.contains('₩') {
+        return "KRW".to_owned();
+    }
+
     match value.to_ascii_uppercase().as_str() {
         "RM" => "MYR".to_owned(),
+        "WON" => "KRW".to_owned(),
         other => other.to_owned(),
     }
 }
@@ -2905,6 +2925,7 @@ fn currency_implied_country(currency: &str) -> Option<&'static str> {
     match canonical_currency_code(currency).as_str() {
         "MYR" => Some("Malaysia"),
         "SGD" => Some("Singapore"),
+        "KRW" => Some("South Korea"),
         "JPY" => Some("Japan"),
         "GBP" => Some("United Kingdom"),
         "CAD" => Some("Canada"),
@@ -3078,6 +3099,47 @@ mod tests {
                 "MYR",
             ),
         ]
+    }
+
+    fn sample_korean_receipt_doc() -> Vec<ExtractedDocumentFacts> {
+        vec![ExtractedDocumentFacts {
+            document_id: "train_0".to_owned(),
+            filename: "train_0.png".to_owned(),
+            classification: DocumentClassification {
+                kind: DocumentKind::Receipt,
+                confidence: ConfidenceLevel::Medium,
+                evidence: vec![document_reference("train_0", "train_0.png")],
+                flags: vec!["grounded_receipt_classification".to_owned()],
+            },
+            extraction_status: ExtractionStatus::Complete,
+            facts: DocumentFactsPayload::Receipt(ReceiptFacts {
+                merchant_name: Some(Observed::new(
+                    "Starfield".to_owned(),
+                    ConfidenceLevel::Medium,
+                    vec![document_reference("train_0", "train_0.png")],
+                )),
+                merchant_location: None,
+                transaction_date: Some(Observed::new(
+                    "2025-10-03".to_owned(),
+                    ConfidenceLevel::Medium,
+                    vec![document_reference("train_0", "train_0.png")],
+                )),
+                total_paid: Some(Observed {
+                    value: MoneyAmount {
+                        amount: "60000.00".to_owned(),
+                        currency: Some("KRW".to_owned()),
+                    },
+                    confidence: ConfidenceLevel::Medium,
+                    evidence: vec![document_reference("train_0", "train_0.png")],
+                    flags: vec!["hangul_currency_inference".to_owned()],
+                }),
+                subtotal: None,
+                tax_amount: None,
+                tip_amount: None,
+                line_items: Vec::new(),
+            }),
+            issues: Vec::new(),
+        }]
     }
 
     fn sample_receipt_only_docs_with_raw_dates() -> Vec<ExtractedDocumentFacts> {
@@ -3499,7 +3561,7 @@ mod tests {
     }
 
     #[test]
-    fn unknown_receipt_remains_unprojected() {
+    fn generic_receipt_projects_into_schema_transaction_line() {
         let mut documents = synthetic_docs();
         let DocumentFactsPayload::Receipt(facts) = &mut documents[2].facts else {
             panic!("expected receipt facts");
@@ -3508,14 +3570,23 @@ mod tests {
         facts.line_items.clear();
 
         let bundle = synthesize_bundle(&documents);
+        let generic_line = bundle
+            .expense_lines
+            .iter()
+            .find(|line| line.kind == CanonicalExpenseKind::GenericReceipt)
+            .expect("generic receipt line should exist");
+        assert!(generic_line.projection_supported);
+        assert_eq!(
+            generic_line
+                .expense_type
+                .as_ref()
+                .map(|value| value.value.as_str()),
+            Some("other_business_expense")
+        );
         assert!(bundle
             .issues
             .iter()
-            .any(|issue| issue.kind == BundleIssueKind::UnprojectedDocument));
-        assert!(bundle
-            .expense_lines
-            .iter()
-            .any(|line| line.kind == CanonicalExpenseKind::GenericReceipt));
+            .all(|issue| issue.kind != BundleIssueKind::UnprojectedDocument));
     }
 
     #[test]
@@ -3611,11 +3682,7 @@ mod tests {
             .bundle
             .expense_lines
             .iter()
-            .all(|line| !line.projection_supported));
-        assert!(result
-            .issues
-            .iter()
-            .any(|issue| issue.kind == BundleIssueKind::UnprojectedDocument));
+            .all(|line| line.projection_supported));
         assert!(!result
             .issues
             .iter()
@@ -3667,6 +3734,47 @@ mod tests {
             .iter()
             .all(|issue| issue.kind != BundleIssueKind::MissingDestination
                 && issue.kind != BundleIssueKind::MissingTransactionSummaryTotal));
+    }
+
+    #[test]
+    fn korean_receipt_projects_and_enriches_with_fx() {
+        let provider = StaticFxRateProvider::demo();
+        let result = synthesize_bundle_projection_with_fx(&sample_korean_receipt_doc(), &provider);
+
+        assert_eq!(result.bundle.expense_lines.len(), 1);
+        let line = &result.bundle.expense_lines[0];
+        assert_eq!(line.kind, CanonicalExpenseKind::GenericReceipt);
+        assert!(line.projection_supported);
+        assert_eq!(
+            line.expense_type.as_ref().map(|value| value.value.as_str()),
+            Some("other_business_expense")
+        );
+        assert_eq!(
+            line.original_currency.as_ref().map(|value| value.value.as_str()),
+            Some("KRW")
+        );
+        assert_eq!(
+            line.line_amount_usd.as_ref().map(|value| value.value.as_str()),
+            Some("42.00")
+        );
+        assert_eq!(
+            result
+                .bundle
+                .trip
+                .destination
+                .as_ref()
+                .and_then(|destination| destination.value.country.as_deref()),
+            Some("South Korea")
+        );
+        assert_eq!(
+            get_path(&result.draft.report, "transaction_lines[0].common.expense_type")
+                .and_then(ReportValue::as_text),
+            Some("other_business_expense")
+        );
+        assert!(!result
+            .issues
+            .iter()
+            .any(|issue| issue.kind == BundleIssueKind::UnprojectedDocument));
     }
 
     #[test]

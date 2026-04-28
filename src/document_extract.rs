@@ -7,7 +7,10 @@ use crate::document_facts::{
     ReceiptFacts, ReceiptLineItemFacts, UnknownDocumentFacts,
 };
 use crate::draft::{ConfidenceLevel, EvidenceKind, EvidenceReference};
-use crate::transcribe::{transcribe_document_path, TranscribedDocument, TranscriptionError};
+use crate::transcribe::{
+    transcribe_document_path, TranscribedDocument, TranscribedPage, TranscribedRegion,
+    TranscriptionError,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct LineRef {
@@ -100,6 +103,10 @@ fn classify_document(document: &TranscribedDocument, lines: &[LineRef]) -> Docum
         return classification;
     }
 
+    if let Some(classification) = grounded_receipt_classification(document) {
+        return classification;
+    }
+
     if let Some(line) = lines.first() {
         let mut classification =
             classification_from_line(document, DocumentKind::Unknown, line, ConfidenceLevel::Low);
@@ -171,6 +178,123 @@ fn fallback_receipt_classification(
         total_line,
         ConfidenceLevel::Medium,
     ))
+}
+
+fn grounded_receipt_classification(document: &TranscribedDocument) -> Option<DocumentClassification> {
+    let supported_region_count = ["merchant_name", "transaction_date", "total_paid"]
+        .iter()
+        .filter(|region_id| grounded_region(document, region_id).is_some())
+        .count();
+    if supported_region_count < 2 {
+        return None;
+    }
+
+    if let Some((page, region)) = grounded_region(document, "total_paid") {
+        return Some(classification_from_region(
+            document,
+            DocumentKind::Receipt,
+            page,
+            region,
+            ConfidenceLevel::Medium,
+            vec!["grounded_receipt_classification".to_owned()],
+        ));
+    }
+
+    if let Some((page, region)) = grounded_region(document, "merchant_name") {
+        return Some(classification_from_region(
+            document,
+            DocumentKind::Receipt,
+            page,
+            region,
+            ConfidenceLevel::Medium,
+            vec!["grounded_receipt_classification".to_owned()],
+        ));
+    }
+
+    None
+}
+
+fn grounded_receipt_merchant_name(document: &TranscribedDocument) -> Option<Observed<String>> {
+    let (page, region) = grounded_region(document, "merchant_name")?;
+    Some(observed_from_region(
+        document,
+        page,
+        region,
+        normalize_bullet_content(&region.text),
+        ConfidenceLevel::Medium,
+        vec!["grounded_receipt_field".to_owned()],
+    ))
+}
+
+fn grounded_receipt_transaction_date(document: &TranscribedDocument) -> Option<Observed<String>> {
+    let (page, region) = grounded_region(document, "transaction_date")?;
+    Some(observed_from_region(
+        document,
+        page,
+        region,
+        normalize_receipt_date_value(&region.text),
+        ConfidenceLevel::Medium,
+        vec!["grounded_receipt_field".to_owned()],
+    ))
+}
+
+fn grounded_receipt_total_paid(document: &TranscribedDocument) -> Option<Observed<MoneyAmount>> {
+    let (page, region) = grounded_region(document, "total_paid")?;
+    let currency_hint = grounded_region(document, "total_paid_currency")
+        .map(|(_, currency_region)| currency_region.text.clone())
+        .or_else(|| {
+            if document_contains_hangul(document) {
+                Some("KRW".to_owned())
+            } else {
+                None
+            }
+        });
+    let money = parse_grounded_money(&region.text, currency_hint.as_deref())?;
+    let mut flags = vec!["grounded_receipt_field".to_owned()];
+    if currency_hint.as_deref() == Some("KRW")
+        && grounded_region(document, "total_paid_currency").is_none()
+        && document_contains_hangul(document)
+    {
+        flags.push("hangul_currency_inference".to_owned());
+    }
+    Some(observed_from_region(
+        document,
+        page,
+        region,
+        money,
+        ConfidenceLevel::Medium,
+        flags,
+    ))
+}
+
+fn grounded_region<'a>(
+    document: &'a TranscribedDocument,
+    region_id: &str,
+) -> Option<(&'a TranscribedPage, &'a TranscribedRegion)> {
+    document.pages.iter().find_map(|page| {
+        page.regions
+            .iter()
+            .find(|region| region.region_id == region_id)
+            .map(|region| (page, region))
+    })
+}
+
+fn parse_grounded_money(value: &str, currency_hint: Option<&str>) -> Option<MoneyAmount> {
+    if let Some(currency_hint) = currency_hint {
+        return Some(MoneyAmount {
+            amount: sanitize_amount(value)?,
+            currency: Some(normalize_currency_code(currency_hint)),
+        });
+    }
+    parse_money(value)
+}
+
+fn document_contains_hangul(document: &TranscribedDocument) -> bool {
+    document.pages.iter().any(|page| {
+        page.text
+            .chars()
+            .any(|ch| matches!(ch as u32, 0x1100..=0x11FF | 0x3130..=0x318F | 0xAC00..=0xD7AF))
+    })
 }
 
 fn extract_flight_itinerary(
@@ -424,6 +548,7 @@ fn extract_receipt(
         &["merchant name", "merchant"],
         ConfidenceLevel::High,
     )
+    .or_else(|| grounded_receipt_merchant_name(document))
     .or_else(|| infer_receipt_merchant_name(document, lines));
     let merchant_location = observed_location(
         document,
@@ -436,7 +561,8 @@ fn extract_receipt(
         lines,
         &["transaction date", "date"],
         ConfidenceLevel::High,
-    );
+    )
+    .or_else(|| grounded_receipt_transaction_date(document));
     let subtotal = observed_money(document, lines, &["subtotal"], ConfidenceLevel::High);
     let tax_amount = observed_money(
         document,
@@ -447,7 +573,8 @@ fn extract_receipt(
     let tip_amount = observed_money(document, lines, &["tip"], ConfidenceLevel::High);
     let total_paid = observed_receipt_total(document, lines, ConfidenceLevel::High).or_else(|| {
         infer_receipt_total(subtotal.as_ref(), tax_amount.as_ref(), tip_amount.as_ref())
-    });
+    })
+    .or_else(|| grounded_receipt_total_paid(document));
     let section_rows = collect_section_rows(
         lines,
         &["line items", "items", "purchased items", "items purchased"],
@@ -1083,6 +1210,22 @@ fn observed_from_line<T>(
     }
 }
 
+fn observed_from_region<T>(
+    document: &TranscribedDocument,
+    page: &TranscribedPage,
+    region: &TranscribedRegion,
+    value: T,
+    confidence: ConfidenceLevel,
+    flags: Vec<String>,
+) -> Observed<T> {
+    Observed {
+        value,
+        confidence,
+        evidence: vec![document_region_evidence(document, page, region)],
+        flags,
+    }
+}
+
 fn find_line_with_any<'a>(lines: &'a [LineRef], needles: &[&str]) -> Option<&'a LineRef> {
     lines.iter().find(|line| {
         let haystack = normalize_key(&line.normalized);
@@ -1487,16 +1630,23 @@ fn sanitize_amount(value: &str) -> Option<String> {
         .filter(|ch| ch.is_ascii_digit() || *ch == '.' || *ch == ',')
         .collect::<String>()
         .replace(',', "");
-    if normalized.is_empty() || !normalized.contains('.') {
+    if normalized.is_empty() {
         None
-    } else {
+    } else if normalized.contains('.') {
         Some(normalized)
+    } else {
+        Some(format!("{normalized}.00"))
     }
 }
 
 fn normalize_currency_code(value: &str) -> String {
+    if value.contains('원') || value.contains('₩') {
+        return "KRW".to_owned();
+    }
+
     match value.to_ascii_uppercase().as_str() {
         "RM" => "MYR".to_owned(),
+        "WON" => "KRW".to_owned(),
         other => other.to_owned(),
     }
 }
@@ -1509,6 +1659,7 @@ fn extract_currency_hint(value: &str) -> Option<String> {
             matches!(
                 token.to_ascii_uppercase().as_str(),
                 "RM" | "MYR" | "USD" | "SGD" | "JPY" | "GBP" | "EUR" | "CAD" | "AUD"
+                    | "KRW" | "WON"
             )
         })
         .map(normalize_currency_code)
@@ -1803,6 +1954,22 @@ fn classification_from_line(
     }
 }
 
+fn classification_from_region(
+    document: &TranscribedDocument,
+    kind: DocumentKind,
+    page: &TranscribedPage,
+    region: &TranscribedRegion,
+    confidence: ConfidenceLevel,
+    flags: Vec<String>,
+) -> DocumentClassification {
+    DocumentClassification {
+        kind,
+        confidence,
+        evidence: vec![document_region_evidence(document, page, region)],
+        flags,
+    }
+}
+
 fn document_span_evidence(document: &TranscribedDocument, line: &LineRef) -> EvidenceReference {
     EvidenceReference {
         kind: EvidenceKind::DocumentSpan,
@@ -1810,6 +1977,21 @@ fn document_span_evidence(document: &TranscribedDocument, line: &LineRef) -> Evi
         filename: Some(document.filename.clone()),
         page: Some(line.page_number),
         quote: Some(line.raw.clone()),
+        origin: None,
+    }
+}
+
+fn document_region_evidence(
+    document: &TranscribedDocument,
+    page: &TranscribedPage,
+    region: &TranscribedRegion,
+) -> EvidenceReference {
+    EvidenceReference {
+        kind: EvidenceKind::DocumentSpan,
+        document_id: Some(document.document_id.clone()),
+        filename: Some(document.filename.clone()),
+        page: Some(page.page_number),
+        quote: Some(region.text.clone()),
         origin: None,
     }
 }
@@ -1841,7 +2023,13 @@ mod tests {
     use crate::synthetic_documents::{
         generate_synthetic_document, generate_synthetic_packet, SyntheticVariant,
     };
+    use crate::transcribe::{
+        OcrBoundingBox, OcrGeometrySource, OcrPassKind, OcrPreprocessVariant, OcrRegionKind,
+        PageDimensions, TranscribedPage, TranscribedRegion, TranscriptionEngine,
+        TranscriptionMetadata,
+    };
     use std::fs;
+    use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -1858,6 +2046,89 @@ mod tests {
         let path = dir.join(filename);
         fs::write(&path, markdown).expect("fixture should be writable");
         path
+    }
+
+    fn grounded_receipt_document(
+        text: &str,
+        merchant: &str,
+        date: &str,
+        total: &str,
+        total_currency: Option<&str>,
+    ) -> TranscribedDocument {
+        let mut regions = vec![
+            TranscribedRegion {
+                region_id: "merchant_name".to_owned(),
+                kind: OcrRegionKind::ValueCandidate,
+                text: merchant.to_owned(),
+                bbox: Some(OcrBoundingBox {
+                    left: 0.1,
+                    top: 0.1,
+                    width: 0.4,
+                    height: 0.05,
+                }),
+            },
+            TranscribedRegion {
+                region_id: "transaction_date".to_owned(),
+                kind: OcrRegionKind::ValueCandidate,
+                text: date.to_owned(),
+                bbox: Some(OcrBoundingBox {
+                    left: 0.1,
+                    top: 0.2,
+                    width: 0.3,
+                    height: 0.05,
+                }),
+            },
+            TranscribedRegion {
+                region_id: "total_paid".to_owned(),
+                kind: OcrRegionKind::ValueCandidate,
+                text: total.to_owned(),
+                bbox: Some(OcrBoundingBox {
+                    left: 0.6,
+                    top: 0.8,
+                    width: 0.2,
+                    height: 0.05,
+                }),
+            },
+        ];
+        if let Some(total_currency) = total_currency {
+            regions.push(TranscribedRegion {
+                region_id: "total_paid_currency".to_owned(),
+                kind: OcrRegionKind::ValueCandidate,
+                text: total_currency.to_owned(),
+                bbox: Some(OcrBoundingBox {
+                    left: 0.52,
+                    top: 0.8,
+                    width: 0.05,
+                    height: 0.05,
+                }),
+            });
+        }
+
+        TranscribedDocument {
+            document_id: "grounded_receipt".to_owned(),
+            filename: "grounded_receipt.png".to_owned(),
+            source_path: PathBuf::from("grounded_receipt.png"),
+            engine: TranscriptionEngine::VertexGeminiSdk,
+            metadata: TranscriptionMetadata {
+                pass_id: "grounded_receipt_primary_original".to_owned(),
+                pass_kind: OcrPassKind::Primary,
+                preprocess_variant: OcrPreprocessVariant::Original,
+                grounding_preprocess_variant: None,
+                producer: "test".to_owned(),
+                model: Some("gemini-3-flash-preview".to_owned()),
+                geometry_source: OcrGeometrySource::Gemini,
+                geometry_available: true,
+            },
+            pages: vec![TranscribedPage {
+                page_number: 1,
+                text: text.to_owned(),
+                dimensions: Some(PageDimensions {
+                    width: 1200,
+                    height: 1800,
+                }),
+                regions,
+            }],
+        }
     }
 
     #[test]
@@ -2132,6 +2403,80 @@ mod tests {
         }
 
         remove_fixture_dir(&path);
+    }
+
+    #[test]
+    fn grounded_receipt_regions_classify_and_extract_multilingual_receipt() {
+        let document = grounded_receipt_document(
+            "# 스타필드\n영수증\n합계 60,000원",
+            "Starfield",
+            "2025-10-03",
+            "60,000",
+            Some("원"),
+        );
+        let actual = extract_document_facts(&document);
+
+        assert_eq!(actual.classification.kind, DocumentKind::Receipt);
+        assert_eq!(actual.classification.confidence, ConfidenceLevel::Medium);
+
+        match actual.facts {
+            DocumentFactsPayload::Receipt(facts) => {
+                assert_eq!(
+                    facts
+                        .merchant_name
+                        .as_ref()
+                        .map(|value| value.value.as_str()),
+                    Some("Starfield")
+                );
+                assert_eq!(
+                    facts
+                        .transaction_date
+                        .as_ref()
+                        .map(|value| value.value.as_str()),
+                    Some("2025-10-03")
+                );
+                assert_eq!(
+                    facts
+                        .total_paid
+                        .as_ref()
+                        .map(|value| value.value.amount.as_str()),
+                    Some("60000.00")
+                );
+                assert_eq!(
+                    facts
+                        .total_paid
+                        .as_ref()
+                        .and_then(|value| value.value.currency.as_deref()),
+                    Some("KRW")
+                );
+            }
+            other => panic!("unexpected payload: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn grounded_receipt_regions_infer_krw_without_explicit_currency_region() {
+        let document = grounded_receipt_document(
+            "# 스타필드\n영수증\n합계 60,000원",
+            "Starfield",
+            "2025-10-03",
+            "60,000",
+            None,
+        );
+        let actual = extract_document_facts(&document);
+
+        match actual.facts {
+            DocumentFactsPayload::Receipt(facts) => {
+                let total_paid = facts.total_paid.expect("total should be extracted");
+                assert_eq!(total_paid.value.amount, "60000.00");
+                assert_eq!(total_paid.value.currency.as_deref(), Some("KRW"));
+                assert!(total_paid
+                    .flags
+                    .iter()
+                    .any(|flag| flag == "hangul_currency_inference"));
+            }
+            other => panic!("unexpected payload: {other:?}"),
+        }
     }
 
     #[test]

@@ -5512,7 +5512,8 @@
                       "group_travel_meal_with_alcohol",
                       "human_subject_incentive",
                       "lodging_domestic",
-                      "lodging_foreign"
+                      "lodging_foreign",
+                      "other_business_expense"
                     ],
                     "collection_columns": [],
                     "collection_rows": [],
@@ -6214,7 +6215,8 @@
                       "group_travel_meal_with_alcohol",
                       "human_subject_incentive",
                       "lodging_domestic",
-                      "lodging_foreign"
+                      "lodging_foreign",
+                      "other_business_expense"
                     ],
                     "collection_columns": [],
                     "collection_rows": [],
@@ -6923,7 +6925,8 @@
                       "group_travel_meal_with_alcohol",
                       "human_subject_incentive",
                       "lodging_domestic",
-                      "lodging_foreign"
+                      "lodging_foreign",
+                      "other_business_expense"
                     ],
                     "collection_columns": [],
                     "collection_rows": [],
@@ -10499,7 +10502,8 @@
                       "group_travel_meal_with_alcohol",
                       "human_subject_incentive",
                       "lodging_domestic",
-                      "lodging_foreign"
+                      "lodging_foreign",
+                      "other_business_expense"
                     ],
                     "collection_columns": [],
                     "collection_rows": [],
@@ -11201,7 +11205,8 @@
                       "group_travel_meal_with_alcohol",
                       "human_subject_incentive",
                       "lodging_domestic",
-                      "lodging_foreign"
+                      "lodging_foreign",
+                      "other_business_expense"
                     ],
                     "collection_columns": [],
                     "collection_rows": [],
@@ -11910,7 +11915,8 @@
                       "group_travel_meal_with_alcohol",
                       "human_subject_incentive",
                       "lodging_domestic",
-                      "lodging_foreign"
+                      "lodging_foreign",
+                      "other_business_expense"
                     ],
                     "collection_columns": [],
                     "collection_rows": [],

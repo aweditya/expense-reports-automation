@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-generated_at_utc: '2026-04-12T08:03:03+00:00'
+generated_at_utc: '2026-04-28T00:19:32+00:00'
 field_rules:
 - path: expense_report
   node_kind: object
@@ -583,6 +583,7 @@ field_rules:
   - human_subject_incentive
   - lodging_domestic
   - lodging_foreign
+  - other_business_expense
   default: null
   description: null
   infer_from: LLM classifies from receipt content

@@ -1726,7 +1726,7 @@ mod tests {
     }
 
     #[test]
-    fn review_packet_surfaces_unprojected_receipt_snapshots() {
+    fn review_packet_surfaces_projected_generic_receipt_snapshots() {
         let document_id = "receipt_book_talk";
         let filename = "book_talk_receipt.png";
         let receipt = ExtractedDocumentFacts {
@@ -1777,7 +1777,7 @@ mod tests {
             .expense_lines
             .iter()
             .any(|line| line.kind == CanonicalExpenseKind::GenericReceipt
-                && !line.projection_supported));
+                && line.projection_supported));
         let projection = synthesize_bundle_projection(&bundle.documents);
         let packet = build_review_packet(
             &projection.bundle,
@@ -1788,20 +1788,20 @@ mod tests {
 
         assert_eq!(packet.document_snapshots.len(), 1);
         assert_eq!(packet.document_snapshots[0].filename, filename);
-        assert!(!packet.document_snapshots[0].projected_to_filing);
+        assert!(packet.document_snapshots[0].projected_to_filing);
         assert_eq!(
             packet.document_snapshots[0].status_label,
-            "parsed for bundle context only"
+            "projected into filing"
         );
         assert!(packet.document_snapshots[0]
             .summary_fields
             .iter()
             .any(|field| field.label == "Merchant" && field.value == "BOOK TALK"));
         assert!(packet.document_snapshots[0]
-            .issue_messages
+            .summary_fields
             .iter()
-            .any(|message| message.contains("not yet projected")
-                || message.contains("not projected")));
+            .any(|field| field.label == "Projected expense type"
+                && field.value == "other_business_expense"));
     }
 
     #[test]
