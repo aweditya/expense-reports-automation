@@ -10,6 +10,7 @@ from pathlib import Path
 DEFAULT_MODEL = "gemini-3-flash-preview"
 CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
 DEFAULT_GENERATE_RETRIES = 3
+EMPTY_TRANSCRIPTION_RESPONSE_RETRIES = 3
 GROUNDABLE_IMAGE_MIME_TYPES = {
     "image/png",
     "image/jpeg",
@@ -273,6 +274,18 @@ def ocr_retry_variants(primary_variant: str, mime_type: str) -> list[str]:
         if candidate not in variants:
             variants.append(candidate)
     return variants
+
+
+def is_retryable_transcription_error(exc: BaseException) -> bool:
+    if isinstance(exc, json.JSONDecodeError):
+        return True
+    if isinstance(exc, SystemExit):
+        message = str(exc)
+        return (
+            "Gemini response did not contain text" in message
+            or "Gemini response JSON did not contain pages or markdown/text" in message
+        )
+    return False
 
 
 def normalize_pages(payload) -> list[dict]:
@@ -557,17 +570,32 @@ def attempt_transcription_pages(
         )
         config = types.GenerateContentConfig(**config)
 
-    response = generate_fn(
-        client,
-        model=model,
-        contents=[
-            prompt,
-            part_factory(file_bytes, mime_type),
-        ],
-        config=config,
-    )
-    payload = json.loads(extract_payload_text(response))
-    return normalize_pages(payload)
+    last_error: BaseException | None = None
+    for _ in range(EMPTY_TRANSCRIPTION_RESPONSE_RETRIES):
+        response = generate_fn(
+            client,
+            model=model,
+            contents=[
+                prompt,
+                part_factory(file_bytes, mime_type),
+            ],
+            config=config,
+        )
+        try:
+            payload = json.loads(extract_payload_text(response))
+            return normalize_pages(payload)
+        except KeyboardInterrupt:
+            raise
+        except BaseException as exc:
+            if not is_retryable_transcription_error(exc):
+                raise
+            last_error = exc
+
+    if isinstance(last_error, SystemExit):
+        raise last_error
+    if last_error is not None:
+        raise SystemExit(f"Gemini transcription did not stabilize: {last_error}") from last_error
+    raise SystemExit("Gemini transcription did not stabilize")
 
 
 def transcribe_pages_with_fallbacks(

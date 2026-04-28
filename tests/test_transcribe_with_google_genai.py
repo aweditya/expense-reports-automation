@@ -415,15 +415,58 @@ class TranscribeWithGoogleGenAiTests(unittest.TestCase):
             ["binarized", "contrast_boosted", "grayscale"],
         )
 
+    def test_attempt_transcription_pages_retries_empty_response_on_same_variant(self):
+        source_png = self.make_png_bytes()
+        call_count = 0
+
+        def fake_generate(_, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            image_part = kwargs["contents"][1]
+            self.assertEqual(image_part, (source_png, "image/png"))
+            if call_count < 3:
+                return type("Response", (), {"text": ""})()
+            return type(
+                "Response",
+                (),
+                {
+                    "text": json.dumps(
+                        {
+                            "pages": [
+                                {
+                                    "page_number": 1,
+                                    "text": "# Merchant Receipt\n- Total: USD 12.40",
+                                }
+                            ]
+                        }
+                    )
+                },
+            )()
+
+        pages = transcribe.attempt_transcription_pages(
+            object(),
+            model="gemini-3-flash-preview",
+            prompt=transcribe.build_prompt("receipt.png", "image/png", "primary"),
+            file_bytes=source_png,
+            mime_type="image/png",
+            generate_fn=fake_generate,
+            part_factory=lambda data, detected_mime: (data, detected_mime),
+        )
+
+        self.assertEqual(call_count, 3)
+        self.assertEqual(pages[0]["text"], "# Merchant Receipt\n- Total: USD 12.40")
+
     def test_transcribe_pages_with_fallbacks_retries_after_empty_text_response(self):
         source_png = self.make_png_bytes()
         attempted_payloads = []
+        per_variant_calls = {}
 
         def fake_generate(_, **kwargs):
             prompt, image_part = kwargs["contents"]
             self.assertIn("Transcribe this financial document", prompt)
             attempted_payloads.append(image_part)
             image_bytes, _mime = image_part
+            per_variant_calls[image_bytes] = per_variant_calls.get(image_bytes, 0) + 1
             if image_bytes == source_png:
                 return type("Response", (), {"text": ""})()
             return type(
@@ -466,7 +509,12 @@ class TranscribeWithGoogleGenAiTests(unittest.TestCase):
 
         self.assertEqual(
             attempted_payloads,
-            [(source_png, "image/png"), (b"contrast_boosted-bytes", "image/png")],
+            [(source_png, "image/png")] * transcribe.EMPTY_TRANSCRIPTION_RESPONSE_RETRIES
+            + [(b"contrast_boosted-bytes", "image/png")],
+        )
+        self.assertEqual(
+            per_variant_calls[source_png],
+            transcribe.EMPTY_TRANSCRIPTION_RESPONSE_RETRIES,
         )
         self.assertEqual(variant, "contrast_boosted")
         self.assertEqual(file_bytes, b"contrast_boosted-bytes")
