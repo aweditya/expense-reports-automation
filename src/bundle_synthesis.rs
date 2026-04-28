@@ -203,6 +203,14 @@ impl StaticFxRateProvider {
 
         for (date, rates) in [
             (
+                "2017-12-01",
+                [("MYR", "0.24"), ("SGD", "0.73"), ("JPY", "0.0088")].as_slice(),
+            ),
+            (
+                "2018-02-01",
+                [("MYR", "0.24"), ("SGD", "0.73"), ("JPY", "0.0088")].as_slice(),
+            ),
+            (
                 "2018-10-01",
                 [("MYR", "0.24"), ("SGD", "0.73"), ("JPY", "0.0088")].as_slice(),
             ),
@@ -3665,6 +3673,12 @@ mod tests {
     #[test]
     fn static_fx_provider_normalizes_non_iso_receipt_dates() {
         let provider = StaticFxRateProvider::demo();
+        let early = provider
+            .usd_rate_for("MYR", "29-12-2017")
+            .expect("early hyphenated receipt date should resolve");
+        let february = provider
+            .usd_rate_for("MYR", "12/02/2018")
+            .expect("early slash-formatted receipt date should resolve");
         let first = provider
             .usd_rate_for("MYR", "25/12/2018")
             .expect("slash-formatted historical date should resolve");
@@ -3674,6 +3688,10 @@ mod tests {
         let third = provider
             .usd_rate_for("MYR", "19/10/2018")
             .expect("older slash-formatted date should resolve against earlier anchor");
+        assert_eq!(early.usd_per_unit, "0.24");
+        assert_eq!(early.date, "2017-12-01");
+        assert_eq!(february.usd_per_unit, "0.24");
+        assert_eq!(february.date, "2018-02-01");
         assert_eq!(first.usd_per_unit, "0.24");
         assert_eq!(first.date, "2018-12-01");
         assert_eq!(second.usd_per_unit, "0.24");
