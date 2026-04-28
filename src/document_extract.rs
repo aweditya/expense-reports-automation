@@ -1759,10 +1759,12 @@ fn with_money_currency_hint(
     origin: &str,
 ) -> Option<Observed<MoneyAmount>> {
     let mut value = value?;
-    let currency_hint = currency_hint?;
     if value.value.currency.is_some() {
         return Some(value);
     }
+    let Some(currency_hint) = currency_hint else {
+        return Some(value);
+    };
     value.value.currency = Some(normalize_currency_code(currency_hint));
     value.evidence.push(system_generated_evidence(origin));
     Some(value)
