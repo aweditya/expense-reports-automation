@@ -519,19 +519,16 @@ fn render_pdf_pages_to_dir(path: &Path, pages_dir: &Path) -> Result<(), Workspac
 }
 
 fn render_image_to_png(path: &Path, output_path: PathBuf) -> Result<(), WorkspaceError> {
-    ensure_tool_available("sips")?;
-    let output = Command::new("sips")
-        .arg("-s")
-        .arg("format")
-        .arg("png")
+    ensure_tool_available("python3")?;
+    let output = Command::new("python3")
+        .arg("scripts/normalize_image_to_png.py")
         .arg(path)
-        .arg("--out")
         .arg(&output_path)
         .output()?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
         return Err(WorkspaceError::CommandFailed(format!(
-            "sips failed to normalize image {}: {stderr}",
+            "image normalization failed for {}: {stderr}",
             path.display()
         )));
     }
