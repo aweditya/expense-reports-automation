@@ -1428,28 +1428,8 @@ fn strip_label_value(line: &str, labels: &[&str], allow_loose_prefix: bool) -> O
                 continue;
             }
 
-            let next_token_key = normalize_key(raw_tokens[prefix_len]);
-            if matches!(
-                next_token_key.as_str(),
-                "amt"
-                    | "amount"
-                    | "paid"
-                    | "due"
-                    | "item"
-                    | "items"
-                    | "incl"
-                    | "including"
-                    | "excl"
-                    | "excluding"
-                    | "rounded"
-                    | "rounding"
-                    | "adj"
-                    | "qty"
-                    | "quantity"
-                    | "gst"
-                    | "tax"
-                    | "sales"
-            ) {
+            let next_token_key = normalize_label_continuation_token(raw_tokens[prefix_len]);
+            if is_disallowed_label_continuation(&next_token_key) {
                 continue;
             }
 
@@ -1508,28 +1488,8 @@ fn strip_label_value_strict(line: &str, labels: &[&str]) -> Option<String> {
                 continue;
             }
 
-            let next_token_key = normalize_key(raw_tokens[prefix_len]);
-            if matches!(
-                next_token_key.as_str(),
-                "amt"
-                    | "amount"
-                    | "paid"
-                    | "due"
-                    | "item"
-                    | "items"
-                    | "incl"
-                    | "including"
-                    | "excl"
-                    | "excluding"
-                    | "rounded"
-                    | "rounding"
-                    | "adj"
-                    | "qty"
-                    | "quantity"
-                    | "gst"
-                    | "tax"
-                    | "sales"
-            ) {
+            let next_token_key = normalize_label_continuation_token(raw_tokens[prefix_len]);
+            if is_disallowed_label_continuation(&next_token_key) {
                 continue;
             }
 
@@ -1550,6 +1510,38 @@ fn find_pipe_value(line: &LineRef, labels: &[&str]) -> Option<String> {
     split_columns(&normalize_bullet_content(&line.raw))
         .into_iter()
         .find_map(|part| strip_label_value(part.trim(), labels, true))
+}
+
+fn normalize_label_continuation_token(value: &str) -> String {
+    value
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .collect::<String>()
+        .to_ascii_lowercase()
+}
+
+fn is_disallowed_label_continuation(value: &str) -> bool {
+    matches!(
+        value,
+        "amt"
+            | "amount"
+            | "paid"
+            | "due"
+            | "item"
+            | "items"
+            | "incl"
+            | "including"
+            | "excl"
+            | "excluding"
+            | "rounded"
+            | "rounding"
+            | "adj"
+            | "qty"
+            | "quantity"
+            | "gst"
+            | "tax"
+            | "sales"
+    )
 }
 
 fn normalize_line(value: &str) -> String {
@@ -2830,6 +2822,41 @@ GOODS SOLD ARE NOT RETURNABLE.
                         .as_ref()
                         .and_then(|value| value.value.currency.as_deref()),
                     Some("MYR")
+                );
+            }
+            other => panic!("unexpected payload: {other:?}"),
+        }
+
+        remove_fixture_dir(&path);
+    }
+
+    #[test]
+    fn receipt_extractor_ignores_total_item_parens_when_selecting_payable_total() {
+        let markdown = "\
+# Merchant Receipt
+
+- Merchant: HOME MASTER HARDWARE & ELECTRICAL
+- Date: 22/12/2017 14:03
+- 24MMX7Y M.ONE TAPE | 1.00 x 15.90 | 15.90 | SR
+- Subtotal: 15.90
+- Total Excl. of GST: 15.00
+- Total Incl. of GST: 15.90
+- Total Amt Rounded: 15.90
+- Payment: 50.00
+- Change Due: 34.10
+- Total Item(s): 1
+";
+        let path = write_fixture(markdown, "receipt_total_items_parens_guard.md");
+        let actual = extract_document_facts_path(&path).expect("fixture should transcribe");
+
+        match actual.facts {
+            DocumentFactsPayload::Receipt(facts) => {
+                assert_eq!(
+                    facts
+                        .total_paid
+                        .as_ref()
+                        .map(|value| value.value.amount.as_str()),
+                    Some("15.90")
                 );
             }
             other => panic!("unexpected payload: {other:?}"),
