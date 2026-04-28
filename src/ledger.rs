@@ -14,7 +14,8 @@ use crate::ocr_compare::DocumentOcrComparisonSummary;
 use crate::ocr_grounding::DocumentOcrGroundingSummary;
 use crate::readiness::{summarize_validation_readiness_with_confirmations, ReadinessReport};
 use crate::review_packet::{
-    build_review_packet_with_ocr_artifacts, FilingStatus, ReviewPacket, ReviewPacketError,
+    apply_confirmed_review_paths, build_review_packet_with_ocr_artifacts, FilingStatus,
+    ReviewPacket, ReviewPacketError,
 };
 use crate::validator::{validate_draft_report, ValidationReport};
 use crate::value::ReportValue;
@@ -597,6 +598,8 @@ fn build_version_record(
         ocr_pass_comparisons,
         ocr_groundings,
     )?;
+    let mut review_packet = review_packet;
+    apply_confirmed_review_paths(&mut review_packet, &confirmed_review_paths);
     Ok(DraftVersionRecord {
         version_id,
         parent_version_id,
@@ -1051,6 +1054,20 @@ mod tests {
             latest.review_packet.summary.readiness.manual_review_count,
             0
         );
+        assert!(!latest
+            .review_packet
+            .copy_sections
+            .iter()
+            .flat_map(|section| section.instances.iter())
+            .flat_map(|instance| instance.fields.iter())
+            .any(|field| {
+                matches!(
+                    field.path.as_str(),
+                    "expense_report.transaction_lines[0].common.date"
+                        | "expense_report.transaction_lines[1].common.date"
+                        | "expense_report.transaction_lines[2].common.date"
+                ) && field.needs_review
+            }));
         assert_eq!(ledger.review_actions.len(), 6);
         assert!(latest.feedback_from_parent.is_some());
     }

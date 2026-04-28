@@ -160,6 +160,25 @@ pub struct ReviewPacket {
     pub document_snapshots: Vec<DocumentSnapshotCard>,
 }
 
+pub fn apply_confirmed_review_paths(
+    packet: &mut ReviewPacket,
+    confirmed_paths: &BTreeSet<String>,
+) {
+    if confirmed_paths.is_empty() {
+        return;
+    }
+
+    for section in &mut packet.copy_sections {
+        for instance in &mut section.instances {
+            for field in &mut instance.fields {
+                if confirmed_paths.contains(&field.path) {
+                    field.needs_review = false;
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum ReviewPacketError {
     UiFieldMapParse(String),
@@ -1473,10 +1492,11 @@ fn push_optional_line(lines: &mut Vec<String>, prefix: &str, value: Option<&str>
 #[cfg(test)]
 mod tests {
     use super::{
-        build_review_packet, build_review_packet_with_ocr_artifacts,
+        apply_confirmed_review_paths, build_review_packet, build_review_packet_with_ocr_artifacts,
         build_review_packet_with_ocr_comparisons, build_review_packet_with_readiness,
         render_review_packet_markdown, FilingStatus,
     };
+    use std::collections::BTreeSet;
     use crate::bundle_synthesis::{
         synthesize_bundle, synthesize_bundle_projection, synthesize_bundle_projection_with_fx,
         CanonicalExpenseKind, StaticFxRateProvider,
@@ -2118,5 +2138,36 @@ mod tests {
             .expect("line item field should exist");
         assert_eq!(line_items_field.ocr_confidence, Some(ConfidenceLevel::High));
         assert!(!line_items_field.grounded);
+    }
+
+    #[test]
+    fn apply_confirmed_review_paths_clears_needs_review_on_matching_fields() {
+        let provider = StaticFxRateProvider::demo();
+        let projection = synthesize_bundle_projection_with_fx(&synthetic_documents(), &provider);
+        let mut packet = build_review_packet(
+            &projection.bundle,
+            &projection.draft,
+            &projection.validation,
+        )
+        .expect("review packet should build");
+
+        let reviewed_path =
+            "expense_report.transaction_lines[2].meal_details.meal_purpose".to_owned();
+        assert!(packet
+            .copy_sections
+            .iter()
+            .flat_map(|section| section.instances.iter())
+            .flat_map(|instance| instance.fields.iter())
+            .any(|field| field.path == reviewed_path && field.needs_review));
+
+        let confirmed_paths = BTreeSet::from([reviewed_path.clone()]);
+        apply_confirmed_review_paths(&mut packet, &confirmed_paths);
+
+        assert!(packet
+            .copy_sections
+            .iter()
+            .flat_map(|section| section.instances.iter())
+            .flat_map(|instance| instance.fields.iter())
+            .any(|field| field.path == reviewed_path && !field.needs_review));
     }
 }
