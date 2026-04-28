@@ -1515,7 +1515,7 @@ fn find_pipe_value(line: &LineRef, labels: &[&str]) -> Option<String> {
 fn normalize_label_continuation_token(value: &str) -> String {
     value
         .chars()
-        .filter(|ch| ch.is_ascii_alphanumeric())
+        .filter(|ch| ch.is_ascii_alphabetic())
         .collect::<String>()
         .to_ascii_lowercase()
 }
@@ -2857,6 +2857,50 @@ GOODS SOLD ARE NOT RETURNABLE.
                         .as_ref()
                         .map(|value| value.value.amount.as_str()),
                     Some("15.90")
+                );
+            }
+            other => panic!("unexpected payload: {other:?}"),
+        }
+
+        remove_fixture_dir(&path);
+    }
+
+    #[test]
+    fn receipt_extractor_ignores_inline_tax_annotation_when_selecting_payable_total() {
+        let markdown = "\
+# Merchant Receipt
+
+- Merchant: RESTORAN HASSANBISTRO
+- Date: 12/28/2017 10:17:32 PM
+- MAKANAN | 1 | 15.00 | 0 | 15.00 ZR
+- Total Items: 1.00
+- Total Qty: 1.00
+- Sub Total: RM 15.00
+- Discount: RM 0.00
+- Total Excl.6% GST: RM 15.00
+- GST 6%: RM 0.00
+- Total Incl.6% GST: RM 15.00
+- Rounding: RM 0.00
+- CASH: RM 15.00
+";
+        let path = write_fixture(markdown, "receipt_total_inline_tax_guard.md");
+        let actual = extract_document_facts_path(&path).expect("fixture should transcribe");
+
+        match actual.facts {
+            DocumentFactsPayload::Receipt(facts) => {
+                assert_eq!(
+                    facts
+                        .total_paid
+                        .as_ref()
+                        .map(|value| value.value.amount.as_str()),
+                    Some("15.00")
+                );
+                assert_eq!(
+                    facts
+                        .total_paid
+                        .as_ref()
+                        .and_then(|value| value.value.currency.as_deref()),
+                    Some("MYR")
                 );
             }
             other => panic!("unexpected payload: {other:?}"),
