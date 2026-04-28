@@ -1,0 +1,89 @@
+{
+  "corpus_name": "sroie_train_0_4",
+  "documents": [
+    {
+      "document_id": "x00016469612",
+      "packet_id": "x00016469612",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x00016469612.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "BOOK TA .K (TAMAN DAYA) SDN BHD",
+        "total_paid": "9.00",
+        "transaction_date": "25/12/2018"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    },
+    {
+      "document_id": "x00016469619",
+      "packet_id": "x00016469619",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x00016469619.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "INDAH GIFT & HOME DECO",
+        "total_paid": "60.30",
+        "transaction_date": "19/10/2018"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    },
+    {
+      "document_id": "x00016469620",
+      "packet_id": "x00016469620",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x00016469620.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "MR D.I.Y. (JOHOR) SDN BHD",
+        "total_paid": "33.90",
+        "transaction_date": "12-01-19"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    },
+    {
+      "document_id": "x00016469622",
+      "packet_id": "x00016469622",
+      "kind": "receipt",
+      "source_name": "ICDAR2019-SROIE",
+      "source_url": "https://huggingface.co/datasets/jsdnrs/ICDAR2019-SROIE",
+      "license": "cc-by-4.0",
+      "input_path": "assets/sroie/x00016469622.png",
+      "expected_fields": {
+        "classification_kind": "receipt",
+        "merchant_name": "YONGFATT ENTERPRISE",
+        "total_paid": "80.90",
+        "transaction_date": "25/12/2018"
+      },
+      "tags": [
+        "real",
+        "receipt",
+        "sroie",
+        "train"
+      ]
+    }
+  ]
+}

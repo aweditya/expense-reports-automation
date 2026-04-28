@@ -1409,17 +1409,36 @@ fn synthesize_receipt_line(
                 merchant.flags.clone(),
             )
         }),
-        country_of_activity: facts.merchant_location.as_ref().and_then(|location| {
-            location.value.country.as_ref().map(|country| {
-                system_observed(
-                    country.clone(),
-                    location.confidence,
-                    location.evidence.clone(),
-                    "bundle_synthesis.project_country_of_activity",
-                    location.flags.clone(),
-                )
+        country_of_activity: trip
+            .region
+            .as_ref()
+            .filter(|region| region.value == TravelRegion::Foreign)
+            .and_then(|_| {
+                trip.destination.as_ref().and_then(|destination| {
+                    destination.value.country.as_ref().map(|country| {
+                        system_observed(
+                            country.clone(),
+                            destination.confidence,
+                            destination.evidence.clone(),
+                            "bundle_synthesis.project_country_of_activity",
+                            destination.flags.clone(),
+                        )
+                    })
+                })
             })
-        }),
+            .or_else(|| {
+                facts.merchant_location.as_ref().and_then(|location| {
+                    location.value.country.as_ref().map(|country| {
+                        system_observed(
+                            country.clone(),
+                            location.confidence,
+                            location.evidence.clone(),
+                            "bundle_synthesis.project_country_of_activity",
+                            location.flags.clone(),
+                        )
+                    })
+                })
+            }),
         foreign_activity_type,
         source_documents: vec![BundleSourceDocument {
             document_id: document.document_id.clone(),
