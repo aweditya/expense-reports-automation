@@ -164,6 +164,7 @@ fn contextual_user_input_schema_path(path: &str) -> bool {
         "expense_report.general_information.category"
             | "expense_report.general_information.payee"
             | "expense_report.general_information.payee.name"
+            | "expense_report.general_information.business_purpose"
             | "expense_report.general_information.business_purpose.who"
             | "expense_report.general_information.business_purpose.what"
             | "expense_report.general_information.business_purpose.where"
@@ -317,6 +318,13 @@ mod tests {
                 ValidationIssue {
                     severity: ValidationSeverity::Error,
                     kind: ValidationIssueKind::MissingRequiredField,
+                    path: "expense_report.general_information.business_purpose".to_owned(),
+                    schema_path: "expense_report.general_information.business_purpose".to_owned(),
+                    message: "Required field is missing".to_owned(),
+                },
+                ValidationIssue {
+                    severity: ValidationSeverity::Error,
+                    kind: ValidationIssueKind::MissingRequiredField,
                     path: "expense_report.general_information.business_purpose.who".to_owned(),
                     schema_path: "expense_report.general_information.business_purpose.who"
                         .to_owned(),
@@ -361,7 +369,7 @@ mod tests {
         let readiness = summarize_validation_readiness(&validation);
 
         assert_eq!(readiness.automation_gap_count(), 0);
-        assert_eq!(readiness.user_input_required_count(), 5);
+        assert_eq!(readiness.user_input_required_count(), 6);
         assert!(readiness
             .issues
             .iter()
