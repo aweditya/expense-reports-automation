@@ -663,6 +663,105 @@ class TranscribeWithGoogleGenAiTests(unittest.TestCase):
         self.assertEqual(mime_type, "image/png")
         self.assertEqual(pages[0]["text"], "# Merchant Receipt\n- Total: USD 12.40")
 
+    def test_transcribe_document_pages_falls_back_to_original_when_localized_ocr_stays_empty(self):
+        canonical_source = self.make_png_bytes()
+        localized_source = b"localized-receipt"
+        attempted_sources = []
+
+        def fake_localize(
+            _client,
+            *,
+            model,
+            filename,
+            document_path,
+            file_bytes,
+            mime_type,
+        ):
+            self.assertEqual(model, "gemini-3-flash-preview")
+            self.assertEqual(filename, "receipt.png")
+            self.assertEqual(document_path, Path("receipt.png"))
+            self.assertEqual(file_bytes, canonical_source)
+            self.assertEqual(mime_type, "image/png")
+            return (
+                localized_source,
+                "image/png",
+                True,
+                {"left": 0.1, "top": 0.1, "right": 0.9, "bottom": 0.9},
+            )
+
+        def fake_preprocess(document_path, file_bytes, mime_type, variant):
+            self.assertEqual(document_path, Path("receipt.png"))
+            self.assertEqual(mime_type, "image/png")
+            return file_bytes + b"::" + variant.encode(), "image/png"
+
+        def fake_transcribe(
+            _client,
+            *,
+            model,
+            prompt,
+            markdown_fallback_prompt,
+            document_path,
+            source_file_bytes,
+            source_mime_type,
+            primary_file_bytes,
+            primary_mime_type,
+            preprocess_variant,
+            generate_fn,
+            preprocess_fn,
+            part_factory,
+        ):
+            attempted_sources.append(source_file_bytes)
+            if source_file_bytes == localized_source:
+                raise SystemExit("Gemini transcription failed for all preprocess variants: Gemini response did not contain text")
+            return (
+                [
+                    {
+                        "page_number": 1,
+                        "text": "# Merchant Receipt\n- Total: USD 12.40",
+                        "dimensions": None,
+                        "regions": [],
+                    }
+                ],
+                "original",
+                primary_file_bytes,
+                primary_mime_type,
+            )
+
+        (
+            pages,
+            effective_variant,
+            file_bytes,
+            mime_type,
+            effective_source_bytes,
+            effective_source_mime,
+            localization_applied,
+            localization_bbox,
+            localization_source,
+        ) = transcribe.transcribe_document_pages(
+            object(),
+            model="gemini-3-flash-preview",
+            document_path=Path("receipt.png"),
+            source_file_bytes=canonical_source,
+            source_mime_type="image/png",
+            preprocess_variant="original",
+            pass_kind="primary",
+            preprocess_fn=fake_preprocess,
+            localize_fn=fake_localize,
+            transcribe_pages_fn=fake_transcribe,
+            part_factory=lambda data, detected_mime: (data, detected_mime),
+        )
+
+        self.assertEqual(attempted_sources, [localized_source, canonical_source])
+        self.assertEqual(effective_variant, "original")
+        self.assertEqual(file_bytes, canonical_source + b"::original")
+        self.assertEqual(mime_type, "image/png")
+        self.assertEqual(effective_source_bytes, canonical_source)
+        self.assertEqual(effective_source_mime, "image/png")
+        self.assertFalse(localization_applied)
+        self.assertIsNone(localization_bbox)
+        self.assertEqual(localization_source, "fallback_to_original_after_localization")
+        self.assertEqual(pages[0]["text"], "# Merchant Receipt\n- Total: USD 12.40")
+
     def test_maybe_ground_key_receipt_fields_retries_fallback_variant(self):
         pages = [{"page_number": 1, "text": "# Merchant Receipt", "dimensions": None, "regions": []}]
         attempted_payloads = []

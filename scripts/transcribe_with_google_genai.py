@@ -781,6 +781,101 @@ def transcribe_pages_with_fallbacks(
     raise SystemExit("Gemini transcription failed for all preprocess variants")
 
 
+def transcribe_document_pages(
+    client,
+    *,
+    model: str,
+    document_path: Path,
+    source_file_bytes: bytes,
+    source_mime_type: str,
+    preprocess_variant: str,
+    pass_kind: str,
+    generate_fn=None,
+    preprocess_fn=preprocess_document_bytes,
+    localize_fn=maybe_localize_receipt_content,
+    transcribe_pages_fn=transcribe_pages_with_fallbacks,
+    part_factory=None,
+) -> tuple[list[dict], str, bytes, str, bytes, str, bool, dict | None, str]:
+    localized_source_file_bytes, localized_source_mime_type, localization_applied, localization_bbox = (
+        localize_fn(
+            client,
+            model=model,
+            filename=document_path.name,
+            document_path=document_path,
+            file_bytes=source_file_bytes,
+            mime_type=source_mime_type,
+        )
+    )
+
+    def transcribe_from_source(
+        candidate_source_bytes: bytes,
+        candidate_source_mime_type: str,
+    ) -> tuple[list[dict], str, bytes, str]:
+        prompt = build_prompt(document_path.name, candidate_source_mime_type, pass_kind)
+        markdown_fallback_prompt = build_markdown_fallback_prompt(
+            document_path.name,
+            candidate_source_mime_type,
+            pass_kind,
+        )
+        file_bytes, mime_type = preprocess_fn(
+            document_path,
+            candidate_source_bytes,
+            candidate_source_mime_type,
+            preprocess_variant,
+        )
+        return transcribe_pages_fn(
+            client,
+            model=model,
+            prompt=prompt,
+            markdown_fallback_prompt=markdown_fallback_prompt,
+            document_path=document_path,
+            source_file_bytes=candidate_source_bytes,
+            source_mime_type=candidate_source_mime_type,
+            primary_file_bytes=file_bytes,
+            primary_mime_type=mime_type,
+            preprocess_variant=preprocess_variant,
+            generate_fn=generate_fn,
+            preprocess_fn=preprocess_fn,
+            part_factory=part_factory,
+        )
+
+    try:
+        normalized_pages, effective_preprocess_variant, file_bytes, mime_type = (
+            transcribe_from_source(localized_source_file_bytes, localized_source_mime_type)
+        )
+        return (
+            normalized_pages,
+            effective_preprocess_variant,
+            file_bytes,
+            mime_type,
+            localized_source_file_bytes,
+            localized_source_mime_type,
+            localization_applied,
+            localization_bbox,
+            "gemini_receipt_boundary" if localization_applied else "none",
+        )
+    except KeyboardInterrupt:
+        raise
+    except BaseException as exc:
+        if not localization_applied or not is_retryable_transcription_error(exc):
+            raise
+
+    normalized_pages, effective_preprocess_variant, file_bytes, mime_type = (
+        transcribe_from_source(source_file_bytes, source_mime_type)
+    )
+    return (
+        normalized_pages,
+        effective_preprocess_variant,
+        file_bytes,
+        mime_type,
+        source_file_bytes,
+        source_mime_type,
+        False,
+        None,
+        "fallback_to_original_after_localization",
+    )
+
+
 def attempt_grounding_regions(
     client,
     *,
@@ -1150,47 +1245,26 @@ def main() -> int:
         source_mime_type,
     )
     (
+        normalized_pages,
+        effective_preprocess_variant,
+        file_bytes,
+        mime_type,
         source_file_bytes,
         source_mime_type,
         localization_applied,
         localization_bbox,
-    ) = maybe_localize_receipt_content(
+        localization_source,
+    ) = transcribe_document_pages(
         client,
         model=args.model,
-        filename=document_path.name,
         document_path=document_path,
-        file_bytes=source_file_bytes,
-        mime_type=source_mime_type,
-    )
-    file_bytes, mime_type = preprocess_document_bytes(
-        document_path,
-        source_file_bytes,
-        source_mime_type,
-        args.preprocess_variant,
-    )
-    prompt = build_prompt(document_path.name, mime_type, args.pass_kind)
-    markdown_fallback_prompt = build_markdown_fallback_prompt(
-        document_path.name,
-        mime_type,
-        args.pass_kind,
-    )
-
-    normalized_pages, effective_preprocess_variant, file_bytes, mime_type = (
-        transcribe_pages_with_fallbacks(
-            client,
-            model=args.model,
-            prompt=prompt,
-            markdown_fallback_prompt=markdown_fallback_prompt,
-            document_path=document_path,
-            source_file_bytes=source_file_bytes,
-            source_mime_type=source_mime_type,
-            primary_file_bytes=file_bytes,
-            primary_mime_type=mime_type,
-            preprocess_variant=args.preprocess_variant,
-            part_factory=lambda data, detected_mime: types.Part.from_bytes(
-                data=data, mime_type=detected_mime
-            ),
-        )
+        source_file_bytes=source_file_bytes,
+        source_mime_type=source_mime_type,
+        preprocess_variant=args.preprocess_variant,
+        pass_kind=args.pass_kind,
+        part_factory=lambda data, detected_mime: types.Part.from_bytes(
+            data=data, mime_type=detected_mime
+        ),
     )
     try:
         (
@@ -1240,7 +1314,7 @@ def main() -> int:
             "geometry_source": geometry_source,
             "geometry_available": geometry_available,
             "localization_applied": localization_applied,
-            "localization_source": "gemini_receipt_boundary" if localization_applied else "none",
+            "localization_source": localization_source,
             **({"localization_bbox": localization_bbox} if localization_bbox else {}),
         },
         "pages": normalized_pages,
