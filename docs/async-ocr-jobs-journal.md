@@ -111,3 +111,34 @@ This file tracks implementation notes, reflections, regrets, and rollout observa
 - Reflection:
   - Phase 2 is now in the state we wanted: easy receipts can stay on the fast path, and the hosted async UX remains stable under real FA-facing uploads
   - the next major slice should be Phase 3 cancellation/checkpointing rather than more speculative OCR gating changes
+
+### Regression: localized hard receipt failed while job page looked stuck
+
+- A real hosted upload of `receipt.png` regressed on the async branch:
+  - the job eventually failed with `Gemini response did not contain text`
+  - the FA-facing job page continued to look like `running`, which is misleading even when the backend has already reached a terminal failure state
+- Root causes:
+  - OCR path:
+    - once receipt localization/cropping was applied, all OCR variant retries operated on the localized crop only
+    - if the crop was bad enough to yield empty Gemini OCR responses, the pipeline never retried the original canonicalized image
+  - UI path:
+    - the job page polling loop swallowed non-JSON / transient polling failures quietly
+    - that could leave the rendered page stuck on its original `running` copy even after the job had actually failed
+- Fixes:
+  - add a final OCR fallback to the original canonicalized image when localized OCR retries still end in retryable empty-response failures
+  - harden the hosted job-page polling loop so repeated poll failures trigger a reload and terminal states update the rendered copy cleanly
+- Hosted validation:
+  - `receipt.png` recovered successfully through the live hosted website:
+    - `.local_runtime/hosted_receipt_png_recovery/report.md`
+    - `Hosted OCR OK: 1/1`
+    - `Schema projected: 1/1`
+    - `Projected without automation gaps: 1/1`
+  - a deliberately corrupt image upload now reaches `failed` and the rendered hosted job page shows failure copy instead of stale `running`
+  - the four-receipt English regression slice stayed green after the fix:
+    - `.local_runtime/hosted_async_gate_sroie_0_4_after_receipt_fix/report.md`
+    - `Hosted OCR OK: 4/4`
+    - `Schema projected: 4/4`
+    - `Projected without automation gaps: 4/4`
+- Reflection:
+  - this was a useful reminder that “robust OCR” here means robustness to our own preprocessing mistakes as well as model variability
+  - it also reinforced the standing rule that OCR work must be validated through the hosted FA-facing surface, because the misleading `running` page would not have shown up in unit tests alone
