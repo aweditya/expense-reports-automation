@@ -9,7 +9,10 @@ use crate::bundle_synthesis::{
     synthesize_bundle_projection_with_fx, BundleProjectionResult, StaticFxRateProvider,
 };
 use crate::document_extract::extract_document_facts;
-use crate::document_facts::{render_document_facts_json_pretty, DocumentKind};
+use crate::document_facts::{
+    render_document_facts_json_pretty, DocumentFactsPayload, DocumentKind, ExtractedDocumentFacts,
+    ExtractionStatus, ReceiptFacts,
+};
 use crate::ledger::{
     initialize_review_submission_ledger_with_ocr_artifacts,
     render_review_submission_ledger_json_pretty, ReviewSubmissionLedger,
@@ -40,8 +43,6 @@ use crate::vertex_gemini_sdk::{
     transcribe_document_path_with_vertex_sdk, transcribe_document_path_with_vertex_sdk_profile,
     VertexGeminiSdkConfig, VertexGeminiSdkPassProfile,
 };
-use crate::ExtractedDocumentFacts;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IngestionFxMode {
     None,
@@ -82,6 +83,12 @@ pub struct IngestionPipelineResult {
     pub review_packet: ReviewPacket,
     pub review_workbench_html: String,
     pub ledger: ReviewSubmissionLedger,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ReceiptEscalationDecision {
+    should_escalate: bool,
+    reasons: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -157,7 +164,6 @@ pub fn ingest_expense_documents(
 
     let mut transcriptions = Vec::new();
     let mut ocr_pass_comparisons = Vec::new();
-    let mut ocr_groundings = Vec::new();
     let mut extracted_documents = Vec::new();
     let resolved_vertex_config = match &config.transcriber {
         IngestionTranscriber::VertexGemini(vertex_config) => {
@@ -197,18 +203,32 @@ pub fn ingest_expense_documents(
                 )?
             }
         };
-        let mut facts = extract_document_facts(&document);
-        if config.compare_receipt_passes
-            && facts.classification.kind == DocumentKind::Receipt
-            && matches!(
-                &config.transcriber,
-                IngestionTranscriber::VertexGeminiSdk(_)
-            )
-        {
-            let sdk_config = match &config.transcriber {
-                IngestionTranscriber::VertexGeminiSdk(sdk_config) => sdk_config,
-                _ => unreachable!("checked above"),
-            };
+        let facts = extract_document_facts(&document);
+        transcriptions.push(document);
+        extracted_documents.push(facts);
+    }
+
+    let mut projection = project_extracted_documents(&extracted_documents, config.fx_mode);
+
+    if config.compare_receipt_passes
+        && matches!(
+            &config.transcriber,
+            IngestionTranscriber::VertexGeminiSdk(_)
+        )
+    {
+        let sdk_config = match &config.transcriber {
+            IngestionTranscriber::VertexGeminiSdk(sdk_config) => sdk_config,
+            _ => unreachable!("checked above"),
+        };
+        for (index, path) in paths.iter().enumerate() {
+            if extracted_documents[index].classification.kind != DocumentKind::Receipt {
+                continue;
+            }
+            let decision = receipt_escalation_decision(&extracted_documents[index], &projection);
+            if !decision.should_escalate {
+                continue;
+            }
+            let document = &transcriptions[index];
             let secondary_profile = VertexGeminiSdkPassProfile {
                 pass_id: Some(format!("{}_table_focused_binarized", document.document_id)),
                 pass_kind: crate::OcrPassKind::TableFocused,
@@ -226,34 +246,36 @@ pub fn ingest_expense_documents(
                 compare_ocr_passes(&[document.clone(), secondary_transcription.clone()])
                     .map_err(|err| ocr_comparison_error(path, err.to_string()))?;
             let secondary_facts = extract_document_facts(&secondary_transcription);
-            facts = resolve_receipt_ocr_consensus(&facts, &secondary_facts, &comparison)
-                .map_err(|err| ocr_comparison_error(path, err.to_string()))?;
+            extracted_documents[index] = resolve_receipt_ocr_consensus(
+                &extracted_documents[index],
+                &secondary_facts,
+                &comparison,
+            )
+            .map_err(|err| ocr_comparison_error(path, err.to_string()))?;
             ocr_pass_comparisons.push(OcrPassComparisonArtifact {
                 document_id: document.document_id.clone(),
                 secondary_transcription,
                 comparison,
             });
         }
-        if document.metadata.geometry_available {
-            ocr_groundings.push(summarize_ocr_grounding(
-                &document,
+        if !ocr_pass_comparisons.is_empty() {
+            projection = project_extracted_documents(&extracted_documents, config.fx_mode);
+        }
+    }
+
+    let ocr_groundings = transcriptions
+        .iter()
+        .filter(|document| document.metadata.geometry_available)
+        .map(|document| {
+            summarize_ocr_grounding(
+                document,
                 Some(format!(
                     "artifact/ocr_grounding/{}/grounded_preview.html",
                     document.document_id
                 )),
-            ));
-        }
-        transcriptions.push(document);
-        extracted_documents.push(facts);
-    }
-
-    let projection = match config.fx_mode {
-        IngestionFxMode::None => synthesize_bundle_projection(&extracted_documents),
-        IngestionFxMode::Demo => {
-            let fx_provider = StaticFxRateProvider::demo();
-            synthesize_bundle_projection_with_fx(&extracted_documents, &fx_provider)
-        }
-    };
+            )
+        })
+        .collect::<Vec<_>>();
     let readiness = summarize_validation_readiness(&projection.validation);
     let ocr_comparison_summaries = ocr_pass_comparisons
         .iter()
@@ -299,6 +321,95 @@ pub fn ingest_expense_documents(
         review_workbench_html,
         ledger,
     })
+}
+
+fn project_extracted_documents(
+    extracted_documents: &[ExtractedDocumentFacts],
+    fx_mode: IngestionFxMode,
+) -> BundleProjectionResult {
+    match fx_mode {
+        IngestionFxMode::None => synthesize_bundle_projection(extracted_documents),
+        IngestionFxMode::Demo => {
+            let fx_provider = StaticFxRateProvider::demo();
+            synthesize_bundle_projection_with_fx(extracted_documents, &fx_provider)
+        }
+    }
+}
+
+fn receipt_escalation_decision(
+    facts: &ExtractedDocumentFacts,
+    projection: &BundleProjectionResult,
+) -> ReceiptEscalationDecision {
+    let DocumentFactsPayload::Receipt(receipt) = &facts.facts else {
+        return ReceiptEscalationDecision {
+            should_escalate: false,
+            reasons: Vec::new(),
+        };
+    };
+
+    let mut reasons = Vec::new();
+    if facts.classification.needs_review() {
+        reasons.push("classification_needs_review".to_owned());
+    }
+    if facts.extraction_status != ExtractionStatus::Complete {
+        reasons.push("primary_extraction_incomplete".to_owned());
+    }
+    collect_primary_receipt_gaps(receipt, &mut reasons);
+    collect_projection_gaps(facts, projection, &mut reasons);
+
+    ReceiptEscalationDecision {
+        should_escalate: !reasons.is_empty(),
+        reasons,
+    }
+}
+
+fn collect_primary_receipt_gaps(receipt: &ReceiptFacts, reasons: &mut Vec<String>) {
+    if receipt.merchant_name.is_none() {
+        reasons.push("missing_merchant_name".to_owned());
+    }
+    if receipt.transaction_date.is_none() {
+        reasons.push("missing_transaction_date".to_owned());
+    }
+    match receipt.total_paid.as_ref() {
+        None => reasons.push("missing_total_paid".to_owned()),
+        Some(total) if total.value.currency.is_none() => {
+            reasons.push("missing_total_currency".to_owned());
+        }
+        Some(_) => {}
+    }
+}
+
+fn collect_projection_gaps(
+    facts: &ExtractedDocumentFacts,
+    projection: &BundleProjectionResult,
+    reasons: &mut Vec<String>,
+) {
+    let Some(line) = projection
+        .bundle
+        .expense_lines
+        .iter()
+        .find(|line| line.document_id == facts.document_id)
+    else {
+        reasons.push("missing_projected_line".to_owned());
+        return;
+    };
+
+    if !line.projection_supported {
+        reasons.push("projection_unsupported".to_owned());
+    }
+    if line.date.is_none() {
+        reasons.push("missing_projected_date".to_owned());
+    }
+    if line.line_amount_usd.is_none() {
+        reasons.push("missing_projected_usd_amount".to_owned());
+    }
+    let is_foreign = line
+        .original_currency
+        .as_ref()
+        .is_some_and(|currency| !currency.value.eq_ignore_ascii_case("USD"));
+    if is_foreign && line.original_amount.is_none() {
+        reasons.push("missing_original_amount".to_owned());
+    }
 }
 
 pub fn write_ingestion_artifacts(
@@ -552,6 +663,11 @@ mod tests {
     use std::thread;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    use crate::document_facts::{
+        DocumentClassification, DocumentFactsPayload, IssueSeverity, MoneyAmount, Observed,
+        ReceiptFacts,
+    };
+    use crate::draft::{ConfidenceLevel, EvidenceKind, EvidenceReference};
     use crate::synthetic_documents::{generate_synthetic_packet, SyntheticVariant};
     use crate::ExtractionStatus;
     use crate::TranscriptionEngine;
@@ -987,6 +1103,143 @@ print(json.dumps({
         );
     }
 
+    #[test]
+    fn receipt_escalation_decision_skips_complete_projected_receipt() {
+        let facts = ExtractedDocumentFacts {
+            document_id: "receipt".to_owned(),
+            filename: "receipt.png".to_owned(),
+            classification: DocumentClassification {
+                kind: DocumentKind::Receipt,
+                confidence: ConfidenceLevel::High,
+                evidence: sample_evidence("receipt", "receipt.png", "BOOK TALK"),
+                flags: Vec::new(),
+            },
+            extraction_status: ExtractionStatus::Complete,
+            facts: DocumentFactsPayload::Receipt(ReceiptFacts {
+                merchant_name: Some(observed_text("BOOK TALK", "receipt", "receipt.png")),
+                merchant_location: None,
+                transaction_date: Some(observed_text("25/12/2018", "receipt", "receipt.png")),
+                total_paid: Some(observed_money("9.00", Some("MYR"), "receipt", "receipt.png")),
+                subtotal: None,
+                tax_amount: None,
+                tip_amount: None,
+                line_items: Vec::new(),
+            }),
+            issues: Vec::new(),
+        };
+        let projection = project_extracted_documents(&[facts.clone()], IngestionFxMode::Demo);
+
+        let decision = receipt_escalation_decision(&facts, &projection);
+
+        assert!(!decision.should_escalate);
+        assert!(decision.reasons.is_empty());
+    }
+
+    #[test]
+    fn receipt_escalation_decision_requests_secondary_for_missing_primary_fields() {
+        let facts = ExtractedDocumentFacts {
+            document_id: "receipt".to_owned(),
+            filename: "receipt.png".to_owned(),
+            classification: DocumentClassification {
+                kind: DocumentKind::Receipt,
+                confidence: ConfidenceLevel::Medium,
+                evidence: sample_evidence("receipt", "receipt.png", "Total 9.00"),
+                flags: Vec::new(),
+            },
+            extraction_status: ExtractionStatus::Partial,
+            facts: DocumentFactsPayload::Receipt(ReceiptFacts {
+                merchant_name: None,
+                merchant_location: None,
+                transaction_date: None,
+                total_paid: Some(observed_money("9.00", None, "receipt", "receipt.png")),
+                subtotal: None,
+                tax_amount: None,
+                tip_amount: None,
+                line_items: Vec::new(),
+            }),
+            issues: vec![crate::document_facts::DocumentExtractionIssue {
+                severity: IssueSeverity::Warning,
+                code: "missing_header_fields".to_owned(),
+                message: "merchant and date were not extracted".to_owned(),
+                evidence: sample_evidence("receipt", "receipt.png", "Total 9.00"),
+            }],
+        };
+        let projection = project_extracted_documents(&[facts.clone()], IngestionFxMode::Demo);
+
+        let decision = receipt_escalation_decision(&facts, &projection);
+
+        assert!(decision.should_escalate);
+        assert!(decision.reasons.contains(&"primary_extraction_incomplete".to_owned()));
+        assert!(decision.reasons.contains(&"missing_merchant_name".to_owned()));
+        assert!(decision.reasons.contains(&"missing_transaction_date".to_owned()));
+        assert!(decision.reasons.contains(&"missing_total_currency".to_owned()));
+    }
+
+    #[test]
+    fn sdk_receipt_pass_comparison_skips_secondary_when_primary_pass_is_sufficient() {
+        let temp_dir = unique_temp_dir("ingest_vertex_sdk_receipt_skip_compare");
+        let script_path = temp_dir.join("mock_skip_compare.py");
+        let key_path = temp_dir.join("service_account.json");
+        let receipt_path = temp_dir.join("receipt.png");
+        fs::write(&key_path, "{}").expect("key should write");
+        fs::write(&receipt_path, b"receipt-bytes").expect("receipt should write");
+        fs::write(
+            &script_path,
+            r###"import json, pathlib, sys
+doc = pathlib.Path(sys.argv[-1])
+pass_kind = sys.argv[sys.argv.index("--pass-kind") + 1]
+if pass_kind == "table_focused":
+    raise SystemExit("secondary pass should not run")
+text = "# Merchant Receipt\n- Merchant Name: BOOK TALK\n- Date: 25/12/2018\n- Total: MYR 9.00\n"
+print(json.dumps({
+  "document_id": "receipt",
+  "filename": doc.name,
+  "source_path": str(doc),
+  "pages": [{"page_number": 1, "text": text}]
+}))
+"###,
+        )
+        .expect("mock compare script should write");
+
+        let result = ingest_expense_documents(
+            &[receipt_path],
+            &IngestionConfig {
+                bundle_id: Some("sdk_skip_compare_demo".to_owned()),
+                transcriber: IngestionTranscriber::VertexGeminiSdk(VertexGeminiSdkConfig {
+                    project_id: Some("demo-project".to_owned()),
+                    location: "global".to_owned(),
+                    model: "gemini-3-flash-preview".to_owned(),
+                    service_account_key_path: key_path,
+                    python_bin: PathBuf::from("python3"),
+                    script_path,
+                }),
+                fx_mode: IngestionFxMode::Demo,
+                compare_receipt_passes: true,
+            },
+        )
+        .expect("sdk comparison ingestion should succeed without escalation");
+
+        assert!(result.ocr_pass_comparisons.is_empty());
+        let crate::DocumentFactsPayload::Receipt(receipt) = &result.extracted_documents[0].facts
+        else {
+            panic!("expected receipt facts");
+        };
+        assert_eq!(
+            receipt
+                .merchant_name
+                .as_ref()
+                .map(|value| value.value.as_str()),
+            Some("BOOK TALK")
+        );
+        assert_eq!(
+            receipt
+                .total_paid
+                .as_ref()
+                .and_then(|value| value.value.currency.as_deref()),
+            Some("MYR")
+        );
+    }
+
     fn write_synthetic_packet(
         base_dir: &Path,
         fixtures: &[crate::SyntheticDocumentFixture],
@@ -1010,6 +1263,41 @@ print(json.dumps({
         let path = std::env::temp_dir().join(format!("expense_report_schema_{prefix}_{unique}"));
         fs::create_dir_all(&path).expect("temp dir should create");
         path
+    }
+
+    fn sample_evidence(document_id: &str, filename: &str, quote: &str) -> Vec<EvidenceReference> {
+        vec![EvidenceReference {
+            kind: EvidenceKind::Document,
+            document_id: Some(document_id.to_owned()),
+            filename: Some(filename.to_owned()),
+            page: Some(1),
+            quote: Some(quote.to_owned()),
+            origin: Some("ingest.tests".to_owned()),
+        }]
+    }
+
+    fn observed_text(value: &str, document_id: &str, filename: &str) -> Observed<String> {
+        Observed::new(
+            value.to_owned(),
+            ConfidenceLevel::High,
+            sample_evidence(document_id, filename, value),
+        )
+    }
+
+    fn observed_money(
+        amount: &str,
+        currency: Option<&str>,
+        document_id: &str,
+        filename: &str,
+    ) -> Observed<MoneyAmount> {
+        Observed::new(
+            MoneyAmount {
+                amount: amount.to_owned(),
+                currency: currency.map(str::to_owned),
+            },
+            ConfidenceLevel::High,
+            sample_evidence(document_id, filename, amount),
+        )
     }
 
     fn spawn_mock_server(
