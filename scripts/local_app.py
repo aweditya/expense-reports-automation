@@ -10,6 +10,7 @@ import os
 import shutil
 import socketserver
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.parse
@@ -40,6 +41,9 @@ EXPORTABLE_ARTIFACTS = {
     "review_workbench.html",
     "ledger.json",
 }
+
+ACTIVE_JOB_STATUSES = {"accepted", "queued", "running", "cancel_requested"}
+TERMINAL_JOB_STATUSES = {"ready_for_review", "failed", "canceled", "stalled"}
 
 
 @dataclass
@@ -83,6 +87,79 @@ class LocalAppConfig:
 
 class LocalAppError(RuntimeError):
     pass
+
+
+def jobs_root_path(workspace_root: Path) -> Path:
+    return workspace_root / "jobs"
+
+
+def ensure_safe_job_id(job_id: str) -> str:
+    if not job_id:
+        raise LocalAppError("job identifier is required")
+    if len(job_id) > MAX_IDENTIFIER_LENGTH * 2:
+        raise LocalAppError("job identifier is too long")
+    if sanitize_identifier(job_id) != job_id:
+        raise LocalAppError(f"invalid job identifier: {job_id[:80]}")
+    return job_id
+
+
+def job_record_path(workspace_root: Path, job_id: str) -> Path:
+    return jobs_root_path(workspace_root) / f"{ensure_safe_job_id(job_id)}.json"
+
+
+def job_log_path(workspace_root: Path, job_id: str, stream: str) -> Path:
+    return jobs_root_path(workspace_root) / f"{ensure_safe_job_id(job_id)}.{stream}.log"
+
+
+def build_job_id(bundle_id: str) -> str:
+    return sanitize_identifier(f"{bundle_id}_{int(time_now_epoch_ms())}")
+
+
+def write_job_record(workspace_root: Path, job: dict) -> None:
+    jobs_root_path(workspace_root).mkdir(parents=True, exist_ok=True)
+    path = job_record_path(workspace_root, str(job["job_id"]))
+    path.write_text(json.dumps(job, indent=2))
+
+
+def load_job_record(workspace_root: Path, job_id: str) -> dict:
+    path = job_record_path(workspace_root, job_id)
+    if not path.exists():
+        raise LocalAppError(f"job {job_id} was not found")
+    return json.loads(path.read_text())
+
+
+def job_is_terminal(job: dict) -> bool:
+    return str(job.get("status") or "") in TERMINAL_JOB_STATUSES
+
+
+def process_is_running(pid: int | None) -> bool:
+    if not pid or pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
+def refresh_job_record_state(workspace_root: Path, job: dict) -> dict:
+    status = str(job.get("status") or "")
+    if status not in ACTIVE_JOB_STATUSES:
+        return job
+    worker_pid = job.get("worker_pid")
+    if isinstance(worker_pid, int) and process_is_running(worker_pid):
+        return job
+    if status == "accepted":
+        return job
+    updated = dict(job)
+    updated["status"] = "stalled"
+    updated["stage"] = "stalled"
+    updated["updated_at_epoch_ms"] = int(time_now_epoch_ms())
+    updated["error_message"] = updated.get("error_message") or (
+        "Processing stopped before the website recorded a final result."
+    )
+    write_job_record(workspace_root, updated)
+    return updated
 
 
 def ensure_safe_bundle_id(bundle_id: str) -> str:
@@ -250,7 +327,32 @@ def bundle_inflight_marker_path(workspace_root: Path, bundle_id: str) -> Path:
     return bundle_root_path(workspace_root, bundle_id) / ".local_app_inflight.json"
 
 
-def acquire_bundle_inflight_lock(workspace_root: Path, bundle_id: str) -> Path:
+def active_bundle_job_if_any(workspace_root: Path, bundle_id: str) -> dict | None:
+    marker_path = bundle_inflight_marker_path(workspace_root, bundle_id)
+    if not marker_path.exists():
+        return None
+    try:
+        payload = json.loads(marker_path.read_text())
+    except json.JSONDecodeError:
+        release_bundle_inflight_lock(marker_path)
+        return None
+    job_id = payload.get("job_id")
+    if not isinstance(job_id, str) or not job_id:
+        release_bundle_inflight_lock(marker_path)
+        return None
+    try:
+        job = load_job_record(workspace_root, job_id)
+    except LocalAppError:
+        release_bundle_inflight_lock(marker_path)
+        return None
+    job = refresh_job_record_state(workspace_root, job)
+    if job_is_terminal(job):
+        release_bundle_inflight_lock(marker_path)
+        return None
+    return job
+
+
+def acquire_bundle_inflight_lock(workspace_root: Path, bundle_id: str, job_id: str) -> Path:
     bundle_root = bundle_root_path(workspace_root, bundle_id)
     try:
         bundle_root.mkdir(parents=True, exist_ok=True)
@@ -261,15 +363,19 @@ def acquire_bundle_inflight_lock(workspace_root: Path, bundle_id: str) -> Path:
     marker_path = bundle_inflight_marker_path(workspace_root, bundle_id)
     payload = {
         "bundle_id": bundle_id,
+        "job_id": ensure_safe_job_id(job_id),
         "started_at_epoch_ms": int(time_now_epoch_ms()),
         "status": "processing",
     }
     try:
         fd = os.open(marker_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
     except FileExistsError as err:
-        raise LocalAppError(
-            f"bundle {bundle_id} is already processing. Wait for the current run to finish before uploading again."
-        ) from err
+        active_job = active_bundle_job_if_any(workspace_root, bundle_id)
+        if active_job:
+            raise LocalAppError(
+                f"bundle {bundle_id} is already processing under job {active_job['job_id']}"
+            ) from err
+        fd = os.open(marker_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=2)
     return marker_path
@@ -280,6 +386,14 @@ def release_bundle_inflight_lock(marker_path: Path) -> None:
         marker_path.unlink()
     except FileNotFoundError:
         pass
+
+
+def bundle_job_page_href(job_id: str) -> str:
+    return f"/job/{urllib.parse.quote(ensure_safe_job_id(job_id))}"
+
+
+def bundle_job_status_href(job_id: str) -> str:
+    return f"{bundle_job_page_href(job_id)}/status"
 
 
 def bundle_document_href(bundle_id: str, document_id: str, stored_filename: str) -> str:
@@ -444,6 +558,30 @@ def load_review_session_state(workspace_root: Path, bundle_id: str) -> dict:
     }
 
 
+def load_job_state(workspace_root: Path, job_id: str) -> dict:
+    job = refresh_job_record_state(workspace_root, load_job_record(workspace_root, job_id))
+    bundle_id = ensure_safe_bundle_id(str(job["bundle_id"]))
+    payload = {
+        "job_id": ensure_safe_job_id(job_id),
+        "bundle_id": bundle_id,
+        "status": job.get("status"),
+        "stage": job.get("stage"),
+        "created_at_epoch_ms": job.get("created_at_epoch_ms"),
+        "updated_at_epoch_ms": job.get("updated_at_epoch_ms"),
+        "error_message": job.get("error_message"),
+        "filing_status": job.get("filing_status"),
+        "cancel_requested": bool(job.get("cancel_requested")),
+        "bundle_href": f"/bundle/{urllib.parse.quote(bundle_id)}",
+        "job_href": bundle_job_page_href(job_id),
+        "status_href": bundle_job_status_href(job_id),
+        "result_href": job.get("result_href"),
+        "overview_href": job.get("overview_href"),
+    }
+    if job.get("latest_run_id"):
+        payload["latest_run_id"] = job["latest_run_id"]
+    return payload
+
+
 def parse_multipart_request(
     content_type: str, body: bytes, encoding: str = "utf-8"
 ) -> UploadRequest:
@@ -531,19 +669,37 @@ def resolve_review_surface_cli_command(repo_root: Path) -> list[str]:
     return [binary] if binary else ["cargo", "run", "--bin", "render_current_review_surface", "--"]
 
 
-def build_ingest_command(
+def build_stage_command(
     config: LocalAppConfig,
     form_fields: dict[str, str],
     input_paths: list[Path],
 ) -> list[str]:
     bundle_id = sanitize_identifier(form_fields.get("bundle_id") or default_bundle_id(input_paths))
-    engine = form_fields.get("engine") or config.default_engine
     command = resolve_cli_command(config.repo_root) + [
-        "stage-and-run",
+        "stage",
         "--workspace-root",
         str(config.workspace_root),
         "--bundle-id",
         bundle_id,
+    ]
+    if form_fields.get("user_id"):
+        command.extend(["--user-id", form_fields["user_id"]])
+    command.extend(str(path) for path in input_paths)
+    return command
+
+
+def build_run_command(
+    config: LocalAppConfig,
+    form_fields: dict[str, str],
+    bundle_id: str,
+) -> list[str]:
+    engine = form_fields.get("engine") or config.default_engine
+    command = resolve_cli_command(config.repo_root) + [
+        "run",
+        "--workspace-root",
+        str(config.workspace_root),
+        "--bundle-id",
+        sanitize_identifier(bundle_id),
         "--fx",
         form_fields.get("fx") or config.default_fx,
         "--engine",
@@ -551,8 +707,6 @@ def build_ingest_command(
     ]
     if form_fields.get("run_id"):
         command.extend(["--run-id", sanitize_identifier(form_fields["run_id"])])
-    if form_fields.get("user_id"):
-        command.extend(["--user-id", form_fields["user_id"]])
     if engine == "vertex-gemini-sdk":
         command.extend(
             [
@@ -574,12 +728,43 @@ def build_ingest_command(
         if sdk_python:
             command.extend(["--sdk-python", sdk_python])
         command.append("--compare-receipt-passes")
-    command.extend(str(path) for path in input_paths)
     return command
+
+
+def build_async_job_runner_command(config: LocalAppConfig, job_id: str) -> list[str]:
+    return [
+        sys.executable,
+        str(config.repo_root / "scripts" / "local_app_job_runner.py"),
+        "--repo-root",
+        str(config.repo_root),
+        "--workspace-root",
+        str(config.workspace_root),
+        "--job-id",
+        ensure_safe_job_id(job_id),
+    ]
 
 
 def run_pipeline_command(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, cwd=cwd, text=True, capture_output=True)
+
+
+def launch_background_job(
+    command: list[str],
+    cwd: Path,
+    *,
+    stdout_path: Path,
+    stderr_path: Path,
+) -> int:
+    stdout_path.parent.mkdir(parents=True, exist_ok=True)
+    with stdout_path.open("ab") as stdout_handle, stderr_path.open("ab") as stderr_handle:
+        process = subprocess.Popen(
+            command,
+            cwd=cwd,
+            stdout=stdout_handle,
+            stderr=stderr_handle,
+            start_new_session=True,
+        )
+    return process.pid
 
 
 def build_review_save_command(
@@ -650,24 +835,103 @@ def handle_upload_submission(
     config: LocalAppConfig,
     request: UploadRequest,
     command_runner: Callable[[list[str], Path], subprocess.CompletedProcess[str]] = run_pipeline_command,
+    job_launcher: Callable[..., int] = launch_background_job,
 ) -> str:
     if not request.files:
         raise LocalAppError("at least one document upload is required")
 
     default_bundle = sanitize_identifier(Path(request.files[0].filename).stem)
     bundle_id = sanitize_identifier(request.fields.get("bundle_id") or default_bundle)
-    marker_path = acquire_bundle_inflight_lock(config.workspace_root, bundle_id)
+    active_job = active_bundle_job_if_any(config.workspace_root, bundle_id)
+    if active_job:
+        return str(active_job["job_id"])
+
+    job_id = build_job_id(bundle_id)
+    marker_path = acquire_bundle_inflight_lock(config.workspace_root, bundle_id, job_id)
     try:
         with repo_scoped_tempdir(config.repo_root, "expense_local_app_") as temp_dir_str:
             temp_dir = Path(temp_dir_str)
             input_paths = save_uploaded_files(temp_dir, request.files)
-            command = build_ingest_command(config, request.fields, input_paths)
-            completed = command_runner(command, config.repo_root)
+            stage_command = build_stage_command(config, request.fields, input_paths)
+            completed = command_runner(stage_command, config.repo_root)
             if completed.returncode != 0:
                 raise LocalAppError(sanitize_pipeline_error(completed.stderr or completed.stdout or ""))
-            return bundle_id
-    finally:
+        run_command = build_run_command(config, request.fields, bundle_id)
+        job_record = {
+            "job_id": job_id,
+            "bundle_id": bundle_id,
+            "status": "queued",
+            "stage": "queued",
+            "created_at_epoch_ms": int(time_now_epoch_ms()),
+            "updated_at_epoch_ms": int(time_now_epoch_ms()),
+            "worker_pid": None,
+            "error_message": None,
+            "cancel_requested": False,
+            "run_command": run_command,
+            "stdout_log": str(job_log_path(config.workspace_root, job_id, "stdout")),
+            "stderr_log": str(job_log_path(config.workspace_root, job_id, "stderr")),
+        }
+        write_job_record(config.workspace_root, job_record)
+        worker_pid = job_launcher(
+            build_async_job_runner_command(config, job_id),
+            config.repo_root,
+            stdout_path=job_log_path(config.workspace_root, job_id, "stdout"),
+            stderr_path=job_log_path(config.workspace_root, job_id, "stderr"),
+        )
+        job_record["worker_pid"] = worker_pid
+        job_record["updated_at_epoch_ms"] = int(time_now_epoch_ms())
+        write_job_record(config.workspace_root, job_record)
+        return job_id
+    except Exception:
         release_bundle_inflight_lock(marker_path)
+        raise
+
+
+def run_job_once(
+    repo_root: Path,
+    workspace_root: Path,
+    job_id: str,
+    command_runner: Callable[[list[str], Path], subprocess.CompletedProcess[str]] = run_pipeline_command,
+) -> int:
+    job = refresh_job_record_state(workspace_root, load_job_record(workspace_root, job_id))
+    bundle_id = ensure_safe_bundle_id(str(job["bundle_id"]))
+    if job.get("cancel_requested"):
+        job["status"] = "canceled"
+        job["stage"] = "canceled"
+        job["updated_at_epoch_ms"] = int(time_now_epoch_ms())
+        write_job_record(workspace_root, job)
+        release_bundle_inflight_lock(bundle_inflight_marker_path(workspace_root, bundle_id))
+        return 0
+
+    job["status"] = "running"
+    job["stage"] = "processing"
+    job["updated_at_epoch_ms"] = int(time_now_epoch_ms())
+    job["worker_pid"] = os.getpid()
+    write_job_record(workspace_root, job)
+    try:
+        completed = command_runner([str(value) for value in job["run_command"]], repo_root)
+        if completed.returncode != 0:
+            job["status"] = "failed"
+            job["stage"] = "failed"
+            job["error_message"] = sanitize_pipeline_error(
+                completed.stderr or completed.stdout or ""
+            )
+            job["updated_at_epoch_ms"] = int(time_now_epoch_ms())
+            write_job_record(workspace_root, job)
+            return completed.returncode
+        manifest = load_bundle_manifest(workspace_root, bundle_id)
+        session = load_review_session_state(workspace_root, bundle_id)
+        job["status"] = "ready_for_review"
+        job["stage"] = "complete"
+        job["updated_at_epoch_ms"] = int(time_now_epoch_ms())
+        job["latest_run_id"] = manifest.get("latest_run_id")
+        job["filing_status"] = session.get("filing_status")
+        job["result_href"] = f"/bundle/{urllib.parse.quote(bundle_id)}/workbench"
+        job["overview_href"] = f"/bundle/{urllib.parse.quote(bundle_id)}/overview"
+        write_job_record(workspace_root, job)
+        return 0
+    finally:
+        release_bundle_inflight_lock(bundle_inflight_marker_path(workspace_root, bundle_id))
 
 
 def handle_review_save_submission(
@@ -1106,6 +1370,117 @@ def render_index_page(config: LocalAppConfig, bundles: list[BundleListEntry], me
 </html>"""
 
 
+def render_job_page(config: LocalAppConfig, job: dict) -> str:
+    bundle_id = html.escape(str(job["bundle_id"]))
+    job_id = html.escape(str(job["job_id"]))
+    status = html.escape(str(job.get("status") or "accepted").replace("_", " "))
+    stage = html.escape(str(job.get("stage") or "accepted").replace("_", " "))
+    error_message = job.get("error_message")
+    result_href = job.get("result_href")
+    overview_href = job.get("overview_href")
+    state_copy = {
+        "accepted": "We received your upload and are getting it ready.",
+        "queued": "Your receipt is queued for processing. This page is safe to refresh.",
+        "running": "We are processing your receipt now. You can refresh this page without starting over.",
+        "ready_for_review": "Your receipt is ready for review.",
+        "failed": "This run failed before a review packet was ready.",
+        "stalled": "Processing stopped before the website recorded a final result.",
+        "canceled": "This run was canceled.",
+    }.get(str(job.get("status") or ""), "We are checking the status of your receipt.")
+    error_block = (
+        f"<p class=\"notice error\">{html.escape(str(error_message))}</p>"
+        if error_message
+        else ""
+    )
+    primary_action = ""
+    if result_href:
+        primary_action = (
+            f"<a class=\"button\" href=\"{html.escape(str(result_href))}\">Open review workbench</a>"
+        )
+    elif overview_href:
+        primary_action = (
+            f"<a class=\"button secondary\" href=\"{html.escape(str(overview_href))}\">Open bundle overview</a>"
+        )
+    refresh_js = ""
+    if str(job.get("status")) in ACTIVE_JOB_STATUSES:
+        refresh_js = f"""
+<script>
+async function pollJobStatus(){{
+  try {{
+    const response = await fetch('{html.escape(str(job['status_href']))}', {{headers: {{'Accept': 'application/json'}}}});
+    if(!response.ok) {{
+      return;
+    }}
+    const payload = await response.json();
+    const status = payload.status || 'accepted';
+    document.getElementById('job-status').textContent = status.replaceAll('_',' ');
+    document.getElementById('job-stage').textContent = (payload.stage || status).replaceAll('_',' ');
+    if(payload.error_message) {{
+      const error = document.getElementById('job-error');
+      if(error) {{
+        error.hidden = false;
+        error.textContent = payload.error_message;
+      }}
+    }}
+    if(status === 'ready_for_review' && payload.result_href) {{
+      window.location.href = payload.result_href;
+      return;
+    }}
+    if(status === 'failed' || status === 'stalled' || status === 'canceled') {{
+      window.location.reload();
+      return;
+    }}
+  }} catch (err) {{
+    // keep polling quietly; transient network errors should not break the page
+  }}
+}}
+setInterval(pollJobStatus, 3000);
+</script>"""
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Processing receipt — Stanford Expense Reports</title>
+  {FAVICON_LINK}
+  <style>
+    :root{{font-family:Georgia,serif;color:#211b10;background:#f7f2e8;}}
+    body{{margin:0;background:linear-gradient(180deg,#f7f2e8 0%,#efe4d1 100%);color:#211b10;}}
+    .shell{{max-width:900px;margin:0 auto;padding:48px 20px 72px;}}
+    .card{{background:#fff;border:1px solid #e3dac9;border-radius:24px;box-shadow:0 14px 32px rgba(41,27,16,.08);padding:28px;}}
+    h1{{font-size:48px;line-height:1.05;margin:0 0 12px;}}
+    .eyebrow{{letter-spacing:.16em;text-transform:uppercase;color:#a35d34;font-weight:700;font-size:13px;margin:0 0 14px;}}
+    .meta{{color:#665f57;font-size:18px;line-height:1.6;}}
+    .grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin:24px 0;}}
+    .pill{{display:inline-block;padding:8px 14px;border-radius:999px;background:#f3ece0;border:1px solid #e3dac9;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#665f57;}}
+    .button{{display:inline-block;padding:12px 18px;border-radius:999px;background:#2f5b53;color:#fff;text-decoration:none;font-weight:700;margin-right:12px;}}
+    .button.secondary{{background:#f3ece0;color:#211b10;border:1px solid #e3dac9;}}
+    .notice.error{{margin:18px 0 0;padding:14px 16px;border-radius:16px;background:#f9ece8;border:1px solid #e8c1b6;color:#8a3d23;}}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="card">
+      <p class="eyebrow">Receipt processing</p>
+      <h1>Processing your receipt</h1>
+      <p class="meta">{html.escape(state_copy)}</p>
+      <div class="grid">
+        <div><span class="pill">Bundle</span><p class="meta">{bundle_id}</p></div>
+        <div><span class="pill">Job</span><p class="meta">{job_id}</p></div>
+        <div><span class="pill">Status</span><p class="meta" id="job-status">{status}</p></div>
+        <div><span class="pill">Stage</span><p class="meta" id="job-stage">{stage}</p></div>
+      </div>
+      {primary_action}
+      <a class="button secondary" href="{html.escape(str(job['bundle_href']))}">Open bundle</a>
+      {error_block}
+      <p class="notice error" id="job-error" hidden></p>
+    </div>
+  </div>
+  {refresh_js}
+</body>
+</html>"""
+
+
 def render_bundle_page(config: LocalAppConfig, bundle_manifest: dict) -> str:
     bundle_id = bundle_manifest["bundle_id"]
     latest_run = next(
@@ -1465,6 +1840,9 @@ class LocalAppHandler(http.server.BaseHTTPRequestHandler):
             if parsed.path.startswith("/debug/"):
                 self.handle_debug_get(parsed.path)
                 return
+            if parsed.path.startswith("/job/"):
+                self.handle_job_get(parsed.path)
+                return
             if parsed.path.startswith("/bundle/"):
                 self.handle_bundle_get(parsed.path)
                 return
@@ -1512,12 +1890,12 @@ class LocalAppHandler(http.server.BaseHTTPRequestHandler):
                     self.headers.get("Content-Type", ""),
                     body,
                 )
-                bundle_id = handle_upload_submission(
+                job_id = handle_upload_submission(
                     self.config,
                     request,
                 )
                 self.send_response(303)
-                self.send_header("Location", f"/bundle/{urllib.parse.quote(bundle_id)}")
+                self.send_header("Location", bundle_job_page_href(job_id))
                 self.end_headers()
                 return
             if parsed.path.startswith("/bundle/") and parsed.path.endswith("/review-session/save"):
@@ -1558,6 +1936,15 @@ class LocalAppHandler(http.server.BaseHTTPRequestHandler):
             return
         bundle_id = ensure_safe_bundle_id(urllib.parse.unquote(segments[1]))
         if len(segments) == 2:
+            active_job = active_bundle_job_if_any(self.config.workspace_root, bundle_id)
+            if active_job:
+                self.send_response(303)
+                self.send_header(
+                    "Location",
+                    bundle_job_page_href(str(active_job["job_id"])),
+                )
+                self.end_headers()
+                return
             if latest_ledger_path(self.config.workspace_root, bundle_id):
                 self.send_response(303)
                 self.send_header(
@@ -1640,6 +2027,20 @@ class LocalAppHandler(http.server.BaseHTTPRequestHandler):
                 stored_filename,
             )
             self.respond_file(path)
+            return
+        self.send_error(404, "Not found")
+
+    def handle_job_get(self, path: str) -> None:
+        segments = [segment for segment in path.split("/") if segment]
+        if len(segments) < 2:
+            self.send_error(404, "Not found")
+            return
+        job_id = ensure_safe_job_id(urllib.parse.unquote(segments[1]))
+        if len(segments) == 2:
+            self.respond_html(render_job_page(self.config, load_job_state(self.config.workspace_root, job_id)))
+            return
+        if len(segments) == 3 and segments[2] == "status":
+            self.respond_json(load_job_state(self.config.workspace_root, job_id))
             return
         self.send_error(404, "Not found")
 

@@ -157,12 +157,18 @@ Deliverables:
 - async `POST /upload` entrypoint
 - status polling endpoint
 - duplicate in-flight upload handling that returns the existing job instead of an error
+- lightweight background runner that advances one persisted job outside the request handler
 
 Acceptance criteria:
 
 - refreshing the page during OCR shows status instead of a dead-end error
 - the user can reopen the bundle/job after a long run without restarting the work
 - no OCR logic changes yet
+
+Implementation note:
+
+- keep Phase 1 intentionally small: synchronous staging + asynchronous `run` execution
+- do not introduce confidence gating, cancellation, or Cloud Tasks in the same slice
 
 ### Phase 2: Confidence checklist and staged OCR decisions
 

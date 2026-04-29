@@ -3,6 +3,7 @@ import json
 import os
 import socket
 import tempfile
+import threading
 import unittest
 import unittest.mock
 from pathlib import Path
@@ -169,6 +170,35 @@ def write_bundle_fixture(
         )
 
 
+def write_job_fixture(
+    workspace_root: Path,
+    job_id: str,
+    *,
+    bundle_id: str = "demo_bundle",
+    status: str = "running",
+    stage: str = "processing",
+    worker_pid: int | None = None,
+    **overrides,
+) -> dict:
+    job = {
+        "job_id": job_id,
+        "bundle_id": bundle_id,
+        "status": status,
+        "stage": stage,
+        "created_at_epoch_ms": 1000,
+        "updated_at_epoch_ms": 1000,
+        "worker_pid": os.getpid() if worker_pid is None else worker_pid,
+        "error_message": None,
+        "cancel_requested": False,
+        "run_command": ["cargo", "run", "--bin", "ingest_bundle_workspace", "--", "run"],
+        "stdout_log": str(local_app.job_log_path(workspace_root, job_id, "stdout")),
+        "stderr_log": str(local_app.job_log_path(workspace_root, job_id, "stderr")),
+    }
+    job.update(overrides)
+    local_app.write_job_record(workspace_root, job)
+    return job
+
+
 def build_config(
     repo_root: Path,
     workspace_root: Path,
@@ -241,26 +271,26 @@ class LocalAppTests(unittest.TestCase):
             self.assertEqual(saved_paths[0].read_bytes(), b"first")
             self.assertEqual(saved_paths[1].read_bytes(), b"second")
 
-    def test_build_ingest_command_uses_cargo_fallback_for_builtin_engine(self):
+    def test_build_stage_command_uses_cargo_fallback_for_builtin_engine(self):
         with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as workspace_dir:
             input_path = Path(workspace_dir) / "receipt.png"
             input_path.write_bytes(b"stub")
             config = build_config(Path(repo_dir), Path(workspace_dir))
 
-            command = local_app.build_ingest_command(
+            command = local_app.build_stage_command(
                 config,
                 {"engine": "builtin", "fx": "demo"},
                 [input_path],
             )
 
             self.assertEqual(command[:4], ["cargo", "run", "--bin", "ingest_bundle_workspace"])
-            self.assertIn("--engine", command)
-            self.assertIn("builtin", command)
+            self.assertEqual(command[4], "--")
+            self.assertIn("stage", command)
             self.assertIn("--bundle-id", command)
             self.assertIn("receipt", command)
             self.assertNotIn("--run-id", command)
 
-    def test_build_ingest_command_uses_cargo_runner_for_vertex_fields_even_if_binary_exists(self):
+    def test_build_run_command_uses_cargo_runner_for_vertex_fields_even_if_binary_exists(self):
         with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as workspace_dir:
             repo_root = Path(repo_dir)
             workspace_root = Path(workspace_dir)
@@ -277,10 +307,9 @@ class LocalAppTests(unittest.TestCase):
                 show_advanced_config=True,
             )
 
-            command = local_app.build_ingest_command(
+            command = local_app.build_run_command(
                 config,
                 {
-                    "bundle_id": "Demo Bundle",
                     "run_id": "Gemini Flash",
                     "engine": "vertex-gemini-sdk",
                     "project": "demo-project",
@@ -289,10 +318,12 @@ class LocalAppTests(unittest.TestCase):
                     "service_account_key": "/tmp/key.json",
                     "sdk_python": "/tmp/venv/bin/python",
                 },
-                [input_path],
+                "Demo Bundle",
             )
 
             self.assertEqual(command[:4], ["cargo", "run", "--bin", "ingest_bundle_workspace"])
+            self.assertEqual(command[4], "--")
+            self.assertIn("run", command)
             self.assertIn("demo_bundle", command)
             self.assertIn("gemini_flash", command)
             self.assertIn("--project", command)
@@ -303,20 +334,18 @@ class LocalAppTests(unittest.TestCase):
             self.assertIn("gemini_flash", command)
             self.assertIn("--compare-receipt-passes", command)
 
-    def test_build_ingest_command_uses_server_side_vertex_defaults(self):
+    def test_build_run_command_uses_server_side_vertex_defaults(self):
         with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as workspace_dir:
             config = build_config(
                 Path(repo_dir),
                 Path(workspace_dir),
                 default_engine="vertex-gemini-sdk",
             )
-            input_path = Path(workspace_dir) / "receipt.png"
-            input_path.write_bytes(b"stub")
 
-            command = local_app.build_ingest_command(
+            command = local_app.build_run_command(
                 config,
-                {"bundle_id": "demo_bundle"},
-                [input_path],
+                {},
+                "demo_bundle",
             )
 
             self.assertIn("--engine", command)
@@ -326,6 +355,19 @@ class LocalAppTests(unittest.TestCase):
             self.assertIn("--sdk-python", command)
             self.assertIn("./.venv/bin/python", command)
             self.assertIn("--compare-receipt-passes", command)
+
+    def test_build_async_job_runner_command_targets_local_runner(self):
+        with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as workspace_dir:
+            config = build_config(Path(repo_dir), Path(workspace_dir))
+
+            command = local_app.build_async_job_runner_command(config, "demo_bundle_123")
+
+            self.assertEqual(command[0], os.sys.executable)
+            self.assertTrue(command[1].endswith("scripts/local_app_job_runner.py"))
+            self.assertIn("--repo-root", command)
+            self.assertIn("--workspace-root", command)
+            self.assertIn("--job-id", command)
+            self.assertIn("demo_bundle_123", command)
 
     def test_build_review_save_command_supports_base_version(self):
         with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as artifacts_dir:
@@ -449,13 +491,20 @@ class LocalAppTests(unittest.TestCase):
             assert workbench_path is not None
             self.assertTrue(workbench_path.name.endswith(".html"))
 
-    def test_handle_upload_submission_invokes_pipeline_runner(self):
-        captured = {}
+    def test_handle_upload_submission_stages_upload_and_launches_job(self):
+        captured = {"commands": []}
 
         def runner(command, cwd):
-            captured["command"] = command
+            captured["commands"].append(command)
             captured["cwd"] = cwd
             return CompletedProcess(command, 0, stdout="ok", stderr="")
+
+        def job_launcher(command, cwd, *, stdout_path, stderr_path):
+            captured["job_launcher_command"] = command
+            captured["job_launcher_cwd"] = cwd
+            captured["stdout_path"] = stdout_path
+            captured["stderr_path"] = stderr_path
+            return 4242
 
         request = local_app.UploadRequest(
             fields={"engine": "builtin", "bundle_id": "demo_bundle"},
@@ -471,25 +520,36 @@ class LocalAppTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as workspace_dir:
             repo_root = Path(repo_dir)
             config = build_config(repo_root, Path(workspace_dir))
-            bundle_id = local_app.handle_upload_submission(
+            job_id = local_app.handle_upload_submission(
                 config,
                 request,
                 command_runner=runner,
+                job_launcher=job_launcher,
             )
 
-            self.assertEqual(bundle_id, "demo_bundle")
+            self.assertTrue(job_id.startswith("demo_bundle_"))
             self.assertEqual(captured["cwd"], repo_root)
-            self.assertIn("--bundle-id", captured["command"])
-            self.assertIn("demo_bundle", captured["command"])
+            self.assertEqual(captured["job_launcher_cwd"], repo_root)
+            self.assertEqual(len(captured["commands"]), 1)
+            self.assertIn("stage", captured["commands"][0])
+            self.assertIn("--bundle-id", captured["commands"][0])
+            self.assertIn("demo_bundle", captured["commands"][0])
             staged_inputs = [
                 Path(value)
-                for value in captured["command"]
+                for value in captured["commands"][0]
                 if value.endswith(".png")
             ]
             self.assertEqual(len(staged_inputs), 1)
             self.assertTrue(
                 str(staged_inputs[0]).startswith(str(repo_root / ".local_runtime"))
             )
+            self.assertIn("local_app_job_runner.py", " ".join(captured["job_launcher_command"]))
+            job = local_app.load_job_record(config.workspace_root, job_id)
+            self.assertEqual(job["bundle_id"], "demo_bundle")
+            self.assertEqual(job["status"], "queued")
+            self.assertEqual(job["worker_pid"], 4242)
+            self.assertIn("run", job["run_command"])
+            self.assertTrue(local_app.bundle_inflight_marker_path(config.workspace_root, "demo_bundle").exists())
 
     def test_handle_upload_submission_rejects_empty_upload(self):
         request = local_app.UploadRequest(fields={}, files=[])
@@ -500,7 +560,7 @@ class LocalAppTests(unittest.TestCase):
                     request,
                 )
 
-    def test_handle_upload_submission_rejects_bundle_already_inflight(self):
+    def test_handle_upload_submission_reuses_active_job_for_same_bundle(self):
         request = local_app.UploadRequest(
             fields={"engine": "builtin", "bundle_id": "demo_bundle"},
             files=[
@@ -513,14 +573,14 @@ class LocalAppTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as workspace_dir:
             workspace_root = Path(workspace_dir)
-            marker_path = local_app.acquire_bundle_inflight_lock(workspace_root, "demo_bundle")
+            marker_path = local_app.acquire_bundle_inflight_lock(workspace_root, "demo_bundle", "demo_bundle_111")
+            write_job_fixture(workspace_root, "demo_bundle_111")
             try:
-                with self.assertRaises(local_app.LocalAppError) as ctx:
-                    local_app.handle_upload_submission(
-                        build_config(Path(repo_dir), workspace_root),
-                        request,
-                    )
-                self.assertIn("already processing", str(ctx.exception))
+                job_id = local_app.handle_upload_submission(
+                    build_config(Path(repo_dir), workspace_root),
+                    request,
+                )
+                self.assertEqual(job_id, "demo_bundle_111")
             finally:
                 local_app.release_bundle_inflight_lock(marker_path)
 
@@ -549,6 +609,71 @@ class LocalAppTests(unittest.TestCase):
                     command_runner=runner,
                 )
             self.assertFalse(local_app.bundle_inflight_marker_path(workspace_root, "demo_bundle").exists())
+
+    def test_run_job_once_updates_job_record_after_success(self):
+        captured = {}
+
+        def runner(command, cwd):
+            captured["command"] = command
+            captured["cwd"] = cwd
+            return CompletedProcess(command, 0, stdout="ok", stderr="")
+
+        with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as workspace_dir:
+            repo_root = Path(repo_dir)
+            workspace_root = Path(workspace_dir)
+            write_bundle_fixture(workspace_root, "demo_bundle", with_workbench=True)
+            marker_path = local_app.acquire_bundle_inflight_lock(workspace_root, "demo_bundle", "demo_bundle_111")
+            try:
+                write_job_fixture(
+                    workspace_root,
+                    "demo_bundle_111",
+                    status="queued",
+                    stage="queued",
+                    worker_pid=None,
+                    run_command=["cargo", "run", "--bin", "ingest_bundle_workspace", "--", "run", "--bundle-id", "demo_bundle"],
+                )
+
+                exit_code = local_app.run_job_once(repo_root, workspace_root, "demo_bundle_111", command_runner=runner)
+
+                self.assertEqual(exit_code, 0)
+                job = local_app.load_job_record(workspace_root, "demo_bundle_111")
+                self.assertEqual(job["status"], "ready_for_review")
+                self.assertEqual(job["stage"], "complete")
+                self.assertEqual(job["result_href"], "/bundle/demo_bundle/workbench")
+                self.assertEqual(job["overview_href"], "/bundle/demo_bundle/overview")
+                self.assertFalse(marker_path.exists())
+                self.assertEqual(captured["cwd"], repo_root)
+            finally:
+                local_app.release_bundle_inflight_lock(marker_path)
+
+    def test_run_job_once_marks_failed_job_and_releases_lock(self):
+        def runner(command, cwd):
+            return CompletedProcess(command, 1, stdout="", stderr="processing exploded")
+
+        with tempfile.TemporaryDirectory() as repo_dir, tempfile.TemporaryDirectory() as workspace_dir:
+            repo_root = Path(repo_dir)
+            workspace_root = Path(workspace_dir)
+            marker_path = local_app.acquire_bundle_inflight_lock(workspace_root, "demo_bundle", "demo_bundle_111")
+            try:
+                write_job_fixture(
+                    workspace_root,
+                    "demo_bundle_111",
+                    status="queued",
+                    stage="queued",
+                    worker_pid=None,
+                    run_command=["cargo", "run", "--bin", "ingest_bundle_workspace", "--", "run", "--bundle-id", "demo_bundle"],
+                )
+
+                exit_code = local_app.run_job_once(repo_root, workspace_root, "demo_bundle_111", command_runner=runner)
+
+                self.assertEqual(exit_code, 1)
+                job = local_app.load_job_record(workspace_root, "demo_bundle_111")
+                self.assertEqual(job["status"], "failed")
+                self.assertEqual(job["stage"], "failed")
+                self.assertIn("processing exploded", job["error_message"])
+                self.assertFalse(marker_path.exists())
+            finally:
+                local_app.release_bundle_inflight_lock(marker_path)
 
     def test_render_bundle_page_handles_missing_saved_workbench_when_ledger_exists(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -905,12 +1030,23 @@ class LocalAppHttpTests(unittest.TestCase):
         request_bytes = ("\r\n".join(request_lines) + "\r\n\r\n").encode("utf-8") + body
 
         client_sock, server_sock = socket.socketpair()
+        handler_error = []
+
+        def serve_request():
+            try:
+                server = type("Server", (), {"config": config})()
+                local_app.LocalAppHandler(server_sock, ("127.0.0.1", 12345), server)
+            except Exception as err:  # pragma: no cover - bubbled into the test below
+                handler_error.append(err)
+            finally:
+                if server_sock.fileno() != -1:
+                    server_sock.close()
+
         try:
-            server = type("Server", (), {"config": config})()
             client_sock.sendall(request_bytes)
             client_sock.shutdown(socket.SHUT_WR)
-            local_app.LocalAppHandler(server_sock, ("127.0.0.1", 12345), server)
-            server_sock.close()
+            handler_thread = threading.Thread(target=serve_request, daemon=True)
+            handler_thread.start()
             client_sock.settimeout(1)
 
             response_bytes = b""
@@ -922,10 +1058,14 @@ class LocalAppHttpTests(unittest.TestCase):
                 if not chunk:
                     break
                 response_bytes += chunk
+            handler_thread.join(timeout=1)
         finally:
             client_sock.close()
             if server_sock.fileno() != -1:
                 server_sock.close()
+
+        if handler_error:
+            raise handler_error[0]
 
         header_bytes, payload = response_bytes.split(b"\r\n\r\n", 1)
         header_lines = header_bytes.split(b"\r\n")
@@ -1057,10 +1197,10 @@ class LocalAppHttpTests(unittest.TestCase):
     def test_http_upload_redirects_after_successful_submission(self):
         original = local_app.handle_upload_submission
 
-        def fake_handle_upload_submission(config, request, command_runner=local_app.run_pipeline_command):
+        def fake_handle_upload_submission(config, request, command_runner=local_app.run_pipeline_command, job_launcher=local_app.launch_background_job):
             self.assertEqual(request.fields["engine"], "builtin")
             self.assertEqual(len(request.files), 1)
-            return "demo_bundle"
+            return "demo_bundle_123"
 
         local_app.handle_upload_submission = fake_handle_upload_submission
         boundary = "----expense-boundary"
@@ -1090,10 +1230,51 @@ class LocalAppHttpTests(unittest.TestCase):
                     },
                 )
                 self.assertEqual(status, 303)
-                self.assertEqual(response_headers["Location"], "/bundle/demo_bundle")
+                self.assertEqual(response_headers["Location"], "/job/demo_bundle_123")
                 self.assertEqual(payload, b"")
             finally:
                 local_app.handle_upload_submission = original
+
+    def test_http_job_routes_serve_status_page_and_json(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            write_job_fixture(
+                workspace_root,
+                "demo_bundle_123",
+                status="queued",
+                stage="queued",
+                worker_pid=os.getpid(),
+                result_href="/bundle/demo_bundle/workbench",
+                overview_href="/bundle/demo_bundle/overview",
+            )
+            config = self.make_config(workspace_root)
+
+            status, _, payload = self.request(config, "GET", "/job/demo_bundle_123")
+            self.assertEqual(status, 200)
+            self.assertIn(b"Processing your receipt", payload)
+            self.assertIn(b"demo_bundle_123", payload)
+
+            status, response_headers, payload = self.request(config, "GET", "/job/demo_bundle_123/status")
+            self.assertEqual(status, 200)
+            self.assertEqual(response_headers["Content-Type"], "application/json; charset=utf-8")
+            body = json.loads(payload)
+            self.assertEqual(body["job_id"], "demo_bundle_123")
+            self.assertEqual(body["bundle_id"], "demo_bundle")
+            self.assertEqual(body["status_href"], "/job/demo_bundle_123/status")
+
+    def test_http_bundle_root_redirects_to_active_job(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            bundle_root = workspace_root / "bundles" / "demo_bundle"
+            bundle_root.mkdir(parents=True, exist_ok=True)
+            local_app.acquire_bundle_inflight_lock(workspace_root, "demo_bundle", "demo_bundle_123")
+            write_job_fixture(workspace_root, "demo_bundle_123")
+            config = self.make_config(workspace_root)
+
+            status, response_headers, payload = self.request(config, "GET", "/bundle/demo_bundle")
+            self.assertEqual(status, 303)
+            self.assertEqual(response_headers["Location"], "/job/demo_bundle_123")
+            self.assertEqual(payload, b"")
 
     def test_http_review_save_returns_json_error(self):
         original = local_app.handle_review_save_submission
