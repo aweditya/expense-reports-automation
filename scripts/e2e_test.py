@@ -93,8 +93,8 @@ def upload_documents(
     bundle_id: str | None = None,
     engine: str | None = None,
     headers: dict[str, str] | None = None,
-) -> str:
-    """Upload documents to the app. Returns the bundle ID from the redirect."""
+) -> dict:
+    """Upload documents to the app. Returns redirect metadata."""
     import re
     import html as htmlmod
 
@@ -127,8 +127,14 @@ def upload_documents(
 
     if resp.status_code == 303:
         location = resp.headers.get("Location", "")
-        bid = urllib.parse.unquote(location.split("/bundle/")[-1].split("/")[0])
-        return bid
+        if "/job/" in location:
+            job_id = urllib.parse.unquote(location.split("/job/")[-1].split("/")[0])
+            return {"redirect_kind": "job", "job_id": job_id, "location": location}
+        if "/bundle/" in location:
+            bid = urllib.parse.unquote(location.split("/bundle/")[-1].split("/")[0])
+            return {"redirect_kind": "bundle", "bundle_id": bid, "location": location}
+        print(f"ERROR: Unexpected redirect location: {location}")
+        sys.exit(1)
 
     print(f"ERROR: Upload failed with HTTP {resp.status_code}")
     for m in re.finditer(r'<p class="notice">(.*?)</p>', resp.text, re.DOTALL):
@@ -140,6 +146,39 @@ def _get(url: str, headers: dict[str, str] | None = None):
     """HTTP GET using requests library."""
     import requests as req_lib
     return req_lib.get(url, headers=headers or {}, timeout=30)
+
+
+def wait_for_job(
+    base_url: str,
+    job_id: str,
+    headers: dict[str, str] | None = None,
+    *,
+    timeout_seconds: int = 600,
+    poll_interval_seconds: float = 2.0,
+) -> dict:
+    """Poll a hosted async OCR job until it reaches a terminal state."""
+    status_url = f"{base_url.rstrip('/')}/job/{urllib.parse.quote(job_id)}/status"
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        resp = _get(status_url, headers)
+        if resp.status_code != 200:
+            print(f"ERROR: Failed to fetch job status for {job_id} (HTTP {resp.status_code})")
+            sys.exit(1)
+        payload = resp.json()
+        status = payload.get("status")
+        stage = payload.get("stage")
+        print(f"   Job {job_id}: {status} ({stage})")
+        if status == "ready_for_review":
+            return payload
+        if status in {"failed", "stalled", "canceled"}:
+            print(f"ERROR: Job {job_id} ended in state '{status}'")
+            if payload.get("error_message"):
+                print(f"  {payload['error_message']}")
+            sys.exit(1)
+        time.sleep(poll_interval_seconds)
+
+    print(f"ERROR: Job {job_id} did not finish within {timeout_seconds}s")
+    sys.exit(1)
 
 
 def check_bundle_manifest(
@@ -221,7 +260,7 @@ def main():
     file_list = ", ".join(d.name for d in args.documents)
     print(f"\n1. Uploading {len(args.documents)} document(s): {file_list}")
     start = time.time()
-    bundle_id = upload_documents(
+    upload_result = upload_documents(
         effective_target,
         args.documents,
         bundle_id=args.bundle_id,
@@ -229,17 +268,26 @@ def main():
         headers=headers,
     )
     elapsed = time.time() - start
-    print(f"   OK — bundle '{bundle_id}' created ({elapsed:.1f}s)")
+    if upload_result["redirect_kind"] == "job":
+        job_id = upload_result["job_id"]
+        print(f"   OK — job '{job_id}' created ({elapsed:.1f}s)")
+        print(f"\n2. Waiting for hosted processing to complete...")
+        job_payload = wait_for_job(effective_target, job_id, headers=headers)
+        bundle_id = job_payload["bundle_id"]
+        print(f"   OK — bundle '{bundle_id}' is ready for review")
+    else:
+        bundle_id = upload_result["bundle_id"]
+        print(f"   OK — bundle '{bundle_id}' created ({elapsed:.1f}s)")
 
-    # Step 2: Check manifest
-    print(f"\n2. Checking bundle manifest...")
+    # Step 3: Check manifest
+    print(f"\n3. Checking bundle manifest...")
     manifest = check_bundle_manifest(effective_target, bundle_id, headers=headers)
     doc_count = len(manifest.get("documents", []))
     run_count = len(manifest.get("runs", []))
     print(f"   OK — {doc_count} document(s), {run_count} run(s)")
 
-    # Step 3: Check review session
-    print(f"\n3. Checking review session state...")
+    # Step 4: Check review session
+    print(f"\n4. Checking review session state...")
     session = check_review_session(effective_target, bundle_id, headers=headers)
     filing_status = session.get("filing_status", "unknown")
     print(f"   OK — filing status: {filing_status}")
@@ -247,8 +295,8 @@ def main():
         readiness = session["readiness"]
         print(f"   Readiness: {json.dumps(readiness, indent=2)}")
 
-    # Step 4: Check key artifacts
-    print(f"\n4. Checking artifacts...")
+    # Step 5: Check key artifacts
+    print(f"\n5. Checking artifacts...")
     artifacts = ["draft.yaml", "validation.json", "readiness.json", "ledger.json"]
     results = {}
     for artifact in artifacts:
@@ -257,10 +305,10 @@ def main():
         status = "OK" if exists else "MISSING"
         print(f"   {status} — {artifact}")
 
-    # Step 5: Verify preview gate (optional)
+    # Step 6: Verify preview gate (optional)
     lifecycle_ok = True
     if args.verify_lifecycle:
-        print(f"\n5. Verifying preview gate...")
+        print(f"\n6. Verifying preview gate...")
         preview_url = (
             f"{effective_target.rstrip('/')}/bundle/{urllib.parse.quote(bundle_id)}/preview"
         )

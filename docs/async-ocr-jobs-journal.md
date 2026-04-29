@@ -41,3 +41,17 @@ This file tracks implementation notes, reflections, regrets, and rollout observa
   - run the handler on a separate thread in the HTTP test helper so client reads and server writes can proceed concurrently
 - Reflection:
   - this was a good reminder that UI-surface tests can fail because the harness no longer matches the size/shape of the real page, not because the product logic regressed
+
+### Hosted validation outcome
+
+- Phase 1 was validated on the hosted Cloud Run site with a real English receipt upload.
+- Validation bundle:
+  - `async_job_receipt_smoke_20260429`
+- Observed behavior:
+  - `/upload` returned a `/job/<job_id>` redirect in under a second
+  - refreshing/polling the job route was safe
+  - the job completed and redirected to the review workbench
+  - the resulting hosted packet reached `user_input_required` with no automation gaps
+- Reflection:
+  - the new orchestration flow fixed the worst UX failure mode without changing OCR behavior
+  - the remaining weakness in Phase 1 is observability, not correctness: the job currently stays in a coarse `running / processing` state for most of its lifetime
