@@ -55,3 +55,29 @@ This file tracks implementation notes, reflections, regrets, and rollout observa
 - Reflection:
   - the new orchestration flow fixed the worst UX failure mode without changing OCR behavior
   - the remaining weakness in Phase 1 is observability, not correctness: the job currently stays in a coarse `running / processing` state for most of its lifetime
+
+### Phase 2 first result
+
+- The first conditional-pass policy was validated on the hosted site with the same English receipt used in the Phase 1 smoke.
+- Validation bundle:
+  - `async_job_receipt_smoke_gate_20260429`
+- Observed behavior:
+  - upload still returned a job redirect immediately
+  - the job completed successfully and reached the normal FA workbench
+  - the hosted bundle did **not** expose an OCR pass comparison artifact for that receipt, which confirms the secondary OCR lane was skipped
+- Reflection:
+  - this is the right proof for the first gating step: preserved correctness with less OCR work on an easy receipt
+  - the next refinement should focus on richer stage visibility and broader confidence rules, not reintroducing unconditional passes
+
+### Hosted gauntlet harness regression
+
+- The first attempt to rerun the small hosted SROIE gauntlet on the async branch reported `0/4` success, but that turned out to be a test-harness bug rather than a hosted product regression.
+- Cause:
+  - `scripts/evaluate_hosted_receipt_flow.py` still assumed `upload_documents(...)` returned a raw bundle id
+  - the async hosted flow now returns redirect metadata and often enters the `/job/<job_id>` path first
+  - the harness then tried to use that metadata object as a bundle id and failed with `quote_from_bytes() expected bytes`
+- Fix:
+  - make the harness follow async job redirects the same way the browser flow does
+  - add explicit unit coverage for both async `/job/...` uploads and direct `/bundle/...` uploads
+- Reflection:
+  - this was a useful reminder that once the UI flow changes, the hosted evaluator has to stay in lockstep with the actual browser contract or it will “prove” false regressions

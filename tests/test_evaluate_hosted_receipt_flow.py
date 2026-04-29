@@ -163,6 +163,143 @@ expense_report:
         self.assertFalse(result["classification"]["hosted_ocr_ok"])
         self.assertEqual(result["error"], "upload failed")
 
+    def test_evaluate_document_waits_for_async_job_uploads(self):
+        document = {
+            "document_id": "receipt_4",
+            "input_path": Path("/fake/receipt.png"),
+            "expected_fields": {},
+        }
+
+        with mock.patch.object(
+            hosted_eval.e2e_test,
+            "upload_documents",
+            return_value={
+                "redirect_kind": "job",
+                "job_id": "job-123",
+                "location": "/job/job-123",
+            },
+        ) as upload_documents, mock.patch.object(
+            hosted_eval.e2e_test,
+            "wait_for_job",
+            return_value={"bundle_id": "resolved-bundle"},
+        ) as wait_for_job, mock.patch.object(
+            hosted_eval.e2e_test,
+            "check_bundle_manifest",
+            return_value={"documents": [{}], "runs": [{}]},
+        ), mock.patch.object(
+            hosted_eval.e2e_test,
+            "check_review_session",
+            return_value={
+                "filing_status": "user_input_required",
+                "readiness": {
+                    "automation_gap_count": 0,
+                    "user_input_gap_count": 1,
+                    "manual_review_count": 0,
+                },
+            },
+        ), mock.patch.object(
+            hosted_eval,
+            "fetch_artifact_text",
+            return_value="""
+expense_report:
+  transaction_lines:
+    - common:
+        expense_type:
+          value: other_business_expense
+        date:
+          value: 2026-04-29
+        line_amount_usd:
+          value: '9.00'
+        original_amount:
+          value: '9.00'
+        original_currency:
+          value: USD
+        remarks:
+          value: demo
+""",
+        ):
+            result = hosted_eval.evaluate_document(
+                base_url="https://example.com",
+                headers={"Authorization": "Bearer token"},
+                document=document,
+                bundle_prefix="hosted-test",
+            )
+
+        self.assertEqual(result["bundle_id"], "resolved-bundle")
+        self.assertTrue(result["classification"]["schema_projected"])
+        upload_documents.assert_called_once()
+        wait_for_job.assert_called_once_with(
+            "https://example.com",
+            "job-123",
+            headers={"Authorization": "Bearer token"},
+        )
+
+    def test_evaluate_document_accepts_direct_bundle_uploads(self):
+        document = {
+            "document_id": "receipt_5",
+            "input_path": Path("/fake/receipt.png"),
+            "expected_fields": {},
+        }
+
+        with mock.patch.object(
+            hosted_eval.e2e_test,
+            "upload_documents",
+            return_value={
+                "redirect_kind": "bundle",
+                "bundle_id": "bundle-456",
+                "location": "/bundle/bundle-456",
+            },
+        ) as upload_documents, mock.patch.object(
+            hosted_eval.e2e_test,
+            "wait_for_job",
+        ) as wait_for_job, mock.patch.object(
+            hosted_eval.e2e_test,
+            "check_bundle_manifest",
+            return_value={"documents": [{}], "runs": [{}]},
+        ), mock.patch.object(
+            hosted_eval.e2e_test,
+            "check_review_session",
+            return_value={
+                "filing_status": "user_input_required",
+                "readiness": {
+                    "automation_gap_count": 0,
+                    "user_input_gap_count": 1,
+                    "manual_review_count": 0,
+                },
+            },
+        ), mock.patch.object(
+            hosted_eval,
+            "fetch_artifact_text",
+            return_value="""
+expense_report:
+  transaction_lines:
+    - common:
+        expense_type:
+          value: other_business_expense
+        date:
+          value: 2026-04-29
+        line_amount_usd:
+          value: '9.00'
+        original_amount:
+          value: '9.00'
+        original_currency:
+          value: USD
+        remarks:
+          value: demo
+""",
+        ):
+            result = hosted_eval.evaluate_document(
+                base_url="https://example.com",
+                headers={"Authorization": "Bearer token"},
+                document=document,
+                bundle_prefix="hosted-test",
+            )
+
+        self.assertEqual(result["bundle_id"], "bundle-456")
+        self.assertTrue(result["classification"]["schema_projected"])
+        upload_documents.assert_called_once()
+        wait_for_job.assert_not_called()
+
     def test_main_refreshes_cloud_run_auth_headers_for_each_document(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

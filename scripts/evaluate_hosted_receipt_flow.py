@@ -175,12 +175,21 @@ def evaluate_document(
     bundle_id = f"{bundle_prefix}_{document['document_id']}"
     started = time.time()
     try:
-        created_bundle_id = e2e_test.upload_documents(
+        upload_result = e2e_test.upload_documents(
             base_url,
             [document["input_path"]],
             bundle_id=bundle_id,
             headers=headers,
         )
+        if upload_result["redirect_kind"] == "job":
+            job_payload = e2e_test.wait_for_job(
+                base_url,
+                upload_result["job_id"],
+                headers=headers,
+            )
+            created_bundle_id = str(job_payload["bundle_id"])
+        else:
+            created_bundle_id = str(upload_result["bundle_id"])
         upload_seconds = round(time.time() - started, 1)
         manifest = e2e_test.check_bundle_manifest(base_url, created_bundle_id, headers=headers)
         review_session = e2e_test.check_review_session(base_url, created_bundle_id, headers=headers)
