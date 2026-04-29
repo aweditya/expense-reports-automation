@@ -258,7 +258,7 @@ At minimum, each phase should be exercised against:
 
 ## Immediate Next Slice
 
-1. Add the durable job model and status page without changing OCR logic.
-2. Change `/upload` to create a job and redirect to `/job/<job_id>`.
-3. Reuse existing in-flight jobs for the same bundle instead of rejecting them.
-4. Only after hosted validation of that job flow, introduce conditional secondary OCR.
+1. Add a best-effort cancel path for hosted async jobs.
+2. Persist stage checkpoints or reusable intermediate artifacts so retries do not redo safe completed work.
+3. Surface `cancel requested` / `canceled` / `stalled` states clearly on the hosted job page.
+4. Validate cancellation and retry behavior through the hosted website before moving on to artifact-cache deduplication.

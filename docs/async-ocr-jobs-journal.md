@@ -94,3 +94,20 @@ This file tracks implementation notes, reflections, regrets, and rollout observa
 - Reflection:
   - the branch is doing exactly what it should here: surfacing orchestration realities before they reach `main`
   - async UX on Cloud Run is not just an application concern; deployment semantics are part of the product behavior
+
+### Phase 2 hosted validation after deploy fix
+
+- After deploying the always-allocated-CPU revision, the hosted async flow completed cleanly again.
+- Validation passes:
+  - single-receipt smoke: `async_gate_single_x00016469612`
+  - four-receipt English slice: `async_gate_sroie_0_4_postfix_*`
+- Observed behavior:
+  - each upload returned a resumable `/job/<job_id>` redirect immediately
+  - each job progressed `queued -> running -> ready_for_review`
+  - the hosted four-receipt report returned:
+    - `Hosted OCR OK: 4/4`
+    - `Schema projected: 4/4`
+    - `Projected without automation gaps: 4/4`
+- Reflection:
+  - Phase 2 is now in the state we wanted: easy receipts can stay on the fast path, and the hosted async UX remains stable under real FA-facing uploads
+  - the next major slice should be Phase 3 cancellation/checkpointing rather than more speculative OCR gating changes
