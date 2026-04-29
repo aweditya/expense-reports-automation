@@ -81,3 +81,16 @@ This file tracks implementation notes, reflections, regrets, and rollout observa
   - add explicit unit coverage for both async `/job/...` uploads and direct `/bundle/...` uploads
 - Reflection:
   - this was a useful reminder that once the UI flow changes, the hosted evaluator has to stay in lockstep with the actual browser contract or it will “prove” false regressions
+
+### Hosted background-worker deployment issue
+
+- The first real hosted gauntlet attempt on the async branch then exposed a deployment-level problem: the job page stayed in `running / processing` far longer than the underlying receipt smoke tests suggested it should.
+- Likely cause:
+  - the async runner executes as a background subprocess after the upload response returns
+  - Cloud Run was deployed without always-allocated CPU, so background work could be throttled between polling requests
+- Fix:
+  - add `--no-cpu-throttling` to the Cloud Run deploy step
+  - add a regression test that asserts the deploy configuration preserves always-allocated CPU for the async-job branch
+- Reflection:
+  - the branch is doing exactly what it should here: surfacing orchestration realities before they reach `main`
+  - async UX on Cloud Run is not just an application concern; deployment semantics are part of the product behavior

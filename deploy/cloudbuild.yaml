@@ -55,6 +55,7 @@ steps:
       - '--max-instances=1'
       - '--timeout=600'
       - '--memory=2Gi'
+      - '--no-cpu-throttling'
       - '--no-allow-unauthenticated'
     id: 'deploy'
     waitFor: ['docker-push']
