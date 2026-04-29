@@ -249,7 +249,7 @@ fn render_issues_panel(html: &mut String, packet: &ReviewPacket, index: &Workben
         .flat_map(|section| section.instances.iter())
         .flat_map(|instance| instance.fields.iter())
         .filter(|field| !field_is_readonly(field))
-        .filter(|field| (!field.present && field.required) || field.needs_review)
+        .filter(|field| field_needs_required_input(field) || field.needs_review)
         .collect::<Vec<_>>();
     let system_issues = packet
         .issues_queue
@@ -413,7 +413,7 @@ fn render_field(html: &mut String, field: &CopyField, index: &WorkbenchIndex) {
         .unwrap_or_else(|| anchor_id("field", &field.path));
     let input_id = format!("{field_id}-input");
     html.push_str("<article class=\"field-card");
-    if !field.present {
+    if !field_has_meaningful_value(field) {
         html.push_str(" missing");
     }
     if field_is_readonly(field) {
@@ -467,7 +467,7 @@ fn render_field(html: &mut String, field: &CopyField, index: &WorkbenchIndex) {
 
 fn render_field_editor(html: &mut String, field: &CopyField, input_id: &str) {
     let value = field.value.as_deref().unwrap_or("");
-    let placeholder = if field.present {
+    let placeholder = if field_has_meaningful_value(field) {
         String::new()
     } else {
         field_placeholder(field)
@@ -490,7 +490,7 @@ fn render_field_editor(html: &mut String, field: &CopyField, input_id: &str) {
         "Generated after save"
     } else if field_is_readonly(field) {
         "Review computed value"
-    } else if field.present {
+    } else if field_has_meaningful_value(field) {
         "Check or edit value"
     } else {
         "Add this value"
@@ -527,7 +527,7 @@ fn render_field_editor(html: &mut String, field: &CopyField, input_id: &str) {
         html.push_str("\"");
         html.push_str(disabled);
         html.push_str("><option value=\"\">");
-        html.push_str(&escape_html(if field.present {
+        html.push_str(&escape_html(if field_has_meaningful_value(field) {
             "Select a different option"
         } else {
             "Choose an option"
@@ -560,7 +560,7 @@ fn render_field_editor(html: &mut String, field: &CopyField, input_id: &str) {
         render_checkbox_option(
             html,
             "",
-            if field.present {
+            if field_has_meaningful_value(field) {
                 "Choose yes or no"
             } else {
                 "Select yes or no"
@@ -614,7 +614,7 @@ fn render_structured_list_editor(html: &mut String, field: &CopyField, input_id:
         &serde_json::to_string(&field.collection_rows).expect("rows should serialize"),
     ));
     html.push_str("\"><p class=\"structured-list-copy\">");
-    html.push_str(if field.present {
+    html.push_str(if field_has_meaningful_value(field) {
         "Edit the repeated rows directly. Add or remove rows as needed."
     } else {
         "Add one or more rows to supply this missing repeated field."
@@ -903,7 +903,7 @@ fn field_generated_after_save(field: &CopyField) -> bool {
 fn field_status_label(field: &CopyField) -> &'static str {
     if field_generated_after_save(field) {
         "Generated after save"
-    } else if !field.present && field.required {
+    } else if field_needs_required_input(field) {
         "Needs your input"
     } else if field.needs_review {
         "Please review"
@@ -917,7 +917,7 @@ fn field_status_label(field: &CopyField) -> &'static str {
 fn field_status_class(field: &CopyField) -> &'static str {
     if field_generated_after_save(field) {
         "status-computed"
-    } else if !field.present && field.required {
+    } else if field_needs_required_input(field) {
         "status-missing"
     } else if field.needs_review {
         "status-review"
@@ -947,7 +947,7 @@ fn issue_badge_class(class: crate::ReadinessIssueClass) -> &'static str {
 }
 
 fn field_issue_label(field: &CopyField) -> &'static str {
-    if !field.present && field.required {
+    if field_needs_required_input(field) {
         "Needs your input"
     } else if field.needs_review {
         "Please review"
@@ -957,7 +957,7 @@ fn field_issue_label(field: &CopyField) -> &'static str {
 }
 
 fn field_issue_badge_class(field: &CopyField) -> &'static str {
-    if !field.present && field.required {
+    if field_needs_required_input(field) {
         "missing"
     } else if field.needs_review {
         "review"
@@ -970,7 +970,7 @@ fn friendly_actionable_message(field: &CopyField, issue_message: Option<&str>) -
     if let Some(message) = issue_message {
         return friendly_issue_message(message);
     }
-    if !field.present && field.required {
+    if field_needs_required_input(field) {
         "Add this missing value to keep the filing packet moving.".to_owned()
     } else if field.needs_review {
         "Review the current value, then mark it reviewed once you are comfortable with it."
@@ -985,7 +985,7 @@ fn field_guidance(field: &CopyField) -> &'static str {
         computed_pending_copy(field)
     } else if field_is_readonly(field) {
         "This field is computed by the system. Review it, but only override it if the filing workflow requires a manual correction."
-    } else if field.present {
+    } else if field_has_meaningful_value(field) {
         "A value is already present. Confirm it or edit it directly if the current value is incomplete or incorrect."
     } else {
         "This field is currently missing. Enter the value here so the filing packet can move forward."
@@ -1010,6 +1010,20 @@ fn issue_is_user_actionable(path: &str, index: &WorkbenchIndex) -> bool {
         .copied()
         .map(|readonly| !readonly)
         .unwrap_or(false)
+}
+
+fn field_has_meaningful_value(field: &CopyField) -> bool {
+    if field.control == FieldControl::StructuredList {
+        return !field.collection_rows.is_empty();
+    }
+    field.value
+        .as_deref()
+        .map(|value| !value.trim().is_empty())
+        .unwrap_or(false)
+}
+
+fn field_needs_required_input(field: &CopyField) -> bool {
+    field.required && !field_is_readonly(field) && !field_has_meaningful_value(field)
 }
 
 fn field_placeholder(field: &CopyField) -> String {
@@ -1217,7 +1231,10 @@ fn escape_html_attribute(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{field_status_label, friendly_issue_message, render_fa_workbench_html};
+    use super::{
+        field_has_meaningful_value, field_needs_required_input, field_status_label,
+        friendly_issue_message, render_fa_workbench_html,
+    };
     use crate::bundle_synthesis::synthesize_bundle_projection_with_fx;
     use crate::field_conventions::{FieldControl, FieldEntryMode};
     use crate::readiness::ReadinessIssueClass;
@@ -1362,6 +1379,68 @@ mod tests {
         }
     }
 
+    fn present_but_empty_required_packet() -> ReviewPacket {
+        ReviewPacket {
+            summary: PacketSummary {
+                filing_status: FilingStatus::AutomationBlocked,
+                payee_name: Some("Aditya Sriram".to_owned()),
+                event_name: Some("Group dinner".to_owned()),
+                trip_window: Some("2026-05-03 to 2026-05-03".to_owned()),
+                report_total_usd: Some("329.12".to_owned()),
+                category: Some("Expenses Domestic".to_owned()),
+                transaction_type: Some("Domestic".to_owned()),
+                transaction_line_count: 1,
+                document_count: 1,
+                readiness: ReviewReadinessSummary {
+                    automation_gap_count: 1,
+                    user_input_gap_count: 0,
+                    manual_review_count: 0,
+                    other_warning_count: 1,
+                },
+                confidence: ConfidenceSummary {
+                    high: 0,
+                    medium: 0,
+                    low: 0,
+                    needs_review: 0,
+                },
+            },
+            issues_queue: vec![ReviewIssueEntry {
+                class: ReadinessIssueClass::AutomationGap,
+                path: "expense_report.transaction_lines[0].common.date".to_owned(),
+                label: "Date".to_owned(),
+                source: Some("t3".to_owned()),
+                current_value: None,
+                message: "Type mismatch: expected date, found null".to_owned(),
+            }],
+            copy_sections: vec![CopySection {
+                key: "transaction_lines".to_owned(),
+                label: "Transaction Lines".to_owned(),
+                repeated: true,
+                instances: vec![CopySectionInstance {
+                    path: "expense_report.transaction_lines[0]".to_owned(),
+                    label: "Transaction Lines 1".to_owned(),
+                    fields: vec![CopyField {
+                        path: "expense_report.transaction_lines[0].common.date".to_owned(),
+                        label: "Date".to_owned(),
+                        control: FieldControl::Date,
+                        allowed_values: Vec::new(),
+                        collection_columns: Vec::new(),
+                        collection_rows: Vec::new(),
+                        value: None,
+                        present: true,
+                        needs_review: false,
+                        required: true,
+                        source: Some("t3".to_owned()),
+                        entry_mode: FieldEntryMode::ModelPrefillReview,
+                        evidence: Vec::new(),
+                    }],
+                }],
+            }],
+            attachment_checklist: Vec::<AttachmentChecklistItem>::new(),
+            document_snapshots: Vec::<DocumentSnapshotCard>::new(),
+        }
+    }
+
     #[test]
     fn fa_workbench_is_editable_and_preview_linked() {
         let rendered = render_fa_workbench_html(&synthetic_packet());
@@ -1471,5 +1550,36 @@ mod tests {
         assert_eq!(field_status_label(&field), "Please review");
         field.needs_review = false;
         assert_eq!(field_status_label(&field), "Filled in");
+    }
+
+    #[test]
+    fn field_presence_uses_meaningful_value_not_present_flag_only() {
+        let field = CopyField {
+            path: "test.field".to_owned(),
+            label: "Test".to_owned(),
+            control: FieldControl::Date,
+            allowed_values: Vec::new(),
+            collection_columns: Vec::new(),
+            collection_rows: Vec::new(),
+            value: None,
+            present: true,
+            needs_review: false,
+            required: true,
+            source: None,
+            entry_mode: FieldEntryMode::ModelPrefillReview,
+            evidence: Vec::new(),
+        };
+        assert!(!field_has_meaningful_value(&field));
+        assert!(field_needs_required_input(&field));
+        assert_eq!(field_status_label(&field), "Needs your input");
+    }
+
+    #[test]
+    fn fa_workbench_keeps_present_but_empty_required_fields_in_queue() {
+        let rendered = render_fa_workbench_html(&present_but_empty_required_packet());
+        assert!(rendered.contains("1 item still needs attention"));
+        assert!(rendered.contains("1 editable item still needs attention"));
+        assert!(rendered.contains("Date"));
+        assert!(rendered.contains("Needs your input"));
     }
 }
