@@ -142,3 +142,24 @@ This file tracks implementation notes, reflections, regrets, and rollout observa
 - Reflection:
   - this was a useful reminder that “robust OCR” here means robustness to our own preprocessing mistakes as well as model variability
   - it also reinforced the standing rule that OCR work must be validated through the hosted FA-facing surface, because the misleading `running` page would not have shown up in unit tests alone
+
+### Regression: preview gate and FA queue drifted on an empty-but-present field
+
+- A live hosted receipt bundle exposed a bad FA-facing inconsistency:
+  - the workbench action queue looked empty
+  - the preview gate still blocked PDF/download because one field needed attention
+- Root cause:
+  - the FA renderer was using `field.present` as the primary proxy for “filled in”
+  - one transaction-line date field was represented as `present: true` while its actual value was empty
+  - readiness/preview logic treated that as unresolved, but the queue/status badges treated it as already filled
+- Fix:
+  - add `field_has_meaningful_value(...)` and `field_needs_required_input(...)`
+  - drive queue membership, missing styling, status badges, and helper copy from actual field value semantics rather than the raw `present` bit
+  - add focused renderer coverage for the exact `present=true, value=None, required=true` shape
+- Hosted validation:
+  - deployed `be5db70`
+  - uploaded a fresh hosted `receipt.png` bundle (`queue_date_verify_1777496214`)
+  - confirmed the live FA workbench now includes the `Date` item in the actionable queue instead of hiding it until preview time
+- Reflection:
+  - this was a classic metadata/value drift bug: the schema/render surface had two notions of “present,” and only one matched the user-facing truth
+  - the regression reinforced that preview gating and action-queue rendering need explicit contract tests against the same field shapes
