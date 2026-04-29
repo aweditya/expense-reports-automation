@@ -1405,16 +1405,42 @@ def render_job_page(config: LocalAppConfig, job: dict) -> str:
     if str(job.get("status")) in ACTIVE_JOB_STATUSES:
         refresh_js = f"""
 <script>
+const jobStateCopy = {{
+  accepted: 'We received your upload and are getting it ready.',
+  queued: 'Your receipt is queued for processing. This page is safe to refresh.',
+  running: 'We are processing your receipt now. You can refresh this page without starting over.',
+  ready_for_review: 'Your receipt is ready for review.',
+  failed: 'This run failed before a review packet was ready.',
+  stalled: 'Processing stopped before the website recorded a final result.',
+  canceled: 'This run was canceled.',
+}};
+let consecutivePollFailures = 0;
+let lastSuccessfulPollAt = Date.now();
+function showPollingProblem(message) {{
+  const error = document.getElementById('job-error');
+  if (!error) {{
+    return;
+  }}
+  error.hidden = false;
+  error.textContent = message;
+}}
 async function pollJobStatus(){{
   try {{
     const response = await fetch('{html.escape(str(job['status_href']))}', {{headers: {{'Accept': 'application/json'}}}});
-    if(!response.ok) {{
-      return;
+    const contentType = response.headers.get('content-type') || '';
+    if(!response.ok || !contentType.includes('application/json')) {{
+      throw new Error('status check did not return JSON');
     }}
     const payload = await response.json();
+    consecutivePollFailures = 0;
+    lastSuccessfulPollAt = Date.now();
     const status = payload.status || 'accepted';
     document.getElementById('job-status').textContent = status.replaceAll('_',' ');
     document.getElementById('job-stage').textContent = (payload.stage || status).replaceAll('_',' ');
+    const copy = document.getElementById('job-copy');
+    if(copy) {{
+      copy.textContent = jobStateCopy[status] || 'We are checking the status of your receipt.';
+    }}
     if(payload.error_message) {{
       const error = document.getElementById('job-error');
       if(error) {{
@@ -1431,7 +1457,11 @@ async function pollJobStatus(){{
       return;
     }}
   }} catch (err) {{
-    // keep polling quietly; transient network errors should not break the page
+    consecutivePollFailures += 1;
+    if (consecutivePollFailures >= 3 || Date.now() - lastSuccessfulPollAt > 15000) {{
+      showPollingProblem('We lost contact with the processing job. Reloading to check its latest state…');
+      window.location.reload();
+    }}
   }}
 }}
 setInterval(pollJobStatus, 3000);
@@ -1463,7 +1493,7 @@ setInterval(pollJobStatus, 3000);
     <div class="card">
       <p class="eyebrow">Receipt processing</p>
       <h1>Processing your receipt</h1>
-      <p class="meta">{html.escape(state_copy)}</p>
+      <p class="meta" id="job-copy">{html.escape(state_copy)}</p>
       <div class="grid">
         <div><span class="pill">Bundle</span><p class="meta">{bundle_id}</p></div>
         <div><span class="pill">Job</span><p class="meta">{job_id}</p></div>

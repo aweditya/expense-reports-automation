@@ -1262,6 +1262,29 @@ class LocalAppHttpTests(unittest.TestCase):
             self.assertEqual(body["bundle_id"], "demo_bundle")
             self.assertEqual(body["status_href"], "/job/demo_bundle_123/status")
 
+    def test_render_job_page_hardens_status_polling_for_non_json_failures(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_root = Path(temp_dir)
+            config = self.make_config(workspace_root)
+            write_job_fixture(
+                workspace_root,
+                "demo_bundle_123",
+                status="running",
+                stage="processing",
+                worker_pid=os.getpid(),
+            )
+
+            rendered = local_app.render_job_page(
+                config,
+                local_app.load_job_state(workspace_root, "demo_bundle_123"),
+            )
+
+            self.assertIn("id=\"job-copy\"", rendered)
+            self.assertIn("const jobStateCopy", rendered)
+            self.assertIn("contentType.includes('application/json')", rendered)
+            self.assertIn("consecutivePollFailures >= 3", rendered)
+            self.assertIn("window.location.reload()", rendered)
+
     def test_http_bundle_root_redirects_to_active_job(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace_root = Path(temp_dir)
