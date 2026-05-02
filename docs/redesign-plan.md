@@ -48,9 +48,12 @@ report → validation → workbench. Six modules. The schema is the spine.
   clarified, status → T1, source_documents → T3, `_meta` promoted to a
   top-level `_meta_convention` block (sibling of `expense_report`, ignored by
   the generator). YAML validated.
-- [ ] **M3. Regenerate model + rules.** Run `scripts/generate_schema_artifacts.py`,
-  verify `cargo test` still passes (failures expected only where the old code
-  refers to dropped enum values — fix or note). Commit regenerated files.
+- [x] **M3. Regenerate model + rules.** Regenerated; cargo green at 201 lib
+  tests + ancillary, Python green at 182. Two commits: (a) regenerated
+  artifacts + readiness cleanup (dropped the obsolete deferred-derived
+  special cases for key_30char/transaction_type, those are now plain T1
+  user-input fields), (b) refreshed ledger/review/workbench regression
+  fixtures via the existing export binaries.
 - [ ] **M4. Spike: single Gemini call → typed transaction line.** New module that
   takes one image and calls Gemini with structured output typed against the
   schema's `transaction_lines` discriminated union. Sanity-test from CLI on
@@ -71,10 +74,11 @@ report → validation → workbench. Six modules. The schema is the spine.
 
 ## Current step
 
-**M3 (next).** Regenerate `expense_report_model.rs` and `validation_rules.rs`
-from the updated schema, then run `cargo test` to surface any breakage caused
-by the source-tier changes (T1/T2/T3) or by the dropped `infer_from` fields
-that downstream code may have keyed on.
+**M4 (next).** Spike a single-Gemini-call extractor against the schema's
+transaction_lines discriminated union, run it from the CLI on the three real
+receipts in `receipts/`. No reduction, no validator, no workbench yet — just
+prove the structured-output approach returns sensible typed rows for real
+documents.
 
 ## Open questions for the FA
 
