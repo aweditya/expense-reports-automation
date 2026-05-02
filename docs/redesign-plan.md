@@ -35,6 +35,31 @@ report → validation → workbench. Six modules. The schema is the spine.
 - CLI testing is sanity-only. The deployed Cloud Run site is the source of truth.
 - Track mistakes in `docs/redesign-regrets.md` so they don't recur.
 
+## Post-M4 decisions (locked 2026-05-02)
+
+- **Prompt-tier fixes belong in M6**, not blocking M5: array-vs-object
+  bracketing, weak expense_type inference, missed tips. The JSON shape is
+  stable enough to design the reduction against now.
+- **`country_of_activity` over-fill for domestic is fine.** Pass 1
+  (Gemini) reads what's on the receipt. Pass 2 (Rust `CONDITIONAL_RULES`)
+  decides whether the value was required given `category`. Don't fight
+  Pass 1 about Pass 2's job.
+- **Keep thinking tokens enabled.** A future ReAct-style agentic loop
+  (extract → validate → revise based on validation feedback → repeat) is
+  the likely direction, and thinking is what makes that work. Budget
+  generously (32k+).
+
+### Architecture flag for M5/M6 design
+
+The one-shot extractor (M4) writes one JSON file and exits. An agentic
+extractor needs to read back validation issues from Rust and re-call
+Gemini with that context. Boundary design choice we don't need to make
+yet but should not lock out: Python emits one final JSON OR Python
+imports/calls Rust validation between iterations. Cleanest is probably
+"Python emits one final JSON, but the loop happens inside Python by
+calling a Rust binary that returns validation issues as JSON." Defer
+the decision until M6.
+
 ## Schema decisions (made; pending edits in M2)
 
 | Decision | Status |
