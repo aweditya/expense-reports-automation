@@ -79,35 +79,34 @@ expense_report:
     business_purpose:
       type: object
       required: true
-      source: T3
-      description: "Structured purpose statement. First 30 chars of the combined text serve as a lookup key."
+      source: T1
+      description: "Structured purpose statement entered by the FA. First 30 chars of the combined text serve as a lookup key."
       fields:
         who:
           type: string
           required: true
-          infer_from: "Payee name and affiliation"
+          infer_from: "Suggestion only — payee name and affiliation"
         what:
           type: string
           required: true
-          infer_from: "Conference name from registration receipt; or meeting purpose from context"
+          infer_from: "Suggestion only — conference name from registration receipt; or meeting purpose from context"
         when:
           type: string
           required: true
-          infer_from: "Trip dates from flight itinerary"
+          infer_from: "Suggestion only — trip dates from flight itinerary"
         where:
           type: string
           required: true
-          infer_from: "Destination city/country from flight or hotel docs"
+          infer_from: "Suggestion only — destination city/country from flight or hotel docs"
         why:
           type: string
           required: true
-          infer_from: "Presenting at conference (if name appears in program), research collaboration, etc."
+          infer_from: "Suggestion only — presenting at conference (if name appears in program), research collaboration, etc."
         key_30char:
           type: string
           required: true
-          source: T2
-          description: "Auto-generated: <name_abbrev><advisor_initials><conference_abbrev>"
-          infer_from: "Computed from payee name, advisor, and event name"
+          source: T1
+          description: "30-character lookup key entered by the FA"
 
     event_name:
       type: string
@@ -155,9 +154,9 @@ expense_report:
     transaction_type:
       type: enum
       required: true
-      source: T3
+      source: T1
       allowed_values: [domestic, foreign]
-      infer_from: "Mirrors general_information.category"
+      description: "FA-entered. Typically matches general_information.category but the portal stores it as a separate field."
     transaction_number:
       type: string
       required: false
@@ -167,12 +166,14 @@ expense_report:
       type: date
       required: true
       source: T3
-      infer_from: "Date the report is filed, or earliest expense date"
+      description: "Date of the expense (earliest expense date across all receipts in the bundle)."
+      infer_from: "Earliest common.date across transaction_lines"
     status:
       type: enum
       required: false
-      source: T2
+      source: T1
       allowed_values: [draft, submitted, approved, returned, paid]
+      description: "FA-entered submission state."
     total_usd:
       type: number
       required: true
@@ -266,8 +267,8 @@ expense_report:
           source_documents:
             type: array
             required: true
-            source: T1
-            description: "References to uploaded documents supporting this line"
+            source: T3
+            description: "References to uploaded documents supporting this line. Filled by the extractor from the same documents that produced the line's other fields."
             items:
               type: object
               fields:
@@ -751,34 +752,81 @@ expense_report:
           relationship:
             type: string
 
-  # ===========================================================================
-  # AGENT METADATA (populated alongside the schema, not part of the form)
-  # ===========================================================================
-  # When the agent fills in an instance of this schema, each field value
-  # should be accompanied by:
-  #
-  #   _meta:
-  #     confidence: high | medium | low
-  #     evidence:
-  #       - kind: document | document_span | system_generated | user_input
-  #         document_id: <optional stable document id>
-  #         filename: <optional filename>
-  #         page: <optional page number>
-  #         quote: <optional supporting text span>
-  #         origin: <required for system_generated/user_input>
-  #     needs_review: true | false
-  #     flags: []            # list of irregularity strings
-  #
-  # Example:
-  #   airfare_details:
-  #     class_of_ticket:
-  #       value: "business"
-  #       _meta:
-  #         confidence: high
-  #         evidence:
-  #           - kind: document_span
-  #             filename: "flight_confirmation.pdf"
-  #             page: 1
-  #             quote: "Business"
-  #         needs_review: true
-  #         flags: ["class_above_coach_no_justification"]
+# =============================================================================
+# Field metadata convention
+# =============================================================================
+# Every leaf value the agent fills is wrapped with a `_meta` block. This is the
+# spec the extractor must produce and the workbench must render. It lives as a
+# sibling of `expense_report:` because it describes the wrapping convention,
+# not the form itself — the schema generator parses only `expense_report`.
+#
+# Confidence is ordinal, not numeric: VLM scores are uncalibrated, ordinal
+# buckets force honesty about that.
+#
+# `flags` is an enumerated vocabulary. New flags must be added here before they
+# can be emitted, so the workbench and validator agree on what each one means.
+
+_meta_convention:
+  confidence:
+    type: enum
+    description: "Ordinal — high, medium, or low. Not a calibrated probability."
+    allowed_values: [high, medium, low]
+  evidence:
+    type: array
+    description: "One or more pointers to where the value came from. Required for every leaf."
+    items:
+      type: object
+      fields:
+        kind:
+          type: enum
+          allowed_values: [document, document_span, system_generated, user_input]
+        document_id:
+          type: string
+          required: false
+        filename:
+          type: string
+          required: false
+        page:
+          type: number
+          required: false
+        bbox:
+          type: object
+          required: false
+          description: "Optional bounding box when the OCR engine reports geometry."
+          fields:
+            left:   { type: number }
+            top:    { type: number }
+            width:  { type: number }
+            height: { type: number }
+        quote:
+          type: string
+          required: false
+          description: "The actual extracted text span."
+        origin:
+          type: string
+          required: "kind in [system_generated, user_input]"
+          description: "Where this value came from when there is no document anchor."
+  needs_review:
+    type: boolean
+    description: "True when the FA must look at this field before submission."
+  flags:
+    type: array
+    description: "Enumerated flag vocabulary. Empty until specific flags are needed."
+    items:
+      type: enum
+      allowed_values: []
+
+# Example instance (illustrative, not part of the spec):
+#
+#   airfare_details:
+#     class_of_ticket:
+#       value: "business"
+#       _meta:
+#         confidence: high
+#         evidence:
+#           - kind: document_span
+#             filename: "flight_confirmation.pdf"
+#             page: 1
+#             quote: "Business"
+#         needs_review: true
+#         flags: []

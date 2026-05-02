@@ -43,8 +43,11 @@ report → validation → workbench. Six modules. The schema is the spine.
   test suites passed locally before push.
 - [x] **M1. Workflow scaffolding.** This document + regrets doc, committed on
   `redesign/single-call-extraction`.
-- [ ] **M2. Schema YAML edits.** Apply the seven edits above to `schema.yaml`.
-  No regeneration yet. Commit.
+- [x] **M2. Schema YAML edits.** Seven edits applied: business_purpose +
+  key_30char → T1, transaction_type → T1, transaction_date description
+  clarified, status → T1, source_documents → T3, `_meta` promoted to a
+  top-level `_meta_convention` block (sibling of `expense_report`, ignored by
+  the generator). YAML validated.
 - [ ] **M3. Regenerate model + rules.** Run `scripts/generate_schema_artifacts.py`,
   verify `cargo test` still passes (failures expected only where the old code
   refers to dropped enum values — fix or note). Commit regenerated files.
@@ -68,8 +71,10 @@ report → validation → workbench. Six modules. The schema is the spine.
 
 ## Current step
 
-**M1 (in progress).** This document and `docs/redesign-regrets.md` are being
-written. After commit, hand back to the user for go-ahead on M2.
+**M3 (next).** Regenerate `expense_report_model.rs` and `validation_rules.rs`
+from the updated schema, then run `cargo test` to surface any breakage caused
+by the source-tier changes (T1/T2/T3) or by the dropped `infer_from` fields
+that downstream code may have keyed on.
 
 ## Open questions for the FA
 
