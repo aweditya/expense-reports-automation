@@ -12,6 +12,19 @@ against `schema.yaml`.
 End state: file → Gemini (typed transaction line) → reduction → schema-typed
 report → validation → workbench. Six modules. The schema is the spine.
 
+## Language split (decided 2026-05-02)
+
+- **Python owns extraction.** One module that calls the Google Gen AI SDK
+  with structured output typed against the schema, returns typed JSON. The
+  SDK is Python-only; no REST hand-rolling, no Rust subprocess wrapper.
+- **Rust owns everything downstream.** Schema-typed model, reduction,
+  validation, ledger, workbench rendering. This is where the type system
+  pays for itself — discriminated-union per-line types, generated
+  `FIELD_RULES` and `CONDITIONAL_RULES`, bit-stable validation.
+- **Boundary: typed JSON file on disk.** Python writes it, Rust reads it.
+  If the extractor ever swaps (Claude, GPT-4o, local VLM), only Python
+  changes.
+
 ## Workflow rules (locked)
 
 - Plan first, act second. Update this doc as work progresses.
@@ -54,23 +67,40 @@ report → validation → workbench. Six modules. The schema is the spine.
   special cases for key_30char/transaction_type, those are now plain T1
   user-input fields), (b) refreshed ledger/review/workbench regression
   fixtures via the existing export binaries.
-- [ ] **M4. Spike: single Gemini call → typed transaction line.** New module that
-  takes one image and calls Gemini with structured output typed against the
-  schema's `transaction_lines` discriminated union. Sanity-test from CLI on
-  `receipts/mels1.jpeg`, `mels2.jpeg`, `tamarine.png`. No reduction, no
-  validator, no workbench wiring. Commit.
-- [ ] **M5. Reduction step.** New module: list of typed lines →
-  `general_information` block + `transaction_summary` + `per_diem_expenses`.
-  Pure functions. Commit.
+- [ ] **M4. Spike: single Gemini call → typed transaction line.** New
+  Python module (`scripts/extract_transaction_line.py` or similar) that
+  takes one image and calls the Google Gen AI SDK with structured output
+  typed against the schema's `transaction_lines` discriminated union.
+  Writes one typed JSON file per document under `./scratch/extractions/`.
+  Sanity-test from CLI on `receipts/mels1.jpeg`, `mels2.jpeg`,
+  `tamarine.png`. No reduction, no validator, no workbench wiring.
+  Commit.
+- [ ] **M5. Reduction step (Rust).** New module: list of typed lines (read
+  from the JSON files Python wrote) → `general_information` block +
+  `transaction_summary` + `per_diem_expenses`. Pure functions. Commit.
 - [ ] **M6. Wire into workbench, deploy, validate on real receipts.** Make the
   workbench render the new typed report. Strip the parts that depend on the
   old pipeline. Deploy to Cloud Run. **Verdict from the deployed site on the 3
   receipts.** Iterate.
 - [ ] **M7. Delete the old pipeline.** Once the new path works on real
-  receipts via the deployed site, delete `document_extract.rs`, the keyword
-  classifier, the per-kind extractors, the synthetic-corpus modules, the
-  OCR-pass-comparison code, the grounded-region helpers. Update CLAUDE.md
-  scope. Commit per deletion group.
+  receipts via the deployed site, delete:
+  - `src/vertex_gemini.rs` (REST client) and `src/vertex_gemini_sdk.rs`
+    (Rust→Python subprocess wrapper) — both made obsolete by the
+    Python-owned extraction.
+  - `IngestionTranscriber` enum and its branches in `ingest.rs`.
+  - `OcrPassKind`, `OcrPreprocessVariant`, `OcrGeometrySource`,
+    `OcrRegionKind` types in `transcribe.rs` (and likely most of
+    `transcribe.rs`).
+  - `src/document_extract.rs`, the keyword classifier, the per-kind
+    extractors.
+  - `src/ocr_compare.rs`, `src/ocr_grounding.rs`, `src/ocr_inspection.rs`.
+  - The synthetic-corpus modules (`synthetic_corpus.rs`,
+    `synthetic_documents.rs`, `corpus_eval.rs`) and their export/eval
+    binaries.
+  - The OCR-pass-comparison and image-preprocessing machinery in
+    `scripts/transcribe_with_google_genai.py` (the file collapses to
+    a thin wrapper, ~200-300 lines).
+  - Update CLAUDE.md scope. Commit per deletion group.
 
 ## Current step
 
