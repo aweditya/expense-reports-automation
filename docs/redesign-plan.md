@@ -67,14 +67,17 @@ report → validation → workbench. Six modules. The schema is the spine.
   special cases for key_30char/transaction_type, those are now plain T1
   user-input fields), (b) refreshed ledger/review/workbench regression
   fixtures via the existing export binaries.
-- [ ] **M4. Spike: single Gemini call → typed transaction line.** New
-  Python module (`scripts/extract_transaction_line.py` or similar) that
-  takes one image and calls the Google Gen AI SDK with structured output
-  typed against the schema's `transaction_lines` discriminated union.
-  Writes one typed JSON file per document under `./scratch/extractions/`.
-  Sanity-test from CLI on `receipts/mels1.jpeg`, `mels2.jpeg`,
-  `tamarine.png`. No reduction, no validator, no workbench wiring.
-  Commit.
+- [x] **M4. Spike: single Gemini call → typed transaction line.** Done.
+  `scripts/spike_extract.py` calls Gemini with the schema vocabulary
+  inlined in a plain-text prompt (no `response_schema`). All three real
+  receipts in `receipts/` produced valid, schema-shaped JSON in
+  `.scratch/spike/`. Verdict in `.scratch/spike/REVIEW.md`: proceed to
+  M5. Issues to address before production: array-vs-object wrapping
+  inconsistency, occasional weak `expense_type` inference (mels1 picked
+  group_travel from a "GST" tax label), `tip_amount` missed on one,
+  `country_of_activity` filled when it should be null for domestic, and
+  `gemini-3-flash-preview` thinking tokens count toward
+  `max_output_tokens` (had to raise to 32768).
 - [ ] **M5. Reduction step (Rust).** New module: list of typed lines (read
   from the JSON files Python wrote) → `general_information` block +
   `transaction_summary` + `per_diem_expenses`. Pure functions. Commit.
@@ -104,11 +107,12 @@ report → validation → workbench. Six modules. The schema is the spine.
 
 ## Current step
 
-**M4 (next).** Spike a single-Gemini-call extractor against the schema's
-transaction_lines discriminated union, run it from the CLI on the three real
-receipts in `receipts/`. No reduction, no validator, no workbench yet — just
-prove the structured-output approach returns sensible typed rows for real
-documents.
+**M5 (next).** Rust reduction step: a new module that reads the typed JSON
+files produced by `scripts/spike_extract.py` (one transaction line per
+file), aggregates them per bundle, and produces `general_information` +
+`transaction_summary` + `per_diem_expenses`. Pure functions, testable.
+This is independent of the prompt-iteration items in the M4 review notes —
+the JSON shape is stable enough to design the reduction against now.
 
 ## Open questions for the FA
 

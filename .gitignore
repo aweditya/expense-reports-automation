@@ -14,3 +14,5 @@ soe-agile-agents-7581b31cd4d2.json
 .local_app_verify_workspace/
 .local_runtime/
 .tmp_test/
+.scratch/
+receipts/
