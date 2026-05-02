@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-generated_at_utc: '2026-04-28T00:19:32+00:00'
+generated_at_utc: '2026-05-02T22:29:32+00:00'
 sections:
 - key: general_information
   label: General Information
@@ -67,8 +67,8 @@ sections:
   - path: expense_report.general_information.business_purpose.who
     label: Who
     control: textarea
-    source: T3
-    entry_mode: model_prefill_review
+    source: T1
+    entry_mode: user_confirmed_input
     required: true
     required_expression: null
     review_priority: medium
@@ -76,8 +76,8 @@ sections:
   - path: expense_report.general_information.business_purpose.what
     label: What
     control: textarea
-    source: T3
-    entry_mode: model_prefill_review
+    source: T1
+    entry_mode: user_confirmed_input
     required: true
     required_expression: null
     review_priority: medium
@@ -85,8 +85,8 @@ sections:
   - path: expense_report.general_information.business_purpose.when
     label: When
     control: textarea
-    source: T3
-    entry_mode: model_prefill_review
+    source: T1
+    entry_mode: user_confirmed_input
     required: true
     required_expression: null
     review_priority: medium
@@ -94,8 +94,8 @@ sections:
   - path: expense_report.general_information.business_purpose.where
     label: Where
     control: textarea
-    source: T3
-    entry_mode: model_prefill_review
+    source: T1
+    entry_mode: user_confirmed_input
     required: true
     required_expression: null
     review_priority: medium
@@ -103,8 +103,8 @@ sections:
   - path: expense_report.general_information.business_purpose.why
     label: Why
     control: textarea
-    source: T3
-    entry_mode: model_prefill_review
+    source: T1
+    entry_mode: user_confirmed_input
     required: true
     required_expression: null
     review_priority: medium
@@ -112,8 +112,8 @@ sections:
   - path: expense_report.general_information.business_purpose.key_30char
     label: Key 30char
     control: textarea
-    source: T2
-    entry_mode: computed_readonly
+    source: T1
+    entry_mode: user_confirmed_input
     required: true
     required_expression: null
     review_priority: medium
@@ -198,8 +198,8 @@ sections:
   - path: expense_report.transaction_summary.transaction_type
     label: Transaction Type
     control: select
-    source: T3
-    entry_mode: model_prefill_review
+    source: T1
+    entry_mode: user_confirmed_input
     required: true
     required_expression: null
     review_priority: medium
@@ -227,8 +227,8 @@ sections:
   - path: expense_report.transaction_summary.status
     label: Status
     control: select
-    source: T2
-    entry_mode: computed_readonly
+    source: T1
+    entry_mode: user_confirmed_input
     required: false
     required_expression: null
     review_priority: low
@@ -358,8 +358,8 @@ sections:
   - path: expense_report.transaction_lines[].common.source_documents[].filename
     label: Filename
     control: text
-    source: T1
-    entry_mode: user_confirmed_input
+    source: T3
+    entry_mode: model_prefill_review
     required: false
     required_expression: null
     review_priority: low
@@ -367,8 +367,8 @@ sections:
   - path: expense_report.transaction_lines[].common.source_documents[].document_type
     label: Document Type
     control: select
-    source: T1
-    entry_mode: user_confirmed_input
+    source: T3
+    entry_mode: model_prefill_review
     required: false
     required_expression: null
     review_priority: low

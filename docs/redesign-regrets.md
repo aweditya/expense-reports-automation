@@ -20,4 +20,29 @@ Keep entries short. The point is recall, not narrative.
 
 ## Entries
 
-(none yet)
+### 2026-05-02 — trusted a piped command's exit code
+
+**What happened:** Ran `cargo test 2>&1 | tee … | tail -10; echo "EXIT: $?"`.
+The `$?` captured `tee`'s exit code (0), not cargo's. The harness reported
+"exit 0" so I almost concluded tests passed when actually 4 tests failed.
+
+**Why it was wrong:** A pipeline's exit status is the last command's by
+default. Hiding the real exit behind `tee`/`tail` makes failures invisible.
+
+**Rule going forward:** Either run the command without piping, or set
+`set -o pipefail` (and check `${PIPESTATUS[0]}` for the real exit), or
+inspect the output file directly for FAILED markers before declaring success.
+
+### 2026-05-02 — wrote a log file to `/tmp`
+
+**What happened:** Piped `cargo test` output through `tee /tmp/cargo_test_after_regen.log`
+to capture a copy of the log alongside the background-task output file.
+
+**Why it was wrong:** Workflow rule is explicit — never use `/tmp`, use the
+project directory. Even harmless intermediate files belong inside the repo so
+they're discoverable and so the project owns its scratch space.
+
+**Rule going forward:** If a command needs a captured log, write it under
+`./.scratch/` (gitignored) or read from the harness-provided task output file.
+Never `/tmp`, never another machine-wide location. Same applies to any
+mktemp, /var/folders, system temp dir.

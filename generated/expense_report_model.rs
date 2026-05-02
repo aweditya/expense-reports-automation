@@ -159,8 +159,9 @@ impl core::fmt::Display for ExpenseReportGeneralInformationRushProcessingEnum {
     }
 }
 
-/// Source tier: T3
-/// Infer from:  Mirrors general_information.category
+///  FA-entered. Typically matches general_information.category but the portal stores it as a
+/// separate field.
+/// Source tier: T1
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ExpenseReportTransactionSummaryTransactionTypeEnum {
     Domestic,
@@ -194,7 +195,8 @@ impl core::fmt::Display for ExpenseReportTransactionSummaryTransactionTypeEnum {
     }
 }
 
-/// Source tier: T2
+///  FA-entered submission state.
+/// Source tier: T1
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ExpenseReportTransactionSummaryStatusEnum {
     Draft,
@@ -362,7 +364,7 @@ impl core::fmt::Display for ExpenseReportTransactionLinesItemCommonForeignActivi
     }
 }
 
-/// Source tier: T1
+/// Source tier: T3
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeEnum {
     Receipt,
@@ -683,29 +685,30 @@ pub struct ExpenseReportGeneralInformationPayee {
 
 }
 
-///  Structured purpose statement. First 30 chars of the combined text serve as a lookup key.
-/// Source tier: T3
+///  Structured purpose statement entered by the FA. First 30 chars of the combined text serve
+/// as a lookup key.
+/// Source tier: T1
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExpenseReportGeneralInformationBusinessPurpose {
-    /// Source tier: T3
-    /// Infer from:  Payee name and affiliation
+    /// Source tier: T1
+    /// Infer from:  Suggestion only — payee name and affiliation
     pub who: String,
-    /// Source tier: T3
-    /// Infer from:  Conference name from registration receipt; or meeting purpose from context
+    /// Source tier: T1
+    /// Infer from:  Suggestion only — conference name from registration receipt; or meeting
+    /// Infer from: purpose from context
     pub what: String,
-    /// Source tier: T3
-    /// Infer from:  Trip dates from flight itinerary
+    /// Source tier: T1
+    /// Infer from:  Suggestion only — trip dates from flight itinerary
     pub when: String,
-    /// Source tier: T3
-    /// Infer from:  Destination city/country from flight or hotel docs
+    /// Source tier: T1
+    /// Infer from:  Suggestion only — destination city/country from flight or hotel docs
     pub r#where: String,
-    /// Source tier: T3
-    /// Infer from:  Presenting at conference (if name appears in program), research
-    /// Infer from: collaboration, etc.
+    /// Source tier: T1
+    /// Infer from:  Suggestion only — presenting at conference (if name appears in program),
+    /// Infer from: research collaboration, etc.
     pub why: String,
-    ///  Auto-generated: <name_abbrev><advisor_initials><conference_abbrev>
-    /// Source tier: T2
-    /// Infer from:  Computed from payee name, advisor, and event name
+    ///  30-character lookup key entered by the FA
+    /// Source tier: T1
     pub key_30char: String,
 
 }
@@ -751,9 +754,9 @@ pub struct ExpenseReportGeneralInformation {
     ///  Always 'electronic' — system pre-fills
     /// Source tier: T2
     pub payment_method: String,
-    ///  Structured purpose statement. First 30 chars of the combined text serve as a lookup
-    /// key.
-    /// Source tier: T3
+    ///  Structured purpose statement entered by the FA. First 30 chars of the combined text
+    /// serve as a lookup key.
+    /// Source tier: T1
     pub business_purpose: ExpenseReportGeneralInformationBusinessPurpose,
     ///  Format: <lab_name> + <Foreign Expenses | Domestic Expenses>
     /// Source tier: T3
@@ -771,16 +774,19 @@ pub struct ExpenseReportGeneralInformation {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExpenseReportTransactionSummary {
-    /// Source tier: T3
-    /// Infer from:  Mirrors general_information.category
+    ///  FA-entered. Typically matches general_information.category but the portal stores it as
+    /// a separate field.
+    /// Source tier: T1
     pub transaction_type: ExpenseReportTransactionSummaryTransactionTypeEnum,
     ///  Format: ERxxxxxxx. Assigned by the system or existing system.
     /// Source tier: T2
     pub transaction_number: Option<String>,
+    ///  Date of the expense (earliest expense date across all receipts in the bundle).
     /// Source tier: T3
-    /// Infer from:  Date the report is filed, or earliest expense date
+    /// Infer from:  Earliest common.date across transaction_lines
     pub transaction_date: IsoDate,
-    /// Source tier: T2
+    ///  FA-entered submission state.
+    /// Source tier: T1
     pub status: Option<ExpenseReportTransactionSummaryStatusEnum>,
     ///  Sum of all transaction lines, converted to USD
     /// Source tier: T2
@@ -788,12 +794,12 @@ pub struct ExpenseReportTransactionSummary {
 
 }
 
-/// Source tier: T1
+/// Source tier: T3
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExpenseReportTransactionLinesItemCommonSourceDocumentsItem {
-    /// Source tier: T1
+    /// Source tier: T3
     pub filename: Option<String>,
-    /// Source tier: T1
+    /// Source tier: T3
     pub document_type: Option<ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeEnum>,
 
 }
@@ -835,8 +841,9 @@ pub struct ExpenseReportTransactionLinesItemCommon {
     /// Source tier: T3
     /// Infer from:  Conference registration → 'conference'; otherwise from context
     pub foreign_activity_type: Option<ExpenseReportTransactionLinesItemCommonForeignActivityTypeEnum>,
-    ///  References to uploaded documents supporting this line
-    /// Source tier: T1
+    ///  References to uploaded documents supporting this line. Filled by the extractor from the
+    /// same documents that produced the line's other fields.
+    /// Source tier: T3
     pub source_documents: Vec<ExpenseReportTransactionLinesItemCommonSourceDocumentsItem>,
 
 }

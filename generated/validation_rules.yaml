@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-generated_at_utc: '2026-04-28T00:19:32+00:00'
+generated_at_utc: '2026-05-02T22:29:32+00:00'
 field_rules:
 - path: expense_report
   node_kind: object
@@ -133,12 +133,12 @@ field_rules:
   rust_type: ExpenseReportGeneralInformationBusinessPurpose
   required: true
   required_expression: null
-  source: T3
-  effective_source: T3
+  source: T1
+  effective_source: T1
   depends_on: []
   allowed_values: []
   default: null
-  description: Structured purpose statement. First 30 chars of the combined text serve as a lookup key.
+  description: Structured purpose statement entered by the FA. First 30 chars of the combined text serve as a lookup key.
   infer_from: null
   validation: null
 - path: expense_report.general_information.business_purpose.who
@@ -148,12 +148,12 @@ field_rules:
   required: true
   required_expression: null
   source: null
-  effective_source: T3
+  effective_source: T1
   depends_on: []
   allowed_values: []
   default: null
   description: null
-  infer_from: Payee name and affiliation
+  infer_from: "Suggestion only \u2014 payee name and affiliation"
   validation: null
 - path: expense_report.general_information.business_purpose.what
   node_kind: field
@@ -162,12 +162,12 @@ field_rules:
   required: true
   required_expression: null
   source: null
-  effective_source: T3
+  effective_source: T1
   depends_on: []
   allowed_values: []
   default: null
   description: null
-  infer_from: Conference name from registration receipt; or meeting purpose from context
+  infer_from: "Suggestion only \u2014 conference name from registration receipt; or meeting purpose from context"
   validation: null
 - path: expense_report.general_information.business_purpose.when
   node_kind: field
@@ -176,12 +176,12 @@ field_rules:
   required: true
   required_expression: null
   source: null
-  effective_source: T3
+  effective_source: T1
   depends_on: []
   allowed_values: []
   default: null
   description: null
-  infer_from: Trip dates from flight itinerary
+  infer_from: "Suggestion only \u2014 trip dates from flight itinerary"
   validation: null
 - path: expense_report.general_information.business_purpose.where
   node_kind: field
@@ -190,12 +190,12 @@ field_rules:
   required: true
   required_expression: null
   source: null
-  effective_source: T3
+  effective_source: T1
   depends_on: []
   allowed_values: []
   default: null
   description: null
-  infer_from: Destination city/country from flight or hotel docs
+  infer_from: "Suggestion only \u2014 destination city/country from flight or hotel docs"
   validation: null
 - path: expense_report.general_information.business_purpose.why
   node_kind: field
@@ -204,12 +204,12 @@ field_rules:
   required: true
   required_expression: null
   source: null
-  effective_source: T3
+  effective_source: T1
   depends_on: []
   allowed_values: []
   default: null
   description: null
-  infer_from: Presenting at conference (if name appears in program), research collaboration, etc.
+  infer_from: "Suggestion only \u2014 presenting at conference (if name appears in program), research collaboration, etc."
   validation: null
 - path: expense_report.general_information.business_purpose.key_30char
   node_kind: field
@@ -217,13 +217,13 @@ field_rules:
   rust_type: String
   required: true
   required_expression: null
-  source: T2
-  effective_source: T2
+  source: T1
+  effective_source: T1
   depends_on: []
   allowed_values: []
   default: null
-  description: 'Auto-generated: <name_abbrev><advisor_initials><conference_abbrev>'
-  infer_from: Computed from payee name, advisor, and event name
+  description: 30-character lookup key entered by the FA
+  infer_from: null
   validation: null
 - path: expense_report.general_information.event_name
   node_kind: field
@@ -373,15 +373,15 @@ field_rules:
   rust_type: ExpenseReportTransactionSummaryTransactionTypeEnum
   required: true
   required_expression: null
-  source: T3
-  effective_source: T3
+  source: T1
+  effective_source: T1
   depends_on: []
   allowed_values:
   - domestic
   - foreign
   default: null
-  description: null
-  infer_from: Mirrors general_information.category
+  description: FA-entered. Typically matches general_information.category but the portal stores it as a separate field.
+  infer_from: null
   validation: null
 - path: expense_report.transaction_summary.transaction_number
   node_kind: field
@@ -408,8 +408,8 @@ field_rules:
   depends_on: []
   allowed_values: []
   default: null
-  description: null
-  infer_from: Date the report is filed, or earliest expense date
+  description: Date of the expense (earliest expense date across all receipts in the bundle).
+  infer_from: Earliest common.date across transaction_lines
   validation: null
 - path: expense_report.transaction_summary.status
   node_kind: field
@@ -417,8 +417,8 @@ field_rules:
   rust_type: ExpenseReportTransactionSummaryStatusEnum
   required: false
   required_expression: null
-  source: T2
-  effective_source: T2
+  source: T1
+  effective_source: T1
   depends_on: []
   allowed_values:
   - draft
@@ -427,7 +427,7 @@ field_rules:
   - returned
   - paid
   default: null
-  description: null
+  description: FA-entered submission state.
   infer_from: null
   validation: null
 - path: expense_report.transaction_summary.total_usd
@@ -640,12 +640,13 @@ field_rules:
   rust_type: Vec<ExpenseReportTransactionLinesItemCommonSourceDocumentsItem>
   required: true
   required_expression: null
-  source: T1
-  effective_source: T1
+  source: T3
+  effective_source: T3
   depends_on: []
   allowed_values: []
   default: null
-  description: References to uploaded documents supporting this line
+  description: References to uploaded documents supporting this line. Filled by the extractor from the same documents that
+    produced the line's other fields.
   infer_from: null
   validation: null
 - path: expense_report.transaction_lines[].common.source_documents[]
@@ -655,7 +656,7 @@ field_rules:
   required: false
   required_expression: null
   source: null
-  effective_source: T1
+  effective_source: T3
   depends_on: []
   allowed_values: []
   default: null
@@ -669,7 +670,7 @@ field_rules:
   required: false
   required_expression: null
   source: null
-  effective_source: T1
+  effective_source: T3
   depends_on: []
   allowed_values: []
   default: null
@@ -683,7 +684,7 @@ field_rules:
   required: false
   required_expression: null
   source: null
-  effective_source: T1
+  effective_source: T3
   depends_on: []
   allowed_values:
   - receipt
