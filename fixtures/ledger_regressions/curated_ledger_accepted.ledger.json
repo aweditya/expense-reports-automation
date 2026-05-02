@@ -4818,8 +4818,8 @@
                     "present": true,
                     "needs_review": false,
                     "required": true,
-                    "source": "T3",
-                    "entry_mode": "model_prefill_review",
+                    "source": "T1",
+                    "entry_mode": "user_confirmed_input",
                     "evidence": [
                       {
                         "kind": "document_span",
@@ -4842,8 +4842,8 @@
                     "present": true,
                     "needs_review": true,
                     "required": true,
-                    "source": "T3",
-                    "entry_mode": "model_prefill_review",
+                    "source": "T1",
+                    "entry_mode": "user_confirmed_input",
                     "evidence": [
                       {
                         "kind": "document_span",
@@ -4874,8 +4874,8 @@
                     "present": true,
                     "needs_review": false,
                     "required": true,
-                    "source": "T3",
-                    "entry_mode": "model_prefill_review",
+                    "source": "T1",
+                    "entry_mode": "user_confirmed_input",
                     "evidence": [
                       {
                         "kind": "document_span",
@@ -4922,8 +4922,8 @@
                     "present": true,
                     "needs_review": false,
                     "required": true,
-                    "source": "T3",
-                    "entry_mode": "model_prefill_review",
+                    "source": "T1",
+                    "entry_mode": "user_confirmed_input",
                     "evidence": [
                       {
                         "kind": "document_span",
@@ -4954,8 +4954,8 @@
                     "present": true,
                     "needs_review": true,
                     "required": true,
-                    "source": "T3",
-                    "entry_mode": "model_prefill_review",
+                    "source": "T1",
+                    "entry_mode": "user_confirmed_input",
                     "evidence": [
                       {
                         "kind": "document_span",
@@ -4986,8 +4986,8 @@
                     "present": true,
                     "needs_review": true,
                     "required": true,
-                    "source": "T2",
-                    "entry_mode": "computed_readonly",
+                    "source": "T1",
+                    "entry_mode": "user_confirmed_input",
                     "evidence": [
                       {
                         "kind": "document_span",
@@ -5137,8 +5137,8 @@
                     "present": true,
                     "needs_review": false,
                     "required": true,
-                    "source": "T3",
-                    "entry_mode": "model_prefill_review",
+                    "source": "T1",
+                    "entry_mode": "user_confirmed_input",
                     "evidence": [
                       {
                         "kind": "document_span",
@@ -5976,8 +5976,8 @@
                     "present": true,
                     "needs_review": false,
                     "required": false,
-                    "source": "T1",
-                    "entry_mode": "user_confirmed_input",
+                    "source": "T3",
+                    "entry_mode": "model_prefill_review",
                     "evidence": []
                   }
                 ]
@@ -6710,8 +6710,8 @@
                     "present": true,
                     "needs_review": false,
                     "required": false,
-                    "source": "T1",
-                    "entry_mode": "user_confirmed_input",
+                    "source": "T3",
+                    "entry_mode": "model_prefill_review",
                     "evidence": []
                   }
                 ]
@@ -7247,8 +7247,8 @@
                     "present": true,
                     "needs_review": false,
                     "required": false,
-                    "source": "T1",
-                    "entry_mode": "user_confirmed_input",
+                    "source": "T3",
+                    "entry_mode": "model_prefill_review",
                     "evidence": []
                   },
                   {
@@ -9807,8 +9807,8 @@
                     "present": true,
                     "needs_review": false,
                     "required": true,
-                    "source": "T3",
-                    "entry_mode": "model_prefill_review",
+                    "source": "T1",
+                    "entry_mode": "user_confirmed_input",
                     "evidence": [
                       {
                         "kind": "document_span",
@@ -9831,8 +9831,8 @@
                     "present": true,
                     "needs_review": true,
                     "required": true,
-                    "source": "T3",
-                    "entry_mode": "model_prefill_review",
+                    "source": "T1",
+                    "entry_mode": "user_confirmed_input",
                     "evidence": [
                       {
                         "kind": "document_span",
@@ -9863,8 +9863,8 @@
                     "present": true,
                     "needs_review": false,
                     "required": true,
-                    "source": "T3",
-                    "entry_mode": "model_prefill_review",
+                    "source": "T1",
+                    "entry_mode": "user_confirmed_input",
                     "evidence": [
                       {
                         "kind": "document_span",
@@ -9911,8 +9911,8 @@
                     "present": true,
                     "needs_review": false,
                     "required": true,
-                    "source": "T3",
-                    "entry_mode": "model_prefill_review",
+                    "source": "T1",
+                    "entry_mode": "user_confirmed_input",
                     "evidence": [
                       {
                         "kind": "document_span",
@@ -9943,8 +9943,8 @@
                     "present": true,
                     "needs_review": true,
                     "required": true,
-                    "source": "T3",
-                    "entry_mode": "model_prefill_review",
+                    "source": "T1",
+                    "entry_mode": "user_confirmed_input",
                     "evidence": [
                       {
                         "kind": "document_span",
@@ -9975,8 +9975,8 @@
                     "present": true,
                     "needs_review": true,
                     "required": true,
-                    "source": "T2",
-                    "entry_mode": "computed_readonly",
+                    "source": "T1",
+                    "entry_mode": "user_confirmed_input",
                     "evidence": [
                       {
                         "kind": "document_span",
@@ -10127,8 +10127,8 @@
                     "present": true,
                     "needs_review": false,
                     "required": true,
-                    "source": "T3",
-                    "entry_mode": "model_prefill_review",
+                    "source": "T1",
+                    "entry_mode": "user_confirmed_input",
                     "evidence": [
                       {
                         "kind": "document_span",
@@ -10966,8 +10966,8 @@
                     "present": true,
                     "needs_review": false,
                     "required": false,
-                    "source": "T1",
-                    "entry_mode": "user_confirmed_input",
+                    "source": "T3",
+                    "entry_mode": "model_prefill_review",
                     "evidence": []
                   }
                 ]
@@ -11700,8 +11700,8 @@
                     "present": true,
                     "needs_review": false,
                     "required": false,
-                    "source": "T1",
-                    "entry_mode": "user_confirmed_input",
+                    "source": "T3",
+                    "entry_mode": "model_prefill_review",
                     "evidence": []
                   }
                 ]
@@ -12237,8 +12237,8 @@
                     "present": true,
                     "needs_review": false,
                     "required": false,
-                    "source": "T1",
-                    "entry_mode": "user_confirmed_input",
+                    "source": "T3",
+                    "entry_mode": "model_prefill_review",
                     "evidence": []
                   },
                   {
