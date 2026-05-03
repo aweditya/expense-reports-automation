@@ -212,6 +212,15 @@ def main() -> int:
         print(f"FAILED to parse JSON. Raw -> {raw_path}, diag -> {err_path}", file=sys.stderr)
         return 1
 
+    # Inject source_filename — system context, not extracted by Gemini.
+    # Reduction reads this to populate ExpenseReport.source_documents.
+    if isinstance(parsed, list):
+        for entry in parsed:
+            if isinstance(entry, dict):
+                entry["source_filename"] = args.image.name
+    elif isinstance(parsed, dict):
+        parsed["source_filename"] = args.image.name
+
     args.output.write_text(json.dumps(parsed, indent=2, ensure_ascii=False))
     print(f"wrote {args.output}")
     return 0

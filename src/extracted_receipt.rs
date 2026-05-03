@@ -14,10 +14,18 @@ use crate::expense_report_model::ExpenseReportTransactionLinesItem;
 use crate::meta::Wrapped;
 
 /// One receipt as it comes out of the Python extractor: the schema-shaped
-/// transaction line plus the extracted `extras`. Stored one-per-file under
-/// `.scratch/spike/<name>.json` (today; production path TBD).
+/// transaction line plus the extracted `extras` plus the source filename.
+/// Stored one-per-file under `.scratch/spike/<name>.json` (today; production
+/// path TBD).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ExtractedReceipt {
+    /// Original FA-uploaded filename including extension (e.g.
+    /// "mjsushi.jpeg"). Injected by the extractor post-Gemini-call from the
+    /// input filename — Gemini doesn't extract this from receipt content.
+    /// Reduction uses this to populate
+    /// ExpenseReport.transaction_lines[].common.source_documents[].filename.
+    #[serde(default)]
+    pub source_filename: String,
     pub expense_kind: String,
     /// Schema-shaped fields. `#[serde(flatten)]` reads `common`/`meal_details`/etc.
     /// into the existing `ExpenseReportTransactionLinesItem` shape.
@@ -51,6 +59,7 @@ mod tests {
         // Trimmed mirror of .scratch/spike/mjsushi.json shape.
         let json = r#"[
             {
+                "source_filename": "mjsushi.jpeg",
                 "expense_kind": "meal",
                 "common": {
                     "date": {"value": "2026-05-02", "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}},
@@ -84,6 +93,7 @@ mod tests {
         let receipts: Vec<ExtractedReceipt> = serde_json::from_str(json).expect("deserialize");
         assert_eq!(receipts.len(), 1);
         let r = &receipts[0];
+        assert_eq!(r.source_filename, "mjsushi.jpeg");
         assert_eq!(r.expense_kind, "meal");
         // Schema-shaped fields flow through #[serde(flatten)] into `line`.
         assert!((r.line.common.line_amount_usd.value.unwrap() - 79.59).abs() < 1e-9);
