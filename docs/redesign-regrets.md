@@ -20,6 +20,43 @@ Keep entries short. The point is recall, not narrative.
 
 ## Entries
 
+### 2026-05-03 — committed visual code without eyeballing the output first
+
+**What happened:** Wrote `src/workbench_simple.rs` + CSS for M7.b, ran the
+unit tests, and immediately wrote a long commit message claiming the
+renderer was done. Only when the user asked for a preview did I render
+the actual HTML — and it had three real visual bugs (line cards getting
+cropped, an orphan `▸` in the wrong position, tooltip not appearing on
+hover). The user had to catch them.
+
+**Why it was wrong:** Unit tests verify the code runs without crashing
+and produces the expected substrings. They do NOT verify the rendered
+output looks right. For any code whose deliverable is a visual or output
+artifact (HTML, JSON, a generated file, an image), "tests pass" is not
+the same as "it works." The artifact has to be looked at.
+
+**Rule going forward:** Code that produces a user-visible artifact gets
+the artifact rendered and inspected by me (or shown to the user) BEFORE
+the commit lands. The check is: "did I open the output and look at it?"
+If no — don't commit yet. Particularly applies to: HTML renderers, JSON
+serializers with new shapes, anything generating a script the user will
+run.
+
+### 2026-05-03 — added a binary without flagging it
+
+**What happened:** Created `src/bin/render_workbench_preview.rs` as a
+preview tool for M7.b without first telling the user "I'm adding a one-
+off binary." Surfaced it in the response after the fact.
+
+**Why it was wrong:** "No code bloat" + "explain why before changing"
+both apply to new files, even small throwaway ones. Sneaking in an
+unflagged file under "I'm just making something work" is exactly how
+the codebase accretes one-offs.
+
+**Rule going forward:** Any new file gets named in the plan or the
+preceding message before it's created. Even one-off scripts. Especially
+one-off scripts — those are the ones that live forever uncalled.
+
 ### 2026-05-03 — used `/tmp/..` in a heredoc cleanup
 
 **What happened:** Tried `cat > /tmp/.. /dev/null 2>&1 || true` as a no-op.

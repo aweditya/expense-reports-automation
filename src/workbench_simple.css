@@ -198,46 +198,59 @@ body {
 .line-card {
   border: 1px solid #e5e7eb;
   border-radius: 6px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   background: #fff;
   overflow: hidden;
 }
-.line-card[open] { background: #fafafa; }
 .line-summary {
   display: grid;
-  grid-template-columns: 32px 1fr auto auto auto;
+  grid-template-columns: 14px 32px 1fr auto auto auto;
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
+  gap: 14px;
+  padding: 12px 16px;
   cursor: pointer;
   font-size: 13px;
   list-style: none;
   background: #fff;
+  border-bottom: 1px solid transparent;
 }
 .line-summary::-webkit-details-marker { display: none; }
-.line-summary::before {
-  content: "▸";
-  color: #9ca3af;
-  font-size: 10px;
-  margin-right: -8px;
-  transition: transform 0.1s;
+.line-card[open] .line-summary { border-bottom-color: #f3f4f6; }
+.line-chev {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 6px solid #9ca3af;
+  transition: transform 0.15s ease;
 }
-.line-card[open] .line-summary::before { transform: rotate(90deg); }
+.line-card[open] .line-chev { transform: rotate(90deg); }
 .line-index {
   font-family: ui-monospace, "SF Mono", Monaco, Consolas, monospace;
   font-size: 12px;
-  color: #6b7280;
+  color: #9ca3af;
 }
-.line-venue { font-weight: 500; }
+.line-venue { font-weight: 600; color: #111827; }
 .line-date, .line-kind { color: #6b7280; font-size: 12px; }
-.line-amount { font-weight: 600; }
-.line-card[open] > .field-grid,
-.line-card[open] > .subsection-title,
-.line-card[open] > h4.subsection-title {
-  padding: 0 14px;
+.line-amount { font-weight: 600; color: #111827; }
+.line-body { padding: 14px 16px 16px; }
+.line-body .subsection-title {
+  margin: 18px 0 10px;
 }
-.line-card > .field-grid { padding: 0 14px 14px; }
-.line-card > h4.subsection-title { padding: 0 14px; margin-top: 14px; }
+.line-body .field-grid + .subsection-title {
+  border-top: 1px solid #f3f4f6;
+  padding-top: 14px;
+}
+
+/* Inline evidence quote (always visible, no hover) ────────────────────── */
+.field-evidence {
+  margin: 4px 0 0;
+  font-size: 11px;
+  font-style: italic;
+  color: #9ca3af;
+  line-height: 1.4;
+}
 
 /* Source documents ────────────────────────────────────────────────────── */
 .doc-grid {

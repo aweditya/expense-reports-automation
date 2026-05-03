@@ -41,8 +41,8 @@ pub fn render_workbench_html(
         render_issues_panel(&mut html, validation);
     }
     render_general_information(&mut html, &report.general_information);
-    render_transaction_summary(&mut html, &report.transaction_summary);
     render_transaction_lines(&mut html, report);
+    render_transaction_summary(&mut html, &report.transaction_summary);
     render_source_documents(&mut html, receipts);
 
     html.push_str("</div>\n</body>\n</html>\n");
@@ -290,16 +290,18 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
     html.push_str(&format!(
         "<details class=\"line-card\" open>\n\
          <summary class=\"line-summary\">\
+           <span class=\"line-chev\" aria-hidden=\"true\"></span>\
            <span class=\"line-index\">#{}</span>\
            <span class=\"line-venue\">{}</span>\
-           <span class=\"line-date\">{}</span>\
            <span class=\"line-kind\">{}</span>\
+           <span class=\"line-date\">{}</span>\
            <span class=\"line-amount\">{}</span>\
-         </summary>\n",
+         </summary>\n\
+         <div class=\"line-body\">\n",
         idx + 1,
         escape(if venue.is_empty() { "(no venue)" } else { venue }),
-        escape(&summary_date),
         escape(&summary_kind),
+        escape(&summary_date),
         escape(&summary_amount),
     ));
 
@@ -322,7 +324,7 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
         html.push_str("</div>\n");
     }
 
-    html.push_str("</details>\n");
+    html.push_str("</div>\n</details>\n");
 }
 
 fn render_meal_details(html: &mut String, meal: &ExpenseReportTransactionLinesItemMealDetails, path: &str) {
@@ -410,29 +412,32 @@ fn field_card_inner(html: &mut String, label: &str, path: &str, value: &str, met
     } else {
         ""
     };
-    let evidence_tooltip = meta
+    // Inline evidence: only the quote (skip origin codes — those are
+    // internal markers like "not_applicable_for_domestic" that aren't
+    // useful to the FA). Always visible under the value when present.
+    let evidence_quote = meta
         .evidence
         .iter()
-        .filter_map(|e| e.quote.as_deref().or(e.origin.as_deref()))
-        .next()
+        .find_map(|e| e.quote.as_deref())
         .unwrap_or("");
-    let title_attr = if evidence_tooltip.is_empty() {
+    let evidence_block = if evidence_quote.is_empty() {
         String::new()
     } else {
-        format!(" title=\"{}\"", escape(evidence_tooltip))
+        format!("<p class=\"field-evidence\">“{}”</p>", escape(evidence_quote))
     };
 
     html.push_str(&format!(
-        "<div class=\"field-card\" id=\"{}\"{}>\
+        "<div class=\"field-card\" id=\"{}\">\
            <p class=\"field-label\">{}</p>\
            <p class=\"field-value\">{} <span class=\"conf-dot {}\"></span></p>\
            {}\
+           {}\
          </div>\n",
         field_anchor(path),
-        title_attr,
         escape(label),
         escape(value),
         conf_class,
+        evidence_block,
         needs_review_tag,
     ));
 }

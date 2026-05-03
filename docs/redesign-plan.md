@@ -307,13 +307,24 @@ Why we did this:
 
   - **M7.c — `src/bin/render_workbench_from_report.rs` —
     orchestration binary.** Takes `--report <ExpenseReport JSON>` and
-    `--bundle-dir <upload dir>`. Reads the typed report, runs the
-    existing validator (via small adapter), emits the HTML. ~100 lines.
+    `--receipts-dir <dir>`. Reads the typed report and the per-receipt
+    extractions, emits the HTML. Validator hookup deferred to M7.d
+    (need to confirm what shape the validator actually wants to read).
+    ~80 lines. Replaces the throwaway `render_workbench_preview`
+    binary, which gets removed in this commit.
+    UI-validation step: after writing the binary, render against the
+    real spike outputs and confirm the page looks identical to the
+    preview we already eyeballed.
 
   - **M7.d — `scripts/local_app_simple.py` — the new HTTP server.**
-    One POST `/upload` endpoint (multipart files → spike_extract per
-    file → reduce_extractions → render_workbench_from_report → return
-    HTML). One GET `/` for the upload form. Synchronous. ~150 lines.
+    Two endpoints:
+      GET  /          → upload form (one file input that accepts multiple)
+      POST /upload    → save uploads → spike_extract per file (sequential)
+                        → reduce_extractions → render_workbench → return HTML
+    Synchronous. No job queue, no polling, no session state. ~200 lines.
+    UI-validation step: run the server locally, upload the four real
+    receipts via the browser, see the workbench render, click the
+    issue-jump links, expand/collapse the transaction lines.
 
   - **M7.e — Dockerfile + cloudbuild updates.** Copy
     `scripts/spike_extract.py`, `scripts/local_app_simple.py`, the
@@ -353,12 +364,25 @@ Why we did this:
 
 ## Current step
 
-**M7.a (next).** Move the old workbench files into `old/` so the new
-minimal workbench can be built fresh in the cleared namespace. No
-deletion — the old files come back later via M8 if we never re-use them.
+**M7.c (next).** Wire the new pipeline into the local app via a small
+synchronous HTTP server. Two locked principles for this phase:
 
-After M7.a: M7.b writes the new HTML renderer (`src/workbench_simple.rs`),
-preserving the old visual language but on a much smaller surface.
+1. **UI-driven validation.** From M7.c onward, every backend change is
+   validated by rendering it in the workbench and looking at the result
+   — not by cargo tests alone. The workbench preview is the verdict at
+   the local stage; Cloud Run is the verdict at the deploy stage.
+2. **Keep things simple.** No async jobs, no editable inputs yet, no
+   "save as PDF" yet. One POST endpoint that runs extract → reduce →
+   render. The full feature set comes in subsequent milestones.
+
+**M7.a (done, commit `a5566f2`):** Old workbench moved to `old/` with
+`#[path]` attributes preserving the import surface.
+
+**M7.b (done, commits `a035907` + the M7.b.1 fixes that followed):**
+New HTML renderer (`src/workbench_simple.rs` + CSS), inline CSS, no JS,
+collapsible transaction lines, inline evidence quotes (always visible,
+no hover), section order: General Info → Transaction Lines → Summary
+→ Source Documents.
 
 ## Mistakes I'm watching for during M5
 

@@ -26,11 +26,20 @@ Outside the redesign, the historical scope (UI-only) still applies.
 6. **CLI testing is sanity-only. The deployed Cloud Run site is the verdict.**
    Local CLI runs prove the loop works; the final yes/no comes from observing
    the hosted app on real receipts.
-7. **Track mistakes in `docs/redesign-regrets.md`** so they don't recur. Add
+7. **Eyeball the artifact before claiming code is done.** For any code that
+   produces a user-visible artifact (HTML, JSON, generated files), render
+   the artifact and look at it before the commit lands. Unit tests check
+   "doesn't crash"; they do not check "looks right." Once the workbench
+   exists, that means *open it in a browser and verify the change looks
+   correct* — not just running cargo tests.
+8. **Track mistakes in `docs/redesign-regrets.md`** so they don't recur. Add
    an entry every time a mistake is caught, by me or by the user.
-8. **Never trust a piped command's exit code.** `cmd | tee | tail; echo $?`
+9. **Never trust a piped command's exit code.** `cmd | tee | tail; echo $?`
    captures the last command's exit, not the first. Either run unpiped, set
    `pipefail`, or inspect the output for FAILED markers before declaring success.
+10. **Flag every new file before creating it.** Even small one-off scripts.
+    "I'm adding `path/to/foo.rs` to do X" before the file appears, never
+    after. One-off scripts are exactly the files that live forever uncalled.
 
 ## Working style
 
