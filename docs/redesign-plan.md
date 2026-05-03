@@ -127,9 +127,38 @@ the decision until M6.
     cases), venue (substring), has_alcohol_on_receipt. With `--run` it
     re-invokes the extractor first (3 Gemini calls). All three receipts
     PASS.
-- [ ] **M6. Reduction step (Rust).** New module: list of typed lines (read
-  from the JSON files Python wrote) → `general_information` block +
-  `transaction_summary` + `per_diem_expenses`. Pure functions. Commit.
+- [ ] **M6. Reduction step (Rust).** Two phases:
+
+  **M6.1 — Wrap leaves in `Wrapped<T>` so Python's JSON deserializes
+  directly into the generated Rust types.** Removes the duplication risk
+  of hand-writing parallel `ExtractedTransactionLine` types. The schema's
+  `_meta_convention` exists precisely for this; the codegen has been
+  ignoring it. Provenance flows end-to-end after this lands. Sub-commits:
+    - **M6.1.a** Add `Wrapped<T>` and `Meta` types in a new `src/meta.rs`.
+      Hand-written, ~80 lines. Unit tests for round-trip and default-meta.
+    - **M6.1.b** Modify `scripts/generate_schema_artifacts.py` to wrap
+      every leaf field's Rust type as `Wrapped<T>`. Regenerate. `cargo
+      build` should pass; many tests will then fail to compile.
+    - **M6.1.c** Fix every compiler error across the Rust codebase. Two
+      patterns: reads add `.value`, constructions wrap with
+      `Wrapped::known()`. Touches `validator.rs`, `bundle_synthesis.rs`,
+      `draft.rs`, all tests, etc. If the diff balloons past ~20 files,
+      split into per-module sub-commits. End state: `cargo test` and
+      `python3 -m unittest discover -s tests` both green.
+    - **M6.1.d** Refresh ledger/review/workbench regression fixtures via
+      the export binaries (same machinery as M3).
+    - **M6.1.e** Verify Python's spike output (`.scratch/spike/*.json`)
+      deserializes into the regenerated transaction-line type. This is
+      the proof that the duplication gap closed — same Rust type for
+      both extracted-from-Python and report-state.
+
+  **M6.2 — Reduction function over `Vec<ExpenseReportTransactionLine>`.**
+  A small library of named reductions (sum, earliest, foreign-presence)
+  in a single `src/reduce.rs`. Aggregates per-bundle into a complete
+  `ExpenseReport`. Per-diem expansion deferred. Plus a binary
+  `src/bin/reduce_extractions.rs` that reads a directory of JSON files
+  and writes one report. Acceptance harness extended to exercise the
+  end-to-end Python -> Rust path on the four real receipts.
 - [ ] **M7. Wire into workbench, deploy, validate on real receipts.** Make the
   workbench render the new typed report. Strip the parts that depend on the
   old pipeline. Deploy to Cloud Run. **Verdict from the deployed site on the 3
@@ -156,16 +185,16 @@ the decision until M6.
 
 ## Current step
 
-**M6 (next).** Rust reduction step. New module that reads the typed JSON
-files Python writes (one transaction line per file), aggregates them per
-bundle, and produces `general_information` + `transaction_summary` +
-`per_diem_expenses`. Pure functions, unit-tested. Output is what Pass 2
-(`validator.rs`) and the workbench will consume.
+**M6.1.a (next).** Add `src/meta.rs` with `Wrapped<T>`, `Meta`,
+`Confidence`, `EvidencePtr`, `EvidenceKind`. Hand-written, serde-derived,
+defaults on `Meta` so no-meta JSON still deserializes. Unit tests for
+round-trip + default-meta + `Wrapped::known()` constructor. No other
+code touched yet.
 
-The acceptance harness (`scripts/spike_acceptance_check.py`) is the
-moat against future regressions in the Python extractor — re-run with
-`--run` whenever the prompt or schema changes, before designing
-downstream Rust around new JSON.
+After M6.1.a: M6.1.b modifies the codegen to wrap leaves; expect a
+medium-sized regenerated `expense_report_model.rs` diff and a much
+larger downstream "fix all callers" sub-commit (M6.1.c) where the
+compiler enumerates the work.
 
 ## Mistakes I'm watching for during M5
 
