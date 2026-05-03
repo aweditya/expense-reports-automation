@@ -115,6 +115,12 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_KEY,
         help=f"Service account key for --run (default: {DEFAULT_KEY.name}).",
     )
+    parser.add_argument(
+        "--end-to-end",
+        action="store_true",
+        help="After per-receipt checks, run the Rust reduction binary and "
+        "assert the aggregated ExpenseReport.",
+    )
     return parser.parse_args()
 
 
@@ -198,12 +204,64 @@ def main() -> int:
         else:
             print(f"PASS  {output.name}")
 
+    if args.end_to_end:
+        total_failures += run_end_to_end_check()
+
     print()
     if total_failures == 0:
         print(f"OK — all {len(RECEIPTS)} receipts pass.")
         return 0
     print(f"FAILED — {total_failures} assertion(s) across {len(RECEIPTS)} receipts.")
     return 1
+
+
+def run_end_to_end_check() -> int:
+    """Run the Rust reduction binary and assert the aggregated ExpenseReport
+    looks right. Returns the number of failed assertions (0 = pass)."""
+    print()
+    print("end-to-end: running cargo reduce_extractions ...")
+    out_path = REPO_ROOT / ".scratch" / "reduced" / "report.json"
+    result = subprocess.run(
+        ["cargo", "run", "--quiet", "--bin", "reduce_extractions"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print(f"FAIL  reduce_extractions exited {result.returncode}: {result.stderr.strip()}")
+        return 1
+
+    if not out_path.exists():
+        print(f"FAIL  reduced report not found at {out_path}")
+        return 1
+
+    report = json.loads(out_path.read_text())
+    expected_total = 163.54 + 123.19 + 387.12 + 79.59  # 753.44
+    expectations = {
+        "transaction_summary.total_usd": expected_total,
+        "transaction_summary.transaction_date.value": "2026-03-05",
+        "general_information.category.value": "expenses_domestic",
+    }
+
+    failures = 0
+    for path, expected in expectations.items():
+        actual = lookup(report, path)
+        if isinstance(expected, float):
+            ok = isinstance(actual, (int, float)) and abs(actual - expected) < 1e-9
+        else:
+            ok = actual == expected
+        if not ok:
+            print(f"FAIL  reduced.{path}: expected {expected!r}, got {actual!r}")
+            failures += 1
+
+    line_count = len(report.get("transaction_lines") or [])
+    if line_count != len(RECEIPTS):
+        print(f"FAIL  reduced.transaction_lines: expected {len(RECEIPTS)} lines, got {line_count}")
+        failures += 1
+
+    if failures == 0:
+        print(f"PASS  reduced report — {line_count} lines, total ${report['transaction_summary']['total_usd']:.2f}")
+    return failures
 
 
 if __name__ == "__main__":
