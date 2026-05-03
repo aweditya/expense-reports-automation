@@ -248,29 +248,19 @@ Why we did this:
     `.scratch/reduced/report.json`. Acceptance harness extended with a
     new `--end-to-end` mode that runs extract → reduce → asserts the
     aggregated report has 4 lines, total = sum, etc.
-- [ ] **M6.5 — Hardening pass before M7 wires the workbench.** Captured
-  during the M6.2.d retrospective; proceed with these *after* M6.2 lands
-  and *before* M7 starts touching the workbench. Ordered by risk:
-  - **M6.5.a Round-trip test for schema/Python alignment.** Take a known
-    Python output, deserialize into the typed Rust model, re-serialize,
-    diff. Catches silent field drops and silent renames that
-    `serde(default)` masks today. ~30 lines, lives next to the meta
-    unit tests.
-  - **M6.5.b `response_schema` validator script.** Calls
-    `genai.types.Schema.model_validate(...)` on
-    `generated/response_schema_meal.json` and exits non-zero on rejection.
-    Catches "Gemini won't accept this" at codegen time, not at extract
-    time. Wire into a manual run; consider Cloud Build later.
-  - **M6.5.c Pin one acceptance receipt against a recorded Gemini
-    response.** Save the model's response for tamarine (most stable,
-    most information-rich) and replay it in the harness. Lets us test
-    the deserialization + reduction layers without paying for API calls
-    or fighting flake (mels2's date came back as 2024 once).
-  - **M6.5.d Decide on `_meta` codegen (or accept the gap).** `Wrapped<T>`
-    and `FieldMetadata` are hand-written; the schema's `_meta_convention`
-    block doesn't drive codegen. Either codegen `Meta` from the YAML, or
-    document the gap explicitly. Small file, low burden — could go
-    either way.
+- [x] **M6.5 — Hardening pass.** Done as one focused round-trip check
+  (`src/bin/roundtrip_check.rs`) plus the fixes it surfaced.
+  - Surfaced: Rust was *adding* fields on serialize that Python omitted
+    (Option::None → null, empty Vec → []). ~50 mismatches per file.
+  - Fixed by emitting `skip_serializing_if = "Option::is_none"` /
+    `"Vec::is_empty"` from the codegen, and on `EvidenceReference`'s 5
+    pre-codegen Option fields in `src/draft.rs`.
+  - Acceptance harness now runs the round-trip check by default (no
+    Gemini cost). 4/4 PASS.
+  - Skipped explicitly: M6.5.b (response_schema validator — Gemini
+    fails loudly enough at runtime); M6.5.c (recorded responses —
+    flake bound by predicate tolerance); M6.5.d (_meta codegen —
+    hand-written is fine).
 - [ ] **M7. Wire into workbench, deploy, validate on real receipts.** Make the
   workbench render the new typed report. Strip the parts that depend on the
   old pipeline. Deploy to Cloud Run. **Verdict from the deployed site on the 3
@@ -297,13 +287,23 @@ Why we did this:
 
 ## Current step
 
-**M6.2.a (next).** Revert money fields to `f64` end-to-end.
+**M7 (next).** Wire the new pipeline into the workbench, deploy to
+Cloud Run, validate on the four real receipts via the deployed site.
 
-After M6.2.a: M6.2.b changes the codegen wrapping rule from
-"every leaf" to "T3 leaves only" — this dissolves the array-shape
-mismatch carried over from M6.1 because source_documents/attendees
-items end up with bare fields, which is what Gemini's response_schema
-already accepts.
+The redesigned pipeline is end-to-end working at the CLI:
+  receipts/*.{jpeg,png} → spike_extract.py (Gemini structured output)
+  → .scratch/spike/*.json → reduce_extractions binary
+  → .scratch/reduced/report.json (typed ExpenseReport)
+
+What M7 needs:
+- An adapter from the new ExpenseReport into whatever the workbench
+  renderer consumes today (likely DraftReport — needs a From impl, or
+  the workbench reader gets rewritten to take ExpenseReport directly).
+- The local app's job runner (scripts/local_app_job_runner.py) needs to
+  invoke the new spike_extract.py + reduce_extractions binary instead
+  of the old transcribe → ingest path.
+- Deploy via Cloud Build push to main.
+- Cloud Run verdict on the real receipts.
 
 ## Mistakes I'm watching for during M5
 
