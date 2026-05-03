@@ -7,6 +7,7 @@ pub mod document_ai;
 pub mod document_extract;
 pub mod document_facts;
 pub mod draft;
+pub mod extracted_receipt;
 #[path = "../generated/expense_report_model.rs"]
 pub mod expense_report_model;
 pub mod feedback;

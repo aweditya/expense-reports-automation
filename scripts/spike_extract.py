@@ -64,6 +64,16 @@ enforced by the response schema — fill the values from the receipt.
 - Fill from the merchant address when present (city/state/country gives the
   country). Pass 2 will null this for domestic expenses if needed.
 
+`extras.merchant_address`:
+- The full printed merchant address (street + city + region + country, if
+  any are visible). This is the raw text; reduction parses it later.
+
+`extras.printed_currency`:
+- The currency literally on the receipt. ISO 4217 code if you see one
+  (e.g. `USD`, `SGD`, `EUR`). Otherwise infer from a printed symbol
+  (`$` alone is most likely USD; £ is GBP; € is EUR; ¥ is JPY/CNY —
+  use medium confidence and let reduction disambiguate).
+
 `has_alcohol_on_receipt` and `alcohol_amount`:
 - `has_alcohol_on_receipt` is true if ANY line item is alcohol (cocktail,
   beer, wine, etc.), even if the price is zero ("on the house").

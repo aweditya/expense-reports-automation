@@ -137,6 +137,34 @@ def meal_details_block_schema() -> dict:
     }
 
 
+def extras_block_schema() -> dict:
+    """Per-receipt extras — extracted from the receipt but NOT submitted to
+    the FA portal. Reduction reads these to derive schema fields the model
+    can't know in isolation (foreign vs domestic, original currency, FX).
+    See Architecture B in docs/redesign-plan.md.
+    """
+    return {
+        "type": "object",
+        "properties": {
+            "merchant_address": leaf(
+                {
+                    "type": "string",
+                    "nullable": True,
+                    "description": "Full printed merchant address (street + city + region + country if visible).",
+                }
+            ),
+            "printed_currency": leaf(
+                {
+                    "type": "string",
+                    "nullable": True,
+                    "description": "ISO 4217 code if printed, else best-effort (e.g. 'USD' from a $ sign).",
+                }
+            ),
+        },
+        "required": ["merchant_address", "printed_currency"],
+    }
+
+
 def transaction_line_schema(expense_type_values: list[str]) -> dict:
     return {
         "type": "object",
@@ -144,8 +172,9 @@ def transaction_line_schema(expense_type_values: list[str]) -> dict:
             "expense_kind": {"type": "string", "enum": ["meal"]},
             "common": common_block_schema(expense_type_values),
             "meal_details": meal_details_block_schema(),
+            "extras": extras_block_schema(),
         },
-        "required": ["expense_kind", "common", "meal_details"],
+        "required": ["expense_kind", "common", "meal_details", "extras"],
     }
 
 

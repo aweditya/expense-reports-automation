@@ -47,6 +47,8 @@ RECEIPTS = [
             "meal_details.venue_name.value": lambda v: v
             and "MJ Sushi" in v,
             "meal_details.has_alcohol_on_receipt.value": True,
+            "extras.printed_currency.value": "USD",
+            "extras.merchant_address.value": lambda v: v and "Palo Alto" in v,
         },
     },
     {
@@ -61,6 +63,8 @@ RECEIPTS = [
             "meal_details.venue_name.value": lambda v: v
             and "Original Mels" in v,
             "meal_details.has_alcohol_on_receipt.value": False,
+            "extras.printed_currency.value": "USD",
+            "extras.merchant_address.value": lambda v: v and "San Leandro" in v,
         },
     },
     {
@@ -75,6 +79,8 @@ RECEIPTS = [
             "meal_details.venue_name.value": lambda v: v
             and "Tamarine" in v,
             "meal_details.has_alcohol_on_receipt.value": True,
+            "extras.printed_currency.value": "USD",
+            "extras.merchant_address.value": lambda v: v and "Palo Alto" in v,
         },
     },
     {
@@ -89,6 +95,8 @@ RECEIPTS = [
             in ("business_meal", "business_meal_with_alcohol"),
             "meal_details.venue_name.value": lambda v: v and "MJ Sushi" in v,
             "meal_details.has_alcohol_on_receipt.value": True,
+            "extras.printed_currency.value": "USD",
+            "extras.merchant_address.value": lambda v: v and "Palo Alto" in v,
         },
     },
 ]
