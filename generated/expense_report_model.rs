@@ -25,9 +25,10 @@ impl From<&str> for IsoDate {
 /// Source tier: T3
 /// Infer from:  Destination in flight/hotel docs. Foreign destination → expenses_foreign;
 /// Infer from: domestic → expenses_domestic. Other categories require explicit context.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExpenseReportGeneralInformationCategoryEnum {
+    #[default]
     ExpensesDomestic,
     ExpensesForeign,
     AthleticUseOnly,
@@ -73,9 +74,10 @@ impl core::fmt::Display for ExpenseReportGeneralInformationCategoryEnum {
 
 /// Source tier: T3
 /// Infer from:  Context from uploaded docs or FA input
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExpenseReportGeneralInformationPayeeAffiliationEnum {
+    #[default]
     StanfordStudent,
     StanfordPostdoc,
     StanfordFaculty,
@@ -118,9 +120,10 @@ impl core::fmt::Display for ExpenseReportGeneralInformationPayeeAffiliationEnum 
 
 ///  Defaults to 'no' unless explicitly requested
 /// Source tier: T1
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExpenseReportGeneralInformationRushProcessingEnum {
+    #[default]
     Yes,
     No,
 }
@@ -155,9 +158,10 @@ impl core::fmt::Display for ExpenseReportGeneralInformationRushProcessingEnum {
 ///  FA-entered. Typically matches general_information.category but the portal stores it as a
 /// separate field.
 /// Source tier: T1
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExpenseReportTransactionSummaryTransactionTypeEnum {
+    #[default]
     Domestic,
     Foreign,
 }
@@ -191,9 +195,10 @@ impl core::fmt::Display for ExpenseReportTransactionSummaryTransactionTypeEnum {
 
 ///  FA-entered submission state.
 /// Source tier: T1
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExpenseReportTransactionSummaryStatusEnum {
+    #[default]
     Draft,
     Submitted,
     Approved,
@@ -236,9 +241,10 @@ impl core::fmt::Display for ExpenseReportTransactionSummaryStatusEnum {
 
 /// Source tier: T3
 /// Infer from:  LLM classifies from receipt content
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExpenseReportTransactionLinesItemCommonExpenseTypeEnum {
+    #[default]
     AdjustedPerDiem,
     AirfareDomestic,
     AirfareForeign,
@@ -321,9 +327,10 @@ impl core::fmt::Display for ExpenseReportTransactionLinesItemCommonExpenseTypeEn
 /// Conditionally required when:  general_information.category == expenses_foreign
 /// Source tier: T3
 /// Infer from:  Conference registration → 'conference'; otherwise from context
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExpenseReportTransactionLinesItemCommonForeignActivityTypeEnum {
+    #[default]
     Conference,
     ResearchCollaboration,
     Fieldwork,
@@ -363,9 +370,10 @@ impl core::fmt::Display for ExpenseReportTransactionLinesItemCommonForeignActivi
 
 ///  Document kind chosen by the FA at upload time.
 /// Source tier: T1
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeEnum {
+    #[default]
     Receipt,
     BookingConfirmation,
     PriceComparison,
@@ -414,9 +422,10 @@ impl core::fmt::Display for ExpenseReportTransactionLinesItemCommonSourceDocumen
 
 /// Source tier: T3
 /// Infer from:  Booking confirmation format/header; default 'other' if unrecognized
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExpenseReportTransactionLinesItemAirfareDetailsBookingMethodEnum {
+    #[default]
     StanfordTravelEgencia,
     StanfordTravelKeyTravel,
     StanfordTravelConnectUa,
@@ -468,9 +477,10 @@ impl core::fmt::Display for ExpenseReportTransactionLinesItemAirfareDetailsBooki
 
 /// Source tier: T3
 /// Infer from:  Booking confirmation
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExpenseReportTransactionLinesItemAirfareDetailsClassOfTicketEnum {
+    #[default]
     Coach,
     PremiumEconomy,
     Business,
@@ -509,9 +519,10 @@ impl core::fmt::Display for ExpenseReportTransactionLinesItemAirfareDetailsClass
 }
 
 /// Source tier: T2
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonSourceEnum {
+    #[default]
     PayeeProvided,
     SystemGenerated,
 }
@@ -545,9 +556,10 @@ impl core::fmt::Display for ExpenseReportTransactionLinesItemAirfareDetailsPrice
 
 /// Source tier: T3
 /// Infer from:  If hotel matches conference venue → conference_hotel; else check booking source
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExpenseReportTransactionLinesItemLodgingDetailsBookingMethodEnum {
+    #[default]
     ConferenceHotel,
     StanfordTravelEgencia,
     StanfordTravelKeyTravel,
@@ -588,9 +600,10 @@ impl core::fmt::Display for ExpenseReportTransactionLinesItemLodgingDetailsBooki
 /// Source tier: T3
 /// Infer from:  Destination from flight/hotel docs determines domestic vs. international;
 /// Infer from: location determines AK/HI vs. continental
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExpenseReportPerDiemExpensesItemExpenseTypeEnum {
+    #[default]
     AlaskaHawaiiLodging,
     AlaskaHawaiiMeals,
     ContinentalUsLodging,
@@ -637,9 +650,10 @@ impl core::fmt::Display for ExpenseReportPerDiemExpensesItemExpenseTypeEnum {
 /// Conditionally required when:  expense_type in [international_lodging, international_meals]
 /// Source tier: T3
 /// Infer from:  Inferred from conference registration or trip context
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExpenseReportPerDiemExpensesItemForeignActivityTypeEnum {
+    #[default]
     Conference,
     ResearchCollaboration,
     Fieldwork,
@@ -679,7 +693,7 @@ impl core::fmt::Display for ExpenseReportPerDiemExpensesItemForeignActivityTypeE
 
 ///  Person being reimbursed
 /// Source tier: T3
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportGeneralInformationPayee {
     /// Source tier: T3
     /// Infer from:  Traveler name on flight booking or hotel folio
@@ -695,7 +709,7 @@ pub struct ExpenseReportGeneralInformationPayee {
 ///  Structured purpose statement entered by the FA. First 30 chars of the combined text serve
 /// as a lookup key.
 /// Source tier: T1
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportGeneralInformationBusinessPurpose {
     /// Source tier: T1
     /// Infer from:  Suggestion only — payee name and affiliation
@@ -729,7 +743,7 @@ pub struct ExpenseReportGeneralInformationBusinessPurpose {
 ///  At least one reason must be selected. Determines required approvals.
 /// Depends on:  general_information.payee.affiliation
 /// Source tier: T3
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportGeneralInformationStudentCertification {
     ///  Requires faculty approval
     /// Source tier: T3
@@ -758,7 +772,7 @@ pub struct ExpenseReportGeneralInformationStudentCertification {
 
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportGeneralInformation {
     /// Source tier: T3
     /// Infer from:  Destination in flight/hotel docs. Foreign destination → expenses_foreign;
@@ -796,7 +810,7 @@ pub struct ExpenseReportGeneralInformation {
 
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionSummary {
     ///  FA-entered. Typically matches general_information.category but the portal stores it as
     /// a separate field.
@@ -824,7 +838,7 @@ pub struct ExpenseReportTransactionSummary {
 }
 
 /// Source tier: T3
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemCommonSourceDocumentsItem {
     ///  Filename the FA uploaded — system context, not extracted.
     /// Source tier: T1
@@ -837,7 +851,7 @@ pub struct ExpenseReportTransactionLinesItemCommonSourceDocumentsItem {
 
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemCommon {
     /// Source tier: T3
     /// Infer from:  Date on the receipt
@@ -892,7 +906,7 @@ pub struct ExpenseReportTransactionLinesItemCommon {
 }
 
 /// Source tier: T2
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonComparableFaresItem {
     /// Source tier: T2
     #[serde(default)]
@@ -908,7 +922,7 @@ pub struct ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonCompara
 
 ///  System-generated if not provided by payee
 /// Source tier: T2
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemAirfareDetailsPriceComparison {
     ///  Date the comparison was generated
     /// Source tier: T2
@@ -924,7 +938,7 @@ pub struct ExpenseReportTransactionLinesItemAirfareDetailsPriceComparison {
 }
 
 /// Conditionally required when:  expense_type in [airfare_domestic, airfare_foreign]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemAirfareDetails {
     /// Source tier: T3
     /// Infer from:  Booking confirmation
@@ -971,7 +985,7 @@ pub struct ExpenseReportTransactionLinesItemAirfareDetails {
 }
 
 /// Conditionally required when:  expense_type in [lodging_domestic, lodging_foreign]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemLodgingDetails {
     /// Source tier: T3
     /// Infer from:  Hotel folio header
@@ -1023,7 +1037,7 @@ pub struct ExpenseReportTransactionLinesItemLodgingDetails {
 
 /// Conditionally required when:  expense_type in [ground_transportation_foreign,
 /// Conditionally required when: ground_transportation_domestic]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemGroundTransportDetails {
     /// Source tier: T3
     /// Infer from:  Uber/Lyft receipt
@@ -1045,7 +1059,7 @@ pub struct ExpenseReportTransactionLinesItemGroundTransportDetails {
 }
 
 /// Source tier: T3
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemConferenceRegistrationDetailsMealsIncludedScheduleItem {
     /// Source tier: T3
     #[serde(default)]
@@ -1065,7 +1079,7 @@ pub struct ExpenseReportTransactionLinesItemConferenceRegistrationDetailsMealsIn
 ///  Which meals the conference provides, by day. Feeds into per diem deductions.
 /// Source tier: T3
 /// Infer from:  Conference program/schedule (e.g., 'lunch provided to all attendees')
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemConferenceRegistrationDetailsMealsIncluded {
     /// Source tier: T3
     #[serde(default)]
@@ -1074,7 +1088,7 @@ pub struct ExpenseReportTransactionLinesItemConferenceRegistrationDetailsMealsIn
 }
 
 /// Conditionally required when:  expense_type == conference_registration
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemConferenceRegistrationDetails {
     /// Source tier: T3
     /// Infer from:  Registration receipt
@@ -1100,7 +1114,7 @@ pub struct ExpenseReportTransactionLinesItemConferenceRegistrationDetails {
 }
 
 /// Source tier: T1
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemMealDetailsAttendeesItem {
     /// Source tier: T1
     #[serde(default)]
@@ -1113,7 +1127,7 @@ pub struct ExpenseReportTransactionLinesItemMealDetailsAttendeesItem {
 
 /// Conditionally required when:  expense_type in [business_meal, business_meal_with_alcohol,
 /// Conditionally required when: group_travel_meal, group_travel_meal_with_alcohol]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemMealDetails {
     /// Source tier: T3
     /// Infer from:  Receipt header
@@ -1146,7 +1160,7 @@ pub struct ExpenseReportTransactionLinesItemMealDetails {
 }
 
 /// Conditionally required when:  expense_type == car_rental
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemCarRentalDetails {
     /// Source tier: T3
     /// Infer from:  Rental agreement
@@ -1181,7 +1195,7 @@ pub struct ExpenseReportTransactionLinesItemCarRentalDetails {
 
 /// Conditionally required when:  expense_type in [gift_card_employee_foreign,
 /// Conditionally required when: gifts_foreign_activity]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemGiftDetails {
     /// Source tier: T1
     #[serde(default)]
@@ -1196,7 +1210,7 @@ pub struct ExpenseReportTransactionLinesItemGiftDetails {
 }
 
 /// Conditionally required when:  expense_type == human_subject_incentive
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemHumanSubjectDetails {
     /// Source tier: T1
     #[serde(default)]
@@ -1213,7 +1227,7 @@ pub struct ExpenseReportTransactionLinesItemHumanSubjectDetails {
 }
 
 ///  One entry per distinct expense
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItem {
     pub common: ExpenseReportTransactionLinesItemCommon,
     /// Conditionally required when:  expense_type in [airfare_domestic, airfare_foreign]
@@ -1240,7 +1254,7 @@ pub struct ExpenseReportTransactionLinesItem {
 }
 
 /// Source tier: T2
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportPerDiemExpensesItemMealDeductionsItem {
     /// Source tier: T2
     #[serde(default)]
@@ -1262,7 +1276,7 @@ pub struct ExpenseReportPerDiemExpensesItemMealDeductionsItem {
 }
 
 /// Source tier: T2
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportPerDiemExpensesItemReimbursementSummaryItem {
     /// Source tier: T2
     #[serde(default)]
@@ -1279,7 +1293,7 @@ pub struct ExpenseReportPerDiemExpensesItemReimbursementSummaryItem {
 
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportPerDiemExpensesItem {
     /// Source tier: T3
     /// Infer from:  Destination from flight/hotel docs determines domestic vs. international;
@@ -1335,12 +1349,12 @@ pub struct ExpenseReportPerDiemExpensesItem {
 
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportMileageExpensesItem {
 }
 
 /// Source tier: T1
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportAllocationAndApproversBeneficiaryListItem {
     /// Source tier: T1
     #[serde(default)]
@@ -1351,7 +1365,7 @@ pub struct ExpenseReportAllocationAndApproversBeneficiaryListItem {
 
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportAllocationAndApprovers {
     ///  Are there any beneficiaries other than the payee?
     /// Source tier: T1
@@ -1364,7 +1378,7 @@ pub struct ExpenseReportAllocationAndApprovers {
 
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReport {
     pub general_information: ExpenseReportGeneralInformation,
     pub transaction_summary: ExpenseReportTransactionSummary,

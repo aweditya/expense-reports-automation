@@ -399,10 +399,18 @@ def generate_rust_model(root: SchemaNode, schema_version: str) -> str:
         for node in enum_nodes:
             enum_name = enum_alias_name(node)
             lines.extend(node_doc_lines(node))
-            lines.append("#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]")
+            lines.append(
+                "#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]"
+            )
             lines.append("#[serde(rename_all = \"snake_case\")]")
             lines.append(f"pub enum {enum_name} {{")
-            for value in node.allowed_values:
+            for index, value in enumerate(node.allowed_values):
+                # Default to the first variant. The default value is
+                # arbitrary — reduction always either overwrites the value
+                # or wraps it with Wrapped::unknown() (value: None). The
+                # workbench/validator key off `value.is_some()`.
+                if index == 0:
+                    lines.append("    #[default]")
                 lines.append(f"    {rust_variant_name(value)},")
             lines.append("}")
             lines.append("")
@@ -436,7 +444,7 @@ def generate_rust_model(root: SchemaNode, schema_version: str) -> str:
 
     for node in object_nodes(root):
         lines.extend(node_doc_lines(node))
-        lines.append("#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]")
+        lines.append("#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]")
         lines.append(f"pub struct {class_name(node)} {{")
         if not node.fields:
             lines.append("}")

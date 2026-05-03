@@ -22,6 +22,7 @@ pub mod ocr_grounding;
 pub mod ocr_inspection;
 pub mod parse;
 pub mod readiness;
+pub mod reduce;
 pub mod render;
 pub mod review_fa_workbench;
 pub mod review_packet;
