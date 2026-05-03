@@ -39,7 +39,7 @@ RECEIPTS = [
         "output": ".scratch/spike/mels1.json",
         "expect": {
             "common.date.value": "2026-04-19",
-            "common.line_amount_usd.value": 163.54,
+            "common.line_amount_usd.value": "163.54",
             "common.original_currency.value": None,
             "common.original_amount.value": None,
             "common.expense_type.value": lambda v: v
@@ -54,7 +54,7 @@ RECEIPTS = [
         "output": ".scratch/spike/mels2.json",
         "expect": {
             "common.date.value": "2026-04-04",
-            "common.line_amount_usd.value": 123.19,
+            "common.line_amount_usd.value": "123.19",
             "common.original_currency.value": None,
             "common.original_amount.value": None,
             "common.expense_type.value": "business_meal",
@@ -68,7 +68,7 @@ RECEIPTS = [
         "output": ".scratch/spike/tamarine.json",
         "expect": {
             "common.date.value": "2026-03-05",
-            "common.line_amount_usd.value": 387.12,
+            "common.line_amount_usd.value": "387.12",
             "common.original_currency.value": None,
             "common.original_amount.value": None,
             "common.expense_type.value": "business_meal_with_alcohol",
@@ -82,7 +82,7 @@ RECEIPTS = [
         "output": ".scratch/spike/mjsushi.json",
         "expect": {
             "common.date.value": "2026-05-02",
-            "common.line_amount_usd.value": 79.59,
+            "common.line_amount_usd.value": "79.59",
             "common.original_currency.value": None,
             "common.original_amount.value": None,
             "common.expense_type.value": lambda v: v

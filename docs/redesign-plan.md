@@ -152,13 +152,35 @@ the decision until M6.
       the proof that the duplication gap closed — same Rust type for
       both extracted-from-Python and report-state.
 
-  **M6.2 — Reduction function over `Vec<ExpenseReportTransactionLine>`.**
-  A small library of named reductions (sum, earliest, foreign-presence)
-  in a single `src/reduce.rs`. Aggregates per-bundle into a complete
-  `ExpenseReport`. Per-diem expansion deferred. Plus a binary
-  `src/bin/reduce_extractions.rs` that reads a directory of JSON files
-  and writes one report. Acceptance harness extended to exercise the
-  end-to-end Python -> Rust path on the four real receipts.
+  **M6.2 — Reduction function over `Vec<ExpenseReportTransactionLine>`,
+  PLUS reconciling the array-shape mismatch carried over from M6.1.**
+
+  *Carryover from M6.1:* Gemini's `response_schema` rejects deeply-nested
+  leaf wrappings inside array items, so for `source_documents` and
+  `attendees` the array is leaf-wrapped at the array level
+  (Wrapped<Vec<...>>-shaped JSON) but the items have BARE leaf fields.
+  The codegen meanwhile wraps every scalar leaf and emits `Vec<...>`
+  for arrays. Net: Python's actual output for any line with non-empty
+  source_documents won't deserialize into `ExpenseReportTransactionLinesItem`
+  yet. The unit test in src/meta.rs proves the Wrapped<T> deserialization
+  contract works on hand-crafted JSON; full end-to-end Python->Rust round
+  trip is M6.2's first job.
+
+  Three reasonable resolutions to consider:
+  1. Custom Deserialize for source_documents/attendees that adapts the
+     `Wrapped<Vec<{bare-fields}>>` JSON into `Vec<ItemWithWrappedLeaves>`.
+  2. Have Python post-process its output to flatten the wrapped arrays
+     before writing the JSON file.
+  3. Add a schema-level marker for "extractor-emitted" arrays so the
+     codegen can wrap them as `Wrapped<Vec<{bare-item}>>` and emit
+     bare-leaf item structs for those specifically.
+
+  *Reduction itself:* a small library of named reductions (sum, earliest,
+  foreign-presence) in a single `src/reduce.rs`. Aggregates per-bundle
+  into a complete `ExpenseReport`. Per-diem expansion deferred. Plus a
+  binary `src/bin/reduce_extractions.rs` that reads a directory of JSON
+  files and writes one report. Acceptance harness extended to exercise
+  the end-to-end Python -> Rust path on the four real receipts.
 - [ ] **M7. Wire into workbench, deploy, validate on real receipts.** Make the
   workbench render the new typed report. Strip the parts that depend on the
   old pipeline. Deploy to Cloud Run. **Verdict from the deployed site on the 3
@@ -185,16 +207,11 @@ the decision until M6.
 
 ## Current step
 
-**M6.1.a (next).** Add `src/meta.rs` with `Wrapped<T>`, `Meta`,
-`Confidence`, `EvidencePtr`, `EvidenceKind`. Hand-written, serde-derived,
-defaults on `Meta` so no-meta JSON still deserializes. Unit tests for
-round-trip + default-meta + `Wrapped::known()` constructor. No other
-code touched yet.
-
-After M6.1.a: M6.1.b modifies the codegen to wrap leaves; expect a
-medium-sized regenerated `expense_report_model.rs` diff and a much
-larger downstream "fix all callers" sub-commit (M6.1.c) where the
-compiler enumerates the work.
+**M6.2 (next).** Reduction step. First task: resolve the array-shape
+mismatch for source_documents/attendees that M6.1 carried over. Then
+build the named reductions library + binary, with the acceptance harness
+extended to verify the end-to-end Python -> Rust path on the four real
+receipts.
 
 ## Mistakes I'm watching for during M5
 

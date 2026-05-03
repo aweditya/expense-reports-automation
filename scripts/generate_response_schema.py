@@ -81,11 +81,13 @@ def common_block_schema(expense_type_values: list[str]) -> dict:
         "type": "object",
         "properties": {
             "date": leaf({"type": "string", "description": "ISO 8601 date (YYYY-MM-DD)"}),
-            "line_amount_usd": leaf({"type": "number"}),
+            # Money is a string everywhere (precision: avoid float). The Rust
+            # type is `DecimalAmount(String)`. Gemini emits e.g. `"79.59"`.
+            "line_amount_usd": leaf({"type": "string", "description": "Decimal amount as a string, e.g. \"79.59\""}),
             "original_currency": leaf(
                 {"type": "string", "nullable": True, "description": "ISO 4217 code or null if USD"}
             ),
-            "original_amount": leaf({"type": "number", "nullable": True}),
+            "original_amount": leaf({"type": "string", "nullable": True, "description": "Decimal amount as a string"}),
             "expense_type": leaf({"type": "string", "enum": expense_type_values}),
             "remarks": leaf({"type": "string"}),
             "country_of_activity": leaf({"type": "string", "nullable": True}),
@@ -96,6 +98,10 @@ def common_block_schema(expense_type_values: list[str]) -> dict:
                     "enum": ["conference", "research_collaboration", "fieldwork", "other"],
                 }
             ),
+            # The array is leaf-wrapped (carries _meta) but its items have
+            # BARE fields — Gemini's response_schema rejects deeply-nested
+            # leaf wrappings inside array items. Reconciling this with the
+            # codegen (which wraps every leaf) is M6.2 work.
             "source_documents": leaf(
                 {
                     "type": "array",
@@ -140,6 +146,9 @@ def meal_details_block_schema() -> dict:
         "type": "object",
         "properties": {
             "venue_name": leaf({"type": "string"}),
+            # See source_documents above — same rationale, items have BARE
+            # fields because Gemini's response_schema rejects deeply-nested
+            # wrapping. M6.2 reconciles.
             "attendees": leaf(
                 {
                     "type": "array",
@@ -155,8 +164,9 @@ def meal_details_block_schema() -> dict:
                 }
             ),
             "meal_purpose": leaf({"type": "string", "nullable": True}),
-            "alcohol_amount": leaf({"type": "number", "nullable": True}),
-            "tip_amount": leaf({"type": "number", "nullable": True}),
+            # Money is a string everywhere (see common.line_amount_usd).
+            "alcohol_amount": leaf({"type": "string", "nullable": True, "description": "Decimal amount as a string"}),
+            "tip_amount": leaf({"type": "string", "nullable": True, "description": "Decimal amount as a string"}),
             "has_alcohol_on_receipt": leaf({"type": "boolean"}),
         },
         "required": [

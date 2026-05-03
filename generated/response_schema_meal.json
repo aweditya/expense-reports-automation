@@ -93,7 +93,8 @@
             "type": "object",
             "properties": {
               "value": {
-                "type": "number"
+                "type": "string",
+                "description": "Decimal amount as a string, e.g. \"79.59\""
               },
               "_meta": {
                 "type": "object",
@@ -247,8 +248,9 @@
             "type": "object",
             "properties": {
               "value": {
-                "type": "number",
-                "nullable": true
+                "type": "string",
+                "nullable": true,
+                "description": "Decimal amount as a string"
               },
               "_meta": {
                 "type": "object",
@@ -1016,8 +1018,9 @@
             "type": "object",
             "properties": {
               "value": {
-                "type": "number",
-                "nullable": true
+                "type": "string",
+                "nullable": true,
+                "description": "Decimal amount as a string"
               },
               "_meta": {
                 "type": "object",
@@ -1093,8 +1096,9 @@
             "type": "object",
             "properties": {
               "value": {
-                "type": "number",
-                "nullable": true
+                "type": "string",
+                "nullable": true,
+                "description": "Decimal amount as a string"
               },
               "_meta": {
                 "type": "object",

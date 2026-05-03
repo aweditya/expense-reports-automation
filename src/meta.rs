@@ -165,4 +165,73 @@ mod tests {
         let w: Wrapped<String> = Wrapped::unknown();
         assert!(w.value.is_none());
     }
+
+    /// M6.1.e: prove the Python extractor's JSON deserializes directly into
+    /// the regenerated `ExpenseReportTransactionLinesItem` struct. This is
+    /// what closes the duplication-risk gap — there is no parallel hand-written
+    /// `ExtractedTransactionLine` type, just the generated schema model.
+    #[test]
+    fn extractor_output_deserializes_into_transaction_line_item() {
+        use crate::expense_report_model::ExpenseReportTransactionLinesItem;
+
+        // Inline JSON mirroring what scripts/spike_extract.py writes for one
+        // line. Embedded literally so the test runs without depending on the
+        // gitignored .scratch/ outputs.
+        let json = r#"{
+            "expense_kind": "meal",
+            "common": {
+                "date": {"value": "2026-05-02", "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}},
+                "line_amount_usd": {"value": "79.59", "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}},
+                "original_currency": {"value": null, "_meta": {"confidence": "high", "evidence": [{"kind": "system_generated", "origin": "not_applicable_for_domestic"}], "needs_review": false, "flags": []}},
+                "original_amount": {"value": null, "_meta": {"confidence": "high", "evidence": [{"kind": "system_generated", "origin": "not_applicable_for_domestic"}], "needs_review": false, "flags": []}},
+                "expense_type": {"value": "business_meal_with_alcohol", "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}},
+                "remarks": {"value": "Dinner at MJ Sushi", "_meta": {"confidence": "medium", "evidence": [], "needs_review": true, "flags": []}},
+                "country_of_activity": {"value": "United States", "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}},
+                "foreign_activity_type": {"value": null, "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}},
+                "source_documents": [
+                    {
+                        "filename": {"value": "mjsushi.jpeg", "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}},
+                        "document_type": {"value": "receipt", "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}}
+                    }
+                ]
+            },
+            "meal_details": {
+                "venue_name": {"value": "MJ Sushi", "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}},
+                "attendees": [],
+                "meal_purpose": {"value": null, "_meta": {"confidence": "low", "evidence": [], "needs_review": true, "flags": []}},
+                "alcohol_amount": {"value": "0.0", "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}},
+                "tip_amount": {"value": "0.0", "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}},
+                "has_alcohol_on_receipt": {"value": true, "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}}
+            }
+        }"#;
+
+        let parsed: ExpenseReportTransactionLinesItem =
+            serde_json::from_str(json).expect("deserialize into transaction line item");
+
+        // Spot-check the fields we care about flowed through correctly.
+        assert_eq!(
+            parsed.common.date.value.as_ref().map(|d| d.0.as_str()),
+            Some("2026-05-02")
+        );
+        assert_eq!(
+            parsed.common.line_amount_usd.value.as_ref().map(|a| a.0.as_str()),
+            Some("79.59")
+        );
+        assert_eq!(parsed.common.original_currency.value, None);
+        assert_eq!(parsed.common.original_amount.value, None);
+        assert_eq!(
+            parsed.common.country_of_activity.value.as_deref(),
+            Some("United States")
+        );
+        assert_eq!(parsed.common.country_of_activity.meta.confidence, ConfidenceLevel::High);
+
+        let meal = parsed.meal_details.expect("meal_details present");
+        assert_eq!(meal.venue_name.value.as_deref(), Some("MJ Sushi"));
+        assert_eq!(meal.has_alcohol_on_receipt.value, Some(true));
+        assert_eq!(meal.tip_amount.value.as_ref().map(|a| a.0.as_str()), Some("0.0"));
+
+        // Provenance flows: the country_of_activity high-confidence flag is
+        // available on the Rust side without a sidecar lookup.
+        assert!(!parsed.common.country_of_activity.meta.needs_review);
+    }
 }

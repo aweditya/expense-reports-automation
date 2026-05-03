@@ -20,6 +20,21 @@ Keep entries short. The point is recall, not narrative.
 
 ## Entries
 
+### 2026-05-03 — used `/tmp/..` in a heredoc cleanup
+
+**What happened:** Tried `cat > /tmp/.. /dev/null 2>&1 || true` as a no-op.
+The literal `/tmp/..` resolves to `/`, so it failed harmlessly with "is a
+directory", but I still typed `/tmp` into a command with the rule explicitly
+forbidding it.
+
+**Why it was wrong:** The rule is "never write to `/tmp`," not "never write
+to a real `/tmp` file." Even bogus paths under `/tmp` violate the spirit
+because they normalize the habit of typing the forbidden path.
+
+**Rule going forward:** `/tmp` doesn't appear in any command I run, ever,
+even as part of a longer path or a placeholder. Use `./.scratch/` for any
+path that even gestures at temp space.
+
 ### 2026-05-02 — trusted a piped command's exit code
 
 **What happened:** Ran `cargo test 2>&1 | tee … | tail -10; echo "EXIT: $?"`.

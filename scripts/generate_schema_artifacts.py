@@ -309,6 +309,12 @@ def rust_field_type(node: SchemaNode) -> str:
         # Presence/absence is carried inside `value`; required-ness is
         # enforced by Pass 2 (FIELD_RULES + CONDITIONAL_RULES), not by the
         # struct shape. See M6.1 in docs/redesign-plan.md for the rationale.
+        #
+        # Arrays are NOT wrapped at the codegen level — `Vec<T>` always.
+        # Reconciling Python's wrapped-array output with Rust's bare Vec<T>
+        # is M6.2 work; Gemini's response_schema rejects deeply-nested leaf
+        # wrappings inside array items, so we cannot make Python match a
+        # `Wrapped<Vec<Item-with-wrapped-leaves>>` shape end-to-end today.
         return f"Wrapped<{base_type}>"
     if node.required and node.required_expression is None:
         return base_type
@@ -353,11 +359,14 @@ def generate_rust_model(root: SchemaNode, schema_version: str) -> str:
     lines: list[str] = [
         "// Auto-generated typed model from schema.yaml. Do not edit manually.",
         "",
+        "use serde::{Deserialize, Serialize};",
+        "",
         "use crate::meta::Wrapped;",
         "",
         f'pub const SCHEMA_VERSION: &str = "{schema_version}";',
         "",
-        "#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]",
+        "#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]",
+        "#[serde(transparent)]",
         "pub struct IsoDate(pub String);",
         "",
         "impl From<String> for IsoDate {",
@@ -372,7 +381,8 @@ def generate_rust_model(root: SchemaNode, schema_version: str) -> str:
         "    }",
         "}",
         "",
-        "#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]",
+        "#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]",
+        "#[serde(transparent)]",
         "pub struct DecimalAmount(pub String);",
         "",
         "impl From<String> for DecimalAmount {",
@@ -394,7 +404,8 @@ def generate_rust_model(root: SchemaNode, schema_version: str) -> str:
         for node in enum_nodes:
             enum_name = enum_alias_name(node)
             lines.extend(node_doc_lines(node))
-            lines.append("#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]")
+            lines.append("#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]")
+            lines.append("#[serde(rename_all = \"snake_case\")]")
             lines.append(f"pub enum {enum_name} {{")
             for value in node.allowed_values:
                 lines.append(f"    {rust_variant_name(value)},")
@@ -430,7 +441,7 @@ def generate_rust_model(root: SchemaNode, schema_version: str) -> str:
 
     for node in object_nodes(root):
         lines.extend(node_doc_lines(node))
-        lines.append("#[derive(Debug, Clone, PartialEq)]")
+        lines.append("#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]")
         lines.append(f"pub struct {class_name(node)} {{")
         if not node.fields:
             lines.append("}")
@@ -440,6 +451,15 @@ def generate_rust_model(root: SchemaNode, schema_version: str) -> str:
         for child in node.fields:
             lines.extend(node_doc_lines(child, indent="    "))
             identifier = rust_identifier(child.name)
+            if child.is_leaf:
+                # Wrapped<T> defaults to `Wrapped::unknown()` (value: None).
+                # `serde(default)` lets Python omit fields it can't fill (e.g.
+                # exchange_rate, T2 / FX-derived) without breaking deserialize.
+                lines.append("    #[serde(default)]")
+            elif child.node_type == "array":
+                # Empty Vec is the natural "not yet filled" representation;
+                # Pass 2 enforces array.len() > 0 for required arrays.
+                lines.append("    #[serde(default)]")
             lines.append(f"    pub {identifier}: {rust_field_type(child)},")
         lines.append("")
         lines.append("}")
