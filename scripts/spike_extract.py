@@ -34,15 +34,55 @@ for a Stanford expense report. The receipt is attached as an image.
 Return a JSON array containing one transaction line object. Its shape is
 enforced by the response schema — fill the values from the receipt.
 
-For every leaf, the `_meta` block carries provenance:
-- `confidence` is ordinal (high/medium/low), NOT a probability.
-- `evidence` is one or more pointers. For values present on the receipt, use
-  `kind: document_span` with `filename`, `page`, and `quote` (the exact text
-  from the receipt). For values you cannot determine from the receipt, use
-  `kind: system_generated` with `origin: not_present_in_receipt`.
-- `needs_review` is true when the FA must look at this field. Set true for
-  `attendees`, `meal_purpose`, and any value you had to guess.
-- `flags` is an empty array unless you observe something irregular.
+# Reasoning rules
+
+`expense_type`:
+- Use `business_meal` for a meal the payee took with one or more guests.
+- Use `business_meal_with_alcohol` when alcohol appears on the line items.
+- Use `group_travel_meal` (or `_with_alcohol`) ONLY when the receipt clearly
+  indicates multiple Stanford travelers — multiple guests/diners is NOT a
+  group_travel signal.
+- Sales tax labels like GST, VAT, HST, and "Sales Tax" are tax categories,
+  NOT expense_type signals.
+
+`tip_amount`:
+- Look below the subtotal/tax block. Common labels: `Tip`, `Gratuity`,
+  `Service Charge`. The tip can be handwritten in or printed.
+- If `Total > Subtotal + Tax`, the difference is likely tip even when not
+  explicitly labeled — use `medium` confidence in that case.
+- If the receipt has space for a tip but you can't read the value, use
+  `value: null` with `low` confidence and `needs_review: true`.
+
+`original_currency` and `original_amount`:
+- For USD receipts (i.e., the printed amounts are in dollars), set BOTH to
+  null with `kind: system_generated, origin: not_applicable_for_domestic`.
+- Only fill them when the receipt's printed amounts are in a non-USD
+  currency. `original_amount` is the amount as printed on the receipt in
+  that currency; `line_amount_usd` is the converted USD amount.
+
+`country_of_activity`:
+- Fill from the merchant address when present (city/state/country gives the
+  country). Pass 2 will null this for domestic expenses if needed.
+
+`has_alcohol_on_receipt` and `alcohol_amount`:
+- `has_alcohol_on_receipt` is true if ANY line item is alcohol (cocktail,
+  beer, wine, etc.), even if the price is zero ("on the house").
+- `alcohol_amount` is the SUM of all alcohol line item prices. Use 0.0 when
+  alcohol is on the receipt but free; null when no alcohol is present.
+
+# _meta convention
+
+- `confidence` is ordinal: `low` when guessing, `medium` when ambiguous but
+  defensible, `high` when unambiguous on the receipt. NOT a probability.
+- `evidence` for present values: `kind: document_span` with `filename`,
+  `page`, and an exact `quote` from the receipt.
+- `evidence` for null values: `kind: system_generated` with one of
+  `origin: not_present_in_receipt`, `not_applicable_for_domestic`, or
+  `not_applicable_for_foreign`. Do NOT cite an unrelated quote with
+  `document_span` to evidence a null value.
+- `needs_review` is true for: `attendees`, `meal_purpose`, any value you
+  guessed, and any field where you used `medium` or `low` confidence.
+- `flags` stays empty unless you observe something irregular.
 """
 
 
