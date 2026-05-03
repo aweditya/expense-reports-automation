@@ -15,6 +15,7 @@ pub mod field_conventions;
 pub mod ingest;
 pub mod ledger;
 pub mod ledger_regression;
+pub mod meta;
 pub mod ocr_compare;
 pub mod ocr_grounding;
 pub mod ocr_inspection;
