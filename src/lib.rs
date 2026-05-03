@@ -131,7 +131,6 @@ pub use draft::EvidenceKind;
 pub use draft::EvidenceReference;
 pub use draft::FieldMetadata;
 pub use draft::ParseDraftReportError;
-pub use expense_report_model::DecimalAmount;
 pub use expense_report_model::ExpenseReport;
 pub use expense_report_model::ExpenseReportModel;
 pub use expense_report_model::IsoDate;

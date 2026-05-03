@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-generated_at_utc: '2026-05-03T16:20:05+00:00'
+generated_at_utc: '2026-05-03T17:00:14+00:00'
 field_rules:
 - path: expense_report
   node_kind: object
@@ -433,7 +433,7 @@ field_rules:
 - path: expense_report.transaction_summary.total_usd
   node_kind: field
   schema_type: number
-  rust_type: DecimalAmount
+  rust_type: f64
   required: true
   required_expression: null
   source: T2
@@ -503,7 +503,7 @@ field_rules:
 - path: expense_report.transaction_lines[].common.line_amount_usd
   node_kind: field
   schema_type: number
-  rust_type: DecimalAmount
+  rust_type: f64
   required: true
   required_expression: null
   source: T3
@@ -531,7 +531,7 @@ field_rules:
 - path: expense_report.transaction_lines[].common.original_amount
   node_kind: field
   schema_type: number
-  rust_type: DecimalAmount
+  rust_type: f64
   required: false
   required_expression: general_information.category == expenses_foreign
   source: T3
@@ -545,7 +545,7 @@ field_rules:
 - path: expense_report.transaction_lines[].common.exchange_rate
   node_kind: field
   schema_type: number
-  rust_type: DecimalAmount
+  rust_type: f64
   required: false
   required_expression: general_information.category == expenses_foreign
   source: T2
@@ -743,7 +743,7 @@ field_rules:
 - path: expense_report.transaction_lines[].airfare_details.ticket_amount
   node_kind: field
   schema_type: number
-  rust_type: DecimalAmount
+  rust_type: f64
   required: true
   required_expression: null
   source: T3
@@ -923,7 +923,7 @@ field_rules:
 - path: expense_report.transaction_lines[].airfare_details.price_comparison.comparable_fares[].amount
   node_kind: field
   schema_type: number
-  rust_type: DecimalAmount
+  rust_type: f64
   required: false
   required_expression: null
   source: null
@@ -1037,7 +1037,7 @@ field_rules:
 - path: expense_report.transaction_lines[].lodging_details.number_of_nights
   node_kind: field
   schema_type: number
-  rust_type: DecimalAmount
+  rust_type: f64
   required: true
   required_expression: null
   source: T2
@@ -1051,7 +1051,7 @@ field_rules:
 - path: expense_report.transaction_lines[].lodging_details.daily_rate
   node_kind: field
   schema_type: number
-  rust_type: DecimalAmount
+  rust_type: f64
   required: true
   required_expression: null
   source: T3
@@ -1111,7 +1111,7 @@ field_rules:
 - path: expense_report.transaction_lines[].lodging_details.personal_nights_excluded
   node_kind: field
   schema_type: number
-  rust_type: DecimalAmount
+  rust_type: f64
   required: false
   required_expression: null
   source: T2
@@ -1461,7 +1461,7 @@ field_rules:
 - path: expense_report.transaction_lines[].meal_details.alcohol_amount
   node_kind: field
   schema_type: number
-  rust_type: DecimalAmount
+  rust_type: f64
   required: false
   required_expression: expense_type in [business_meal_with_alcohol, group_travel_meal_with_alcohol]
   source: T3
@@ -1475,7 +1475,7 @@ field_rules:
 - path: expense_report.transaction_lines[].meal_details.tip_amount
   node_kind: field
   schema_type: number
-  rust_type: DecimalAmount
+  rust_type: f64
   required: false
   required_expression: null
   source: T3
@@ -1699,7 +1699,7 @@ field_rules:
 - path: expense_report.transaction_lines[].human_subject_details.number_of_subjects
   node_kind: field
   schema_type: number
-  rust_type: DecimalAmount
+  rust_type: f64
   required: true
   required_expression: null
   source: T3
@@ -1713,7 +1713,7 @@ field_rules:
 - path: expense_report.transaction_lines[].human_subject_details.per_subject_amount
   node_kind: field
   schema_type: number
-  rust_type: DecimalAmount
+  rust_type: f64
   required: true
   required_expression: null
   source: T3
@@ -1803,7 +1803,7 @@ field_rules:
 - path: expense_report.per_diem_expenses[].number_of_days
   node_kind: field
   schema_type: number
-  rust_type: DecimalAmount
+  rust_type: f64
   required: true
   required_expression: null
   source: T2
@@ -1863,7 +1863,7 @@ field_rules:
 - path: expense_report.per_diem_expenses[].per_diem_rate
   node_kind: field
   schema_type: number
-  rust_type: DecimalAmount
+  rust_type: f64
   required: true
   required_expression: null
   source: T2
@@ -1975,7 +1975,7 @@ field_rules:
 - path: expense_report.per_diem_expenses[].meal_deductions[].deduction_amount
   node_kind: field
   schema_type: number
-  rust_type: DecimalAmount
+  rust_type: f64
   required: false
   required_expression: null
   source: T2
@@ -2031,7 +2031,7 @@ field_rules:
 - path: expense_report.per_diem_expenses[].reimbursement_summary[].per_diem_amount
   node_kind: field
   schema_type: number
-  rust_type: DecimalAmount
+  rust_type: f64
   required: false
   required_expression: null
   source: null
@@ -2045,7 +2045,7 @@ field_rules:
 - path: expense_report.per_diem_expenses[].reimbursement_summary[].meal_deduction
   node_kind: field
   schema_type: number
-  rust_type: DecimalAmount
+  rust_type: f64
   required: false
   required_expression: null
   source: null
@@ -2059,7 +2059,7 @@ field_rules:
 - path: expense_report.per_diem_expenses[].reimbursement_summary[].net_amount
   node_kind: field
   schema_type: number
-  rust_type: DecimalAmount
+  rust_type: f64
   required: false
   required_expression: null
   source: null

@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::expense_report_model::{DecimalAmount, IsoDate};
+use crate::expense_report_model::IsoDate;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ValueKind {
@@ -121,8 +121,8 @@ impl From<IsoDate> for ReportValue {
     }
 }
 
-impl From<DecimalAmount> for ReportValue {
-    fn from(value: DecimalAmount) -> Self {
-        Self::Number(value.0)
+impl From<f64> for ReportValue {
+    fn from(value: f64) -> Self {
+        Self::Number(value.to_string())
     }
 }

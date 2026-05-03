@@ -22,22 +22,6 @@ impl From<&str> for IsoDate {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct DecimalAmount(pub String);
-
-impl From<String> for DecimalAmount {
-    fn from(value: String) -> Self {
-        Self(value)
-    }
-}
-
-impl From<&str> for DecimalAmount {
-    fn from(value: &str) -> Self {
-        Self(value.to_owned())
-    }
-}
-
 /// Source tier: T3
 /// Infer from:  Destination in flight/hotel docs. Foreign destination → expenses_foreign;
 /// Infer from: domestic → expenses_domestic. Other categories require explicit context.
@@ -834,7 +818,7 @@ pub struct ExpenseReportTransactionSummary {
     ///  Sum of all transaction lines, converted to USD
     /// Source tier: T2
     #[serde(default)]
-    pub total_usd: Wrapped<DecimalAmount>,
+    pub total_usd: Wrapped<f64>,
 
 }
 
@@ -861,7 +845,7 @@ pub struct ExpenseReportTransactionLinesItemCommon {
     /// Source tier: T3
     /// Infer from:  Receipt amount × exchange rate (if foreign)
     #[serde(default)]
-    pub line_amount_usd: Wrapped<DecimalAmount>,
+    pub line_amount_usd: Wrapped<f64>,
     /// Conditionally required when:  general_information.category == expenses_foreign
     /// Source tier: T3
     /// Infer from:  Currency symbol/code on receipt
@@ -871,12 +855,12 @@ pub struct ExpenseReportTransactionLinesItemCommon {
     /// Source tier: T3
     /// Infer from:  Amount as printed on receipt
     #[serde(default)]
-    pub original_amount: Wrapped<DecimalAmount>,
+    pub original_amount: Wrapped<f64>,
     /// Conditionally required when:  general_information.category == expenses_foreign
     /// Source tier: T2
     /// Infer from:  Historical rate for common.date from exchange rate API
     #[serde(default)]
-    pub exchange_rate: Wrapped<DecimalAmount>,
+    pub exchange_rate: Wrapped<f64>,
     /// Source tier: T3
     /// Infer from:  LLM classifies from receipt content
     #[serde(default)]
@@ -912,7 +896,7 @@ pub struct ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonCompara
     pub airline: Wrapped<String>,
     /// Source tier: T2
     #[serde(default)]
-    pub amount: Wrapped<DecimalAmount>,
+    pub amount: Wrapped<f64>,
     /// Source tier: T2
     #[serde(default)]
     pub class: Wrapped<String>,
@@ -950,7 +934,7 @@ pub struct ExpenseReportTransactionLinesItemAirfareDetails {
     /// Source tier: T3
     /// Infer from:  Booking confirmation
     #[serde(default)]
-    pub ticket_amount: Wrapped<DecimalAmount>,
+    pub ticket_amount: Wrapped<f64>,
     /// Source tier: T3
     /// Infer from:  Booking confirmation format/header; default 'other' if unrecognized
     #[serde(default)]
@@ -1006,12 +990,12 @@ pub struct ExpenseReportTransactionLinesItemLodgingDetails {
     /// Source tier: T2
     /// Infer from:  Computed: check_out_date - check_in_date
     #[serde(default)]
-    pub number_of_nights: Wrapped<DecimalAmount>,
+    pub number_of_nights: Wrapped<f64>,
     ///  In original currency
     /// Source tier: T3
     /// Infer from:  Hotel folio
     #[serde(default)]
-    pub daily_rate: Wrapped<DecimalAmount>,
+    pub daily_rate: Wrapped<f64>,
     /// Source tier: T3
     /// Infer from:  If hotel matches conference venue → conference_hotel; else check booking
     /// Infer from: source
@@ -1030,7 +1014,7 @@ pub struct ExpenseReportTransactionLinesItemLodgingDetails {
     /// Source tier: T2
     /// Infer from:  Compare hotel dates against conference dates from registration
     #[serde(default)]
-    pub personal_nights_excluded: Wrapped<DecimalAmount>,
+    pub personal_nights_excluded: Wrapped<f64>,
 
 }
 
@@ -1144,11 +1128,11 @@ pub struct ExpenseReportTransactionLinesItemMealDetails {
     /// Source tier: T3
     /// Infer from:  Itemized receipt — sum of alcohol line items
     #[serde(default)]
-    pub alcohol_amount: Wrapped<DecimalAmount>,
+    pub alcohol_amount: Wrapped<f64>,
     /// Source tier: T3
     /// Infer from:  Receipt
     #[serde(default)]
-    pub tip_amount: Wrapped<DecimalAmount>,
+    pub tip_amount: Wrapped<f64>,
     ///  Flag for validation: if true but expense_type is non-alcohol variant, raise
     /// irregularity
     /// Source tier: T3
@@ -1217,11 +1201,11 @@ pub struct ExpenseReportTransactionLinesItemHumanSubjectDetails {
     /// Source tier: T3
     /// Infer from:  Distribution log
     #[serde(default)]
-    pub number_of_subjects: Wrapped<DecimalAmount>,
+    pub number_of_subjects: Wrapped<f64>,
     /// Source tier: T3
     /// Infer from:  Distribution log
     #[serde(default)]
-    pub per_subject_amount: Wrapped<DecimalAmount>,
+    pub per_subject_amount: Wrapped<f64>,
 
 }
 
@@ -1270,7 +1254,7 @@ pub struct ExpenseReportPerDiemExpensesItemMealDeductionsItem {
     ///  Computed from per diem rate breakdown
     /// Source tier: T2
     #[serde(default)]
-    pub deduction_amount: Wrapped<DecimalAmount>,
+    pub deduction_amount: Wrapped<f64>,
 
 }
 
@@ -1282,13 +1266,13 @@ pub struct ExpenseReportPerDiemExpensesItemReimbursementSummaryItem {
     pub date: Wrapped<IsoDate>,
     /// Source tier: T2
     #[serde(default)]
-    pub per_diem_amount: Wrapped<DecimalAmount>,
+    pub per_diem_amount: Wrapped<f64>,
     /// Source tier: T2
     #[serde(default)]
-    pub meal_deduction: Wrapped<DecimalAmount>,
+    pub meal_deduction: Wrapped<f64>,
     /// Source tier: T2
     #[serde(default)]
-    pub net_amount: Wrapped<DecimalAmount>,
+    pub net_amount: Wrapped<f64>,
 
 }
 
@@ -1310,7 +1294,7 @@ pub struct ExpenseReportPerDiemExpensesItem {
     /// Source tier: T2
     /// Infer from:  Computed: end_date - start_date + 1
     #[serde(default)]
-    pub number_of_days: Wrapped<DecimalAmount>,
+    pub number_of_days: Wrapped<f64>,
     ///  City, State/Country
     /// Source tier: T3
     /// Infer from:  Destination from flight or hotel docs
@@ -1330,7 +1314,7 @@ pub struct ExpenseReportPerDiemExpensesItem {
     /// Source tier: T2
     /// Infer from:  API lookup by location + date
     #[serde(default)]
-    pub per_diem_rate: Wrapped<DecimalAmount>,
+    pub per_diem_rate: Wrapped<f64>,
     /// Source tier: T3
     /// Infer from:  Generated summary of dates and location
     #[serde(default)]

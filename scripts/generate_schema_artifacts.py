@@ -289,7 +289,11 @@ def rust_type(node: SchemaNode) -> str:
     if node.node_type == "date":
         return "IsoDate"
     if node.node_type == "number":
-        return "DecimalAmount"
+        # f64 has ~15-17 decimal digits of precision — sufficient for this
+        # domain (travel-expense amounts). The YAML literally says "number";
+        # earlier codegen used a string newtype to dodge IEEE 754 precision,
+        # which mattered more for accounting at scale than for receipts.
+        return "f64"
     if node.node_type == "boolean":
         return "bool"
     if node.node_type == "enum":
@@ -376,22 +380,6 @@ def generate_rust_model(root: SchemaNode, schema_version: str) -> str:
         "}",
         "",
         "impl From<&str> for IsoDate {",
-        "    fn from(value: &str) -> Self {",
-        "        Self(value.to_owned())",
-        "    }",
-        "}",
-        "",
-        "#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]",
-        "#[serde(transparent)]",
-        "pub struct DecimalAmount(pub String);",
-        "",
-        "impl From<String> for DecimalAmount {",
-        "    fn from(value: String) -> Self {",
-        "        Self(value)",
-        "    }",
-        "}",
-        "",
-        "impl From<&str> for DecimalAmount {",
         "    fn from(value: &str) -> Self {",
         "        Self(value.to_owned())",
         "    }",
