@@ -1,0 +1,1262 @@
+{
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "expense_kind": {
+        "type": "string",
+        "enum": [
+          "meal"
+        ]
+      },
+      "common": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string",
+                "description": "ISO 8601 date (YYYY-MM-DD)"
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "line_amount_usd": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "number"
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "original_currency": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string",
+                "nullable": true,
+                "description": "ISO 4217 code or null if USD"
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "original_amount": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "expense_type": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string",
+                "enum": [
+                  "adjusted_per_diem",
+                  "airfare_domestic",
+                  "airfare_foreign",
+                  "ancillary_airline_fee",
+                  "business_meal",
+                  "business_meal_with_alcohol",
+                  "car_rental",
+                  "conference_registration",
+                  "gift_card_employee_foreign",
+                  "gifts_foreign_activity",
+                  "ground_transportation_foreign",
+                  "ground_transportation_domestic",
+                  "group_travel_meal",
+                  "group_travel_meal_with_alcohol",
+                  "human_subject_incentive",
+                  "lodging_domestic",
+                  "lodging_foreign",
+                  "other_business_expense"
+                ]
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "remarks": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "country_of_activity": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string",
+                "nullable": true
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "foreign_activity_type": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string",
+                "nullable": true,
+                "enum": [
+                  "conference",
+                  "research_collaboration",
+                  "fieldwork",
+                  "other"
+                ]
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "source_documents": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "filename": {
+                      "type": "string"
+                    },
+                    "document_type": {
+                      "type": "string",
+                      "enum": [
+                        "receipt",
+                        "booking_confirmation",
+                        "price_comparison",
+                        "currency_conversion",
+                        "conference_program",
+                        "missing_receipt_form",
+                        "other"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "filename",
+                    "document_type"
+                  ]
+                }
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          }
+        },
+        "required": [
+          "date",
+          "line_amount_usd",
+          "original_currency",
+          "original_amount",
+          "expense_type",
+          "remarks",
+          "country_of_activity",
+          "foreign_activity_type",
+          "source_documents"
+        ]
+      },
+      "meal_details": {
+        "type": "object",
+        "properties": {
+          "venue_name": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "attendees": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "array",
+                "nullable": true,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "affiliation": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ]
+                }
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "meal_purpose": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string",
+                "nullable": true
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "alcohol_amount": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "tip_amount": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "has_alcohol_on_receipt": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "boolean"
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          }
+        },
+        "required": [
+          "venue_name",
+          "attendees",
+          "meal_purpose",
+          "alcohol_amount",
+          "tip_amount",
+          "has_alcohol_on_receipt"
+        ]
+      }
+    },
+    "required": [
+      "expense_kind",
+      "common",
+      "meal_details"
+    ]
+  }
+}
