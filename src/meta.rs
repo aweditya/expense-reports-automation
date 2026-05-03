@@ -187,15 +187,10 @@ mod tests {
                 "expense_type": {"value": "business_meal_with_alcohol", "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}},
                 "remarks": {"value": "Dinner at MJ Sushi", "_meta": {"confidence": "medium", "evidence": [], "needs_review": true, "flags": []}},
                 "country_of_activity": {"value": "United States", "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}},
-                "foreign_activity_type": {"value": null, "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}},
-                "source_documents": [
-                    {"filename": "mjsushi.jpeg", "document_type": "receipt"}
-                ]
+                "foreign_activity_type": {"value": null, "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}}
             },
             "meal_details": {
                 "venue_name": {"value": "MJ Sushi", "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}},
-                "attendees": [],
-                "meal_purpose": null,
                 "alcohol_amount": {"value": 0.0, "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}},
                 "tip_amount": {"value": 0.0, "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}},
                 "has_alcohol_on_receipt": {"value": true, "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}}

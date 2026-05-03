@@ -80,8 +80,8 @@ enforced by the response schema — fill the values from the receipt.
   `origin: not_present_in_receipt`, `not_applicable_for_domestic`, or
   `not_applicable_for_foreign`. Do NOT cite an unrelated quote with
   `document_span` to evidence a null value.
-- `needs_review` is true for: `attendees`, `meal_purpose`, any value you
-  guessed, and any field where you used `medium` or `low` confidence.
+- `needs_review` is true for any value you guessed, and any field where
+  you used `medium` or `low` confidence.
 - `flags` stays empty unless you observe something irregular.
 """
 

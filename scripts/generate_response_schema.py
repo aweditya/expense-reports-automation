@@ -98,34 +98,10 @@ def common_block_schema(expense_type_values: list[str]) -> dict:
                     "enum": ["conference", "research_collaboration", "fieldwork", "other"],
                 }
             ),
-            # The array is leaf-wrapped (carries _meta) but its items have
-            # BARE fields — Gemini's response_schema rejects deeply-nested
-            # leaf wrappings inside array items. Reconciling this with the
-            # codegen (which wraps every leaf) is M6.2 work.
-            "source_documents": leaf(
-                {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "filename": {"type": "string"},
-                            "document_type": {
-                                "type": "string",
-                                "enum": [
-                                    "receipt",
-                                    "booking_confirmation",
-                                    "price_comparison",
-                                    "currency_conversion",
-                                    "conference_program",
-                                    "missing_receipt_form",
-                                    "other",
-                                ],
-                            },
-                        },
-                        "required": ["filename", "document_type"],
-                    },
-                }
-            ),
+            # source_documents is intentionally NOT in the per-receipt
+            # schema — the FA gave us the file (we already know its name and
+            # type). Reduction populates source_documents from the input
+            # context. See Architecture B in docs/redesign-plan.md.
         },
         "required": [
             "date",
@@ -136,7 +112,6 @@ def common_block_schema(expense_type_values: list[str]) -> dict:
             "remarks",
             "country_of_activity",
             "foreign_activity_type",
-            "source_documents",
         ],
     }
 
@@ -146,32 +121,15 @@ def meal_details_block_schema() -> dict:
         "type": "object",
         "properties": {
             "venue_name": leaf({"type": "string"}),
-            # See source_documents above — same rationale, items have BARE
-            # fields because Gemini's response_schema rejects deeply-nested
-            # wrapping. M6.2 reconciles.
-            "attendees": leaf(
-                {
-                    "type": "array",
-                    "nullable": True,
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "name": {"type": "string"},
-                            "affiliation": {"type": "string"},
-                        },
-                        "required": ["name"],
-                    },
-                }
-            ),
-            "meal_purpose": leaf({"type": "string", "nullable": True}),
+            # attendees and meal_purpose are intentionally NOT in the
+            # per-receipt schema — both are T1 (FA fills later). See
+            # Architecture B in docs/redesign-plan.md.
             "alcohol_amount": leaf({"type": "number", "nullable": True}),
             "tip_amount": leaf({"type": "number", "nullable": True}),
             "has_alcohol_on_receipt": leaf({"type": "boolean"}),
         },
         "required": [
             "venue_name",
-            "attendees",
-            "meal_purpose",
             "alcohol_amount",
             "tip_amount",
             "has_alcohol_on_receipt",
