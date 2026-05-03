@@ -1402,8 +1402,8 @@
               "present": true,
               "needs_review": false,
               "required": false,
-              "source": "T3",
-              "entry_mode": "model_prefill_review",
+              "source": "T1",
+              "entry_mode": "user_confirmed_input",
               "evidence": []
             }
           ]
@@ -2136,8 +2136,8 @@
               "present": true,
               "needs_review": false,
               "required": false,
-              "source": "T3",
-              "entry_mode": "model_prefill_review",
+              "source": "T1",
+              "entry_mode": "user_confirmed_input",
               "evidence": []
             }
           ]
@@ -2673,8 +2673,8 @@
               "present": true,
               "needs_review": false,
               "required": false,
-              "source": "T3",
-              "entry_mode": "model_prefill_review",
+              "source": "T1",
+              "entry_mode": "user_confirmed_input",
               "evidence": []
             },
             {

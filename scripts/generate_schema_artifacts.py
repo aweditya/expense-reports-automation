@@ -309,17 +309,24 @@ def rust_type(node: SchemaNode) -> str:
 def rust_field_type(node: SchemaNode) -> str:
     base_type = rust_type(node)
     if node.is_leaf:
-        # Every leaf is wrapped — `Wrapped<T> { value: Option<T>, _meta: ... }`
-        # Presence/absence is carried inside `value`; required-ness is
-        # enforced by Pass 2 (FIELD_RULES + CONDITIONAL_RULES), not by the
-        # struct shape. See M6.1 in docs/redesign-plan.md for the rationale.
-        #
-        # Arrays are NOT wrapped at the codegen level — `Vec<T>` always.
-        # Reconciling Python's wrapped-array output with Rust's bare Vec<T>
-        # is M6.2 work; Gemini's response_schema rejects deeply-nested leaf
-        # wrappings inside array items, so we cannot make Python match a
-        # `Wrapped<Vec<Item-with-wrapped-leaves>>` shape end-to-end today.
-        return f"Wrapped<{base_type}>"
+        # Wrap by source tier:
+        # - T3 leaves are extracted from documents — they need _meta
+        #   provenance so the workbench can show "this came from this
+        #   quote at this confidence." → `Wrapped<T>`.
+        # - T1 leaves are FA-input — provenance is "the FA typed it" and
+        #   doesn't need a document quote. → `Option<T>` (pragmatic;
+        #   required-ness lives in Pass 2 via FIELD_RULES).
+        # - T2 leaves are system-derived — provenance is "computed by step
+        #   X" and lives in the reduction layer. → `Option<T>`.
+        # - Leaves with no source tier (root-level / structural) fall back
+        #   to the required-ness rule.
+        if node.effective_source == "T3":
+            return f"Wrapped<{base_type}>"
+        if node.effective_source in ("T1", "T2"):
+            return f"Option<{base_type}>"
+        if node.required and node.required_expression is None:
+            return base_type
+        return f"Option<{base_type}>"
     if node.required and node.required_expression is None:
         return base_type
     return f"Option<{base_type}>"

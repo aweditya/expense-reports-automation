@@ -361,7 +361,8 @@ impl core::fmt::Display for ExpenseReportTransactionLinesItemCommonForeignActivi
     }
 }
 
-/// Source tier: T3
+///  Document kind chosen by the FA at upload time.
+/// Source tier: T1
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeEnum {
@@ -699,29 +700,29 @@ pub struct ExpenseReportGeneralInformationBusinessPurpose {
     /// Source tier: T1
     /// Infer from:  Suggestion only — payee name and affiliation
     #[serde(default)]
-    pub who: Wrapped<String>,
+    pub who: Option<String>,
     /// Source tier: T1
     /// Infer from:  Suggestion only — conference name from registration receipt; or meeting
     /// Infer from: purpose from context
     #[serde(default)]
-    pub what: Wrapped<String>,
+    pub what: Option<String>,
     /// Source tier: T1
     /// Infer from:  Suggestion only — trip dates from flight itinerary
     #[serde(default)]
-    pub when: Wrapped<String>,
+    pub when: Option<String>,
     /// Source tier: T1
     /// Infer from:  Suggestion only — destination city/country from flight or hotel docs
     #[serde(default)]
-    pub r#where: Wrapped<String>,
+    pub r#where: Option<String>,
     /// Source tier: T1
     /// Infer from:  Suggestion only — presenting at conference (if name appears in program),
     /// Infer from: research collaboration, etc.
     #[serde(default)]
-    pub why: Wrapped<String>,
+    pub why: Option<String>,
     ///  30-character lookup key entered by the FA
     /// Source tier: T1
     #[serde(default)]
-    pub key_30char: Wrapped<String>,
+    pub key_30char: Option<String>,
 
 }
 
@@ -770,11 +771,11 @@ pub struct ExpenseReportGeneralInformation {
     ///  Defaults to 'no' unless explicitly requested
     /// Source tier: T1
     #[serde(default)]
-    pub rush_processing: Wrapped<ExpenseReportGeneralInformationRushProcessingEnum>,
+    pub rush_processing: Option<ExpenseReportGeneralInformationRushProcessingEnum>,
     ///  Always 'electronic' — system pre-fills
     /// Source tier: T2
     #[serde(default)]
-    pub payment_method: Wrapped<String>,
+    pub payment_method: Option<String>,
     ///  Structured purpose statement entered by the FA. First 30 chars of the combined text
     /// serve as a lookup key.
     /// Source tier: T1
@@ -791,7 +792,7 @@ pub struct ExpenseReportGeneralInformation {
     ///  Faculty member or approver name
     /// Source tier: T1
     #[serde(default)]
-    pub authorized_by: Wrapped<String>,
+    pub authorized_by: Option<String>,
 
 }
 
@@ -801,11 +802,11 @@ pub struct ExpenseReportTransactionSummary {
     /// a separate field.
     /// Source tier: T1
     #[serde(default)]
-    pub transaction_type: Wrapped<ExpenseReportTransactionSummaryTransactionTypeEnum>,
+    pub transaction_type: Option<ExpenseReportTransactionSummaryTransactionTypeEnum>,
     ///  Format: ERxxxxxxx. Assigned by the system or existing system.
     /// Source tier: T2
     #[serde(default)]
-    pub transaction_number: Wrapped<String>,
+    pub transaction_number: Option<String>,
     ///  Date of the expense (earliest expense date across all receipts in the bundle).
     /// Source tier: T3
     /// Infer from:  Earliest common.date across transaction_lines
@@ -814,23 +815,25 @@ pub struct ExpenseReportTransactionSummary {
     ///  FA-entered submission state.
     /// Source tier: T1
     #[serde(default)]
-    pub status: Wrapped<ExpenseReportTransactionSummaryStatusEnum>,
+    pub status: Option<ExpenseReportTransactionSummaryStatusEnum>,
     ///  Sum of all transaction lines, converted to USD
     /// Source tier: T2
     #[serde(default)]
-    pub total_usd: Wrapped<f64>,
+    pub total_usd: Option<f64>,
 
 }
 
 /// Source tier: T3
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemCommonSourceDocumentsItem {
-    /// Source tier: T3
+    ///  Filename the FA uploaded — system context, not extracted.
+    /// Source tier: T1
     #[serde(default)]
-    pub filename: Wrapped<String>,
-    /// Source tier: T3
+    pub filename: Option<String>,
+    ///  Document kind chosen by the FA at upload time.
+    /// Source tier: T1
     #[serde(default)]
-    pub document_type: Wrapped<ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeEnum>,
+    pub document_type: Option<ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeEnum>,
 
 }
 
@@ -860,7 +863,7 @@ pub struct ExpenseReportTransactionLinesItemCommon {
     /// Source tier: T2
     /// Infer from:  Historical rate for common.date from exchange rate API
     #[serde(default)]
-    pub exchange_rate: Wrapped<f64>,
+    pub exchange_rate: Option<f64>,
     /// Source tier: T3
     /// Infer from:  LLM classifies from receipt content
     #[serde(default)]
@@ -893,13 +896,13 @@ pub struct ExpenseReportTransactionLinesItemCommon {
 pub struct ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonComparableFaresItem {
     /// Source tier: T2
     #[serde(default)]
-    pub airline: Wrapped<String>,
+    pub airline: Option<String>,
     /// Source tier: T2
     #[serde(default)]
-    pub amount: Wrapped<f64>,
+    pub amount: Option<f64>,
     /// Source tier: T2
     #[serde(default)]
-    pub class: Wrapped<String>,
+    pub class: Option<String>,
 
 }
 
@@ -910,13 +913,13 @@ pub struct ExpenseReportTransactionLinesItemAirfareDetailsPriceComparison {
     ///  Date the comparison was generated
     /// Source tier: T2
     #[serde(default)]
-    pub comparison_date: Wrapped<IsoDate>,
+    pub comparison_date: Option<IsoDate>,
     /// Source tier: T2
     #[serde(default)]
     pub comparable_fares: Option<Vec<ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonComparableFaresItem>>,
     /// Source tier: T2
     #[serde(default)]
-    pub source: Wrapped<ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonSourceEnum>,
+    pub source: Option<ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonSourceEnum>,
 
 }
 
@@ -990,7 +993,7 @@ pub struct ExpenseReportTransactionLinesItemLodgingDetails {
     /// Source tier: T2
     /// Infer from:  Computed: check_out_date - check_in_date
     #[serde(default)]
-    pub number_of_nights: Wrapped<f64>,
+    pub number_of_nights: Option<f64>,
     ///  In original currency
     /// Source tier: T3
     /// Infer from:  Hotel folio
@@ -1009,12 +1012,12 @@ pub struct ExpenseReportTransactionLinesItemLodgingDetails {
     /// Conditionally required when:  lodging_details.is_shared_lodging == true
     /// Source tier: T1
     #[serde(default)]
-    pub shared_with_transaction_number: Wrapped<String>,
+    pub shared_with_transaction_number: Option<String>,
     ///  Number of nights flagged as personal (outside conference dates)
     /// Source tier: T2
     /// Infer from:  Compare hotel dates against conference dates from registration
     #[serde(default)]
-    pub personal_nights_excluded: Wrapped<f64>,
+    pub personal_nights_excluded: Option<f64>,
 
 }
 
@@ -1037,7 +1040,7 @@ pub struct ExpenseReportTransactionLinesItemGroundTransportDetails {
     ///  If true, missing receipt form is used instead
     /// Source tier: T1
     #[serde(default)]
-    pub missing_receipt: Wrapped<bool>,
+    pub missing_receipt: Option<bool>,
 
 }
 
@@ -1101,10 +1104,10 @@ pub struct ExpenseReportTransactionLinesItemConferenceRegistrationDetails {
 pub struct ExpenseReportTransactionLinesItemMealDetailsAttendeesItem {
     /// Source tier: T1
     #[serde(default)]
-    pub name: Wrapped<String>,
+    pub name: Option<String>,
     /// Source tier: T1
     #[serde(default)]
-    pub affiliation: Wrapped<String>,
+    pub affiliation: Option<String>,
 
 }
 
@@ -1122,7 +1125,7 @@ pub struct ExpenseReportTransactionLinesItemMealDetails {
     pub attendees: Vec<ExpenseReportTransactionLinesItemMealDetailsAttendeesItem>,
     /// Source tier: T1
     #[serde(default)]
-    pub meal_purpose: Wrapped<String>,
+    pub meal_purpose: Option<String>,
     /// Conditionally required when:  expense_type in [business_meal_with_alcohol,
     /// Conditionally required when: group_travel_meal_with_alcohol]
     /// Source tier: T3
@@ -1182,13 +1185,13 @@ pub struct ExpenseReportTransactionLinesItemCarRentalDetails {
 pub struct ExpenseReportTransactionLinesItemGiftDetails {
     /// Source tier: T1
     #[serde(default)]
-    pub recipient_name: Wrapped<String>,
+    pub recipient_name: Option<String>,
     /// Source tier: T1
     #[serde(default)]
-    pub recipient_relationship: Wrapped<String>,
+    pub recipient_relationship: Option<String>,
     /// Source tier: T1
     #[serde(default)]
-    pub gift_purpose: Wrapped<String>,
+    pub gift_purpose: Option<String>,
 
 }
 
@@ -1197,7 +1200,7 @@ pub struct ExpenseReportTransactionLinesItemGiftDetails {
 pub struct ExpenseReportTransactionLinesItemHumanSubjectDetails {
     /// Source tier: T1
     #[serde(default)]
-    pub irb_protocol_number: Wrapped<String>,
+    pub irb_protocol_number: Option<String>,
     /// Source tier: T3
     /// Infer from:  Distribution log
     #[serde(default)]
@@ -1241,20 +1244,20 @@ pub struct ExpenseReportTransactionLinesItem {
 pub struct ExpenseReportPerDiemExpensesItemMealDeductionsItem {
     /// Source tier: T2
     #[serde(default)]
-    pub date: Wrapped<IsoDate>,
+    pub date: Option<IsoDate>,
     /// Source tier: T2
     #[serde(default)]
-    pub breakfast_provided: Wrapped<bool>,
+    pub breakfast_provided: Option<bool>,
     /// Source tier: T2
     #[serde(default)]
-    pub lunch_provided: Wrapped<bool>,
+    pub lunch_provided: Option<bool>,
     /// Source tier: T2
     #[serde(default)]
-    pub dinner_provided: Wrapped<bool>,
+    pub dinner_provided: Option<bool>,
     ///  Computed from per diem rate breakdown
     /// Source tier: T2
     #[serde(default)]
-    pub deduction_amount: Wrapped<f64>,
+    pub deduction_amount: Option<f64>,
 
 }
 
@@ -1263,16 +1266,16 @@ pub struct ExpenseReportPerDiemExpensesItemMealDeductionsItem {
 pub struct ExpenseReportPerDiemExpensesItemReimbursementSummaryItem {
     /// Source tier: T2
     #[serde(default)]
-    pub date: Wrapped<IsoDate>,
+    pub date: Option<IsoDate>,
     /// Source tier: T2
     #[serde(default)]
-    pub per_diem_amount: Wrapped<f64>,
+    pub per_diem_amount: Option<f64>,
     /// Source tier: T2
     #[serde(default)]
-    pub meal_deduction: Wrapped<f64>,
+    pub meal_deduction: Option<f64>,
     /// Source tier: T2
     #[serde(default)]
-    pub net_amount: Wrapped<f64>,
+    pub net_amount: Option<f64>,
 
 }
 
@@ -1294,7 +1297,7 @@ pub struct ExpenseReportPerDiemExpensesItem {
     /// Source tier: T2
     /// Infer from:  Computed: end_date - start_date + 1
     #[serde(default)]
-    pub number_of_days: Wrapped<f64>,
+    pub number_of_days: Option<f64>,
     ///  City, State/Country
     /// Source tier: T3
     /// Infer from:  Destination from flight or hotel docs
@@ -1314,7 +1317,7 @@ pub struct ExpenseReportPerDiemExpensesItem {
     /// Source tier: T2
     /// Infer from:  API lookup by location + date
     #[serde(default)]
-    pub per_diem_rate: Wrapped<f64>,
+    pub per_diem_rate: Option<f64>,
     /// Source tier: T3
     /// Infer from:  Generated summary of dates and location
     #[serde(default)]
@@ -1341,10 +1344,10 @@ pub struct ExpenseReportMileageExpensesItem {
 pub struct ExpenseReportAllocationAndApproversBeneficiaryListItem {
     /// Source tier: T1
     #[serde(default)]
-    pub name: Wrapped<String>,
+    pub name: Option<String>,
     /// Source tier: T1
     #[serde(default)]
-    pub relationship: Wrapped<String>,
+    pub relationship: Option<String>,
 
 }
 
@@ -1353,7 +1356,7 @@ pub struct ExpenseReportAllocationAndApprovers {
     ///  Are there any beneficiaries other than the payee?
     /// Source tier: T1
     #[serde(default)]
-    pub other_beneficiaries: Wrapped<bool>,
+    pub other_beneficiaries: Option<bool>,
     /// Conditionally required when:  allocation_and_approvers.other_beneficiaries == true
     /// Source tier: T1
     #[serde(default)]

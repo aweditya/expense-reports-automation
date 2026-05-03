@@ -274,8 +274,12 @@ expense_report:
               fields:
                 filename:
                   type: string
+                  source: T1
+                  description: "Filename the FA uploaded — system context, not extracted."
                 document_type:
                   type: enum
+                  source: T1
+                  description: "Document kind chosen by the FA at upload time."
                   allowed_values:
                     - receipt
                     - booking_confirmation
