@@ -103,14 +103,39 @@ the decision until M6.
   `country_of_activity` filled when it should be null for domestic, and
   `gemini-3-flash-preview` thinking tokens count toward
   `max_output_tokens` (had to raise to 32768).
-- [ ] **M5. Reduction step (Rust).** New module: list of typed lines (read
+- [ ] **M5. Harden the extractor (Python).** Address the prompt + schema
+  enforcement issues from the M4 review now, before designing Rust against
+  imperfect inputs. Four sub-steps, one commit each:
+  - **M5.1 Schema generator.** `scripts/generate_response_schema.py` reads
+    `schema.yaml` and emits `generated/response_schema_meal.json` — the
+    SDK-ready response schema for a list of meal transaction lines.
+    Meal-only because that's all our corpus covers; other kinds get added
+    when receipts of those kinds appear.
+  - **M5.2 Wire `response_schema` into the extractor.** Modify
+    `scripts/spike_extract.py` to load the generated schema, pass it as
+    `response_schema` in the SDK call, and drop the inline schema
+    description from the prompt. Verify against the three real receipts:
+    structural fixes (always-array wrapping, all required fields) should
+    land on first run. If the SDK rejects our schema or returns errors,
+    fall back to keeping `response_mime_type` only and document in the
+    regrets log.
+  - **M5.3 Tighten the prompt.** With shape guaranteed, the prompt
+    focuses on reasoning rules: when to use `group_*` variants, where to
+    look for `tip_amount`, evidence-kind discipline for null values,
+    confidence calibration. Re-run on three receipts; each issue from
+    the M4 review either fixed or accepted with rationale.
+  - **M5.4 Acceptance harness.** `scripts/spike_acceptance_check.py`
+    runs the extractor on the three receipts and asserts the ~6-8
+    fields-that-matter per receipt. Manual-run script (no Cloud Build
+    integration). Pass/fail per receipt, summary line.
+- [ ] **M6. Reduction step (Rust).** New module: list of typed lines (read
   from the JSON files Python wrote) → `general_information` block +
   `transaction_summary` + `per_diem_expenses`. Pure functions. Commit.
-- [ ] **M6. Wire into workbench, deploy, validate on real receipts.** Make the
+- [ ] **M7. Wire into workbench, deploy, validate on real receipts.** Make the
   workbench render the new typed report. Strip the parts that depend on the
   old pipeline. Deploy to Cloud Run. **Verdict from the deployed site on the 3
   receipts.** Iterate.
-- [ ] **M7. Delete the old pipeline.** Once the new path works on real
+- [ ] **M8. Delete the old pipeline.** Once the new path works on real
   receipts via the deployed site, delete:
   - `src/vertex_gemini.rs` (REST client) and `src/vertex_gemini_sdk.rs`
     (Rust→Python subprocess wrapper) — both made obsolete by the
@@ -132,12 +157,24 @@ the decision until M6.
 
 ## Current step
 
-**M5 (next).** Rust reduction step: a new module that reads the typed JSON
-files produced by `scripts/spike_extract.py` (one transaction line per
-file), aggregates them per bundle, and produces `general_information` +
-`transaction_summary` + `per_diem_expenses`. Pure functions, testable.
-This is independent of the prompt-iteration items in the M4 review notes —
-the JSON shape is stable enough to design the reduction against now.
+**M5.1 (next).** Schema generator: `scripts/generate_response_schema.py`.
+Reads `schema.yaml`, emits `generated/response_schema_meal.json` containing
+a JSON-Schema-shaped object the Google Gen AI SDK can use as its
+`response_schema`. Meal-only. Verifies the output parses as valid JSON.
+No Gemini call yet.
+
+After M5.1: M5.2 wires the generated schema into the extractor and re-runs
+on the three receipts to confirm structural fixes land on the first try.
+
+## Mistakes I'm watching for during M5
+
+- Generating schema for expense kinds we don't have receipts of. We can't
+  validate them. Build only meal for now.
+- Building a generic JSON-Schema → SDK-Schema converter when one shape is
+  all we need. Hand-write the conversion.
+- Adding "for the future" prompt rules about expense kinds we haven't seen.
+- Re-piping `cargo test` through `tee` and reading `$?` (M3 mistake).
+- Writing anything to `/tmp` (M3 mistake).
 
 ## Open questions for the FA
 
