@@ -60,6 +60,71 @@ imports/calls Rust validation between iterations. Cleanest is probably
 calling a Rust binary that returns validation issues as JSON." Defer
 the decision until M6.
 
+## Per-receipt JSON shape — Architecture B (locked 2026-05-03)
+
+The per-receipt JSON the extractor writes has TWO compartments:
+
+1. **Schema-shaped fields.** `expense_kind`, `common`, and the matching
+   detail block (`meal_details` for now). These map 1:1 to
+   `ExpenseReportTransactionLinesItem` and flow into the final report
+   unchanged. T3 fields are `Wrapped<T>` (carry _meta provenance from
+   the document); T1/T2 fields stay bare (FA-input or system-derived,
+   no document quote needed).
+
+2. **`extras` block.** Things the model reads off the receipt that are
+   useful to reduction or validation but DON'T appear in `ExpenseReport`.
+   Initial fields: `merchant_address`, `printed_currency`. More added
+   as reduction needs them. Same `_meta` discipline (provenance still
+   matters); they just live at the per-receipt layer only.
+
+The schema (`schema.yaml`) is NOT polluted with these extras. It stays
+focused on what the FA portal stores. Two shapes, one source of truth
+for the report; the per-receipt JSON is a richer thing that the
+extractor produces and reduction consumes.
+
+Why we did this:
+- We never get to re-read a receipt without another Gemini call. Capture
+  what's there now; let reduction decide what to use.
+- Reduction has real work that needs the extras (FX conversion needs
+  printed_currency, foreign/domestic decision needs merchant_address).
+- The schema's discipline matters — it mirrors the portal. The day
+  someone says "is `merchant_address` required for submission?" we want
+  the answer to be obvious from the schema, not "well it depends on
+  what the extractor happened to grab."
+
+## Decisions locked 2026-05-03 (drive M6.2 work)
+
+1. **Money is `f64`.** The YAML says `type: number`. The codegen
+   currently maps `number` → `DecimalAmount(String)` (string-based,
+   chosen to dodge float precision). Reverting to `f64`: this domain
+   doesn't have the magnitudes where IEEE 754 precision bites. M6.2
+   reverts the codegen and the response_schema in lockstep.
+
+2. **Drop `source_documents` and `attendees` from the per-receipt
+   response_schema.** `source_documents` is filename context the system
+   provided (no value re-emitting). `attendees` is T1 (FA fills later).
+   Both still exist in `ExpenseReportTransactionLinesItem` so the full
+   report can carry them; the per-receipt JSON just doesn't emit them.
+   With `#[serde(default)]` on those fields, deserialization works.
+
+3. **Codegen wraps by source tier, not blindly by leaf-ness.**
+   - T3 fields → `Wrapped<T>` (extracted from documents; provenance
+     matters)
+   - T1 fields → bare `T` or `Option<T>` per required-ness (FA input;
+     "the FA typed it" is the provenance, no document quote needed)
+   - T2 fields → bare `T` or `Option<T>` (system-derived; provenance
+     is "computed by step X")
+
+   This dissolves the deeply-nested-wrapping problem with
+   source_documents items naturally.
+
+4. **`extras` block is per-receipt only.** Lives in the Python output's
+   JSON, not in the schema. Rust side: the per-receipt deserialization
+   target is a wrapper struct, e.g. `ExtractedReceipt { line:
+   ExpenseReportTransactionLinesItem, extras: Extras }`. Reduction reads
+   both. The final `ExpenseReport` only carries `line` (extras don't
+   flow downstream past reduction).
+
 ## Schema decisions (made; pending edits in M2)
 
 | Decision | Status |
@@ -152,35 +217,37 @@ the decision until M6.
       the proof that the duplication gap closed — same Rust type for
       both extracted-from-Python and report-state.
 
-  **M6.2 — Reduction function over `Vec<ExpenseReportTransactionLine>`,
-  PLUS reconciling the array-shape mismatch carried over from M6.1.**
+  **M6.2 — Per-receipt cleanup + reduction function (Architecture B).**
 
-  *Carryover from M6.1:* Gemini's `response_schema` rejects deeply-nested
-  leaf wrappings inside array items, so for `source_documents` and
-  `attendees` the array is leaf-wrapped at the array level
-  (Wrapped<Vec<...>>-shaped JSON) but the items have BARE leaf fields.
-  The codegen meanwhile wraps every scalar leaf and emits `Vec<...>`
-  for arrays. Net: Python's actual output for any line with non-empty
-  source_documents won't deserialize into `ExpenseReportTransactionLinesItem`
-  yet. The unit test in src/meta.rs proves the Wrapped<T> deserialization
-  contract works on hand-crafted JSON; full end-to-end Python->Rust round
-  trip is M6.2's first job.
+  Sub-steps, one commit each:
 
-  Three reasonable resolutions to consider:
-  1. Custom Deserialize for source_documents/attendees that adapts the
-     `Wrapped<Vec<{bare-fields}>>` JSON into `Vec<ItemWithWrappedLeaves>`.
-  2. Have Python post-process its output to flatten the wrapped arrays
-     before writing the JSON file.
-  3. Add a schema-level marker for "extractor-emitted" arrays so the
-     codegen can wrap them as `Wrapped<Vec<{bare-item}>>` and emit
-     bare-leaf item structs for those specifically.
-
-  *Reduction itself:* a small library of named reductions (sum, earliest,
-  foreign-presence) in a single `src/reduce.rs`. Aggregates per-bundle
-  into a complete `ExpenseReport`. Per-diem expansion deferred. Plus a
-  binary `src/bin/reduce_extractions.rs` that reads a directory of JSON
-  files and writes one report. Acceptance harness extended to exercise
-  the end-to-end Python -> Rust path on the four real receipts.
+  - **M6.2.a Revert money to `f64`.** Codegen `number` → `f64` (drop
+    DecimalAmount string-newtype). Response_schema money fields back to
+    `number` (drop the string description). Acceptance-harness
+    expectations back to numeric literals.
+  - **M6.2.b Codegen wraps by source tier.** T3 leaves → `Wrapped<T>`;
+    T1/T2 leaves → bare `T` or `Option<T>` per required-ness. Eliminates
+    the deeply-nested wrapping problem (source_documents/attendees items
+    now have bare fields and Gemini accepts that shape natively).
+  - **M6.2.c Drop source_documents and attendees from the per-receipt
+    response_schema.** They stay in the schema's full report struct, but
+    the extractor doesn't emit them. `serde(default)` handles the absence
+    on deserialize.
+  - **M6.2.d Add the `extras` block to the per-receipt JSON.** Initial
+    fields: `merchant_address`, `printed_currency`. Hand-written
+    response_schema additions; same `_meta` discipline. Add a Rust
+    `Extras` struct + `ExtractedReceipt { line: ExpenseReportTransactionLinesItem,
+    extras: Extras }` wrapper for deserialization. Update the unit test
+    in src/meta.rs to deserialize the new shape.
+  - **M6.2.e Reduction library.** `src/reduce.rs` with named reductions
+    (sum, earliest, foreign_presence_from_extras, etc.). Aggregates a
+    `Vec<ExtractedReceipt>` into a complete `ExpenseReport`. Per-diem
+    expansion deferred. Unit-tested.
+  - **M6.2.f Reduction binary.** `src/bin/reduce_extractions.rs` reads
+    `.scratch/spike/*.json`, calls reduce, writes one `ExpenseReport` to
+    `.scratch/reduced/report.json`. Acceptance harness extended with a
+    new `--end-to-end` mode that runs extract → reduce → asserts the
+    aggregated report has 4 lines, total = sum, etc.
 - [ ] **M7. Wire into workbench, deploy, validate on real receipts.** Make the
   workbench render the new typed report. Strip the parts that depend on the
   old pipeline. Deploy to Cloud Run. **Verdict from the deployed site on the 3
@@ -207,11 +274,13 @@ the decision until M6.
 
 ## Current step
 
-**M6.2 (next).** Reduction step. First task: resolve the array-shape
-mismatch for source_documents/attendees that M6.1 carried over. Then
-build the named reductions library + binary, with the acceptance harness
-extended to verify the end-to-end Python -> Rust path on the four real
-receipts.
+**M6.2.a (next).** Revert money fields to `f64` end-to-end.
+
+After M6.2.a: M6.2.b changes the codegen wrapping rule from
+"every leaf" to "T3 leaves only" — this dissolves the array-shape
+mismatch carried over from M6.1 because source_documents/attendees
+items end up with bare fields, which is what Gemini's response_schema
+already accepts.
 
 ## Mistakes I'm watching for during M5
 
