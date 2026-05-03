@@ -23,6 +23,7 @@ pub mod ocr_inspection;
 pub mod parse;
 pub mod readiness;
 pub mod reduce;
+pub mod workbench_simple;
 pub mod render;
 // Old-pipeline workbench renderers. Physically in `old/` (slated for
 // deletion in M8); logically still in the crate so the pre-redesign
