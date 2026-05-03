@@ -248,6 +248,29 @@ Why we did this:
     `.scratch/reduced/report.json`. Acceptance harness extended with a
     new `--end-to-end` mode that runs extract → reduce → asserts the
     aggregated report has 4 lines, total = sum, etc.
+- [ ] **M6.5 — Hardening pass before M7 wires the workbench.** Captured
+  during the M6.2.d retrospective; proceed with these *after* M6.2 lands
+  and *before* M7 starts touching the workbench. Ordered by risk:
+  - **M6.5.a Round-trip test for schema/Python alignment.** Take a known
+    Python output, deserialize into the typed Rust model, re-serialize,
+    diff. Catches silent field drops and silent renames that
+    `serde(default)` masks today. ~30 lines, lives next to the meta
+    unit tests.
+  - **M6.5.b `response_schema` validator script.** Calls
+    `genai.types.Schema.model_validate(...)` on
+    `generated/response_schema_meal.json` and exits non-zero on rejection.
+    Catches "Gemini won't accept this" at codegen time, not at extract
+    time. Wire into a manual run; consider Cloud Build later.
+  - **M6.5.c Pin one acceptance receipt against a recorded Gemini
+    response.** Save the model's response for tamarine (most stable,
+    most information-rich) and replay it in the harness. Lets us test
+    the deserialization + reduction layers without paying for API calls
+    or fighting flake (mels2's date came back as 2024 once).
+  - **M6.5.d Decide on `_meta` codegen (or accept the gap).** `Wrapped<T>`
+    and `FieldMetadata` are hand-written; the schema's `_meta_convention`
+    block doesn't drive codegen. Either codegen `Meta` from the YAML, or
+    document the gap explicitly. Small file, low burden — could go
+    either way.
 - [ ] **M7. Wire into workbench, deploy, validate on real receipts.** Make the
   workbench render the new typed report. Strip the parts that depend on the
   old pipeline. Deploy to Cloud Run. **Verdict from the deployed site on the 3
