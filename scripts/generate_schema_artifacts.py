@@ -454,16 +454,20 @@ def generate_rust_model(root: SchemaNode, schema_version: str) -> str:
         for child in node.fields:
             lines.extend(node_doc_lines(child, indent="    "))
             identifier = rust_identifier(child.name)
-            if child.is_leaf:
-                # Wrapped<T> defaults to `Wrapped::unknown()` (value: None).
-                # `serde(default)` lets Python omit fields it can't fill (e.g.
-                # exchange_rate, T2 / FX-derived) without breaking deserialize.
+            field_type = rust_field_type(child)
+            # `serde(default)` lets Python omit fields without breaking deserialize.
+            # `skip_serializing_if` lets Rust omit defaulted fields on the way back
+            # out so re-serialization round-trips losslessly (M6.5 round-trip check).
+            if field_type.startswith("Option<"):
+                lines.append('    #[serde(default, skip_serializing_if = "Option::is_none")]')
+            elif field_type.startswith("Vec<"):
+                lines.append('    #[serde(default, skip_serializing_if = "Vec::is_empty")]')
+            elif child.is_leaf:
+                # Wrapped<T> — default is Wrapped::unknown() (value: None).
+                # We don't skip these; provenance metadata distinguishes
+                # "extractor saw nothing" from "field absent."
                 lines.append("    #[serde(default)]")
-            elif child.node_type == "array":
-                # Empty Vec is the natural "not yet filled" representation;
-                # Pass 2 enforces array.len() > 0 for required arrays.
-                lines.append("    #[serde(default)]")
-            lines.append(f"    pub {identifier}: {rust_field_type(child)},")
+            lines.append(f"    pub {identifier}: {field_type},")
         lines.append("")
         lines.append("}")
         lines.append("")

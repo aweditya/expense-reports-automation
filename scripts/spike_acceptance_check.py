@@ -204,6 +204,8 @@ def main() -> int:
         else:
             print(f"PASS  {output.name}")
 
+    total_failures += run_roundtrip_check()
+
     if args.end_to_end:
         total_failures += run_end_to_end_check()
 
@@ -213,6 +215,27 @@ def main() -> int:
         return 0
     print(f"FAILED — {total_failures} assertion(s) across {len(RECEIPTS)} receipts.")
     return 1
+
+
+def run_roundtrip_check() -> int:
+    """Round-trip each .scratch/spike/*.json through the Rust ExtractedReceipt
+    deserializer + serializer. Catches silent contract drift between Python
+    and Rust. No Gemini calls."""
+    print()
+    print("round-trip: deserialize each spike output through Rust + diff ...")
+    result = subprocess.run(
+        ["cargo", "run", "--quiet", "--bin", "roundtrip_check"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    # roundtrip_check prints PASS/FAIL per file to stdout; relay it.
+    if result.stdout.strip():
+        for line in result.stdout.strip().splitlines():
+            print(line)
+    if result.returncode != 0:
+        return max(result.stdout.count("FAIL"), 1)
+    return 0
 
 
 def run_end_to_end_check() -> int:

@@ -713,29 +713,29 @@ pub struct ExpenseReportGeneralInformationPayee {
 pub struct ExpenseReportGeneralInformationBusinessPurpose {
     /// Source tier: T1
     /// Infer from:  Suggestion only — payee name and affiliation
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub who: Option<String>,
     /// Source tier: T1
     /// Infer from:  Suggestion only — conference name from registration receipt; or meeting
     /// Infer from: purpose from context
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub what: Option<String>,
     /// Source tier: T1
     /// Infer from:  Suggestion only — trip dates from flight itinerary
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub when: Option<String>,
     /// Source tier: T1
     /// Infer from:  Suggestion only — destination city/country from flight or hotel docs
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub r#where: Option<String>,
     /// Source tier: T1
     /// Infer from:  Suggestion only — presenting at conference (if name appears in program),
     /// Infer from: research collaboration, etc.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub why: Option<String>,
     ///  30-character lookup key entered by the FA
     /// Source tier: T1
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key_30char: Option<String>,
 
 }
@@ -784,11 +784,11 @@ pub struct ExpenseReportGeneralInformation {
     pub payee: ExpenseReportGeneralInformationPayee,
     ///  Defaults to 'no' unless explicitly requested
     /// Source tier: T1
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rush_processing: Option<ExpenseReportGeneralInformationRushProcessingEnum>,
     ///  Always 'electronic' — system pre-fills
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub payment_method: Option<String>,
     ///  Structured purpose statement entered by the FA. First 30 chars of the combined text
     /// serve as a lookup key.
@@ -805,7 +805,7 @@ pub struct ExpenseReportGeneralInformation {
     pub student_certification: ExpenseReportGeneralInformationStudentCertification,
     ///  Faculty member or approver name
     /// Source tier: T1
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub authorized_by: Option<String>,
 
 }
@@ -815,11 +815,11 @@ pub struct ExpenseReportTransactionSummary {
     ///  FA-entered. Typically matches general_information.category but the portal stores it as
     /// a separate field.
     /// Source tier: T1
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transaction_type: Option<ExpenseReportTransactionSummaryTransactionTypeEnum>,
     ///  Format: ERxxxxxxx. Assigned by the system or existing system.
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transaction_number: Option<String>,
     ///  Date of the expense (earliest expense date across all receipts in the bundle).
     /// Source tier: T3
@@ -828,11 +828,11 @@ pub struct ExpenseReportTransactionSummary {
     pub transaction_date: Wrapped<IsoDate>,
     ///  FA-entered submission state.
     /// Source tier: T1
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<ExpenseReportTransactionSummaryStatusEnum>,
     ///  Sum of all transaction lines, converted to USD
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub total_usd: Option<f64>,
 
 }
@@ -842,11 +842,11 @@ pub struct ExpenseReportTransactionSummary {
 pub struct ExpenseReportTransactionLinesItemCommonSourceDocumentsItem {
     ///  Filename the FA uploaded — system context, not extracted.
     /// Source tier: T1
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub filename: Option<String>,
     ///  Document kind chosen by the FA at upload time.
     /// Source tier: T1
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub document_type: Option<ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeEnum>,
 
 }
@@ -876,7 +876,7 @@ pub struct ExpenseReportTransactionLinesItemCommon {
     /// Conditionally required when:  general_information.category == expenses_foreign
     /// Source tier: T2
     /// Infer from:  Historical rate for common.date from exchange rate API
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub exchange_rate: Option<f64>,
     /// Source tier: T3
     /// Infer from:  LLM classifies from receipt content
@@ -900,7 +900,7 @@ pub struct ExpenseReportTransactionLinesItemCommon {
     ///  References to uploaded documents supporting this line. Filled by the extractor from the
     /// same documents that produced the line's other fields.
     /// Source tier: T3
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub source_documents: Vec<ExpenseReportTransactionLinesItemCommonSourceDocumentsItem>,
 
 }
@@ -909,13 +909,13 @@ pub struct ExpenseReportTransactionLinesItemCommon {
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonComparableFaresItem {
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub airline: Option<String>,
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub amount: Option<f64>,
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub class: Option<String>,
 
 }
@@ -926,13 +926,13 @@ pub struct ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonCompara
 pub struct ExpenseReportTransactionLinesItemAirfareDetailsPriceComparison {
     ///  Date the comparison was generated
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub comparison_date: Option<IsoDate>,
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub comparable_fares: Option<Vec<ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonComparableFaresItem>>,
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonSourceEnum>,
 
 }
@@ -1006,7 +1006,7 @@ pub struct ExpenseReportTransactionLinesItemLodgingDetails {
     pub check_out_date: Wrapped<IsoDate>,
     /// Source tier: T2
     /// Infer from:  Computed: check_out_date - check_in_date
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub number_of_nights: Option<f64>,
     ///  In original currency
     /// Source tier: T3
@@ -1025,12 +1025,12 @@ pub struct ExpenseReportTransactionLinesItemLodgingDetails {
     ///  ERxxxxxxx of the other traveler's report
     /// Conditionally required when:  lodging_details.is_shared_lodging == true
     /// Source tier: T1
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shared_with_transaction_number: Option<String>,
     ///  Number of nights flagged as personal (outside conference dates)
     /// Source tier: T2
     /// Infer from:  Compare hotel dates against conference dates from registration
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub personal_nights_excluded: Option<f64>,
 
 }
@@ -1053,7 +1053,7 @@ pub struct ExpenseReportTransactionLinesItemGroundTransportDetails {
     pub service_provider: Wrapped<String>,
     ///  If true, missing receipt form is used instead
     /// Source tier: T1
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub missing_receipt: Option<bool>,
 
 }
@@ -1082,7 +1082,7 @@ pub struct ExpenseReportTransactionLinesItemConferenceRegistrationDetailsMealsIn
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemConferenceRegistrationDetailsMealsIncluded {
     /// Source tier: T3
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub schedule: Option<Vec<ExpenseReportTransactionLinesItemConferenceRegistrationDetailsMealsIncludedScheduleItem>>,
 
 }
@@ -1117,10 +1117,10 @@ pub struct ExpenseReportTransactionLinesItemConferenceRegistrationDetails {
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemMealDetailsAttendeesItem {
     /// Source tier: T1
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     /// Source tier: T1
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub affiliation: Option<String>,
 
 }
@@ -1135,10 +1135,10 @@ pub struct ExpenseReportTransactionLinesItemMealDetails {
     pub venue_name: Wrapped<String>,
     ///  Only the payee knows who attended
     /// Source tier: T1
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub attendees: Vec<ExpenseReportTransactionLinesItemMealDetailsAttendeesItem>,
     /// Source tier: T1
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub meal_purpose: Option<String>,
     /// Conditionally required when:  expense_type in [business_meal_with_alcohol,
     /// Conditionally required when: group_travel_meal_with_alcohol]
@@ -1198,13 +1198,13 @@ pub struct ExpenseReportTransactionLinesItemCarRentalDetails {
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemGiftDetails {
     /// Source tier: T1
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recipient_name: Option<String>,
     /// Source tier: T1
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recipient_relationship: Option<String>,
     /// Source tier: T1
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gift_purpose: Option<String>,
 
 }
@@ -1213,7 +1213,7 @@ pub struct ExpenseReportTransactionLinesItemGiftDetails {
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemHumanSubjectDetails {
     /// Source tier: T1
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub irb_protocol_number: Option<String>,
     /// Source tier: T3
     /// Infer from:  Distribution log
@@ -1231,24 +1231,32 @@ pub struct ExpenseReportTransactionLinesItemHumanSubjectDetails {
 pub struct ExpenseReportTransactionLinesItem {
     pub common: ExpenseReportTransactionLinesItemCommon,
     /// Conditionally required when:  expense_type in [airfare_domestic, airfare_foreign]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub airfare_details: Option<ExpenseReportTransactionLinesItemAirfareDetails>,
     /// Conditionally required when:  expense_type in [lodging_domestic, lodging_foreign]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lodging_details: Option<ExpenseReportTransactionLinesItemLodgingDetails>,
     /// Conditionally required when:  expense_type in [ground_transportation_foreign,
     /// Conditionally required when: ground_transportation_domestic]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ground_transport_details: Option<ExpenseReportTransactionLinesItemGroundTransportDetails>,
     /// Conditionally required when:  expense_type == conference_registration
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub conference_registration_details: Option<ExpenseReportTransactionLinesItemConferenceRegistrationDetails>,
     /// Conditionally required when:  expense_type in [business_meal,
     /// Conditionally required when: business_meal_with_alcohol, group_travel_meal,
     /// Conditionally required when: group_travel_meal_with_alcohol]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub meal_details: Option<ExpenseReportTransactionLinesItemMealDetails>,
     /// Conditionally required when:  expense_type == car_rental
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub car_rental_details: Option<ExpenseReportTransactionLinesItemCarRentalDetails>,
     /// Conditionally required when:  expense_type in [gift_card_employee_foreign,
     /// Conditionally required when: gifts_foreign_activity]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gift_details: Option<ExpenseReportTransactionLinesItemGiftDetails>,
     /// Conditionally required when:  expense_type == human_subject_incentive
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub human_subject_details: Option<ExpenseReportTransactionLinesItemHumanSubjectDetails>,
 
 }
@@ -1257,20 +1265,20 @@ pub struct ExpenseReportTransactionLinesItem {
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportPerDiemExpensesItemMealDeductionsItem {
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub date: Option<IsoDate>,
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub breakfast_provided: Option<bool>,
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lunch_provided: Option<bool>,
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dinner_provided: Option<bool>,
     ///  Computed from per diem rate breakdown
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deduction_amount: Option<f64>,
 
 }
@@ -1279,16 +1287,16 @@ pub struct ExpenseReportPerDiemExpensesItemMealDeductionsItem {
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportPerDiemExpensesItemReimbursementSummaryItem {
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub date: Option<IsoDate>,
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub per_diem_amount: Option<f64>,
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub meal_deduction: Option<f64>,
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub net_amount: Option<f64>,
 
 }
@@ -1310,7 +1318,7 @@ pub struct ExpenseReportPerDiemExpensesItem {
     pub end_date: Wrapped<IsoDate>,
     /// Source tier: T2
     /// Infer from:  Computed: end_date - start_date + 1
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub number_of_days: Option<f64>,
     ///  City, State/Country
     /// Source tier: T3
@@ -1330,7 +1338,7 @@ pub struct ExpenseReportPerDiemExpensesItem {
     ///  Daily rate in USD from GSA (domestic) or State Dept (foreign)
     /// Source tier: T2
     /// Infer from:  API lookup by location + date
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub per_diem_rate: Option<f64>,
     /// Source tier: T3
     /// Infer from:  Generated summary of dates and location
@@ -1340,11 +1348,11 @@ pub struct ExpenseReportPerDiemExpensesItem {
     /// Source tier: T2
     /// Infer from:  Cross-reference conference_registration_details.meals_included with trip
     /// Infer from: dates
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub meal_deductions: Vec<ExpenseReportPerDiemExpensesItemMealDeductionsItem>,
     ///  One entry per day. Auto-computed.
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub reimbursement_summary: Vec<ExpenseReportPerDiemExpensesItemReimbursementSummaryItem>,
 
 }
@@ -1357,10 +1365,10 @@ pub struct ExpenseReportMileageExpensesItem {
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportAllocationAndApproversBeneficiaryListItem {
     /// Source tier: T1
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     /// Source tier: T1
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub relationship: Option<String>,
 
 }
@@ -1369,11 +1377,11 @@ pub struct ExpenseReportAllocationAndApproversBeneficiaryListItem {
 pub struct ExpenseReportAllocationAndApprovers {
     ///  Are there any beneficiaries other than the payee?
     /// Source tier: T1
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub other_beneficiaries: Option<bool>,
     /// Conditionally required when:  allocation_and_approvers.other_beneficiaries == true
     /// Source tier: T1
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub beneficiary_list: Option<Vec<ExpenseReportAllocationAndApproversBeneficiaryListItem>>,
 
 }
@@ -1382,12 +1390,12 @@ pub struct ExpenseReportAllocationAndApprovers {
 pub struct ExpenseReport {
     pub general_information: ExpenseReportGeneralInformation,
     pub transaction_summary: ExpenseReportTransactionSummary,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transaction_lines: Option<Vec<ExpenseReportTransactionLinesItem>>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub per_diem_expenses: Option<Vec<ExpenseReportPerDiemExpensesItem>>,
     ///  Placeholder — details to be filled after FA consultation
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mileage_expenses: Option<Vec<ExpenseReportMileageExpensesItem>>,
     pub allocation_and_approvers: ExpenseReportAllocationAndApprovers,
 

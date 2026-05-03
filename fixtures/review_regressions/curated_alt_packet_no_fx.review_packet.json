@@ -156,23 +156,14 @@
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "Property Location: Singapore, Singapore",
-                  "origin": null
+                  "quote": "Property Location: Singapore, Singapore"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.infer_region_from_destination_country"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.project_category_from_region"
                 }
               ]
@@ -196,8 +187,7 @@
                   "document_id": "airline_itinerary_trip_window",
                   "filename": "airline_itinerary_trip_window.md",
                   "page": 1,
-                  "quote": "Passenger Name: Olivia Park",
-                  "origin": null
+                  "quote": "Passenger Name: Olivia Park"
                 }
               ]
             },
@@ -241,10 +231,6 @@
               "evidence": [
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.default_rush_processing"
                 }
               ]
@@ -265,10 +251,6 @@
               "evidence": [
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.default_payment_method"
                 }
               ]
@@ -292,8 +274,7 @@
                   "document_id": "airline_itinerary_trip_window",
                   "filename": "airline_itinerary_trip_window.md",
                   "page": 1,
-                  "quote": "Passenger Name: Olivia Park",
-                  "origin": null
+                  "quote": "Passenger Name: Olivia Park"
                 }
               ]
             },
@@ -316,15 +297,10 @@
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "Property Location: Singapore, Singapore",
-                  "origin": null
+                  "quote": "Property Location: Singapore, Singapore"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.default_business_purpose_what"
                 }
               ]
@@ -348,15 +324,10 @@
                   "document_id": "airline_itinerary_trip_window",
                   "filename": "airline_itinerary_trip_window.md",
                   "page": 1,
-                  "quote": "Trip Window: 2025-04-21 to 2025-04-29",
-                  "origin": null
+                  "quote": "Trip Window: 2025-04-21 to 2025-04-29"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.project_business_purpose_when"
                 }
               ]
@@ -380,15 +351,10 @@
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "Property Location: Singapore, Singapore",
-                  "origin": null
+                  "quote": "Property Location: Singapore, Singapore"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.project_business_purpose_where"
                 }
               ]
@@ -412,15 +378,10 @@
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "Property Location: Singapore, Singapore",
-                  "origin": null
+                  "quote": "Property Location: Singapore, Singapore"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.default_business_purpose_why"
                 }
               ]
@@ -444,23 +405,17 @@
                   "document_id": "airline_itinerary_trip_window",
                   "filename": "airline_itinerary_trip_window.md",
                   "page": 1,
-                  "quote": "Passenger Name: Olivia Park",
-                  "origin": null
+                  "quote": "Passenger Name: Olivia Park"
                 },
                 {
                   "kind": "document_span",
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "Property Location: Singapore, Singapore",
-                  "origin": null
+                  "quote": "Property Location: Singapore, Singapore"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.default_business_purpose_what"
                 },
                 {
@@ -468,31 +423,18 @@
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "Property Location: Singapore, Singapore",
-                  "origin": null
+                  "quote": "Property Location: Singapore, Singapore"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.infer_region_from_destination_country"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.project_category_from_region"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.compute_business_purpose_key"
                 }
               ]
@@ -516,31 +458,18 @@
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "Property Location: Singapore, Singapore",
-                  "origin": null
+                  "quote": "Property Location: Singapore, Singapore"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.infer_region_from_destination_country"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.project_category_from_region"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.default_event_name_from_category"
                 }
               ]
@@ -595,31 +524,18 @@
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "Property Location: Singapore, Singapore",
-                  "origin": null
+                  "quote": "Property Location: Singapore, Singapore"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.infer_region_from_destination_country"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.project_category_from_region"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.project_transaction_type"
                 }
               ]
@@ -643,15 +559,10 @@
                   "document_id": "airline_itinerary_trip_window",
                   "filename": "airline_itinerary_trip_window.md",
                   "page": 1,
-                  "quote": "Trip Window: 2025-04-21 to 2025-04-29",
-                  "origin": null
+                  "quote": "Trip Window: 2025-04-21 to 2025-04-29"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.project_transaction_date_from_trip_end"
                 }
               ]
@@ -703,8 +614,7 @@
                   "document_id": "airline_itinerary_trip_window",
                   "filename": "airline_itinerary_trip_window.md",
                   "page": 1,
-                  "quote": "Booking Date: 2025-04-10",
-                  "origin": null
+                  "quote": "Booking Date: 2025-04-10"
                 }
               ]
             },
@@ -727,15 +637,10 @@
                   "document_id": "airline_itinerary_trip_window",
                   "filename": "airline_itinerary_trip_window.md",
                   "page": 1,
-                  "quote": "Fare Total: USD 1287.44",
-                  "origin": null
+                  "quote": "Fare Total: USD 1287.44"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.project_usd_amount"
                 }
               ]
@@ -759,15 +664,10 @@
                   "document_id": "airline_itinerary_trip_window",
                   "filename": "airline_itinerary_trip_window.md",
                   "page": 1,
-                  "quote": "Fare Total: USD 1287.44",
-                  "origin": null
+                  "quote": "Fare Total: USD 1287.44"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.project_original_currency"
                 }
               ]
@@ -791,15 +691,10 @@
                   "document_id": "airline_itinerary_trip_window",
                   "filename": "airline_itinerary_trip_window.md",
                   "page": 1,
-                  "quote": "Fare Total: USD 1287.44",
-                  "origin": null
+                  "quote": "Fare Total: USD 1287.44"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.project_amount_number"
                 }
               ]
@@ -823,15 +718,10 @@
                   "document_id": "airline_itinerary_trip_window",
                   "filename": "airline_itinerary_trip_window.md",
                   "page": 1,
-                  "quote": "Fare Total: USD 1287.44",
-                  "origin": null
+                  "quote": "Fare Total: USD 1287.44"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.identity_exchange_rate_for_usd"
                 }
               ]
@@ -874,23 +764,14 @@
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "Property Location: Singapore, Singapore",
-                  "origin": null
+                  "quote": "Property Location: Singapore, Singapore"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.infer_region_from_destination_country"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.classify_airfare_expense_type"
                 }
               ]
@@ -914,15 +795,10 @@
                   "document_id": "airline_itinerary_trip_window",
                   "filename": "airline_itinerary_trip_window.md",
                   "page": 1,
-                  "quote": "Fare Total: USD 1287.44",
-                  "origin": null
+                  "quote": "Fare Total: USD 1287.44"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.build_airfare_remarks"
                 }
               ]
@@ -946,15 +822,10 @@
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "Property Location: Singapore, Singapore",
-                  "origin": null
+                  "quote": "Property Location: Singapore, Singapore"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.project_country_of_activity"
                 }
               ]
@@ -983,23 +854,14 @@
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "Property Location: Singapore, Singapore",
-                  "origin": null
+                  "quote": "Property Location: Singapore, Singapore"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.infer_region_from_destination_country"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.default_foreign_activity_type"
                 }
               ]
@@ -1023,8 +885,7 @@
                   "document_id": "airline_itinerary_trip_window",
                   "filename": "airline_itinerary_trip_window.md",
                   "page": 1,
-                  "quote": "Passenger Name: Olivia Park",
-                  "origin": null
+                  "quote": "Passenger Name: Olivia Park"
                 }
               ]
             },
@@ -1047,8 +908,7 @@
                   "document_id": "airline_itinerary_trip_window",
                   "filename": "airline_itinerary_trip_window.md",
                   "page": 1,
-                  "quote": "Ticket No: 0162459135784",
-                  "origin": null
+                  "quote": "Ticket No: 0162459135784"
                 }
               ]
             },
@@ -1071,15 +931,10 @@
                   "document_id": "airline_itinerary_trip_window",
                   "filename": "airline_itinerary_trip_window.md",
                   "page": 1,
-                  "quote": "Fare Total: USD 1287.44",
-                  "origin": null
+                  "quote": "Fare Total: USD 1287.44"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.project_amount_number"
                 }
               ]
@@ -1109,10 +964,6 @@
               "evidence": [
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.default_airfare_booking_method"
                 }
               ]
@@ -1136,8 +987,7 @@
                   "document_id": "airline_itinerary_trip_window",
                   "filename": "airline_itinerary_trip_window.md",
                   "page": 1,
-                  "quote": "Segment 1 | Departure Airport: SFO | Arrival Airport: NRT | Departure Date: 2025-04-21 | Arrival Date: 2025-04-22 | Marketing Carrier: ANA | Flight Number: NH107 | Cabin Class: Economy",
-                  "origin": null
+                  "quote": "Segment 1 | Departure Airport: SFO | Arrival Airport: NRT | Departure Date: 2025-04-21 | Arrival Date: 2025-04-22 | Marketing Carrier: ANA | Flight Number: NH107 | Cabin Class: Economy"
                 }
               ]
             },
@@ -1165,15 +1015,10 @@
                   "document_id": "airline_itinerary_trip_window",
                   "filename": "airline_itinerary_trip_window.md",
                   "page": 1,
-                  "quote": "Segment 1 | Departure Airport: SFO | Arrival Airport: NRT | Departure Date: 2025-04-21 | Arrival Date: 2025-04-22 | Marketing Carrier: ANA | Flight Number: NH107 | Cabin Class: Economy",
-                  "origin": null
+                  "quote": "Segment 1 | Departure Airport: SFO | Arrival Airport: NRT | Departure Date: 2025-04-21 | Arrival Date: 2025-04-22 | Marketing Carrier: ANA | Flight Number: NH107 | Cabin Class: Economy"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.normalize_airfare_class"
                 }
               ]
@@ -1197,15 +1042,10 @@
                   "document_id": "airline_itinerary_trip_window",
                   "filename": "airline_itinerary_trip_window.md",
                   "page": 1,
-                  "quote": "Origin: San Francisco, CA, United States (SFO)",
-                  "origin": null
+                  "quote": "Origin: San Francisco, CA, United States (SFO)"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.project_departure_airport_from_location"
                 }
               ]
@@ -1229,15 +1069,10 @@
                   "document_id": "airline_itinerary_trip_window",
                   "filename": "airline_itinerary_trip_window.md",
                   "page": 1,
-                  "quote": "Destination: Singapore (SIN)",
-                  "origin": null
+                  "quote": "Destination: Singapore (SIN)"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.project_destination_airport_from_location"
                 }
               ]
@@ -1261,23 +1096,17 @@
                   "document_id": "airline_itinerary_trip_window",
                   "filename": "airline_itinerary_trip_window.md",
                   "page": 1,
-                  "quote": "Segment 1 | Departure Airport: SFO | Arrival Airport: NRT | Departure Date: 2025-04-21 | Arrival Date: 2025-04-22 | Marketing Carrier: ANA | Flight Number: NH107 | Cabin Class: Economy",
-                  "origin": null
+                  "quote": "Segment 1 | Departure Airport: SFO | Arrival Airport: NRT | Departure Date: 2025-04-21 | Arrival Date: 2025-04-22 | Marketing Carrier: ANA | Flight Number: NH107 | Cabin Class: Economy"
                 },
                 {
                   "kind": "document_span",
                   "document_id": "airline_itinerary_trip_window",
                   "filename": "airline_itinerary_trip_window.md",
                   "page": 1,
-                  "quote": "Segment 2 | Departure Airport: SIN | Arrival Airport: SFO | Departure Date: 2025-04-29 | Arrival Date: 2025-04-29 | Marketing Carrier: ANA | Flight Number: NH108 | Cabin Class: Economy",
-                  "origin": null
+                  "quote": "Segment 2 | Departure Airport: SIN | Arrival Airport: SFO | Departure Date: 2025-04-29 | Arrival Date: 2025-04-29 | Marketing Carrier: ANA | Flight Number: NH108 | Cabin Class: Economy"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.detect_round_trip"
                 }
               ]
@@ -1350,15 +1179,10 @@
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "Stay Window: 2025-04-21 to 2025-04-24",
-                  "origin": null
+                  "quote": "Stay Window: 2025-04-21 to 2025-04-24"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.project_lodging_line_date_from_checkout"
                 }
               ]
@@ -1397,15 +1221,10 @@
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "Total Paid: SGD 778.80",
-                  "origin": null
+                  "quote": "Total Paid: SGD 778.80"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.project_original_currency"
                 }
               ]
@@ -1429,15 +1248,10 @@
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "Total Paid: SGD 778.80",
-                  "origin": null
+                  "quote": "Total Paid: SGD 778.80"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.project_amount_number"
                 }
               ]
@@ -1495,23 +1309,14 @@
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "Property Location: Singapore, Singapore",
-                  "origin": null
+                  "quote": "Property Location: Singapore, Singapore"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.infer_region_from_destination_country"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.classify_lodging_expense_type"
                 }
               ]
@@ -1535,15 +1340,10 @@
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "Total Paid: SGD 778.80",
-                  "origin": null
+                  "quote": "Total Paid: SGD 778.80"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.build_lodging_remarks"
                 }
               ]
@@ -1567,15 +1367,10 @@
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "Property Location: Singapore, Singapore",
-                  "origin": null
+                  "quote": "Property Location: Singapore, Singapore"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.project_country_of_activity"
                 }
               ]
@@ -1604,23 +1399,14 @@
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "Property Location: Singapore, Singapore",
-                  "origin": null
+                  "quote": "Property Location: Singapore, Singapore"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.infer_region_from_destination_country"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.default_foreign_activity_type"
                 }
               ]
@@ -1644,8 +1430,7 @@
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "Property Name: Marina Bay Grand Hotel",
-                  "origin": null
+                  "quote": "Property Name: Marina Bay Grand Hotel"
                 }
               ]
             },
@@ -1668,15 +1453,10 @@
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "Property Location: Singapore, Singapore",
-                  "origin": null
+                  "quote": "Property Location: Singapore, Singapore"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.project_lodging_location"
                 }
               ]
@@ -1700,15 +1480,10 @@
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "Stay Window: 2025-04-21 to 2025-04-24",
-                  "origin": null
+                  "quote": "Stay Window: 2025-04-21 to 2025-04-24"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.project_lodging_check_in"
                 }
               ]
@@ -1732,15 +1507,10 @@
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "Stay Window: 2025-04-21 to 2025-04-24",
-                  "origin": null
+                  "quote": "Stay Window: 2025-04-21 to 2025-04-24"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.project_lodging_check_out"
                 }
               ]
@@ -1764,31 +1534,24 @@
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "2025-04-21 | Deluxe King Room | SGD 220.00 | SGD 39.60",
-                  "origin": null
+                  "quote": "2025-04-21 | Deluxe King Room | SGD 220.00 | SGD 39.60"
                 },
                 {
                   "kind": "document_span",
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "2025-04-22 | Deluxe King Room | SGD 220.00 | SGD 39.60",
-                  "origin": null
+                  "quote": "2025-04-22 | Deluxe King Room | SGD 220.00 | SGD 39.60"
                 },
                 {
                   "kind": "document_span",
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "2025-04-23 | Deluxe King Room | SGD 220.00 | SGD 39.60",
-                  "origin": null
+                  "quote": "2025-04-23 | Deluxe King Room | SGD 220.00 | SGD 39.60"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.compute_number_of_nights"
                 }
               ]
@@ -1812,31 +1575,24 @@
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "2025-04-21 | Deluxe King Room | SGD 220.00 | SGD 39.60",
-                  "origin": null
+                  "quote": "2025-04-21 | Deluxe King Room | SGD 220.00 | SGD 39.60"
                 },
                 {
                   "kind": "document_span",
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "2025-04-22 | Deluxe King Room | SGD 220.00 | SGD 39.60",
-                  "origin": null
+                  "quote": "2025-04-22 | Deluxe King Room | SGD 220.00 | SGD 39.60"
                 },
                 {
                   "kind": "document_span",
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "2025-04-23 | Deluxe King Room | SGD 220.00 | SGD 39.60",
-                  "origin": null
+                  "quote": "2025-04-23 | Deluxe King Room | SGD 220.00 | SGD 39.60"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.compute_lodging_daily_rate"
                 }
               ]
@@ -1862,10 +1618,6 @@
               "evidence": [
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.default_lodging_booking_method"
                 }
               ]
@@ -1889,15 +1641,10 @@
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "Property Name: Marina Bay Grand Hotel",
-                  "origin": null
+                  "quote": "Property Name: Marina Bay Grand Hotel"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.default_shared_lodging_false"
                 }
               ]
@@ -1970,8 +1717,7 @@
                   "document_id": "receipt_merchant_labeled",
                   "filename": "receipt_merchant_labeled.md",
                   "page": 1,
-                  "quote": "Transaction Date: 2025-04-24",
-                  "origin": null
+                  "quote": "Transaction Date: 2025-04-24"
                 }
               ]
             },
@@ -2009,15 +1755,10 @@
                   "document_id": "receipt_merchant_labeled",
                   "filename": "receipt_merchant_labeled.md",
                   "page": 1,
-                  "quote": "Amount Paid: SGD 35.02",
-                  "origin": null
+                  "quote": "Amount Paid: SGD 35.02"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.project_original_currency"
                 }
               ]
@@ -2041,15 +1782,10 @@
                   "document_id": "receipt_merchant_labeled",
                   "filename": "receipt_merchant_labeled.md",
                   "page": 1,
-                  "quote": "Amount Paid: SGD 35.02",
-                  "origin": null
+                  "quote": "Amount Paid: SGD 35.02"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.project_amount_number"
                 }
               ]
@@ -2107,15 +1843,10 @@
                   "document_id": "receipt_merchant_labeled",
                   "filename": "receipt_merchant_labeled.md",
                   "page": 1,
-                  "quote": "Amount Paid: SGD 35.02",
-                  "origin": null
+                  "quote": "Amount Paid: SGD 35.02"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.heuristic_meal_classification"
                 }
               ]
@@ -2139,15 +1870,10 @@
                   "document_id": "receipt_merchant_labeled",
                   "filename": "receipt_merchant_labeled.md",
                   "page": 1,
-                  "quote": "Merchant: East Bay Bistro",
-                  "origin": null
+                  "quote": "Merchant: East Bay Bistro"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.build_meal_remarks"
                 }
               ]
@@ -2171,15 +1897,10 @@
                   "document_id": "receipt_merchant_labeled",
                   "filename": "receipt_merchant_labeled.md",
                   "page": 1,
-                  "quote": "Merchant Location: Singapore, Singapore",
-                  "origin": null
+                  "quote": "Merchant Location: Singapore, Singapore"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.project_country_of_activity"
                 }
               ]
@@ -2208,23 +1929,14 @@
                   "document_id": "hotel_folio_property_labeled",
                   "filename": "hotel_folio_property_labeled.md",
                   "page": 1,
-                  "quote": "Property Location: Singapore, Singapore",
-                  "origin": null
+                  "quote": "Property Location: Singapore, Singapore"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.infer_region_from_destination_country"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.default_foreign_activity_type"
                 }
               ]
@@ -2248,8 +1960,7 @@
                   "document_id": "receipt_merchant_labeled",
                   "filename": "receipt_merchant_labeled.md",
                   "page": 1,
-                  "quote": "Merchant: East Bay Bistro",
-                  "origin": null
+                  "quote": "Merchant: East Bay Bistro"
                 }
               ]
             },
@@ -2272,23 +1983,14 @@
                   "document_id": "receipt_merchant_labeled",
                   "filename": "receipt_merchant_labeled.md",
                   "page": 1,
-                  "quote": "Merchant Location: Singapore, Singapore",
-                  "origin": null
+                  "quote": "Merchant Location: Singapore, Singapore"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.project_country_of_activity"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.default_meal_purpose_from_activity_country"
                 }
               ]
@@ -2312,15 +2014,10 @@
                   "document_id": "receipt_merchant_labeled",
                   "filename": "receipt_merchant_labeled.md",
                   "page": 1,
-                  "quote": "Tip: SGD 4.50",
-                  "origin": null
+                  "quote": "Tip: SGD 4.50"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.project_amount_number"
                 }
               ]
@@ -2344,31 +2041,24 @@
                   "document_id": "receipt_merchant_labeled",
                   "filename": "receipt_merchant_labeled.md",
                   "page": 1,
-                  "quote": "Laksa Lunch    SGD 18.00",
-                  "origin": null
+                  "quote": "Laksa Lunch    SGD 18.00"
                 },
                 {
                   "kind": "document_span",
                   "document_id": "receipt_merchant_labeled",
                   "filename": "receipt_merchant_labeled.md",
                   "page": 1,
-                  "quote": "Iced Tea       SGD 6.00",
-                  "origin": null
+                  "quote": "Iced Tea       SGD 6.00"
                 },
                 {
                   "kind": "document_span",
                   "document_id": "receipt_merchant_labeled",
                   "filename": "receipt_merchant_labeled.md",
                   "page": 1,
-                  "quote": "Service Charge SGD 4.00",
-                  "origin": null
+                  "quote": "Service Charge SGD 4.00"
                 },
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.detect_receipt_alcohol"
                 }
               ]
@@ -2473,10 +2163,6 @@
               "evidence": [
                 {
                   "kind": "system_generated",
-                  "document_id": null,
-                  "filename": null,
-                  "page": null,
-                  "quote": null,
                   "origin": "bundle_synthesis.default_other_beneficiaries_false"
                 }
               ]

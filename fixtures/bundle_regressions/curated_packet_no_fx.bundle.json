@@ -12,8 +12,7 @@
             "document_id": "airline_itinerary_classic",
             "filename": "airline_itinerary_classic.md",
             "page": 1,
-            "quote": "E-TICKET ITINERARY RECEIPT",
-            "origin": null
+            "quote": "E-TICKET ITINERARY RECEIPT"
           }
         ],
         "flags": []
@@ -31,8 +30,7 @@
                   "document_id": "airline_itinerary_classic",
                   "filename": "airline_itinerary_classic.md",
                   "page": 1,
-                  "quote": "Passenger Olivia Park",
-                  "origin": null
+                  "quote": "Passenger Olivia Park"
                 }
               ],
               "flags": []
@@ -47,8 +45,7 @@
                 "document_id": "airline_itinerary_classic",
                 "filename": "airline_itinerary_classic.md",
                 "page": 1,
-                "quote": "Record Locator H7K9Q2",
-                "origin": null
+                "quote": "Record Locator H7K9Q2"
               }
             ],
             "flags": []
@@ -62,8 +59,7 @@
                 "document_id": "airline_itinerary_classic",
                 "filename": "airline_itinerary_classic.md",
                 "page": 1,
-                "quote": "Ticket Number 0162459135784",
-                "origin": null
+                "quote": "Ticket Number 0162459135784"
               }
             ],
             "flags": []
@@ -77,8 +73,7 @@
                 "document_id": "airline_itinerary_classic",
                 "filename": "airline_itinerary_classic.md",
                 "page": 1,
-                "quote": "Issue Date 2025-04-10",
-                "origin": null
+                "quote": "Issue Date 2025-04-10"
               }
             ],
             "flags": []
@@ -95,23 +90,17 @@
                 "document_id": "airline_itinerary_classic",
                 "filename": "airline_itinerary_classic.md",
                 "page": 1,
-                "quote": "Departure 2025-04-21",
-                "origin": null
+                "quote": "Departure 2025-04-21"
               },
               {
                 "kind": "document_span",
                 "document_id": "airline_itinerary_classic",
                 "filename": "airline_itinerary_classic.md",
                 "page": 1,
-                "quote": "Return 2025-04-29",
-                "origin": null
+                "quote": "Return 2025-04-29"
               },
               {
                 "kind": "system_generated",
-                "document_id": null,
-                "filename": null,
-                "page": null,
-                "quote": null,
                 "origin": "document_extract.infer_trip_window_from_departure_return"
               }
             ],
@@ -131,8 +120,7 @@
                 "document_id": "airline_itinerary_classic",
                 "filename": "airline_itinerary_classic.md",
                 "page": 1,
-                "quote": "From San Francisco, CA, United States (SFO)",
-                "origin": null
+                "quote": "From San Francisco, CA, United States (SFO)"
               }
             ],
             "flags": []
@@ -151,8 +139,7 @@
                 "document_id": "airline_itinerary_classic",
                 "filename": "airline_itinerary_classic.md",
                 "page": 1,
-                "quote": "To Singapore (SIN)",
-                "origin": null
+                "quote": "To Singapore (SIN)"
               }
             ],
             "flags": []
@@ -168,8 +155,7 @@
                     "document_id": "airline_itinerary_classic",
                     "filename": "airline_itinerary_classic.md",
                     "page": 1,
-                    "quote": "1 | SFO -> NRT | 2025-04-21 -> 2025-04-22 | ANA NH107 | Economy",
-                    "origin": null
+                    "quote": "1 | SFO -> NRT | 2025-04-21 -> 2025-04-22 | ANA NH107 | Economy"
                   }
                 ],
                 "flags": []
@@ -183,8 +169,7 @@
                     "document_id": "airline_itinerary_classic",
                     "filename": "airline_itinerary_classic.md",
                     "page": 1,
-                    "quote": "1 | SFO -> NRT | 2025-04-21 -> 2025-04-22 | ANA NH107 | Economy",
-                    "origin": null
+                    "quote": "1 | SFO -> NRT | 2025-04-21 -> 2025-04-22 | ANA NH107 | Economy"
                   }
                 ],
                 "flags": []
@@ -198,8 +183,7 @@
                     "document_id": "airline_itinerary_classic",
                     "filename": "airline_itinerary_classic.md",
                     "page": 1,
-                    "quote": "1 | SFO -> NRT | 2025-04-21 -> 2025-04-22 | ANA NH107 | Economy",
-                    "origin": null
+                    "quote": "1 | SFO -> NRT | 2025-04-21 -> 2025-04-22 | ANA NH107 | Economy"
                   }
                 ],
                 "flags": []
@@ -213,8 +197,7 @@
                     "document_id": "airline_itinerary_classic",
                     "filename": "airline_itinerary_classic.md",
                     "page": 1,
-                    "quote": "1 | SFO -> NRT | 2025-04-21 -> 2025-04-22 | ANA NH107 | Economy",
-                    "origin": null
+                    "quote": "1 | SFO -> NRT | 2025-04-21 -> 2025-04-22 | ANA NH107 | Economy"
                   }
                 ],
                 "flags": []
@@ -228,8 +211,7 @@
                     "document_id": "airline_itinerary_classic",
                     "filename": "airline_itinerary_classic.md",
                     "page": 1,
-                    "quote": "1 | SFO -> NRT | 2025-04-21 -> 2025-04-22 | ANA NH107 | Economy",
-                    "origin": null
+                    "quote": "1 | SFO -> NRT | 2025-04-21 -> 2025-04-22 | ANA NH107 | Economy"
                   }
                 ],
                 "flags": []
@@ -243,8 +225,7 @@
                     "document_id": "airline_itinerary_classic",
                     "filename": "airline_itinerary_classic.md",
                     "page": 1,
-                    "quote": "1 | SFO -> NRT | 2025-04-21 -> 2025-04-22 | ANA NH107 | Economy",
-                    "origin": null
+                    "quote": "1 | SFO -> NRT | 2025-04-21 -> 2025-04-22 | ANA NH107 | Economy"
                   }
                 ],
                 "flags": []
@@ -258,8 +239,7 @@
                     "document_id": "airline_itinerary_classic",
                     "filename": "airline_itinerary_classic.md",
                     "page": 1,
-                    "quote": "1 | SFO -> NRT | 2025-04-21 -> 2025-04-22 | ANA NH107 | Economy",
-                    "origin": null
+                    "quote": "1 | SFO -> NRT | 2025-04-21 -> 2025-04-22 | ANA NH107 | Economy"
                   }
                 ],
                 "flags": []
@@ -275,8 +255,7 @@
                     "document_id": "airline_itinerary_classic",
                     "filename": "airline_itinerary_classic.md",
                     "page": 1,
-                    "quote": "2 | SIN -> SFO | 2025-04-29 -> 2025-04-29 | ANA NH108 | Economy",
-                    "origin": null
+                    "quote": "2 | SIN -> SFO | 2025-04-29 -> 2025-04-29 | ANA NH108 | Economy"
                   }
                 ],
                 "flags": []
@@ -290,8 +269,7 @@
                     "document_id": "airline_itinerary_classic",
                     "filename": "airline_itinerary_classic.md",
                     "page": 1,
-                    "quote": "2 | SIN -> SFO | 2025-04-29 -> 2025-04-29 | ANA NH108 | Economy",
-                    "origin": null
+                    "quote": "2 | SIN -> SFO | 2025-04-29 -> 2025-04-29 | ANA NH108 | Economy"
                   }
                 ],
                 "flags": []
@@ -305,8 +283,7 @@
                     "document_id": "airline_itinerary_classic",
                     "filename": "airline_itinerary_classic.md",
                     "page": 1,
-                    "quote": "2 | SIN -> SFO | 2025-04-29 -> 2025-04-29 | ANA NH108 | Economy",
-                    "origin": null
+                    "quote": "2 | SIN -> SFO | 2025-04-29 -> 2025-04-29 | ANA NH108 | Economy"
                   }
                 ],
                 "flags": []
@@ -320,8 +297,7 @@
                     "document_id": "airline_itinerary_classic",
                     "filename": "airline_itinerary_classic.md",
                     "page": 1,
-                    "quote": "2 | SIN -> SFO | 2025-04-29 -> 2025-04-29 | ANA NH108 | Economy",
-                    "origin": null
+                    "quote": "2 | SIN -> SFO | 2025-04-29 -> 2025-04-29 | ANA NH108 | Economy"
                   }
                 ],
                 "flags": []
@@ -335,8 +311,7 @@
                     "document_id": "airline_itinerary_classic",
                     "filename": "airline_itinerary_classic.md",
                     "page": 1,
-                    "quote": "2 | SIN -> SFO | 2025-04-29 -> 2025-04-29 | ANA NH108 | Economy",
-                    "origin": null
+                    "quote": "2 | SIN -> SFO | 2025-04-29 -> 2025-04-29 | ANA NH108 | Economy"
                   }
                 ],
                 "flags": []
@@ -350,8 +325,7 @@
                     "document_id": "airline_itinerary_classic",
                     "filename": "airline_itinerary_classic.md",
                     "page": 1,
-                    "quote": "2 | SIN -> SFO | 2025-04-29 -> 2025-04-29 | ANA NH108 | Economy",
-                    "origin": null
+                    "quote": "2 | SIN -> SFO | 2025-04-29 -> 2025-04-29 | ANA NH108 | Economy"
                   }
                 ],
                 "flags": []
@@ -365,8 +339,7 @@
                     "document_id": "airline_itinerary_classic",
                     "filename": "airline_itinerary_classic.md",
                     "page": 1,
-                    "quote": "2 | SIN -> SFO | 2025-04-29 -> 2025-04-29 | ANA NH108 | Economy",
-                    "origin": null
+                    "quote": "2 | SIN -> SFO | 2025-04-29 -> 2025-04-29 | ANA NH108 | Economy"
                   }
                 ],
                 "flags": []
@@ -385,8 +358,7 @@
                 "document_id": "airline_itinerary_classic",
                 "filename": "airline_itinerary_classic.md",
                 "page": 1,
-                "quote": "Total Fare Paid USD 1,287.44",
-                "origin": null
+                "quote": "Total Fare Paid USD 1,287.44"
               }
             ],
             "flags": []
@@ -407,8 +379,7 @@
             "document_id": "hotel_folio_guest_bill",
             "filename": "hotel_folio_guest_bill.md",
             "page": 1,
-            "quote": "Guest Folio",
-            "origin": null
+            "quote": "Guest Folio"
           }
         ],
         "flags": []
@@ -425,8 +396,7 @@
                 "document_id": "hotel_folio_guest_bill",
                 "filename": "hotel_folio_guest_bill.md",
                 "page": 1,
-                "quote": "Guest Olivia Park",
-                "origin": null
+                "quote": "Guest Olivia Park"
               }
             ],
             "flags": []
@@ -440,8 +410,7 @@
                 "document_id": "hotel_folio_guest_bill",
                 "filename": "hotel_folio_guest_bill.md",
                 "page": 1,
-                "quote": "MARINA BAY GRAND HOTEL",
-                "origin": null
+                "quote": "MARINA BAY GRAND HOTEL"
               }
             ],
             "flags": []
@@ -455,8 +424,7 @@
                 "document_id": "hotel_folio_guest_bill",
                 "filename": "hotel_folio_guest_bill.md",
                 "page": 1,
-                "quote": "Folio # MBG-88421",
-                "origin": null
+                "quote": "Folio # MBG-88421"
               }
             ],
             "flags": []
@@ -473,23 +441,17 @@
                 "document_id": "hotel_folio_guest_bill",
                 "filename": "hotel_folio_guest_bill.md",
                 "page": 1,
-                "quote": "Check-in 2025-04-21",
-                "origin": null
+                "quote": "Check-in 2025-04-21"
               },
               {
                 "kind": "document_span",
                 "document_id": "hotel_folio_guest_bill",
                 "filename": "hotel_folio_guest_bill.md",
                 "page": 1,
-                "quote": "Check-out 2025-04-24",
-                "origin": null
+                "quote": "Check-out 2025-04-24"
               },
               {
                 "kind": "system_generated",
-                "document_id": null,
-                "filename": null,
-                "page": null,
-                "quote": null,
                 "origin": "document_extract.infer_stay_window_from_checkin_checkout"
               }
             ],
@@ -509,8 +471,7 @@
                 "document_id": "hotel_folio_guest_bill",
                 "filename": "hotel_folio_guest_bill.md",
                 "page": 1,
-                "quote": "City/Country Singapore, Singapore",
-                "origin": null
+                "quote": "City/Country Singapore, Singapore"
               }
             ],
             "flags": []
@@ -526,8 +487,7 @@
                     "document_id": "hotel_folio_guest_bill",
                     "filename": "hotel_folio_guest_bill.md",
                     "page": 1,
-                    "quote": "2025-04-21  Deluxe King Room  SGD 220.00  SGD 39.60",
-                    "origin": null
+                    "quote": "2025-04-21  Deluxe King Room  SGD 220.00  SGD 39.60"
                   }
                 ],
                 "flags": []
@@ -544,8 +504,7 @@
                     "document_id": "hotel_folio_guest_bill",
                     "filename": "hotel_folio_guest_bill.md",
                     "page": 1,
-                    "quote": "2025-04-21  Deluxe King Room  SGD 220.00  SGD 39.60",
-                    "origin": null
+                    "quote": "2025-04-21  Deluxe King Room  SGD 220.00  SGD 39.60"
                   }
                 ],
                 "flags": []
@@ -563,8 +522,7 @@
                       "document_id": "hotel_folio_guest_bill",
                       "filename": "hotel_folio_guest_bill.md",
                       "page": 1,
-                      "quote": "2025-04-21  Deluxe King Room  SGD 220.00  SGD 39.60",
-                      "origin": null
+                      "quote": "2025-04-21  Deluxe King Room  SGD 220.00  SGD 39.60"
                     }
                   ],
                   "flags": []
@@ -579,8 +537,7 @@
                     "document_id": "hotel_folio_guest_bill",
                     "filename": "hotel_folio_guest_bill.md",
                     "page": 1,
-                    "quote": "2025-04-21  Deluxe King Room  SGD 220.00  SGD 39.60",
-                    "origin": null
+                    "quote": "2025-04-21  Deluxe King Room  SGD 220.00  SGD 39.60"
                   }
                 ],
                 "flags": []
@@ -596,8 +553,7 @@
                     "document_id": "hotel_folio_guest_bill",
                     "filename": "hotel_folio_guest_bill.md",
                     "page": 1,
-                    "quote": "2025-04-22  Deluxe King Room  SGD 220.00  SGD 39.60",
-                    "origin": null
+                    "quote": "2025-04-22  Deluxe King Room  SGD 220.00  SGD 39.60"
                   }
                 ],
                 "flags": []
@@ -614,8 +570,7 @@
                     "document_id": "hotel_folio_guest_bill",
                     "filename": "hotel_folio_guest_bill.md",
                     "page": 1,
-                    "quote": "2025-04-22  Deluxe King Room  SGD 220.00  SGD 39.60",
-                    "origin": null
+                    "quote": "2025-04-22  Deluxe King Room  SGD 220.00  SGD 39.60"
                   }
                 ],
                 "flags": []
@@ -633,8 +588,7 @@
                       "document_id": "hotel_folio_guest_bill",
                       "filename": "hotel_folio_guest_bill.md",
                       "page": 1,
-                      "quote": "2025-04-22  Deluxe King Room  SGD 220.00  SGD 39.60",
-                      "origin": null
+                      "quote": "2025-04-22  Deluxe King Room  SGD 220.00  SGD 39.60"
                     }
                   ],
                   "flags": []
@@ -649,8 +603,7 @@
                     "document_id": "hotel_folio_guest_bill",
                     "filename": "hotel_folio_guest_bill.md",
                     "page": 1,
-                    "quote": "2025-04-22  Deluxe King Room  SGD 220.00  SGD 39.60",
-                    "origin": null
+                    "quote": "2025-04-22  Deluxe King Room  SGD 220.00  SGD 39.60"
                   }
                 ],
                 "flags": []
@@ -666,8 +619,7 @@
                     "document_id": "hotel_folio_guest_bill",
                     "filename": "hotel_folio_guest_bill.md",
                     "page": 1,
-                    "quote": "2025-04-23  Deluxe King Room  SGD 220.00  SGD 39.60",
-                    "origin": null
+                    "quote": "2025-04-23  Deluxe King Room  SGD 220.00  SGD 39.60"
                   }
                 ],
                 "flags": []
@@ -684,8 +636,7 @@
                     "document_id": "hotel_folio_guest_bill",
                     "filename": "hotel_folio_guest_bill.md",
                     "page": 1,
-                    "quote": "2025-04-23  Deluxe King Room  SGD 220.00  SGD 39.60",
-                    "origin": null
+                    "quote": "2025-04-23  Deluxe King Room  SGD 220.00  SGD 39.60"
                   }
                 ],
                 "flags": []
@@ -703,8 +654,7 @@
                       "document_id": "hotel_folio_guest_bill",
                       "filename": "hotel_folio_guest_bill.md",
                       "page": 1,
-                      "quote": "2025-04-23  Deluxe King Room  SGD 220.00  SGD 39.60",
-                      "origin": null
+                      "quote": "2025-04-23  Deluxe King Room  SGD 220.00  SGD 39.60"
                     }
                   ],
                   "flags": []
@@ -719,8 +669,7 @@
                     "document_id": "hotel_folio_guest_bill",
                     "filename": "hotel_folio_guest_bill.md",
                     "page": 1,
-                    "quote": "2025-04-23  Deluxe King Room  SGD 220.00  SGD 39.60",
-                    "origin": null
+                    "quote": "2025-04-23  Deluxe King Room  SGD 220.00  SGD 39.60"
                   }
                 ],
                 "flags": []
@@ -739,8 +688,7 @@
                 "document_id": "hotel_folio_guest_bill",
                 "filename": "hotel_folio_guest_bill.md",
                 "page": 1,
-                "quote": "Balance Due SGD 778.80",
-                "origin": null
+                "quote": "Balance Due SGD 778.80"
               }
             ],
             "flags": []
@@ -755,8 +703,7 @@
                   "document_id": "hotel_folio_guest_bill",
                   "filename": "hotel_folio_guest_bill.md",
                   "page": 1,
-                  "quote": "Breakfast",
-                  "origin": null
+                  "quote": "Breakfast"
                 }
               ],
               "flags": []
@@ -770,8 +717,7 @@
                   "document_id": "hotel_folio_guest_bill",
                   "filename": "hotel_folio_guest_bill.md",
                   "page": 1,
-                  "quote": "Evening Reception",
-                  "origin": null
+                  "quote": "Evening Reception"
                 }
               ],
               "flags": []
@@ -793,8 +739,7 @@
             "document_id": "receipt_card_dotted",
             "filename": "receipt_card_dotted.md",
             "page": 1,
-            "quote": "Card Receipt",
-            "origin": null
+            "quote": "Card Receipt"
           }
         ],
         "flags": []
@@ -811,8 +756,7 @@
                 "document_id": "receipt_card_dotted",
                 "filename": "receipt_card_dotted.md",
                 "page": 1,
-                "quote": "EAST BAY BISTRO",
-                "origin": null
+                "quote": "EAST BAY BISTRO"
               }
             ],
             "flags": []
@@ -831,8 +775,7 @@
                 "document_id": "receipt_card_dotted",
                 "filename": "receipt_card_dotted.md",
                 "page": 1,
-                "quote": "Location Singapore, Singapore",
-                "origin": null
+                "quote": "Location Singapore, Singapore"
               }
             ],
             "flags": []
@@ -846,8 +789,7 @@
                 "document_id": "receipt_card_dotted",
                 "filename": "receipt_card_dotted.md",
                 "page": 1,
-                "quote": "Date 2025-04-24",
-                "origin": null
+                "quote": "Date 2025-04-24"
               }
             ],
             "flags": []
@@ -864,8 +806,7 @@
                 "document_id": "receipt_card_dotted",
                 "filename": "receipt_card_dotted.md",
                 "page": 1,
-                "quote": "Total SGD 35.02",
-                "origin": null
+                "quote": "Total SGD 35.02"
               }
             ],
             "flags": []
@@ -882,8 +823,7 @@
                 "document_id": "receipt_card_dotted",
                 "filename": "receipt_card_dotted.md",
                 "page": 1,
-                "quote": "Subtotal SGD 28.00",
-                "origin": null
+                "quote": "Subtotal SGD 28.00"
               }
             ],
             "flags": []
@@ -900,8 +840,7 @@
                 "document_id": "receipt_card_dotted",
                 "filename": "receipt_card_dotted.md",
                 "page": 1,
-                "quote": "GST SGD 2.52",
-                "origin": null
+                "quote": "GST SGD 2.52"
               }
             ],
             "flags": []
@@ -918,8 +857,7 @@
                 "document_id": "receipt_card_dotted",
                 "filename": "receipt_card_dotted.md",
                 "page": 1,
-                "quote": "Tip SGD 4.50",
-                "origin": null
+                "quote": "Tip SGD 4.50"
               }
             ],
             "flags": []
@@ -935,8 +873,7 @@
                     "document_id": "receipt_card_dotted",
                     "filename": "receipt_card_dotted.md",
                     "page": 1,
-                    "quote": "Laksa Lunch ........ SGD 18.00",
-                    "origin": null
+                    "quote": "Laksa Lunch ........ SGD 18.00"
                   }
                 ],
                 "flags": []
@@ -953,8 +890,7 @@
                     "document_id": "receipt_card_dotted",
                     "filename": "receipt_card_dotted.md",
                     "page": 1,
-                    "quote": "Laksa Lunch ........ SGD 18.00",
-                    "origin": null
+                    "quote": "Laksa Lunch ........ SGD 18.00"
                   }
                 ],
                 "flags": []
@@ -970,8 +906,7 @@
                     "document_id": "receipt_card_dotted",
                     "filename": "receipt_card_dotted.md",
                     "page": 1,
-                    "quote": "Iced Tea ........... SGD 6.00",
-                    "origin": null
+                    "quote": "Iced Tea ........... SGD 6.00"
                   }
                 ],
                 "flags": []
@@ -988,8 +923,7 @@
                     "document_id": "receipt_card_dotted",
                     "filename": "receipt_card_dotted.md",
                     "page": 1,
-                    "quote": "Iced Tea ........... SGD 6.00",
-                    "origin": null
+                    "quote": "Iced Tea ........... SGD 6.00"
                   }
                 ],
                 "flags": []
@@ -1005,8 +939,7 @@
                     "document_id": "receipt_card_dotted",
                     "filename": "receipt_card_dotted.md",
                     "page": 1,
-                    "quote": "Service Charge ..... SGD 4.00",
-                    "origin": null
+                    "quote": "Service Charge ..... SGD 4.00"
                   }
                 ],
                 "flags": []
@@ -1023,8 +956,7 @@
                     "document_id": "receipt_card_dotted",
                     "filename": "receipt_card_dotted.md",
                     "page": 1,
-                    "quote": "Service Charge ..... SGD 4.00",
-                    "origin": null
+                    "quote": "Service Charge ..... SGD 4.00"
                   }
                 ],
                 "flags": []
@@ -1046,8 +978,7 @@
           "document_id": "airline_itinerary_classic",
           "filename": "airline_itinerary_classic.md",
           "page": 1,
-          "quote": "Passenger Olivia Park",
-          "origin": null
+          "quote": "Passenger Olivia Park"
         }
       ],
       "flags": []
@@ -1066,23 +997,17 @@
           "document_id": "airline_itinerary_classic",
           "filename": "airline_itinerary_classic.md",
           "page": 1,
-          "quote": "Departure 2025-04-21",
-          "origin": null
+          "quote": "Departure 2025-04-21"
         },
         {
           "kind": "document_span",
           "document_id": "airline_itinerary_classic",
           "filename": "airline_itinerary_classic.md",
           "page": 1,
-          "quote": "Return 2025-04-29",
-          "origin": null
+          "quote": "Return 2025-04-29"
         },
         {
           "kind": "system_generated",
-          "document_id": null,
-          "filename": null,
-          "page": null,
-          "quote": null,
           "origin": "document_extract.infer_trip_window_from_departure_return"
         }
       ],
@@ -1102,8 +1027,7 @@
           "document_id": "airline_itinerary_classic",
           "filename": "airline_itinerary_classic.md",
           "page": 1,
-          "quote": "From San Francisco, CA, United States (SFO)",
-          "origin": null
+          "quote": "From San Francisco, CA, United States (SFO)"
         }
       ],
       "flags": []
@@ -1122,8 +1046,7 @@
           "document_id": "hotel_folio_guest_bill",
           "filename": "hotel_folio_guest_bill.md",
           "page": 1,
-          "quote": "City/Country Singapore, Singapore",
-          "origin": null
+          "quote": "City/Country Singapore, Singapore"
         }
       ],
       "flags": []
@@ -1137,15 +1060,10 @@
           "document_id": "hotel_folio_guest_bill",
           "filename": "hotel_folio_guest_bill.md",
           "page": 1,
-          "quote": "City/Country Singapore, Singapore",
-          "origin": null
+          "quote": "City/Country Singapore, Singapore"
         },
         {
           "kind": "system_generated",
-          "document_id": null,
-          "filename": null,
-          "page": null,
-          "quote": null,
           "origin": "bundle_synthesis.infer_region_from_destination_country"
         }
       ],
@@ -1166,8 +1084,7 @@
             "document_id": "airline_itinerary_classic",
             "filename": "airline_itinerary_classic.md",
             "page": 1,
-            "quote": "Issue Date 2025-04-10",
-            "origin": null
+            "quote": "Issue Date 2025-04-10"
           }
         ],
         "flags": []
@@ -1181,15 +1098,10 @@
             "document_id": "airline_itinerary_classic",
             "filename": "airline_itinerary_classic.md",
             "page": 1,
-            "quote": "Total Fare Paid USD 1,287.44",
-            "origin": null
+            "quote": "Total Fare Paid USD 1,287.44"
           },
           {
             "kind": "system_generated",
-            "document_id": null,
-            "filename": null,
-            "page": null,
-            "quote": null,
             "origin": "bundle_synthesis.project_usd_amount"
           }
         ],
@@ -1204,15 +1116,10 @@
             "document_id": "airline_itinerary_classic",
             "filename": "airline_itinerary_classic.md",
             "page": 1,
-            "quote": "Total Fare Paid USD 1,287.44",
-            "origin": null
+            "quote": "Total Fare Paid USD 1,287.44"
           },
           {
             "kind": "system_generated",
-            "document_id": null,
-            "filename": null,
-            "page": null,
-            "quote": null,
             "origin": "bundle_synthesis.identity_exchange_rate_for_usd"
           }
         ],
@@ -1227,15 +1134,10 @@
             "document_id": "airline_itinerary_classic",
             "filename": "airline_itinerary_classic.md",
             "page": 1,
-            "quote": "Total Fare Paid USD 1,287.44",
-            "origin": null
+            "quote": "Total Fare Paid USD 1,287.44"
           },
           {
             "kind": "system_generated",
-            "document_id": null,
-            "filename": null,
-            "page": null,
-            "quote": null,
             "origin": "bundle_synthesis.project_original_currency"
           }
         ],
@@ -1250,15 +1152,10 @@
             "document_id": "airline_itinerary_classic",
             "filename": "airline_itinerary_classic.md",
             "page": 1,
-            "quote": "Total Fare Paid USD 1,287.44",
-            "origin": null
+            "quote": "Total Fare Paid USD 1,287.44"
           },
           {
             "kind": "system_generated",
-            "document_id": null,
-            "filename": null,
-            "page": null,
-            "quote": null,
             "origin": "bundle_synthesis.project_amount_number"
           }
         ],
@@ -1273,23 +1170,14 @@
             "document_id": "hotel_folio_guest_bill",
             "filename": "hotel_folio_guest_bill.md",
             "page": 1,
-            "quote": "City/Country Singapore, Singapore",
-            "origin": null
+            "quote": "City/Country Singapore, Singapore"
           },
           {
             "kind": "system_generated",
-            "document_id": null,
-            "filename": null,
-            "page": null,
-            "quote": null,
             "origin": "bundle_synthesis.infer_region_from_destination_country"
           },
           {
             "kind": "system_generated",
-            "document_id": null,
-            "filename": null,
-            "page": null,
-            "quote": null,
             "origin": "bundle_synthesis.classify_airfare_expense_type"
           }
         ],
@@ -1304,15 +1192,10 @@
             "document_id": "airline_itinerary_classic",
             "filename": "airline_itinerary_classic.md",
             "page": 1,
-            "quote": "Total Fare Paid USD 1,287.44",
-            "origin": null
+            "quote": "Total Fare Paid USD 1,287.44"
           },
           {
             "kind": "system_generated",
-            "document_id": null,
-            "filename": null,
-            "page": null,
-            "quote": null,
             "origin": "bundle_synthesis.build_airfare_remarks"
           }
         ],
@@ -1327,15 +1210,10 @@
             "document_id": "hotel_folio_guest_bill",
             "filename": "hotel_folio_guest_bill.md",
             "page": 1,
-            "quote": "City/Country Singapore, Singapore",
-            "origin": null
+            "quote": "City/Country Singapore, Singapore"
           },
           {
             "kind": "system_generated",
-            "document_id": null,
-            "filename": null,
-            "page": null,
-            "quote": null,
             "origin": "bundle_synthesis.project_country_of_activity"
           }
         ],
@@ -1350,23 +1228,14 @@
             "document_id": "hotel_folio_guest_bill",
             "filename": "hotel_folio_guest_bill.md",
             "page": 1,
-            "quote": "City/Country Singapore, Singapore",
-            "origin": null
+            "quote": "City/Country Singapore, Singapore"
           },
           {
             "kind": "system_generated",
-            "document_id": null,
-            "filename": null,
-            "page": null,
-            "quote": null,
             "origin": "bundle_synthesis.infer_region_from_destination_country"
           },
           {
             "kind": "system_generated",
-            "document_id": null,
-            "filename": null,
-            "page": null,
-            "quote": null,
             "origin": "bundle_synthesis.default_foreign_activity_type"
           }
         ],
@@ -1391,8 +1260,7 @@
               "document_id": "airline_itinerary_classic",
               "filename": "airline_itinerary_classic.md",
               "page": 1,
-              "quote": "Passenger Olivia Park",
-              "origin": null
+              "quote": "Passenger Olivia Park"
             }
           ],
           "flags": []
@@ -1406,8 +1274,7 @@
               "document_id": "airline_itinerary_classic",
               "filename": "airline_itinerary_classic.md",
               "page": 1,
-              "quote": "Ticket Number 0162459135784",
-              "origin": null
+              "quote": "Ticket Number 0162459135784"
             }
           ],
           "flags": []
@@ -1421,15 +1288,10 @@
               "document_id": "airline_itinerary_classic",
               "filename": "airline_itinerary_classic.md",
               "page": 1,
-              "quote": "Total Fare Paid USD 1,287.44",
-              "origin": null
+              "quote": "Total Fare Paid USD 1,287.44"
             },
             {
               "kind": "system_generated",
-              "document_id": null,
-              "filename": null,
-              "page": null,
-              "quote": null,
               "origin": "bundle_synthesis.project_amount_number"
             }
           ],
@@ -1441,10 +1303,6 @@
           "evidence": [
             {
               "kind": "system_generated",
-              "document_id": null,
-              "filename": null,
-              "page": null,
-              "quote": null,
               "origin": "bundle_synthesis.default_airfare_booking_method"
             }
           ],
@@ -1459,8 +1317,7 @@
               "document_id": "airline_itinerary_classic",
               "filename": "airline_itinerary_classic.md",
               "page": 1,
-              "quote": "1 | SFO -> NRT | 2025-04-21 -> 2025-04-22 | ANA NH107 | Economy",
-              "origin": null
+              "quote": "1 | SFO -> NRT | 2025-04-21 -> 2025-04-22 | ANA NH107 | Economy"
             }
           ],
           "flags": []
@@ -1474,15 +1331,10 @@
               "document_id": "airline_itinerary_classic",
               "filename": "airline_itinerary_classic.md",
               "page": 1,
-              "quote": "1 | SFO -> NRT | 2025-04-21 -> 2025-04-22 | ANA NH107 | Economy",
-              "origin": null
+              "quote": "1 | SFO -> NRT | 2025-04-21 -> 2025-04-22 | ANA NH107 | Economy"
             },
             {
               "kind": "system_generated",
-              "document_id": null,
-              "filename": null,
-              "page": null,
-              "quote": null,
               "origin": "bundle_synthesis.normalize_airfare_class"
             }
           ],
@@ -1497,15 +1349,10 @@
               "document_id": "airline_itinerary_classic",
               "filename": "airline_itinerary_classic.md",
               "page": 1,
-              "quote": "From San Francisco, CA, United States (SFO)",
-              "origin": null
+              "quote": "From San Francisco, CA, United States (SFO)"
             },
             {
               "kind": "system_generated",
-              "document_id": null,
-              "filename": null,
-              "page": null,
-              "quote": null,
               "origin": "bundle_synthesis.project_departure_airport_from_location"
             }
           ],
@@ -1520,15 +1367,10 @@
               "document_id": "airline_itinerary_classic",
               "filename": "airline_itinerary_classic.md",
               "page": 1,
-              "quote": "To Singapore (SIN)",
-              "origin": null
+              "quote": "To Singapore (SIN)"
             },
             {
               "kind": "system_generated",
-              "document_id": null,
-              "filename": null,
-              "page": null,
-              "quote": null,
               "origin": "bundle_synthesis.project_destination_airport_from_location"
             }
           ],
@@ -1543,23 +1385,17 @@
               "document_id": "airline_itinerary_classic",
               "filename": "airline_itinerary_classic.md",
               "page": 1,
-              "quote": "1 | SFO -> NRT | 2025-04-21 -> 2025-04-22 | ANA NH107 | Economy",
-              "origin": null
+              "quote": "1 | SFO -> NRT | 2025-04-21 -> 2025-04-22 | ANA NH107 | Economy"
             },
             {
               "kind": "document_span",
               "document_id": "airline_itinerary_classic",
               "filename": "airline_itinerary_classic.md",
               "page": 1,
-              "quote": "2 | SIN -> SFO | 2025-04-29 -> 2025-04-29 | ANA NH108 | Economy",
-              "origin": null
+              "quote": "2 | SIN -> SFO | 2025-04-29 -> 2025-04-29 | ANA NH108 | Economy"
             },
             {
               "kind": "system_generated",
-              "document_id": null,
-              "filename": null,
-              "page": null,
-              "quote": null,
               "origin": "bundle_synthesis.detect_round_trip"
             }
           ],
@@ -1583,31 +1419,21 @@
             "document_id": "hotel_folio_guest_bill",
             "filename": "hotel_folio_guest_bill.md",
             "page": 1,
-            "quote": "Check-in 2025-04-21",
-            "origin": null
+            "quote": "Check-in 2025-04-21"
           },
           {
             "kind": "document_span",
             "document_id": "hotel_folio_guest_bill",
             "filename": "hotel_folio_guest_bill.md",
             "page": 1,
-            "quote": "Check-out 2025-04-24",
-            "origin": null
+            "quote": "Check-out 2025-04-24"
           },
           {
             "kind": "system_generated",
-            "document_id": null,
-            "filename": null,
-            "page": null,
-            "quote": null,
             "origin": "document_extract.infer_stay_window_from_checkin_checkout"
           },
           {
             "kind": "system_generated",
-            "document_id": null,
-            "filename": null,
-            "page": null,
-            "quote": null,
             "origin": "bundle_synthesis.project_lodging_line_date_from_checkout"
           }
         ],
@@ -1624,15 +1450,10 @@
             "document_id": "hotel_folio_guest_bill",
             "filename": "hotel_folio_guest_bill.md",
             "page": 1,
-            "quote": "Balance Due SGD 778.80",
-            "origin": null
+            "quote": "Balance Due SGD 778.80"
           },
           {
             "kind": "system_generated",
-            "document_id": null,
-            "filename": null,
-            "page": null,
-            "quote": null,
             "origin": "bundle_synthesis.project_original_currency"
           }
         ],
@@ -1647,15 +1468,10 @@
             "document_id": "hotel_folio_guest_bill",
             "filename": "hotel_folio_guest_bill.md",
             "page": 1,
-            "quote": "Balance Due SGD 778.80",
-            "origin": null
+            "quote": "Balance Due SGD 778.80"
           },
           {
             "kind": "system_generated",
-            "document_id": null,
-            "filename": null,
-            "page": null,
-            "quote": null,
             "origin": "bundle_synthesis.project_amount_number"
           }
         ],
@@ -1670,23 +1486,14 @@
             "document_id": "hotel_folio_guest_bill",
             "filename": "hotel_folio_guest_bill.md",
             "page": 1,
-            "quote": "City/Country Singapore, Singapore",
-            "origin": null
+            "quote": "City/Country Singapore, Singapore"
           },
           {
             "kind": "system_generated",
-            "document_id": null,
-            "filename": null,
-            "page": null,
-            "quote": null,
             "origin": "bundle_synthesis.infer_region_from_destination_country"
           },
           {
             "kind": "system_generated",
-            "document_id": null,
-            "filename": null,
-            "page": null,
-            "quote": null,
             "origin": "bundle_synthesis.classify_lodging_expense_type"
           }
         ],
@@ -1701,15 +1508,10 @@
             "document_id": "hotel_folio_guest_bill",
             "filename": "hotel_folio_guest_bill.md",
             "page": 1,
-            "quote": "Balance Due SGD 778.80",
-            "origin": null
+            "quote": "Balance Due SGD 778.80"
           },
           {
             "kind": "system_generated",
-            "document_id": null,
-            "filename": null,
-            "page": null,
-            "quote": null,
             "origin": "bundle_synthesis.build_lodging_remarks"
           }
         ],
@@ -1724,15 +1526,10 @@
             "document_id": "hotel_folio_guest_bill",
             "filename": "hotel_folio_guest_bill.md",
             "page": 1,
-            "quote": "City/Country Singapore, Singapore",
-            "origin": null
+            "quote": "City/Country Singapore, Singapore"
           },
           {
             "kind": "system_generated",
-            "document_id": null,
-            "filename": null,
-            "page": null,
-            "quote": null,
             "origin": "bundle_synthesis.project_country_of_activity"
           }
         ],
@@ -1747,23 +1544,14 @@
             "document_id": "hotel_folio_guest_bill",
             "filename": "hotel_folio_guest_bill.md",
             "page": 1,
-            "quote": "City/Country Singapore, Singapore",
-            "origin": null
+            "quote": "City/Country Singapore, Singapore"
           },
           {
             "kind": "system_generated",
-            "document_id": null,
-            "filename": null,
-            "page": null,
-            "quote": null,
             "origin": "bundle_synthesis.infer_region_from_destination_country"
           },
           {
             "kind": "system_generated",
-            "document_id": null,
-            "filename": null,
-            "page": null,
-            "quote": null,
             "origin": "bundle_synthesis.default_foreign_activity_type"
           }
         ],
@@ -1789,8 +1577,7 @@
               "document_id": "hotel_folio_guest_bill",
               "filename": "hotel_folio_guest_bill.md",
               "page": 1,
-              "quote": "MARINA BAY GRAND HOTEL",
-              "origin": null
+              "quote": "MARINA BAY GRAND HOTEL"
             }
           ],
           "flags": []
@@ -1804,15 +1591,10 @@
               "document_id": "hotel_folio_guest_bill",
               "filename": "hotel_folio_guest_bill.md",
               "page": 1,
-              "quote": "City/Country Singapore, Singapore",
-              "origin": null
+              "quote": "City/Country Singapore, Singapore"
             },
             {
               "kind": "system_generated",
-              "document_id": null,
-              "filename": null,
-              "page": null,
-              "quote": null,
               "origin": "bundle_synthesis.project_lodging_location"
             }
           ],
@@ -1827,31 +1609,21 @@
               "document_id": "hotel_folio_guest_bill",
               "filename": "hotel_folio_guest_bill.md",
               "page": 1,
-              "quote": "Check-in 2025-04-21",
-              "origin": null
+              "quote": "Check-in 2025-04-21"
             },
             {
               "kind": "document_span",
               "document_id": "hotel_folio_guest_bill",
               "filename": "hotel_folio_guest_bill.md",
               "page": 1,
-              "quote": "Check-out 2025-04-24",
-              "origin": null
+              "quote": "Check-out 2025-04-24"
             },
             {
               "kind": "system_generated",
-              "document_id": null,
-              "filename": null,
-              "page": null,
-              "quote": null,
               "origin": "document_extract.infer_stay_window_from_checkin_checkout"
             },
             {
               "kind": "system_generated",
-              "document_id": null,
-              "filename": null,
-              "page": null,
-              "quote": null,
               "origin": "bundle_synthesis.project_lodging_check_in"
             }
           ],
@@ -1866,31 +1638,21 @@
               "document_id": "hotel_folio_guest_bill",
               "filename": "hotel_folio_guest_bill.md",
               "page": 1,
-              "quote": "Check-in 2025-04-21",
-              "origin": null
+              "quote": "Check-in 2025-04-21"
             },
             {
               "kind": "document_span",
               "document_id": "hotel_folio_guest_bill",
               "filename": "hotel_folio_guest_bill.md",
               "page": 1,
-              "quote": "Check-out 2025-04-24",
-              "origin": null
+              "quote": "Check-out 2025-04-24"
             },
             {
               "kind": "system_generated",
-              "document_id": null,
-              "filename": null,
-              "page": null,
-              "quote": null,
               "origin": "document_extract.infer_stay_window_from_checkin_checkout"
             },
             {
               "kind": "system_generated",
-              "document_id": null,
-              "filename": null,
-              "page": null,
-              "quote": null,
               "origin": "bundle_synthesis.project_lodging_check_out"
             }
           ],
@@ -1905,31 +1667,24 @@
               "document_id": "hotel_folio_guest_bill",
               "filename": "hotel_folio_guest_bill.md",
               "page": 1,
-              "quote": "2025-04-21  Deluxe King Room  SGD 220.00  SGD 39.60",
-              "origin": null
+              "quote": "2025-04-21  Deluxe King Room  SGD 220.00  SGD 39.60"
             },
             {
               "kind": "document_span",
               "document_id": "hotel_folio_guest_bill",
               "filename": "hotel_folio_guest_bill.md",
               "page": 1,
-              "quote": "2025-04-22  Deluxe King Room  SGD 220.00  SGD 39.60",
-              "origin": null
+              "quote": "2025-04-22  Deluxe King Room  SGD 220.00  SGD 39.60"
             },
             {
               "kind": "document_span",
               "document_id": "hotel_folio_guest_bill",
               "filename": "hotel_folio_guest_bill.md",
               "page": 1,
-              "quote": "2025-04-23  Deluxe King Room  SGD 220.00  SGD 39.60",
-              "origin": null
+              "quote": "2025-04-23  Deluxe King Room  SGD 220.00  SGD 39.60"
             },
             {
               "kind": "system_generated",
-              "document_id": null,
-              "filename": null,
-              "page": null,
-              "quote": null,
               "origin": "bundle_synthesis.compute_number_of_nights"
             }
           ],
@@ -1944,31 +1699,24 @@
               "document_id": "hotel_folio_guest_bill",
               "filename": "hotel_folio_guest_bill.md",
               "page": 1,
-              "quote": "2025-04-21  Deluxe King Room  SGD 220.00  SGD 39.60",
-              "origin": null
+              "quote": "2025-04-21  Deluxe King Room  SGD 220.00  SGD 39.60"
             },
             {
               "kind": "document_span",
               "document_id": "hotel_folio_guest_bill",
               "filename": "hotel_folio_guest_bill.md",
               "page": 1,
-              "quote": "2025-04-22  Deluxe King Room  SGD 220.00  SGD 39.60",
-              "origin": null
+              "quote": "2025-04-22  Deluxe King Room  SGD 220.00  SGD 39.60"
             },
             {
               "kind": "document_span",
               "document_id": "hotel_folio_guest_bill",
               "filename": "hotel_folio_guest_bill.md",
               "page": 1,
-              "quote": "2025-04-23  Deluxe King Room  SGD 220.00  SGD 39.60",
-              "origin": null
+              "quote": "2025-04-23  Deluxe King Room  SGD 220.00  SGD 39.60"
             },
             {
               "kind": "system_generated",
-              "document_id": null,
-              "filename": null,
-              "page": null,
-              "quote": null,
               "origin": "bundle_synthesis.compute_lodging_daily_rate"
             }
           ],
@@ -1980,10 +1728,6 @@
           "evidence": [
             {
               "kind": "system_generated",
-              "document_id": null,
-              "filename": null,
-              "page": null,
-              "quote": null,
               "origin": "bundle_synthesis.default_lodging_booking_method"
             }
           ],
@@ -1998,15 +1742,10 @@
               "document_id": "hotel_folio_guest_bill",
               "filename": "hotel_folio_guest_bill.md",
               "page": 1,
-              "quote": "MARINA BAY GRAND HOTEL",
-              "origin": null
+              "quote": "MARINA BAY GRAND HOTEL"
             },
             {
               "kind": "system_generated",
-              "document_id": null,
-              "filename": null,
-              "page": null,
-              "quote": null,
               "origin": "bundle_synthesis.default_shared_lodging_false"
             }
           ],
@@ -2029,8 +1768,7 @@
             "document_id": "receipt_card_dotted",
             "filename": "receipt_card_dotted.md",
             "page": 1,
-            "quote": "Date 2025-04-24",
-            "origin": null
+            "quote": "Date 2025-04-24"
           }
         ],
         "flags": []
@@ -2046,15 +1784,10 @@
             "document_id": "receipt_card_dotted",
             "filename": "receipt_card_dotted.md",
             "page": 1,
-            "quote": "Total SGD 35.02",
-            "origin": null
+            "quote": "Total SGD 35.02"
           },
           {
             "kind": "system_generated",
-            "document_id": null,
-            "filename": null,
-            "page": null,
-            "quote": null,
             "origin": "bundle_synthesis.project_original_currency"
           }
         ],
@@ -2069,15 +1802,10 @@
             "document_id": "receipt_card_dotted",
             "filename": "receipt_card_dotted.md",
             "page": 1,
-            "quote": "Total SGD 35.02",
-            "origin": null
+            "quote": "Total SGD 35.02"
           },
           {
             "kind": "system_generated",
-            "document_id": null,
-            "filename": null,
-            "page": null,
-            "quote": null,
             "origin": "bundle_synthesis.project_amount_number"
           }
         ],
@@ -2092,15 +1820,10 @@
             "document_id": "receipt_card_dotted",
             "filename": "receipt_card_dotted.md",
             "page": 1,
-            "quote": "Total SGD 35.02",
-            "origin": null
+            "quote": "Total SGD 35.02"
           },
           {
             "kind": "system_generated",
-            "document_id": null,
-            "filename": null,
-            "page": null,
-            "quote": null,
             "origin": "bundle_synthesis.heuristic_meal_classification"
           }
         ],
@@ -2117,15 +1840,10 @@
             "document_id": "receipt_card_dotted",
             "filename": "receipt_card_dotted.md",
             "page": 1,
-            "quote": "EAST BAY BISTRO",
-            "origin": null
+            "quote": "EAST BAY BISTRO"
           },
           {
             "kind": "system_generated",
-            "document_id": null,
-            "filename": null,
-            "page": null,
-            "quote": null,
             "origin": "bundle_synthesis.build_meal_remarks"
           }
         ],
@@ -2142,15 +1860,10 @@
             "document_id": "receipt_card_dotted",
             "filename": "receipt_card_dotted.md",
             "page": 1,
-            "quote": "Location Singapore, Singapore",
-            "origin": null
+            "quote": "Location Singapore, Singapore"
           },
           {
             "kind": "system_generated",
-            "document_id": null,
-            "filename": null,
-            "page": null,
-            "quote": null,
             "origin": "bundle_synthesis.project_country_of_activity"
           }
         ],
@@ -2165,23 +1878,14 @@
             "document_id": "hotel_folio_guest_bill",
             "filename": "hotel_folio_guest_bill.md",
             "page": 1,
-            "quote": "City/Country Singapore, Singapore",
-            "origin": null
+            "quote": "City/Country Singapore, Singapore"
           },
           {
             "kind": "system_generated",
-            "document_id": null,
-            "filename": null,
-            "page": null,
-            "quote": null,
             "origin": "bundle_synthesis.infer_region_from_destination_country"
           },
           {
             "kind": "system_generated",
-            "document_id": null,
-            "filename": null,
-            "page": null,
-            "quote": null,
             "origin": "bundle_synthesis.default_foreign_activity_type"
           }
         ],
@@ -2208,8 +1912,7 @@
               "document_id": "receipt_card_dotted",
               "filename": "receipt_card_dotted.md",
               "page": 1,
-              "quote": "EAST BAY BISTRO",
-              "origin": null
+              "quote": "EAST BAY BISTRO"
             }
           ],
           "flags": []
@@ -2223,15 +1926,10 @@
               "document_id": "receipt_card_dotted",
               "filename": "receipt_card_dotted.md",
               "page": 1,
-              "quote": "Tip SGD 4.50",
-              "origin": null
+              "quote": "Tip SGD 4.50"
             },
             {
               "kind": "system_generated",
-              "document_id": null,
-              "filename": null,
-              "page": null,
-              "quote": null,
               "origin": "bundle_synthesis.project_amount_number"
             }
           ],
@@ -2247,31 +1945,24 @@
               "document_id": "receipt_card_dotted",
               "filename": "receipt_card_dotted.md",
               "page": 1,
-              "quote": "Laksa Lunch ........ SGD 18.00",
-              "origin": null
+              "quote": "Laksa Lunch ........ SGD 18.00"
             },
             {
               "kind": "document_span",
               "document_id": "receipt_card_dotted",
               "filename": "receipt_card_dotted.md",
               "page": 1,
-              "quote": "Iced Tea ........... SGD 6.00",
-              "origin": null
+              "quote": "Iced Tea ........... SGD 6.00"
             },
             {
               "kind": "document_span",
               "document_id": "receipt_card_dotted",
               "filename": "receipt_card_dotted.md",
               "page": 1,
-              "quote": "Service Charge ..... SGD 4.00",
-              "origin": null
+              "quote": "Service Charge ..... SGD 4.00"
             },
             {
               "kind": "system_generated",
-              "document_id": null,
-              "filename": null,
-              "page": null,
-              "quote": null,
               "origin": "bundle_synthesis.detect_receipt_alcohol"
             }
           ],
@@ -2295,15 +1986,10 @@
           "document_id": "hotel_folio_guest_bill",
           "filename": "hotel_folio_guest_bill.md",
           "page": 1,
-          "quote": "Balance Due SGD 778.80",
-          "origin": null
+          "quote": "Balance Due SGD 778.80"
         },
         {
           "kind": "system_generated",
-          "document_id": null,
-          "filename": null,
-          "page": null,
-          "quote": null,
           "origin": "bundle_synthesis.project_amount_number"
         }
       ]
@@ -2321,15 +2007,10 @@
           "document_id": "receipt_card_dotted",
           "filename": "receipt_card_dotted.md",
           "page": 1,
-          "quote": "Total SGD 35.02",
-          "origin": null
+          "quote": "Total SGD 35.02"
         },
         {
           "kind": "system_generated",
-          "document_id": null,
-          "filename": null,
-          "page": null,
-          "quote": null,
           "origin": "bundle_synthesis.project_amount_number"
         }
       ]

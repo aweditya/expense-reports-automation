@@ -24,10 +24,6 @@
       "corrected_evidence": [
         {
           "kind": "user_input",
-          "document_id": null,
-          "filename": null,
-          "page": null,
-          "quote": null,
           "origin": "feedback_regression.acceptance.authorized_by"
         }
       ],
@@ -54,41 +50,24 @@
           "document_id": "hotel_folio_guest_bill",
           "filename": "hotel_folio_guest_bill.md",
           "page": 1,
-          "quote": "City/Country Singapore, Singapore",
-          "origin": null
+          "quote": "City/Country Singapore, Singapore"
         },
         {
           "kind": "system_generated",
-          "document_id": null,
-          "filename": null,
-          "page": null,
-          "quote": null,
           "origin": "bundle_synthesis.infer_region_from_destination_country"
         },
         {
           "kind": "system_generated",
-          "document_id": null,
-          "filename": null,
-          "page": null,
-          "quote": null,
           "origin": "bundle_synthesis.project_category_from_region"
         },
         {
           "kind": "system_generated",
-          "document_id": null,
-          "filename": null,
-          "page": null,
-          "quote": null,
           "origin": "bundle_synthesis.default_event_name_from_category"
         }
       ],
       "corrected_evidence": [
         {
           "kind": "user_input",
-          "document_id": null,
-          "filename": null,
-          "page": null,
-          "quote": null,
           "origin": "feedback_regression.acceptance.event_name"
         }
       ],
@@ -113,10 +92,6 @@
       "corrected_evidence": [
         {
           "kind": "user_input",
-          "document_id": null,
-          "filename": null,
-          "page": null,
-          "quote": null,
           "origin": "feedback_regression.acceptance.affiliation"
         }
       ],
@@ -141,10 +116,6 @@
       "corrected_evidence": [
         {
           "kind": "user_input",
-          "document_id": null,
-          "filename": null,
-          "page": null,
-          "quote": null,
           "origin": "feedback_regression.acceptance.attendees"
         }
       ],
@@ -169,10 +140,6 @@
       "corrected_evidence": [
         {
           "kind": "user_input",
-          "document_id": null,
-          "filename": null,
-          "page": null,
-          "quote": null,
           "origin": "feedback_regression.acceptance.attendees"
         }
       ],
@@ -197,10 +164,6 @@
       "corrected_evidence": [
         {
           "kind": "user_input",
-          "document_id": null,
-          "filename": null,
-          "page": null,
-          "quote": null,
           "origin": "feedback_regression.acceptance.attendees"
         }
       ],
@@ -225,10 +188,6 @@
       "corrected_evidence": [
         {
           "kind": "user_input",
-          "document_id": null,
-          "filename": null,
-          "page": null,
-          "quote": null,
           "origin": "feedback_regression.acceptance.attendees"
         }
       ],

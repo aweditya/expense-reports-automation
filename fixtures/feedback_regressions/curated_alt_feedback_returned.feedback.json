@@ -24,10 +24,6 @@
       "corrected_evidence": [
         {
           "kind": "user_input",
-          "document_id": null,
-          "filename": null,
-          "page": null,
-          "quote": null,
           "origin": "feedback_regression.returned.authorized_by"
         }
       ],
@@ -54,10 +50,6 @@
       "corrected_evidence": [
         {
           "kind": "user_input",
-          "document_id": null,
-          "filename": null,
-          "page": null,
-          "quote": null,
           "origin": "feedback_regression.returned.affiliation"
         }
       ],
@@ -84,25 +76,16 @@
           "document_id": "receipt_merchant_labeled",
           "filename": "receipt_merchant_labeled.md",
           "page": 1,
-          "quote": "Amount Paid: SGD 35.02",
-          "origin": null
+          "quote": "Amount Paid: SGD 35.02"
         },
         {
           "kind": "system_generated",
-          "document_id": null,
-          "filename": null,
-          "page": null,
-          "quote": null,
           "origin": "bundle_synthesis.heuristic_meal_classification"
         }
       ],
       "corrected_evidence": [
         {
           "kind": "user_input",
-          "document_id": null,
-          "filename": null,
-          "page": null,
-          "quote": null,
           "origin": "feedback_regression.returned.expense_type"
         }
       ],
@@ -129,10 +112,6 @@
       "corrected_evidence": [
         {
           "kind": "user_input",
-          "document_id": null,
-          "filename": null,
-          "page": null,
-          "quote": null,
           "origin": "feedback_regression.returned.attendees"
         }
       ],
@@ -157,10 +136,6 @@
       "corrected_evidence": [
         {
           "kind": "user_input",
-          "document_id": null,
-          "filename": null,
-          "page": null,
-          "quote": null,
           "origin": "feedback_regression.returned.attendees"
         }
       ],
@@ -185,10 +160,6 @@
       "corrected_evidence": [
         {
           "kind": "user_input",
-          "document_id": null,
-          "filename": null,
-          "page": null,
-          "quote": null,
           "origin": "feedback_regression.returned.attendees"
         }
       ],
@@ -213,10 +184,6 @@
       "corrected_evidence": [
         {
           "kind": "user_input",
-          "document_id": null,
-          "filename": null,
-          "page": null,
-          "quote": null,
           "origin": "feedback_regression.returned.attendees"
         }
       ],

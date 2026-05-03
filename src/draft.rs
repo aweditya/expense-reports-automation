@@ -27,10 +27,15 @@ pub enum EvidenceKind {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EvidenceReference {
     pub kind: EvidenceKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub document_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub filename: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub page: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quote: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub origin: Option<String>,
 }
 
