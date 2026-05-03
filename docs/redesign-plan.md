@@ -261,10 +261,76 @@ Why we did this:
     fails loudly enough at runtime); M6.5.c (recorded responses —
     flake bound by predicate tolerance); M6.5.d (_meta codegen —
     hand-written is fine).
-- [ ] **M7. Wire into workbench, deploy, validate on real receipts.** Make the
-  workbench render the new typed report. Strip the parts that depend on the
-  old pipeline. Deploy to Cloud Run. **Verdict from the deployed site on the 3
-  receipts.** Iterate.
+- [ ] **M7. Build the new minimal workbench, deploy, validate on real
+  receipts.** Re-planned 2026-05-03 around a much simpler architecture
+  than the old workbench. The old workbench is *moved aside* (not
+  deleted) — the new one is built fresh with no inherited complexity.
+
+  **Locked decisions for the first deploy:**
+  - Read-only display. Editable comes later — FA reviews extracted data
+    on the page, copies into Stanford portal manually for now. (Eventual
+    target: in-place editing of missing/incorrectly-extracted fields,
+    plus a "save PDF" option for the final printable form.)
+  - Synchronous request flow. ~30s/receipt × 4 = ~2 min upload-to-page.
+    Browser blocks. Cloud Run's 600s timeout is plenty. (Eventual target:
+    polling-based async with a status page.)
+  - Render only: transaction summary, transaction lines, source documents.
+    Plus general info as mostly-empty (T1 fields show as "needs FA
+    input"). Skip per-diem and mileage entirely until they're populated
+    by reduction.
+
+  **What we keep from the old workbench's visual language:**
+  hero header with summary cards, eyebrow/badge/panel/card hierarchy,
+  per-section panels, field cards with confidence pills + evidence
+  quotes + needs-review tags, issues queue with jump-to-field links.
+
+  **What we drop:** OCR inspection pages, grounding overlays, async job
+  queue UI, ledger/version/draft-revision concepts, the editable filing
+  surface JavaScript, OCR comparison artifacts.
+
+  **Sub-steps, one commit each:**
+
+  - **M7.a — Move the old workbench aside.** Create an `old/`
+    directory at the repo root. Move `src/review_workbench.rs`,
+    `src/review_packet.rs`, `src/review_fa_workbench.rs`,
+    `src/review_preview.rs`, `src/review_session.rs`,
+    `src/review_workbench.css`, the workbench/review/ledger/feedback
+    export+verify binaries, and `fixtures/workbench_regressions/` into
+    it. Update `src/lib.rs` to drop the references. Confirm `cargo
+    test` still passes (the moved tests no longer run; that's expected).
+
+  - **M7.b — `src/workbench_simple.rs` — the new HTML renderer.**
+    Walks the typed `ExpenseReport`, emits HTML using the existing
+    visual vocabulary (eyebrow/panel/card classes). Inline CSS in the
+    HTML (single self-contained file output). No JavaScript. Unit-tested
+    against a sample `ExpenseReport`. ~400-600 lines including CSS.
+
+  - **M7.c — `src/bin/render_workbench_from_report.rs` —
+    orchestration binary.** Takes `--report <ExpenseReport JSON>` and
+    `--bundle-dir <upload dir>`. Reads the typed report, runs the
+    existing validator (via small adapter), emits the HTML. ~100 lines.
+
+  - **M7.d — `scripts/local_app_simple.py` — the new HTTP server.**
+    One POST `/upload` endpoint (multipart files → spike_extract per
+    file → reduce_extractions → render_workbench_from_report → return
+    HTML). One GET `/` for the upload form. Synchronous. ~150 lines.
+
+  - **M7.e — Dockerfile + cloudbuild updates.** Copy
+    `scripts/spike_extract.py`, `scripts/local_app_simple.py`, the
+    `generated/response_schema_meal.json`, and the new Rust binaries.
+    Switch the entrypoint to `local_app_simple.py`. cloudbuild.yaml
+    likely needs no changes (still cargo test + python tests + build +
+    deploy).
+
+  - **M7.f — Deploy and verify.** Push to main → Cloud Build → Cloud
+    Run. Open the deployed site, upload the four real receipts via the
+    actual UI, see what happens. Iterate on whatever surfaces.
+
+  **Eventual follow-ups (NOT M7):**
+  - Editable in-place fields with save endpoint
+  - Poll-based async upload with status page
+  - "Save as PDF" button for the FA's records
+  - Per-diem rendering once the reduction populates it
 - [ ] **M8. Delete the old pipeline.** Once the new path works on real
   receipts via the deployed site, delete:
   - `src/vertex_gemini.rs` (REST client) and `src/vertex_gemini_sdk.rs`
@@ -287,23 +353,12 @@ Why we did this:
 
 ## Current step
 
-**M7 (next).** Wire the new pipeline into the workbench, deploy to
-Cloud Run, validate on the four real receipts via the deployed site.
+**M7.a (next).** Move the old workbench files into `old/` so the new
+minimal workbench can be built fresh in the cleared namespace. No
+deletion — the old files come back later via M8 if we never re-use them.
 
-The redesigned pipeline is end-to-end working at the CLI:
-  receipts/*.{jpeg,png} → spike_extract.py (Gemini structured output)
-  → .scratch/spike/*.json → reduce_extractions binary
-  → .scratch/reduced/report.json (typed ExpenseReport)
-
-What M7 needs:
-- An adapter from the new ExpenseReport into whatever the workbench
-  renderer consumes today (likely DraftReport — needs a From impl, or
-  the workbench reader gets rewritten to take ExpenseReport directly).
-- The local app's job runner (scripts/local_app_job_runner.py) needs to
-  invoke the new spike_extract.py + reduce_extractions binary instead
-  of the old transcribe → ingest path.
-- Deploy via Cloud Build push to main.
-- Cloud Run verdict on the real receipts.
+After M7.a: M7.b writes the new HTML renderer (`src/workbench_simple.rs`),
+preserving the old visual language but on a much smaller surface.
 
 ## Mistakes I'm watching for during M5
 
