@@ -25,7 +25,7 @@ impl WorkbenchRegressionVerificationReport {
 }
 
 pub fn workbench_regression_root() -> PathBuf {
-    repo_root().join("fixtures/workbench_regressions")
+    repo_root().join("old/workbench_regressions")
 }
 
 pub fn verify_workbench_regressions() -> WorkbenchRegressionVerificationReport {
@@ -132,7 +132,7 @@ fn render_text_mismatch(expected: &str, actual: &str) -> String {
 }
 
 fn expected_workbench_relative_path(case_id: &str) -> String {
-    format!("fixtures/workbench_regressions/{case_id}.workbench.html")
+    format!("old/workbench_regressions/{case_id}.workbench.html")
 }
 
 fn repo_root() -> PathBuf {

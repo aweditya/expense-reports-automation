@@ -24,11 +24,17 @@ pub mod parse;
 pub mod readiness;
 pub mod reduce;
 pub mod render;
+// Old-pipeline workbench renderers. Physically in `old/` (slated for
+// deletion in M8); logically still in the crate so the pre-redesign
+// upload flow keeps working until the new path is deployed.
+#[path = "../old/review_fa_workbench.rs"]
 pub mod review_fa_workbench;
 pub mod review_packet;
+#[path = "../old/review_preview.rs"]
 pub mod review_preview;
 pub mod review_regression;
 pub mod review_session;
+#[path = "../old/review_workbench.rs"]
 pub mod review_workbench;
 pub mod synthetic_corpus;
 pub mod synthetic_documents;
