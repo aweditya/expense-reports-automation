@@ -304,6 +304,12 @@ def rust_type(node: SchemaNode) -> str:
 
 def rust_field_type(node: SchemaNode) -> str:
     base_type = rust_type(node)
+    if node.is_leaf:
+        # Every leaf is wrapped — `Wrapped<T> { value: Option<T>, _meta: ... }`
+        # Presence/absence is carried inside `value`; required-ness is
+        # enforced by Pass 2 (FIELD_RULES + CONDITIONAL_RULES), not by the
+        # struct shape. See M6.1 in docs/redesign-plan.md for the rationale.
+        return f"Wrapped<{base_type}>"
     if node.required and node.required_expression is None:
         return base_type
     return f"Option<{base_type}>"
@@ -346,6 +352,8 @@ def node_doc_lines(node: SchemaNode, indent: str = "") -> list[str]:
 def generate_rust_model(root: SchemaNode, schema_version: str) -> str:
     lines: list[str] = [
         "// Auto-generated typed model from schema.yaml. Do not edit manually.",
+        "",
+        "use crate::meta::Wrapped;",
         "",
         f'pub const SCHEMA_VERSION: &str = "{schema_version}";',
         "",

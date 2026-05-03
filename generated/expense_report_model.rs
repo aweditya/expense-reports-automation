@@ -1,5 +1,7 @@
 // Auto-generated typed model from schema.yaml. Do not edit manually.
 
+use crate::meta::Wrapped;
+
 pub const SCHEMA_VERSION: &str = "0.1.0";
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
@@ -678,10 +680,10 @@ impl core::fmt::Display for ExpenseReportPerDiemExpensesItemForeignActivityTypeE
 pub struct ExpenseReportGeneralInformationPayee {
     /// Source tier: T3
     /// Infer from:  Traveler name on flight booking or hotel folio
-    pub name: String,
+    pub name: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Context from uploaded docs or FA input
-    pub affiliation: ExpenseReportGeneralInformationPayeeAffiliationEnum,
+    pub affiliation: Wrapped<ExpenseReportGeneralInformationPayeeAffiliationEnum>,
 
 }
 
@@ -692,24 +694,24 @@ pub struct ExpenseReportGeneralInformationPayee {
 pub struct ExpenseReportGeneralInformationBusinessPurpose {
     /// Source tier: T1
     /// Infer from:  Suggestion only — payee name and affiliation
-    pub who: String,
+    pub who: Wrapped<String>,
     /// Source tier: T1
     /// Infer from:  Suggestion only — conference name from registration receipt; or meeting
     /// Infer from: purpose from context
-    pub what: String,
+    pub what: Wrapped<String>,
     /// Source tier: T1
     /// Infer from:  Suggestion only — trip dates from flight itinerary
-    pub when: String,
+    pub when: Wrapped<String>,
     /// Source tier: T1
     /// Infer from:  Suggestion only — destination city/country from flight or hotel docs
-    pub r#where: String,
+    pub r#where: Wrapped<String>,
     /// Source tier: T1
     /// Infer from:  Suggestion only — presenting at conference (if name appears in program),
     /// Infer from: research collaboration, etc.
-    pub why: String,
+    pub why: Wrapped<String>,
     ///  30-character lookup key entered by the FA
     /// Source tier: T1
-    pub key_30char: String,
+    pub key_30char: Wrapped<String>,
 
 }
 
@@ -720,22 +722,22 @@ pub struct ExpenseReportGeneralInformationBusinessPurpose {
 pub struct ExpenseReportGeneralInformationStudentCertification {
     ///  Requires faculty approval
     /// Source tier: T3
-    pub supports_faculty_research: Option<bool>,
+    pub supports_faculty_research: Wrapped<bool>,
     ///  Requires faculty approval + conference program attachment
     /// Source tier: T3
     /// Infer from:  Payee name appears in conference program/agenda
-    pub presenting_at_conference: Option<bool>,
+    pub presenting_at_conference: Wrapped<bool>,
     ///  Requires faculty approval. Not applicable to post-docs.
     /// Depends on:  general_information.payee.affiliation
     /// Source tier: T3
-    pub integral_to_degree_work: Option<bool>,
+    pub integral_to_degree_work: Wrapped<bool>,
     /// Source tier: T3
-    pub related_to_employment: Option<bool>,
+    pub related_to_employment: Wrapped<bool>,
     /// Source tier: T3
-    pub other: Option<bool>,
+    pub other: Wrapped<bool>,
     /// Conditionally required when:  student_certification.other == true
     /// Source tier: T3
-    pub other_explanation: Option<String>,
+    pub other_explanation: Wrapped<String>,
 
 }
 
@@ -744,16 +746,16 @@ pub struct ExpenseReportGeneralInformation {
     /// Source tier: T3
     /// Infer from:  Destination in flight/hotel docs. Foreign destination → expenses_foreign;
     /// Infer from: domestic → expenses_domestic. Other categories require explicit context.
-    pub category: ExpenseReportGeneralInformationCategoryEnum,
+    pub category: Wrapped<ExpenseReportGeneralInformationCategoryEnum>,
     ///  Person being reimbursed
     /// Source tier: T3
     pub payee: ExpenseReportGeneralInformationPayee,
     ///  Defaults to 'no' unless explicitly requested
     /// Source tier: T1
-    pub rush_processing: ExpenseReportGeneralInformationRushProcessingEnum,
+    pub rush_processing: Wrapped<ExpenseReportGeneralInformationRushProcessingEnum>,
     ///  Always 'electronic' — system pre-fills
     /// Source tier: T2
-    pub payment_method: String,
+    pub payment_method: Wrapped<String>,
     ///  Structured purpose statement entered by the FA. First 30 chars of the combined text
     /// serve as a lookup key.
     /// Source tier: T1
@@ -761,14 +763,14 @@ pub struct ExpenseReportGeneralInformation {
     ///  Format: <lab_name> + <Foreign Expenses | Domestic Expenses>
     /// Source tier: T3
     /// Infer from:  Lab affiliation + category
-    pub event_name: String,
+    pub event_name: Wrapped<String>,
     ///  At least one reason must be selected. Determines required approvals.
     /// Depends on:  general_information.payee.affiliation
     /// Source tier: T3
     pub student_certification: ExpenseReportGeneralInformationStudentCertification,
     ///  Faculty member or approver name
     /// Source tier: T1
-    pub authorized_by: String,
+    pub authorized_by: Wrapped<String>,
 
 }
 
@@ -777,20 +779,20 @@ pub struct ExpenseReportTransactionSummary {
     ///  FA-entered. Typically matches general_information.category but the portal stores it as
     /// a separate field.
     /// Source tier: T1
-    pub transaction_type: ExpenseReportTransactionSummaryTransactionTypeEnum,
+    pub transaction_type: Wrapped<ExpenseReportTransactionSummaryTransactionTypeEnum>,
     ///  Format: ERxxxxxxx. Assigned by the system or existing system.
     /// Source tier: T2
-    pub transaction_number: Option<String>,
+    pub transaction_number: Wrapped<String>,
     ///  Date of the expense (earliest expense date across all receipts in the bundle).
     /// Source tier: T3
     /// Infer from:  Earliest common.date across transaction_lines
-    pub transaction_date: IsoDate,
+    pub transaction_date: Wrapped<IsoDate>,
     ///  FA-entered submission state.
     /// Source tier: T1
-    pub status: Option<ExpenseReportTransactionSummaryStatusEnum>,
+    pub status: Wrapped<ExpenseReportTransactionSummaryStatusEnum>,
     ///  Sum of all transaction lines, converted to USD
     /// Source tier: T2
-    pub total_usd: DecimalAmount,
+    pub total_usd: Wrapped<DecimalAmount>,
 
 }
 
@@ -798,9 +800,9 @@ pub struct ExpenseReportTransactionSummary {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExpenseReportTransactionLinesItemCommonSourceDocumentsItem {
     /// Source tier: T3
-    pub filename: Option<String>,
+    pub filename: Wrapped<String>,
     /// Source tier: T3
-    pub document_type: Option<ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeEnum>,
+    pub document_type: Wrapped<ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeEnum>,
 
 }
 
@@ -809,38 +811,38 @@ pub struct ExpenseReportTransactionLinesItemCommon {
     /// Source tier: T3
     /// Infer from:  Date on the receipt
     /// Validation rule:  Must fall within trip date window
-    pub date: IsoDate,
+    pub date: Wrapped<IsoDate>,
     ///  Amount in USD. If original currency is foreign, this is the converted amount.
     /// Source tier: T3
     /// Infer from:  Receipt amount × exchange rate (if foreign)
-    pub line_amount_usd: DecimalAmount,
+    pub line_amount_usd: Wrapped<DecimalAmount>,
     /// Conditionally required when:  general_information.category == expenses_foreign
     /// Source tier: T3
     /// Infer from:  Currency symbol/code on receipt
-    pub original_currency: Option<String>,
+    pub original_currency: Wrapped<String>,
     /// Conditionally required when:  general_information.category == expenses_foreign
     /// Source tier: T3
     /// Infer from:  Amount as printed on receipt
-    pub original_amount: Option<DecimalAmount>,
+    pub original_amount: Wrapped<DecimalAmount>,
     /// Conditionally required when:  general_information.category == expenses_foreign
     /// Source tier: T2
     /// Infer from:  Historical rate for common.date from exchange rate API
-    pub exchange_rate: Option<DecimalAmount>,
+    pub exchange_rate: Wrapped<DecimalAmount>,
     /// Source tier: T3
     /// Infer from:  LLM classifies from receipt content
-    pub expense_type: ExpenseReportTransactionLinesItemCommonExpenseTypeEnum,
+    pub expense_type: Wrapped<ExpenseReportTransactionLinesItemCommonExpenseTypeEnum>,
     ///  Reiterate dates, foreign currency details, any context
     /// Source tier: T3
     /// Infer from:  Generated from receipt details and trip context
-    pub remarks: String,
+    pub remarks: Wrapped<String>,
     /// Conditionally required when:  general_information.category == expenses_foreign
     /// Source tier: T3
     /// Infer from:  Destination country from flight/hotel docs
-    pub country_of_activity: Option<String>,
+    pub country_of_activity: Wrapped<String>,
     /// Conditionally required when:  general_information.category == expenses_foreign
     /// Source tier: T3
     /// Infer from:  Conference registration → 'conference'; otherwise from context
-    pub foreign_activity_type: Option<ExpenseReportTransactionLinesItemCommonForeignActivityTypeEnum>,
+    pub foreign_activity_type: Wrapped<ExpenseReportTransactionLinesItemCommonForeignActivityTypeEnum>,
     ///  References to uploaded documents supporting this line. Filled by the extractor from the
     /// same documents that produced the line's other fields.
     /// Source tier: T3
@@ -852,11 +854,11 @@ pub struct ExpenseReportTransactionLinesItemCommon {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonComparableFaresItem {
     /// Source tier: T2
-    pub airline: Option<String>,
+    pub airline: Wrapped<String>,
     /// Source tier: T2
-    pub amount: Option<DecimalAmount>,
+    pub amount: Wrapped<DecimalAmount>,
     /// Source tier: T2
-    pub class: Option<String>,
+    pub class: Wrapped<String>,
 
 }
 
@@ -866,11 +868,11 @@ pub struct ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonCompara
 pub struct ExpenseReportTransactionLinesItemAirfareDetailsPriceComparison {
     ///  Date the comparison was generated
     /// Source tier: T2
-    pub comparison_date: Option<IsoDate>,
+    pub comparison_date: Wrapped<IsoDate>,
     /// Source tier: T2
     pub comparable_fares: Option<Vec<ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonComparableFaresItem>>,
     /// Source tier: T2
-    pub source: Option<ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonSourceEnum>,
+    pub source: Wrapped<ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonSourceEnum>,
 
 }
 
@@ -879,33 +881,33 @@ pub struct ExpenseReportTransactionLinesItemAirfareDetailsPriceComparison {
 pub struct ExpenseReportTransactionLinesItemAirfareDetails {
     /// Source tier: T3
     /// Infer from:  Booking confirmation
-    pub travelers_name: String,
+    pub travelers_name: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  E-ticket receipt
-    pub ticket_number: String,
+    pub ticket_number: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Booking confirmation
-    pub ticket_amount: DecimalAmount,
+    pub ticket_amount: Wrapped<DecimalAmount>,
     /// Source tier: T3
     /// Infer from:  Booking confirmation format/header; default 'other' if unrecognized
-    pub booking_method: ExpenseReportTransactionLinesItemAirfareDetailsBookingMethodEnum,
+    pub booking_method: Wrapped<ExpenseReportTransactionLinesItemAirfareDetailsBookingMethodEnum>,
     /// Source tier: T3
     /// Infer from:  Booking confirmation or ticket
-    pub airline: String,
+    pub airline: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Booking confirmation
-    pub class_of_ticket: ExpenseReportTransactionLinesItemAirfareDetailsClassOfTicketEnum,
+    pub class_of_ticket: Wrapped<ExpenseReportTransactionLinesItemAirfareDetailsClassOfTicketEnum>,
     ///  IATA code
     /// Source tier: T3
     /// Infer from:  Itinerary
-    pub departure_airport: String,
+    pub departure_airport: Wrapped<String>,
     ///  IATA code
     /// Source tier: T3
     /// Infer from:  Itinerary
-    pub destination_airport: String,
+    pub destination_airport: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Itinerary shows return leg
-    pub round_trip: bool,
+    pub round_trip: Wrapped<bool>,
     ///  System-generated if not provided by payee
     /// Source tier: T2
     pub price_comparison: ExpenseReportTransactionLinesItemAirfareDetailsPriceComparison,
@@ -917,39 +919,39 @@ pub struct ExpenseReportTransactionLinesItemAirfareDetails {
 pub struct ExpenseReportTransactionLinesItemLodgingDetails {
     /// Source tier: T3
     /// Infer from:  Hotel folio header
-    pub hotel_name: String,
+    pub hotel_name: Wrapped<String>,
     ///  City, Country
     /// Source tier: T3
     /// Infer from:  Hotel folio address
-    pub location: String,
+    pub location: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Hotel folio
-    pub check_in_date: IsoDate,
+    pub check_in_date: Wrapped<IsoDate>,
     /// Source tier: T3
     /// Infer from:  Hotel folio
-    pub check_out_date: IsoDate,
+    pub check_out_date: Wrapped<IsoDate>,
     /// Source tier: T2
     /// Infer from:  Computed: check_out_date - check_in_date
-    pub number_of_nights: DecimalAmount,
+    pub number_of_nights: Wrapped<DecimalAmount>,
     ///  In original currency
     /// Source tier: T3
     /// Infer from:  Hotel folio
-    pub daily_rate: DecimalAmount,
+    pub daily_rate: Wrapped<DecimalAmount>,
     /// Source tier: T3
     /// Infer from:  If hotel matches conference venue → conference_hotel; else check booking
     /// Infer from: source
-    pub booking_method: ExpenseReportTransactionLinesItemLodgingDetailsBookingMethodEnum,
+    pub booking_method: Wrapped<ExpenseReportTransactionLinesItemLodgingDetailsBookingMethodEnum>,
     /// Source tier: T3
     /// Infer from:  Context from payee; default false
-    pub is_shared_lodging: bool,
+    pub is_shared_lodging: Wrapped<bool>,
     ///  ERxxxxxxx of the other traveler's report
     /// Conditionally required when:  lodging_details.is_shared_lodging == true
     /// Source tier: T1
-    pub shared_with_transaction_number: Option<String>,
+    pub shared_with_transaction_number: Wrapped<String>,
     ///  Number of nights flagged as personal (outside conference dates)
     /// Source tier: T2
     /// Infer from:  Compare hotel dates against conference dates from registration
-    pub personal_nights_excluded: Option<DecimalAmount>,
+    pub personal_nights_excluded: Wrapped<DecimalAmount>,
 
 }
 
@@ -959,16 +961,16 @@ pub struct ExpenseReportTransactionLinesItemLodgingDetails {
 pub struct ExpenseReportTransactionLinesItemGroundTransportDetails {
     /// Source tier: T3
     /// Infer from:  Uber/Lyft receipt
-    pub origin: String,
+    pub origin: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Uber/Lyft receipt
-    pub destination: String,
+    pub destination: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Receipt header (Uber, Lyft, taxi company, etc.)
-    pub service_provider: String,
+    pub service_provider: Wrapped<String>,
     ///  If true, missing receipt form is used instead
     /// Source tier: T1
-    pub missing_receipt: bool,
+    pub missing_receipt: Wrapped<bool>,
 
 }
 
@@ -976,13 +978,13 @@ pub struct ExpenseReportTransactionLinesItemGroundTransportDetails {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExpenseReportTransactionLinesItemConferenceRegistrationDetailsMealsIncludedScheduleItem {
     /// Source tier: T3
-    pub date: Option<IsoDate>,
+    pub date: Wrapped<IsoDate>,
     /// Source tier: T3
-    pub breakfast: Option<bool>,
+    pub breakfast: Wrapped<bool>,
     /// Source tier: T3
-    pub lunch: Option<bool>,
+    pub lunch: Wrapped<bool>,
     /// Source tier: T3
-    pub dinner: Option<bool>,
+    pub dinner: Wrapped<bool>,
 
 }
 
@@ -1001,16 +1003,16 @@ pub struct ExpenseReportTransactionLinesItemConferenceRegistrationDetailsMealsIn
 pub struct ExpenseReportTransactionLinesItemConferenceRegistrationDetails {
     /// Source tier: T3
     /// Infer from:  Registration receipt
-    pub conference_name: String,
+    pub conference_name: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Registration receipt
-    pub order_number: String,
+    pub order_number: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Conference program or registration confirmation
-    pub conference_start_date: IsoDate,
+    pub conference_start_date: Wrapped<IsoDate>,
     /// Source tier: T3
     /// Infer from:  Conference program or registration confirmation
-    pub conference_end_date: IsoDate,
+    pub conference_end_date: Wrapped<IsoDate>,
     ///  Which meals the conference provides, by day. Feeds into per diem deductions.
     /// Source tier: T3
     /// Infer from:  Conference program/schedule (e.g., 'lunch provided to all attendees')
@@ -1022,9 +1024,9 @@ pub struct ExpenseReportTransactionLinesItemConferenceRegistrationDetails {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExpenseReportTransactionLinesItemMealDetailsAttendeesItem {
     /// Source tier: T1
-    pub name: Option<String>,
+    pub name: Wrapped<String>,
     /// Source tier: T1
-    pub affiliation: Option<String>,
+    pub affiliation: Wrapped<String>,
 
 }
 
@@ -1034,25 +1036,25 @@ pub struct ExpenseReportTransactionLinesItemMealDetailsAttendeesItem {
 pub struct ExpenseReportTransactionLinesItemMealDetails {
     /// Source tier: T3
     /// Infer from:  Receipt header
-    pub venue_name: String,
+    pub venue_name: Wrapped<String>,
     ///  Only the payee knows who attended
     /// Source tier: T1
     pub attendees: Vec<ExpenseReportTransactionLinesItemMealDetailsAttendeesItem>,
     /// Source tier: T1
-    pub meal_purpose: String,
+    pub meal_purpose: Wrapped<String>,
     /// Conditionally required when:  expense_type in [business_meal_with_alcohol,
     /// Conditionally required when: group_travel_meal_with_alcohol]
     /// Source tier: T3
     /// Infer from:  Itemized receipt — sum of alcohol line items
-    pub alcohol_amount: Option<DecimalAmount>,
+    pub alcohol_amount: Wrapped<DecimalAmount>,
     /// Source tier: T3
     /// Infer from:  Receipt
-    pub tip_amount: Option<DecimalAmount>,
+    pub tip_amount: Wrapped<DecimalAmount>,
     ///  Flag for validation: if true but expense_type is non-alcohol variant, raise
     /// irregularity
     /// Source tier: T3
     /// Infer from:  Scan itemized receipt for alcohol items
-    pub has_alcohol_on_receipt: bool,
+    pub has_alcohol_on_receipt: Wrapped<bool>,
 
 }
 
@@ -1061,25 +1063,25 @@ pub struct ExpenseReportTransactionLinesItemMealDetails {
 pub struct ExpenseReportTransactionLinesItemCarRentalDetails {
     /// Source tier: T3
     /// Infer from:  Rental agreement
-    pub rental_company: String,
+    pub rental_company: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Rental agreement
-    pub pickup_location: String,
+    pub pickup_location: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Rental agreement
-    pub return_location: String,
+    pub return_location: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Rental agreement
-    pub rental_start_date: IsoDate,
+    pub rental_start_date: Wrapped<IsoDate>,
     /// Source tier: T3
     /// Infer from:  Rental agreement
-    pub rental_end_date: IsoDate,
+    pub rental_end_date: Wrapped<IsoDate>,
     /// Source tier: T3
     /// Infer from:  Rental agreement
-    pub vehicle_class: String,
+    pub vehicle_class: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Rental receipt line items
-    pub insurance_included: bool,
+    pub insurance_included: Wrapped<bool>,
 
 }
 
@@ -1088,11 +1090,11 @@ pub struct ExpenseReportTransactionLinesItemCarRentalDetails {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExpenseReportTransactionLinesItemGiftDetails {
     /// Source tier: T1
-    pub recipient_name: String,
+    pub recipient_name: Wrapped<String>,
     /// Source tier: T1
-    pub recipient_relationship: String,
+    pub recipient_relationship: Wrapped<String>,
     /// Source tier: T1
-    pub gift_purpose: String,
+    pub gift_purpose: Wrapped<String>,
 
 }
 
@@ -1100,13 +1102,13 @@ pub struct ExpenseReportTransactionLinesItemGiftDetails {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExpenseReportTransactionLinesItemHumanSubjectDetails {
     /// Source tier: T1
-    pub irb_protocol_number: String,
+    pub irb_protocol_number: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Distribution log
-    pub number_of_subjects: DecimalAmount,
+    pub number_of_subjects: Wrapped<DecimalAmount>,
     /// Source tier: T3
     /// Infer from:  Distribution log
-    pub per_subject_amount: DecimalAmount,
+    pub per_subject_amount: Wrapped<DecimalAmount>,
 
 }
 
@@ -1141,16 +1143,16 @@ pub struct ExpenseReportTransactionLinesItem {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExpenseReportPerDiemExpensesItemMealDeductionsItem {
     /// Source tier: T2
-    pub date: Option<IsoDate>,
+    pub date: Wrapped<IsoDate>,
     /// Source tier: T2
-    pub breakfast_provided: Option<bool>,
+    pub breakfast_provided: Wrapped<bool>,
     /// Source tier: T2
-    pub lunch_provided: Option<bool>,
+    pub lunch_provided: Wrapped<bool>,
     /// Source tier: T2
-    pub dinner_provided: Option<bool>,
+    pub dinner_provided: Wrapped<bool>,
     ///  Computed from per diem rate breakdown
     /// Source tier: T2
-    pub deduction_amount: Option<DecimalAmount>,
+    pub deduction_amount: Wrapped<DecimalAmount>,
 
 }
 
@@ -1158,13 +1160,13 @@ pub struct ExpenseReportPerDiemExpensesItemMealDeductionsItem {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExpenseReportPerDiemExpensesItemReimbursementSummaryItem {
     /// Source tier: T2
-    pub date: Option<IsoDate>,
+    pub date: Wrapped<IsoDate>,
     /// Source tier: T2
-    pub per_diem_amount: Option<DecimalAmount>,
+    pub per_diem_amount: Wrapped<DecimalAmount>,
     /// Source tier: T2
-    pub meal_deduction: Option<DecimalAmount>,
+    pub meal_deduction: Wrapped<DecimalAmount>,
     /// Source tier: T2
-    pub net_amount: Option<DecimalAmount>,
+    pub net_amount: Wrapped<DecimalAmount>,
 
 }
 
@@ -1173,35 +1175,35 @@ pub struct ExpenseReportPerDiemExpensesItem {
     /// Source tier: T3
     /// Infer from:  Destination from flight/hotel docs determines domestic vs. international;
     /// Infer from: location determines AK/HI vs. continental
-    pub expense_type: ExpenseReportPerDiemExpensesItemExpenseTypeEnum,
+    pub expense_type: Wrapped<ExpenseReportPerDiemExpensesItemExpenseTypeEnum>,
     /// Source tier: T3
     /// Infer from:  Trip start from flight itinerary
-    pub start_date: IsoDate,
+    pub start_date: Wrapped<IsoDate>,
     /// Source tier: T3
     /// Infer from:  Trip end from flight itinerary
-    pub end_date: IsoDate,
+    pub end_date: Wrapped<IsoDate>,
     /// Source tier: T2
     /// Infer from:  Computed: end_date - start_date + 1
-    pub number_of_days: DecimalAmount,
+    pub number_of_days: Wrapped<DecimalAmount>,
     ///  City, State/Country
     /// Source tier: T3
     /// Infer from:  Destination from flight or hotel docs
-    pub location: String,
+    pub location: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Derived from location
-    pub country_of_activity: String,
+    pub country_of_activity: Wrapped<String>,
     /// Conditionally required when:  expense_type in [international_lodging,
     /// Conditionally required when: international_meals]
     /// Source tier: T3
     /// Infer from:  Inferred from conference registration or trip context
-    pub foreign_activity_type: Option<ExpenseReportPerDiemExpensesItemForeignActivityTypeEnum>,
+    pub foreign_activity_type: Wrapped<ExpenseReportPerDiemExpensesItemForeignActivityTypeEnum>,
     ///  Daily rate in USD from GSA (domestic) or State Dept (foreign)
     /// Source tier: T2
     /// Infer from:  API lookup by location + date
-    pub per_diem_rate: DecimalAmount,
+    pub per_diem_rate: Wrapped<DecimalAmount>,
     /// Source tier: T3
     /// Infer from:  Generated summary of dates and location
-    pub remarks: String,
+    pub remarks: Wrapped<String>,
     ///  One entry per day. Pre-filled from conference meal schedule.
     /// Source tier: T2
     /// Infer from:  Cross-reference conference_registration_details.meals_included with trip
@@ -1221,9 +1223,9 @@ pub struct ExpenseReportMileageExpensesItem {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExpenseReportAllocationAndApproversBeneficiaryListItem {
     /// Source tier: T1
-    pub name: Option<String>,
+    pub name: Wrapped<String>,
     /// Source tier: T1
-    pub relationship: Option<String>,
+    pub relationship: Wrapped<String>,
 
 }
 
@@ -1231,7 +1233,7 @@ pub struct ExpenseReportAllocationAndApproversBeneficiaryListItem {
 pub struct ExpenseReportAllocationAndApprovers {
     ///  Are there any beneficiaries other than the payee?
     /// Source tier: T1
-    pub other_beneficiaries: bool,
+    pub other_beneficiaries: Wrapped<bool>,
     /// Conditionally required when:  allocation_and_approvers.other_beneficiaries == true
     /// Source tier: T1
     pub beneficiary_list: Option<Vec<ExpenseReportAllocationAndApproversBeneficiaryListItem>>,
