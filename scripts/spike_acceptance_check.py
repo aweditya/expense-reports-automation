@@ -77,6 +77,20 @@ RECEIPTS = [
             "meal_details.has_alcohol_on_receipt.value": True,
         },
     },
+    {
+        "image": "receipts/mjsushi.jpeg",
+        "output": ".scratch/spike/mjsushi.json",
+        "expect": {
+            "common.date.value": "2026-05-02",
+            "common.line_amount_usd.value": 79.59,
+            "common.original_currency.value": None,
+            "common.original_amount.value": None,
+            "common.expense_type.value": lambda v: v
+            in ("business_meal", "business_meal_with_alcohol"),
+            "meal_details.venue_name.value": lambda v: v and "MJ Sushi" in v,
+            "meal_details.has_alcohol_on_receipt.value": True,
+        },
+    },
 ]
 
 
