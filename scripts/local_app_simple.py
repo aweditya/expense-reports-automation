@@ -25,6 +25,7 @@ import subprocess
 import sys
 import uuid
 from datetime import datetime
+from html import escape as html_escape
 from pathlib import Path
 
 from flask import Flask, abort, redirect, request, send_from_directory
@@ -45,6 +46,22 @@ SERVICE_ACCOUNT_KEY = os.environ.get(
 
 
 app = Flask(__name__)
+
+
+class PipelineError(RuntimeError):
+    """Raised when a pipeline step (extract / reduce / render) fails. Carries
+    enough structured context for the error page to render a friendly message
+    + an optional technical-details panel.
+
+    Defined here (above the route handlers) so the @app.errorhandler decorator
+    can reference it at module load time.
+    """
+
+    def __init__(self, step: str, detail: str, filename: str | None = None):
+        self.step = step
+        self.filename = filename
+        self.detail = detail
+        super().__init__(f"{step} failed: {detail[:200]}")
 
 
 # ─── Routes ────────────────────────────────────────────────────────────────
@@ -82,6 +99,21 @@ def upload():
     # rendered workbench. Refresh-friendly; back-button-friendly; no
     # double-submit on reload.
     return redirect(f"/uploads/{upload_id}/workbench.html", code=303)
+
+
+@app.errorhandler(PipelineError)
+def handle_pipeline_error(err: PipelineError):
+    """Render a friendly error page for any failed pipeline step. Hidden
+    technical-details panel for the developer (you/me); the FA sees a clean
+    message."""
+    file_phrase = f" (file: {err.filename})" if err.filename else ""
+    detail_excerpt = err.detail[:2000]  # cap so we don't dump megabytes
+    page = ERROR_PAGE_HTML.format(
+        step=html_escape(err.step),
+        file_phrase=html_escape(file_phrase),
+        detail=html_escape(detail_excerpt),
+    )
+    return page, 500
 
 
 @app.get("/uploads/<upload_id>/<path:filename>")
@@ -128,6 +160,7 @@ def extract_all(saved_paths: list[Path], extractions_dir: Path) -> list[Path]:
                 "--service-account-key", SERVICE_ACCOUNT_KEY,
             ],
             label=f"extract {src.name}",
+            filename=src.name,
         )
         out.append(out_path)
     return out
@@ -155,15 +188,15 @@ def render_workbench(
     )
 
 
-def run_subprocess(cmd: list[str], label: str) -> None:
-    """Run a subprocess; raise with stderr on failure. Streams progress to
-    the server's stdout so an operator can see what's happening."""
+def run_subprocess(cmd: list[str], label: str, filename: str | None = None) -> None:
+    """Run a subprocess; raise PipelineError with stderr on failure. Streams
+    progress to the server's stdout so an operator can see what's happening."""
     print(f"  ▸ {label} ...", flush=True)
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(REPO_ROOT))
     if result.returncode != 0:
         print(f"  ✗ {label} failed (exit {result.returncode})", flush=True)
         print(result.stderr, file=sys.stderr)
-        raise RuntimeError(f"{label} failed: {result.stderr.strip()[:500]}")
+        raise PipelineError(step=label, detail=result.stderr.strip(), filename=filename)
     print(f"  ✓ {label} done", flush=True)
 
 
@@ -240,6 +273,49 @@ UPLOAD_FORM_HTML = """\
     <button type="submit">Process Receipts</button>
   </form>
   <p class="note">Please don't refresh the page while processing.</p>
+</div>
+</body>
+</html>
+"""
+
+
+ERROR_PAGE_HTML = """\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stanford Expense Report — Error</title>
+<style>
+  body {{ margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+         background:#f6f7f9; color:#1a1d1f; }}
+  .shell {{ max-width:640px; margin:80px auto; padding:32px 28px; background:#fff;
+           border:1px solid #e5e7eb; border-radius:8px; }}
+  .eyebrow {{ margin:0 0 4px; font-size:11px; font-weight:600; text-transform:uppercase;
+             letter-spacing:.08em; color:#6b7280; }}
+  h1 {{ margin:0 0 16px; font-size:24px; font-weight:600; }}
+  .msg {{ background:#fef2f2; border-left:3px solid #ef4444; padding:12px 14px;
+         border-radius:4px; margin:0 0 20px; color:#7f1d1d; font-size:14px; }}
+  details {{ margin:20px 0; }}
+  summary {{ cursor:pointer; color:#2563eb; font-size:13px; }}
+  pre {{ background:#f3f4f6; padding:12px; border-radius:4px; overflow-x:auto;
+        font-size:12px; line-height:1.4; color:#374151; max-height:400px;
+        overflow-y:auto; }}
+  a.try-again {{ display:inline-block; background:#1a1d1f; color:#fff; padding:10px 20px;
+                border-radius:6px; font-size:14px; font-weight:500; text-decoration:none; }}
+  a.try-again:hover {{ background:#374151; }}
+</style>
+</head>
+<body>
+<div class="shell">
+  <p class="eyebrow">Stanford Expense Report</p>
+  <h1>Something went wrong</h1>
+  <p class="msg">The <strong>{step}</strong> step failed{file_phrase}.</p>
+  <details>
+    <summary>Show technical details</summary>
+    <pre>{detail}</pre>
+  </details>
+  <p><a class="try-again" href="/">Try again</a></p>
 </div>
 </body>
 </html>
