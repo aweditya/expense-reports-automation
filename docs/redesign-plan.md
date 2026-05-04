@@ -368,13 +368,22 @@ Why we did this:
 
 ## Current step
 
-**M7.d.2 (next).** New HTTP server `scripts/local_app_simple.py` with
-two endpoints (GET / for the upload form, POST /upload for the pipeline).
-Synchronous, no job queue. Eyeball step: upload the four real receipts
-via the browser at the locally-running server, watch the rendered
-workbench come up.
+**M7.d.3 (next): Flask error handling.** Wrap each pipeline step
+(extract_all, reduce, render_workbench) in try/except. On failure,
+render a small error page that names the failing step and the file
+(when applicable). Goal: a real upload that fails (Gemini 429, network
+blip, malformed image) doesn't show the user a Flask traceback.
 
-After M7.d.2: M7.e wires the new files into the Dockerfile and
+**M7.d.1 (done, `2f40b02`):** typed validator + workbench layout split.
+**M7.d.2 (done, `1ebce88`):** Flask HTTP server + Download JSON link.
+**Codegen wraps T2 (done, `52d7fd3`):** total_usd is Wrapped now.
+**Provenance text for derived fields (done, `0699db8`):** Trip Date /
+Total USD / Category show human-readable provenance under the value.
+**Relative-URL unification (done, `23932e0`):** renderer is
+backend-agnostic; Flask serves the per-upload dir as static files;
+POST/Redirect/GET means the URL is bookmarkable.
+
+After M7.d.3: M7.e wires the new files into the Dockerfile and
 M7.f deploys to Cloud Run for the real verdict.
 
 **Locked principles for this phase:**

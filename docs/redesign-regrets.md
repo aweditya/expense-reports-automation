@@ -20,6 +20,44 @@ Keep entries short. The point is recall, not narrative.
 
 ## Entries
 
+### 2026-05-04 — created a log file in `.scratch/` without flagging it
+
+**What happened:** During step 5 I started the Flask server in the
+background with output redirected to `.scratch/local_app.log` without
+first naming the file in a "I'm about to create X" message. The file is
+tiny and gitignored, but Rule 10 ("flag every new file before creating
+it, even small one-off scripts") doesn't carve out an exception for log
+files.
+
+**Why it was wrong:** The rule's spirit is "no new files appear without
+the user knowing they're coming." Log files are exactly the kind of
+incidental artifact that accumulates if I don't think about them.
+
+**Rule going forward:** Server logs go in the upload-dir or a per-run
+subdirectory under `.scratch/`, named in the flag-then-create message
+that precedes server startup. No more bare `.scratch/local_app.log`.
+
+### 2026-05-04 — wrote a regret about bundled commits without un-bundling the commit
+
+**What happened:** Commit `72f557e` was supposed to be a clean "remove
+dead amount_confidence" but I `git add`-ed without checking the working
+tree, and three new helpers (`confidence_floor`, `derived_meta`,
+`category_confidence`) rode along. I noticed, wrote a regret entry
+(`d09751f`) confessing to it, and moved on. The bundled commit stayed
+bundled.
+
+**Why it was wrong:** A regret entry is not a fix. Future-me reading
+`git log` will see "Remove dead amount_confidence variable" and trust
+that's what landed. The history lies; the regret is in a separate file
+that may or may not get read. The honest move would have been to
+`git reset HEAD~1`, split the commit, and re-commit with accurate
+messages — at the cost of 5 extra minutes.
+
+**Rule going forward:** When I notice I've bundled commits, the first
+move is to un-bundle (reset + split), not to confess in regrets. Regret
+entries are for things that can't be fixed retroactively (deployed
+bugs, lost work). Bad history is fixable while it's still local.
+
 ### 2026-05-04 — `meta: Default::default()` placeholder eventually surfaced as a visible red dot
 
 **What happened:** In M6.2.e I wrote three derived-field assignments in
