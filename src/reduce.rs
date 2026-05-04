@@ -17,7 +17,7 @@ use crate::expense_report_model::{
     ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeEnum, IsoDate,
 };
 use crate::extracted_receipt::ExtractedReceipt;
-use crate::meta::Wrapped;
+use crate::meta::{ConfidenceLevel, EvidenceKind, EvidenceReference, FieldMetadata, Wrapped};
 
 /// Sum of `common.line_amount_usd.value` across receipts. None values are
 /// treated as 0 (validator catches "missing required line amount" later).
@@ -57,6 +57,57 @@ pub fn reduce_inferred_category(
     }
 }
 
+/// "Floor" of two confidence levels — the more cautious of the two.
+/// Low < Medium < High.
+fn min_confidence(a: ConfidenceLevel, b: ConfidenceLevel) -> ConfidenceLevel {
+    use ConfidenceLevel::*;
+    match (a, b) {
+        (Low, _) | (_, Low) => Low,
+        (Medium, _) | (_, Medium) => Medium,
+        _ => High,
+    }
+}
+
+fn confidence_floor<I: Iterator<Item = ConfidenceLevel>>(mut levels: I) -> ConfidenceLevel {
+    let mut acc = match levels.next() {
+        Some(c) => c,
+        None => return ConfidenceLevel::Low,
+    };
+    for c in levels {
+        acc = min_confidence(acc, c);
+    }
+    acc
+}
+
+/// Confidence in an "any non-USD → foreign" derivation: the floor of the
+/// contributing receipts' `printed_currency` confidences. If every receipt
+/// reported `printed_currency` with `high` confidence, the derived
+/// category is `high` too. If some are missing or `low`, the result is
+/// `low`. The derivation rule itself is unambiguous, so the only loss
+/// of confidence comes from the inputs.
+fn category_confidence(receipts: &[ExtractedReceipt]) -> ConfidenceLevel {
+    confidence_floor(receipts.iter().map(|r| r.extras.printed_currency.meta.confidence))
+}
+
+/// Construct a `FieldMetadata` for a value derived in the reduction step.
+/// The evidence is a single `system_generated` entry naming the reduction
+/// origin so the workbench can show where the value came from.
+fn derived_meta(confidence: ConfidenceLevel, origin: &str) -> FieldMetadata {
+    FieldMetadata {
+        confidence,
+        evidence: vec![EvidenceReference {
+            kind: EvidenceKind::SystemGenerated,
+            document_id: None,
+            filename: None,
+            page: None,
+            quote: None,
+            origin: Some(origin.to_owned()),
+        }],
+        needs_review: false,
+        flags: Vec::new(),
+    }
+}
+
 /// Build the `transaction_lines` array. For each receipt: take the
 /// schema-shaped line, attach a single `source_documents` entry naming the
 /// FA-uploaded file. The line is otherwise passed through unchanged —
@@ -93,18 +144,24 @@ pub fn reduce_to_expense_report(receipts: &[ExtractedReceipt]) -> ExpenseReport 
     let earliest = reduce_earliest_date(receipts);
     let category = reduce_inferred_category(receipts);
 
+    // Derive a confidence floor from the contributing receipts' dates
+    // — same principle as category_confidence.
+    let date_confidence = confidence_floor(
+        receipts.iter().map(|r| r.line.common.date.meta.confidence)
+    );
+
     report.transaction_lines = Some(lines);
     report.transaction_summary.total_usd = Some(total);
     report.transaction_summary.transaction_date = match earliest {
         Some(date) => Wrapped {
             value: Some(date),
-            meta: Default::default(),
+            meta: derived_meta(date_confidence, "reduce.earliest_date"),
         },
         None => Wrapped::unknown(),
     };
     report.general_information.category = Wrapped {
         value: Some(category),
-        meta: Default::default(),
+        meta: derived_meta(category_confidence(receipts), "reduce.inferred_category"),
     };
 
     report
