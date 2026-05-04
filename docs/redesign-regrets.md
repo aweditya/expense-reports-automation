@@ -20,6 +20,32 @@ Keep entries short. The point is recall, not narrative.
 
 ## Entries
 
+### 2026-05-03 — UI mistakes from rushing through visual iteration
+
+**What happened:** During M7.d.1 I made a string of small UI mistakes that
+the user caught: misread "move highlight to the issue clicked" as the
+*issue card* when the user meant the *field card*; left the `:target` CSS
+rule in place after switching to JS-driven highlighting, which caused
+fields to highlight on bare page loads with no user click; wrote test
+assertions that matched substrings in the inlined CSS instead of the
+actual rendered elements. Each was caught and fixed within minutes, but
+they came in a cluster.
+
+**Why it was wrong:** The pattern wasn't any single mistake — it was
+*pace*. I was making changes, rendering, sending the URL to the user,
+and moving to the next change before fully thinking through implications.
+The :target slip especially was sloppy: removing one trigger of a
+behavior (the JS that added the class) without removing all triggers
+(the CSS pseudo-class that auto-applied) is exactly the kind of cleanup
+miss that more deliberate work would catch.
+
+**Rule going forward:** When iterating on UI, slow down on the "between"
+moments. Before sending a refresh-and-look message: re-read the diff,
+ask "did I leave any stale state that could trigger the old behavior?",
+and trace through what the user is about to see. Visual code earns one
+extra beat of deliberation per cycle. Speed up only when the change is
+mechanical.
+
 ### 2026-05-03 — committed visual code without eyeballing the output first
 
 **What happened:** Wrote `src/workbench_simple.rs` + CSS for M7.b, ran the
