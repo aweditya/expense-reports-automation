@@ -1,3 +1,4 @@
+flask
 google-genai
 google-cloud-documentai
 Pillow
