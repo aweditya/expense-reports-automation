@@ -8,13 +8,13 @@ state, no editable inputs (those come post-M7).
 Designed to run identically locally and on Cloud Run:
   - Reads HOST / PORT from env vars (Cloud Run sets PORT).
   - Per-upload directories live under .scratch/uploads/<id>/ locally;
-    M7.e decides the cloud persistence story (ephemeral vs GCS-mount).
-  - GCP auth: --service-account-key path on the spike_extract.py call.
-    M7.e may switch this to Application Default Credentials for Cloud Run.
+    Cloud Run uses ephemeral container-local storage.
+  - GCP auth: Application Default Credentials. On Cloud Run this is the
+    runtime service account via the metadata server. Locally, run once:
+    `gcloud auth application-default login`.
 
 Run locally:
-  VERTEX_SERVICE_ACCOUNT_KEY=soe-agile-agents-7581b31cd4d2.json \\
-  ./.venv/bin/python scripts/local_app_simple.py
+  VERTEX_PROJECT_ID=soe-agile-agents ./.venv/bin/python scripts/local_app_simple.py
 """
 
 from __future__ import annotations
@@ -39,10 +39,6 @@ UPLOADS_ROOT = REPO_ROOT / ".scratch" / "uploads"
 # Cloud Run sets PORT; locally default 8765 (matches existing app's muscle memory).
 HOST = os.environ.get("HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", "8765"))
-SERVICE_ACCOUNT_KEY = os.environ.get(
-    "VERTEX_SERVICE_ACCOUNT_KEY",
-    str(REPO_ROOT / "soe-agile-agents-7581b31cd4d2.json"),
-)
 
 
 app = Flask(__name__)
@@ -157,7 +153,6 @@ def extract_all(saved_paths: list[Path], extractions_dir: Path) -> list[Path]:
                 str(SPIKE_EXTRACT),
                 "--image", str(src),
                 "--output", str(out_path),
-                "--service-account-key", SERVICE_ACCOUNT_KEY,
             ],
             label=f"extract {src.name}",
             filename=src.name,
@@ -327,6 +322,5 @@ ERROR_PAGE_HTML = """\
 if __name__ == "__main__":
     UPLOADS_ROOT.mkdir(parents=True, exist_ok=True)
     print(f"local_app_simple listening on http://{HOST}:{PORT}", flush=True)
-    print(f"  service-account-key: {SERVICE_ACCOUNT_KEY}", flush=True)
     print(f"  uploads dir:         {UPLOADS_ROOT}", flush=True)
     app.run(host=HOST, port=PORT, debug=False)

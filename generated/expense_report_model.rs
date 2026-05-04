@@ -697,11 +697,11 @@ impl core::fmt::Display for ExpenseReportPerDiemExpensesItemForeignActivityTypeE
 pub struct ExpenseReportGeneralInformationPayee {
     /// Source tier: T3
     /// Infer from:  Traveler name on flight booking or hotel folio
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub name: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Context from uploaded docs or FA input
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub affiliation: Wrapped<ExpenseReportGeneralInformationPayeeAffiliationEnum>,
 
 }
@@ -747,27 +747,27 @@ pub struct ExpenseReportGeneralInformationBusinessPurpose {
 pub struct ExpenseReportGeneralInformationStudentCertification {
     ///  Requires faculty approval
     /// Source tier: T3
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub supports_faculty_research: Wrapped<bool>,
     ///  Requires faculty approval + conference program attachment
     /// Source tier: T3
     /// Infer from:  Payee name appears in conference program/agenda
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub presenting_at_conference: Wrapped<bool>,
     ///  Requires faculty approval. Not applicable to post-docs.
     /// Depends on:  general_information.payee.affiliation
     /// Source tier: T3
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub integral_to_degree_work: Wrapped<bool>,
     /// Source tier: T3
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub related_to_employment: Wrapped<bool>,
     /// Source tier: T3
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub other: Wrapped<bool>,
     /// Conditionally required when:  student_certification.other == true
     /// Source tier: T3
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub other_explanation: Wrapped<String>,
 
 }
@@ -777,7 +777,7 @@ pub struct ExpenseReportGeneralInformation {
     /// Source tier: T3
     /// Infer from:  Destination in flight/hotel docs. Foreign destination → expenses_foreign;
     /// Infer from: domestic → expenses_domestic. Other categories require explicit context.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub category: Wrapped<ExpenseReportGeneralInformationCategoryEnum>,
     ///  Person being reimbursed
     /// Source tier: T3
@@ -788,7 +788,7 @@ pub struct ExpenseReportGeneralInformation {
     pub rush_processing: Option<ExpenseReportGeneralInformationRushProcessingEnum>,
     ///  Always 'electronic' — system pre-fills
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub payment_method: Wrapped<String>,
     ///  Structured purpose statement entered by the FA. First 30 chars of the combined text
     /// serve as a lookup key.
@@ -797,7 +797,7 @@ pub struct ExpenseReportGeneralInformation {
     ///  Format: <lab_name> + <Foreign Expenses | Domestic Expenses>
     /// Source tier: T3
     /// Infer from:  Lab affiliation + category
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub event_name: Wrapped<String>,
     ///  At least one reason must be selected. Determines required approvals.
     /// Depends on:  general_information.payee.affiliation
@@ -819,12 +819,12 @@ pub struct ExpenseReportTransactionSummary {
     pub transaction_type: Option<ExpenseReportTransactionSummaryTransactionTypeEnum>,
     ///  Format: ERxxxxxxx. Assigned by the system or existing system.
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub transaction_number: Wrapped<String>,
     ///  Date of the expense (earliest expense date across all receipts in the bundle).
     /// Source tier: T3
     /// Infer from:  Earliest common.date across transaction_lines
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub transaction_date: Wrapped<IsoDate>,
     ///  FA-entered submission state.
     /// Source tier: T1
@@ -832,7 +832,7 @@ pub struct ExpenseReportTransactionSummary {
     pub status: Option<ExpenseReportTransactionSummaryStatusEnum>,
     ///  Sum of all transaction lines, converted to USD
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub total_usd: Wrapped<f64>,
 
 }
@@ -856,46 +856,46 @@ pub struct ExpenseReportTransactionLinesItemCommon {
     /// Source tier: T3
     /// Infer from:  Date on the receipt
     /// Validation rule:  Must fall within trip date window
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub date: Wrapped<IsoDate>,
     ///  Amount in USD. If original currency is foreign, this is the converted amount.
     /// Source tier: T3
     /// Infer from:  Receipt amount × exchange rate (if foreign)
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub line_amount_usd: Wrapped<f64>,
     /// Conditionally required when:  general_information.category == expenses_foreign
     /// Source tier: T3
     /// Infer from:  Currency symbol/code on receipt
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub original_currency: Wrapped<String>,
     /// Conditionally required when:  general_information.category == expenses_foreign
     /// Source tier: T3
     /// Infer from:  Amount as printed on receipt
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub original_amount: Wrapped<f64>,
     /// Conditionally required when:  general_information.category == expenses_foreign
     /// Source tier: T2
     /// Infer from:  Historical rate for common.date from exchange rate API
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub exchange_rate: Wrapped<f64>,
     /// Source tier: T3
     /// Infer from:  LLM classifies from receipt content
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub expense_type: Wrapped<ExpenseReportTransactionLinesItemCommonExpenseTypeEnum>,
     ///  Reiterate dates, foreign currency details, any context
     /// Source tier: T3
     /// Infer from:  Generated from receipt details and trip context
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub remarks: Wrapped<String>,
     /// Conditionally required when:  general_information.category == expenses_foreign
     /// Source tier: T3
     /// Infer from:  Destination country from flight/hotel docs
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub country_of_activity: Wrapped<String>,
     /// Conditionally required when:  general_information.category == expenses_foreign
     /// Source tier: T3
     /// Infer from:  Conference registration → 'conference'; otherwise from context
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub foreign_activity_type: Wrapped<ExpenseReportTransactionLinesItemCommonForeignActivityTypeEnum>,
     ///  References to uploaded documents supporting this line. Filled by the extractor from the
     /// same documents that produced the line's other fields.
@@ -909,13 +909,13 @@ pub struct ExpenseReportTransactionLinesItemCommon {
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonComparableFaresItem {
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub airline: Wrapped<String>,
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub amount: Wrapped<f64>,
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub class: Wrapped<String>,
 
 }
@@ -926,13 +926,13 @@ pub struct ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonCompara
 pub struct ExpenseReportTransactionLinesItemAirfareDetailsPriceComparison {
     ///  Date the comparison was generated
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub comparison_date: Wrapped<IsoDate>,
     /// Source tier: T2
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub comparable_fares: Option<Vec<ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonComparableFaresItem>>,
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub source: Wrapped<ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonSourceEnum>,
 
 }
@@ -942,41 +942,41 @@ pub struct ExpenseReportTransactionLinesItemAirfareDetailsPriceComparison {
 pub struct ExpenseReportTransactionLinesItemAirfareDetails {
     /// Source tier: T3
     /// Infer from:  Booking confirmation
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub travelers_name: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  E-ticket receipt
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub ticket_number: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Booking confirmation
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub ticket_amount: Wrapped<f64>,
     /// Source tier: T3
     /// Infer from:  Booking confirmation format/header; default 'other' if unrecognized
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub booking_method: Wrapped<ExpenseReportTransactionLinesItemAirfareDetailsBookingMethodEnum>,
     /// Source tier: T3
     /// Infer from:  Booking confirmation or ticket
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub airline: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Booking confirmation
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub class_of_ticket: Wrapped<ExpenseReportTransactionLinesItemAirfareDetailsClassOfTicketEnum>,
     ///  IATA code
     /// Source tier: T3
     /// Infer from:  Itinerary
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub departure_airport: Wrapped<String>,
     ///  IATA code
     /// Source tier: T3
     /// Infer from:  Itinerary
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub destination_airport: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Itinerary shows return leg
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub round_trip: Wrapped<bool>,
     ///  System-generated if not provided by payee
     /// Source tier: T2
@@ -989,38 +989,38 @@ pub struct ExpenseReportTransactionLinesItemAirfareDetails {
 pub struct ExpenseReportTransactionLinesItemLodgingDetails {
     /// Source tier: T3
     /// Infer from:  Hotel folio header
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub hotel_name: Wrapped<String>,
     ///  City, Country
     /// Source tier: T3
     /// Infer from:  Hotel folio address
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub location: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Hotel folio
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub check_in_date: Wrapped<IsoDate>,
     /// Source tier: T3
     /// Infer from:  Hotel folio
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub check_out_date: Wrapped<IsoDate>,
     /// Source tier: T2
     /// Infer from:  Computed: check_out_date - check_in_date
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub number_of_nights: Wrapped<f64>,
     ///  In original currency
     /// Source tier: T3
     /// Infer from:  Hotel folio
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub daily_rate: Wrapped<f64>,
     /// Source tier: T3
     /// Infer from:  If hotel matches conference venue → conference_hotel; else check booking
     /// Infer from: source
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub booking_method: Wrapped<ExpenseReportTransactionLinesItemLodgingDetailsBookingMethodEnum>,
     /// Source tier: T3
     /// Infer from:  Context from payee; default false
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub is_shared_lodging: Wrapped<bool>,
     ///  ERxxxxxxx of the other traveler's report
     /// Conditionally required when:  lodging_details.is_shared_lodging == true
@@ -1030,7 +1030,7 @@ pub struct ExpenseReportTransactionLinesItemLodgingDetails {
     ///  Number of nights flagged as personal (outside conference dates)
     /// Source tier: T2
     /// Infer from:  Compare hotel dates against conference dates from registration
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub personal_nights_excluded: Wrapped<f64>,
 
 }
@@ -1041,15 +1041,15 @@ pub struct ExpenseReportTransactionLinesItemLodgingDetails {
 pub struct ExpenseReportTransactionLinesItemGroundTransportDetails {
     /// Source tier: T3
     /// Infer from:  Uber/Lyft receipt
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub origin: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Uber/Lyft receipt
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub destination: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Receipt header (Uber, Lyft, taxi company, etc.)
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub service_provider: Wrapped<String>,
     ///  If true, missing receipt form is used instead
     /// Source tier: T1
@@ -1062,16 +1062,16 @@ pub struct ExpenseReportTransactionLinesItemGroundTransportDetails {
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemConferenceRegistrationDetailsMealsIncludedScheduleItem {
     /// Source tier: T3
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub date: Wrapped<IsoDate>,
     /// Source tier: T3
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub breakfast: Wrapped<bool>,
     /// Source tier: T3
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub lunch: Wrapped<bool>,
     /// Source tier: T3
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub dinner: Wrapped<bool>,
 
 }
@@ -1092,19 +1092,19 @@ pub struct ExpenseReportTransactionLinesItemConferenceRegistrationDetailsMealsIn
 pub struct ExpenseReportTransactionLinesItemConferenceRegistrationDetails {
     /// Source tier: T3
     /// Infer from:  Registration receipt
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub conference_name: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Registration receipt
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub order_number: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Conference program or registration confirmation
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub conference_start_date: Wrapped<IsoDate>,
     /// Source tier: T3
     /// Infer from:  Conference program or registration confirmation
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub conference_end_date: Wrapped<IsoDate>,
     ///  Which meals the conference provides, by day. Feeds into per diem deductions.
     /// Source tier: T3
@@ -1131,7 +1131,7 @@ pub struct ExpenseReportTransactionLinesItemMealDetailsAttendeesItem {
 pub struct ExpenseReportTransactionLinesItemMealDetails {
     /// Source tier: T3
     /// Infer from:  Receipt header
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub venue_name: Wrapped<String>,
     ///  Only the payee knows who attended
     /// Source tier: T1
@@ -1144,17 +1144,17 @@ pub struct ExpenseReportTransactionLinesItemMealDetails {
     /// Conditionally required when: group_travel_meal_with_alcohol]
     /// Source tier: T3
     /// Infer from:  Itemized receipt — sum of alcohol line items
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub alcohol_amount: Wrapped<f64>,
     /// Source tier: T3
     /// Infer from:  Receipt
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub tip_amount: Wrapped<f64>,
     ///  Flag for validation: if true but expense_type is non-alcohol variant, raise
     /// irregularity
     /// Source tier: T3
     /// Infer from:  Scan itemized receipt for alcohol items
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub has_alcohol_on_receipt: Wrapped<bool>,
 
 }
@@ -1164,31 +1164,31 @@ pub struct ExpenseReportTransactionLinesItemMealDetails {
 pub struct ExpenseReportTransactionLinesItemCarRentalDetails {
     /// Source tier: T3
     /// Infer from:  Rental agreement
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub rental_company: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Rental agreement
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub pickup_location: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Rental agreement
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub return_location: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Rental agreement
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub rental_start_date: Wrapped<IsoDate>,
     /// Source tier: T3
     /// Infer from:  Rental agreement
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub rental_end_date: Wrapped<IsoDate>,
     /// Source tier: T3
     /// Infer from:  Rental agreement
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub vehicle_class: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Rental receipt line items
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub insurance_included: Wrapped<bool>,
 
 }
@@ -1217,11 +1217,11 @@ pub struct ExpenseReportTransactionLinesItemHumanSubjectDetails {
     pub irb_protocol_number: Option<String>,
     /// Source tier: T3
     /// Infer from:  Distribution log
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub number_of_subjects: Wrapped<f64>,
     /// Source tier: T3
     /// Infer from:  Distribution log
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub per_subject_amount: Wrapped<f64>,
 
 }
@@ -1265,20 +1265,20 @@ pub struct ExpenseReportTransactionLinesItem {
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportPerDiemExpensesItemMealDeductionsItem {
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub date: Wrapped<IsoDate>,
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub breakfast_provided: Wrapped<bool>,
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub lunch_provided: Wrapped<bool>,
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub dinner_provided: Wrapped<bool>,
     ///  Computed from per diem rate breakdown
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub deduction_amount: Wrapped<f64>,
 
 }
@@ -1287,16 +1287,16 @@ pub struct ExpenseReportPerDiemExpensesItemMealDeductionsItem {
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportPerDiemExpensesItemReimbursementSummaryItem {
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub date: Wrapped<IsoDate>,
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub per_diem_amount: Wrapped<f64>,
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub meal_deduction: Wrapped<f64>,
     /// Source tier: T2
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub net_amount: Wrapped<f64>,
 
 }
@@ -1306,43 +1306,43 @@ pub struct ExpenseReportPerDiemExpensesItem {
     /// Source tier: T3
     /// Infer from:  Destination from flight/hotel docs determines domestic vs. international;
     /// Infer from: location determines AK/HI vs. continental
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub expense_type: Wrapped<ExpenseReportPerDiemExpensesItemExpenseTypeEnum>,
     /// Source tier: T3
     /// Infer from:  Trip start from flight itinerary
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub start_date: Wrapped<IsoDate>,
     /// Source tier: T3
     /// Infer from:  Trip end from flight itinerary
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub end_date: Wrapped<IsoDate>,
     /// Source tier: T2
     /// Infer from:  Computed: end_date - start_date + 1
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub number_of_days: Wrapped<f64>,
     ///  City, State/Country
     /// Source tier: T3
     /// Infer from:  Destination from flight or hotel docs
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub location: Wrapped<String>,
     /// Source tier: T3
     /// Infer from:  Derived from location
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub country_of_activity: Wrapped<String>,
     /// Conditionally required when:  expense_type in [international_lodging,
     /// Conditionally required when: international_meals]
     /// Source tier: T3
     /// Infer from:  Inferred from conference registration or trip context
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub foreign_activity_type: Wrapped<ExpenseReportPerDiemExpensesItemForeignActivityTypeEnum>,
     ///  Daily rate in USD from GSA (domestic) or State Dept (foreign)
     /// Source tier: T2
     /// Infer from:  API lookup by location + date
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub per_diem_rate: Wrapped<f64>,
     /// Source tier: T3
     /// Infer from:  Generated summary of dates and location
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub remarks: Wrapped<String>,
     ///  One entry per day. Pre-filled from conference meal schedule.
     /// Source tier: T2

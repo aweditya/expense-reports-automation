@@ -5,8 +5,9 @@ Started as the M4 spike (no response_schema, free-form JSON, hand-inspected).
 M5.2 wired in `generated/response_schema_meal.json` so structural correctness
 is enforced by the SDK rather than the prompt.
 
-Auth mirrors scripts/transcribe_with_google_genai.py — service-account key
-either via --service-account-key or VERTEX_SERVICE_ACCOUNT_KEY.
+Auth uses Application Default Credentials (ADC). Works on Cloud Run
+automatically via the metadata server. Locally, run once:
+    gcloud auth application-default login
 """
 
 from __future__ import annotations
@@ -18,7 +19,6 @@ import sys
 from pathlib import Path
 
 
-CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
 DEFAULT_MODEL = "gemini-3-flash-preview"
 DEFAULT_LOCATION = "global"
 
@@ -109,15 +109,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--image", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument(
-        "--service-account-key",
-        type=Path,
-        default=os.environ.get("VERTEX_SERVICE_ACCOUNT_KEY"),
-        help="Service account key path (defaults to $VERTEX_SERVICE_ACCOUNT_KEY).",
-    )
-    parser.add_argument(
         "--project",
-        default=os.environ.get("VERTEX_PROJECT_ID"),
-        help="GCP project (defaults to $VERTEX_PROJECT_ID or the key's project_id).",
+        default=os.environ.get("VERTEX_PROJECT_ID")
+        or os.environ.get("GOOGLE_CLOUD_PROJECT"),
+        help="GCP project (defaults to $VERTEX_PROJECT_ID or $GOOGLE_CLOUD_PROJECT).",
     )
     parser.add_argument(
         "--location",
@@ -145,23 +140,21 @@ def main() -> int:
 
     if not args.image.exists():
         sys.exit(f"image not found: {args.image}")
-    if args.service_account_key is None or not Path(args.service_account_key).exists():
-        sys.exit("service account key required (--service-account-key or VERTEX_SERVICE_ACCOUNT_KEY)")
 
     from google import genai
     from google.genai import types
-    from google.oauth2 import service_account
 
-    key_path = Path(args.service_account_key)
-    project = args.project or json.loads(key_path.read_text()).get("project_id")
-    if not project:
-        sys.exit("project required (--project or project_id in the key)")
+    if not args.project:
+        sys.exit(
+            "project required: pass --project or set $VERTEX_PROJECT_ID / "
+            "$GOOGLE_CLOUD_PROJECT (Cloud Run sets the latter automatically)."
+        )
 
-    credentials = service_account.Credentials.from_service_account_file(
-        str(key_path), scopes=[CLOUD_PLATFORM_SCOPE]
-    )
+    # Application Default Credentials: works on Cloud Run via the metadata
+    # server, and locally after `gcloud auth application-default login`.
+    # The SDK picks credentials up automatically when none are passed.
     client = genai.Client(
-        vertexai=True, project=project, location=args.location, credentials=credentials
+        vertexai=True, project=args.project, location=args.location
     )
 
     image_bytes = args.image.read_bytes()

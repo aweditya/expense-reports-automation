@@ -26,7 +26,6 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EXTRACTOR = REPO_ROOT / "scripts" / "spike_extract.py"
 PYTHON = REPO_ROOT / ".venv" / "bin" / "python"
-DEFAULT_KEY = REPO_ROOT / "soe-agile-agents-7581b31cd4d2.json"
 
 
 # Each entry is (image_filename, output_json_filename, expectations).
@@ -107,13 +106,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--run",
         action="store_true",
-        help="Re-invoke spike_extract.py before checking (3 Gemini calls).",
-    )
-    parser.add_argument(
-        "--service-account-key",
-        type=Path,
-        default=DEFAULT_KEY,
-        help=f"Service account key for --run (default: {DEFAULT_KEY.name}).",
+        help="Re-invoke spike_extract.py before checking (3 Gemini calls; "
+        "uses Application Default Credentials, run "
+        "`gcloud auth application-default login` first).",
     )
     parser.add_argument(
         "--end-to-end",
@@ -124,7 +119,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def run_extractor(image: Path, output: Path, key: Path) -> None:
+def run_extractor(image: Path, output: Path) -> None:
     subprocess.run(
         [
             str(PYTHON),
@@ -133,8 +128,6 @@ def run_extractor(image: Path, output: Path, key: Path) -> None:
             str(image),
             "--output",
             str(output),
-            "--service-account-key",
-            str(key),
         ],
         check=True,
     )
@@ -167,14 +160,11 @@ def main() -> int:
     args = parse_args()
 
     if args.run:
-        if not args.service_account_key.exists():
-            print(f"missing service account key: {args.service_account_key}", file=sys.stderr)
-            return 2
         for entry in RECEIPTS:
             image = REPO_ROOT / entry["image"]
             output = REPO_ROOT / entry["output"]
             print(f"running extractor on {image.name} ...")
-            run_extractor(image, output, args.service_account_key)
+            run_extractor(image, output)
 
     total_failures = 0
     for entry in RECEIPTS:

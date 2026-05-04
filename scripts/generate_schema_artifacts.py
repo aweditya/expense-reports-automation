@@ -462,11 +462,12 @@ def generate_rust_model(root: SchemaNode, schema_version: str) -> str:
                 lines.append('    #[serde(default, skip_serializing_if = "Option::is_none")]')
             elif field_type.startswith("Vec<"):
                 lines.append('    #[serde(default, skip_serializing_if = "Vec::is_empty")]')
-            elif child.is_leaf:
-                # Wrapped<T> — default is Wrapped::unknown() (value: None).
-                # We don't skip these; provenance metadata distinguishes
-                # "extractor saw nothing" from "field absent."
-                lines.append("    #[serde(default)]")
+            elif field_type.startswith("Wrapped<"):
+                # Skip Wrapped<T> fields whose value is None and meta is
+                # default — i.e. fields Python didn't write. Without this,
+                # the round-trip emits `{value: null, _meta: {default}}`
+                # for every absent leaf, which fails the round-trip check.
+                lines.append('    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]')
             lines.append(f"    pub {identifier}: {field_type},")
         lines.append("")
         lines.append("}")

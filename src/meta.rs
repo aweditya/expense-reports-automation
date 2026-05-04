@@ -49,6 +49,14 @@ impl<T> Wrapped<T> {
             meta: FieldMetadata::default(),
         }
     }
+
+    /// True when this wraps a missing value with no meaningful provenance.
+    /// Codegen uses this for `skip_serializing_if` so fields Python omits
+    /// don't get re-emitted as `{value: null, _meta: {default}}` on the
+    /// way back out — keeps the round-trip lossless.
+    pub fn is_unknown(&self) -> bool {
+        self.value.is_none() && self.meta == FieldMetadata::default()
+    }
 }
 
 impl<T> Default for Wrapped<T> {
