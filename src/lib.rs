@@ -43,6 +43,7 @@ pub mod transcribe;
 #[path = "../generated/validation_rules.rs"]
 pub mod validation_rules;
 pub mod validator;
+pub mod validator_typed;
 pub mod value;
 pub mod vertex_gemini;
 pub mod vertex_gemini_sdk;

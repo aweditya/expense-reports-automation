@@ -37,17 +37,61 @@ pub fn render_workbench_html(
 
     render_hero(&mut html, report, validation);
     render_summary_cards(&mut html, report);
-    if !validation.issues.is_empty() {
+
+    // Layout split: left rail (issues) + center column (form sections).
+    // Rail is hidden via CSS when there are no issues so the center column
+    // takes the full width.
+    let has_issues = !validation.issues.is_empty();
+    let layout_class = if has_issues { "layout split" } else { "layout solo" };
+    html.push_str(&format!("<div class=\"{layout_class}\">\n"));
+
+    if has_issues {
+        html.push_str("<aside class=\"rail\">\n");
         render_issues_panel(&mut html, validation);
+        html.push_str("</aside>\n");
     }
+
+    html.push_str("<main class=\"main-col\">\n");
     render_general_information(&mut html, &report.general_information);
     render_transaction_lines(&mut html, report);
     render_transaction_summary(&mut html, &report.transaction_summary);
     render_source_documents(&mut html, receipts);
+    html.push_str("</main>\n");
 
-    html.push_str("</div>\n</body>\n</html>\n");
+    html.push_str("</div>\n");
+    html.push_str("</div>\n");
+    // Tiny in-view-aware jump handler: if the target field is already
+    // visible in the viewport, just flash the amber highlight without
+    // scrolling. Otherwise let the browser do its default anchor scroll.
+    html.push_str(JUMP_SCRIPT);
+    html.push_str("</body>\n</html>\n");
     html
 }
+
+const JUMP_SCRIPT: &str = r#"<script>
+// Click an issue → highlight the target field card. If the target is
+// already visible, skip the browser's scroll-to-top behavior (still
+// highlight). If it's out of view, let the browser scroll normally.
+// Only one field card stays highlighted at a time.
+document.addEventListener('click', function(e) {
+  const link = e.target.closest('a.issue-jump');
+  if (!link) return;
+  const id = link.getAttribute('href').slice(1);
+  const target = document.getElementById(id);
+  if (!target) return;
+  document.querySelectorAll('.field-card.active').forEach(function(el) {
+    el.classList.remove('active');
+  });
+  target.classList.add('active');
+  const rect = target.getBoundingClientRect();
+  const inView = rect.top >= 0 && rect.bottom <= window.innerHeight;
+  if (inView) {
+    e.preventDefault();
+    history.replaceState(null, '', '#' + id);
+  }
+});
+</script>
+"#;
 
 // ─── Hero ──────────────────────────────────────────────────────────────────
 
@@ -543,7 +587,13 @@ mod tests {
         let report = reduce_to_expense_report(&receipts);
 
         let no_issues = render_workbench_html(&report, &receipts, &ValidationReport { issues: vec![] });
-        assert!(!no_issues.contains("issues-panel"));
+        // No-issues path: layout is "solo" (no rail), and no <aside> is rendered.
+        // Check for the actual rendered link element (class="issue-jump") rather
+        // than a substring like "Jump to field" which can spuriously match in
+        // the inlined CSS/JS comments.
+        assert!(no_issues.contains("layout solo"));
+        assert!(!no_issues.contains("<aside class=\"rail\""));
+        assert!(!no_issues.contains("class=\"issue-jump\""));
 
         let with_issues = render_workbench_html(
             &report,
@@ -558,7 +608,9 @@ mod tests {
                 }],
             },
         );
-        assert!(with_issues.contains("issues-panel"));
-        assert!(with_issues.contains("Jump to field"));
+        // Has-issues path: layout is "split", rail is rendered, jump link present.
+        assert!(with_issues.contains("layout split"));
+        assert!(with_issues.contains("<aside class=\"rail\""));
+        assert!(with_issues.contains("class=\"issue-jump\""));
     }
 }

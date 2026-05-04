@@ -4,15 +4,45 @@
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.5;
   color: #1a1d1f;
   background: #f6f7f9;
 }
 .shell {
-  max-width: 1080px;
+  max-width: 1240px;
   margin: 0 auto;
   padding: 32px 24px 64px;
+}
+
+/* Layout: hero + summary cards full width, then split into rail + main. */
+.layout {
+  display: grid;
+  gap: 20px;
+}
+.layout.split {
+  grid-template-columns: 280px minmax(0, 1fr);
+}
+.layout.solo {
+  grid-template-columns: minmax(0, 1fr);
+}
+.rail {
+  position: sticky;
+  top: 16px;
+  align-self: start;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+.main-col { min-width: 0; }
+
+/* Mobile fallback: stack rail above main column. */
+@media (max-width: 900px) {
+  .layout.split { grid-template-columns: minmax(0, 1fr); }
+  .rail {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+  }
 }
 
 /* Hero ────────────────────────────────────────────────────────────────── */
@@ -103,18 +133,25 @@ body {
   font-size: 13px;
 }
 
-/* Issues ──────────────────────────────────────────────────────────────── */
+/* Issues panel (now in the left rail) ──────────────────────────────────── */
+.issues-panel {
+  padding: 16px 18px;
+}
+.issues-panel h2 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
 .issue-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 .issue-card {
   border-left: 3px solid #d1d5db;
   background: #f9fafb;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-radius: 4px;
 }
 .issue-error { border-left-color: #ef4444; }
@@ -123,8 +160,9 @@ body {
 .issue-path {
   margin: 0 0 2px;
   font-family: ui-monospace, "SF Mono", Monaco, Consolas, monospace;
-  font-size: 11px;
+  font-size: 10px;
   color: #6b7280;
+  word-break: break-all;
 }
 .issue-message {
   margin: 0 0 4px;
@@ -151,7 +189,11 @@ body {
   border-radius: 4px;
   cursor: default;
 }
-.field-card:target {
+/* Active state set via JS when an issue's "Jump to field" is clicked.
+   Deliberately NOT using :target — that would highlight the field whose id
+   matches the URL fragment on page load, even when the user hasn't clicked
+   anything. The JS owns the highlight; it's only on after a real click. */
+.field-card.active {
   background: #fef3c7;
   border-color: #f59e0b;
   outline: 2px solid #f59e0b;

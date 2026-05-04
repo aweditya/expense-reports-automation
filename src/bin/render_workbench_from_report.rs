@@ -22,7 +22,7 @@ use std::process::ExitCode;
 
 use expense_report_schema::expense_report_model::ExpenseReport;
 use expense_report_schema::extracted_receipt::ExtractedReceipt;
-use expense_report_schema::validator::ValidationReport;
+use expense_report_schema::validator_typed::validate_typed;
 use expense_report_schema::workbench_simple::render_workbench_html;
 
 fn parse_args() -> (PathBuf, PathBuf, PathBuf) {
@@ -101,8 +101,9 @@ fn main() -> ExitCode {
         }
     };
 
-    // Validation deferred to M7.d. Empty issues for now.
-    let validation = ValidationReport { issues: vec![] };
+    // M7.d.1: typed validator runs against the typed ExpenseReport directly,
+    // walking the tree and looking up FIELD_RULES + CONDITIONAL_RULES per path.
+    let validation = validate_typed(&report);
 
     let html = render_workbench_html(&report, &receipts, &validation);
 
