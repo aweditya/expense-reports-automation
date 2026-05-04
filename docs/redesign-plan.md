@@ -305,18 +305,22 @@ Why we did this:
     HTML (single self-contained file output). No JavaScript. Unit-tested
     against a sample `ExpenseReport`. ~400-600 lines including CSS.
 
-  - **M7.c — `src/bin/render_workbench_from_report.rs` —
-    orchestration binary.** Takes `--report <ExpenseReport JSON>` and
-    `--receipts-dir <dir>`. Reads the typed report and the per-receipt
-    extractions, emits the HTML. Validator hookup deferred to M7.d
-    (need to confirm what shape the validator actually wants to read).
-    ~80 lines. Replaces the throwaway `render_workbench_preview`
-    binary, which gets removed in this commit.
-    UI-validation step: after writing the binary, render against the
-    real spike outputs and confirm the page looks identical to the
-    preview we already eyeballed.
+  - **M7.c (done, commit `d8c83c2`)** — Renamed
+    `src/bin/render_workbench_preview.rs` → `render_workbench_from_report.rs`
+    via git mv (preserves history) and rewrote with production CLI
+    flags + sensible defaults. Output moved from `.scratch/workbench_preview/`
+    to `.scratch/workbench/`.
 
-  - **M7.d — `scripts/local_app_simple.py` — the new HTTP server.**
+  - **M7.d.1 (done, commit `2f40b02`)** — Typed validator
+    (`src/validator_typed.rs`) that walks the typed `ExpenseReport`
+    directly, looks up FIELD_RULES + CONDITIONAL_RULES per path, emits
+    issues. Wired into the render binary so the workbench shows real
+    validation issues. Plus the workbench layout split (left rail for
+    issues, sticky-positioned, hidden when no issues; center column
+    for the form), bumped base font to 15px, JS-driven active-issue
+    highlight on the field card with in-view-no-scroll.
+
+  - **M7.d.2 — `scripts/local_app_simple.py` — the new HTTP server.**
     Two endpoints:
       GET  /          → upload form (one file input that accepts multiple)
       POST /upload    → save uploads → spike_extract per file (sequential)
@@ -364,25 +368,35 @@ Why we did this:
 
 ## Current step
 
-**M7.c (next).** Wire the new pipeline into the local app via a small
-synchronous HTTP server. Two locked principles for this phase:
+**M7.d.2 (next).** New HTTP server `scripts/local_app_simple.py` with
+two endpoints (GET / for the upload form, POST /upload for the pipeline).
+Synchronous, no job queue. Eyeball step: upload the four real receipts
+via the browser at the locally-running server, watch the rendered
+workbench come up.
 
-1. **UI-driven validation.** From M7.c onward, every backend change is
-   validated by rendering it in the workbench and looking at the result
-   — not by cargo tests alone. The workbench preview is the verdict at
-   the local stage; Cloud Run is the verdict at the deploy stage.
-2. **Keep things simple.** No async jobs, no editable inputs yet, no
-   "save as PDF" yet. One POST endpoint that runs extract → reduce →
-   render. The full feature set comes in subsequent milestones.
+After M7.d.2: M7.e wires the new files into the Dockerfile and
+M7.f deploys to Cloud Run for the real verdict.
 
-**M7.a (done, commit `a5566f2`):** Old workbench moved to `old/` with
-`#[path]` attributes preserving the import surface.
+**Locked principles for this phase:**
 
-**M7.b (done, commits `a035907` + the M7.b.1 fixes that followed):**
-New HTML renderer (`src/workbench_simple.rs` + CSS), inline CSS, no JS,
-collapsible transaction lines, inline evidence quotes (always visible,
-no hover), section order: General Info → Transaction Lines → Summary
-→ Source Documents.
+1. **UI-driven validation.** Every backend change is validated by
+   rendering it in the workbench and looking at it — not by cargo
+   tests alone. Workbench is the local verdict; Cloud Run is the
+   deploy verdict.
+2. **Keep things simple.** No async jobs, no editable inputs yet,
+   no "save as PDF." The full feature set comes in subsequent
+   milestones.
+3. **Slow down on visual iteration.** When changing UI: re-read the
+   diff, ask "did I leave any stale state that could trigger the old
+   behavior?", trace through what the user is about to see, before
+   sending a refresh-and-look message. Codified after M7.d.1's UI
+   mistakes (see regrets).
+
+**M7.a (done, commit `a5566f2`):** Old workbench moved to `old/`.
+**M7.b (done, commit `a035907`):** New HTML renderer + CSS.
+**M7.c (done, commit `d8c83c2`):** render_workbench_from_report binary.
+**M7.d.1 (done, commit `2f40b02`):** Typed validator + layout split +
+active-issue highlight.
 
 ## Mistakes I'm watching for during M5
 
