@@ -25,10 +25,11 @@ use expense_report_schema::extracted_receipt::ExtractedReceipt;
 use expense_report_schema::validator_typed::validate_typed;
 use expense_report_schema::workbench_simple::render_workbench_html;
 
-fn parse_args() -> (PathBuf, PathBuf, PathBuf) {
+fn parse_args() -> (PathBuf, PathBuf, PathBuf, Option<String>) {
     let mut report = PathBuf::from(".scratch/reduced/report.json");
     let mut receipts_dir = PathBuf::from(".scratch/spike");
     let mut out = PathBuf::from(".scratch/workbench/index.html");
+    let mut upload_id: Option<String> = None;
 
     let args: Vec<String> = std::env::args().skip(1).collect();
     let mut iter = args.iter();
@@ -39,13 +40,14 @@ fn parse_args() -> (PathBuf, PathBuf, PathBuf) {
                 receipts_dir = PathBuf::from(iter.next().expect("--receipts-dir needs path"))
             }
             "--out" => out = PathBuf::from(iter.next().expect("--out needs path")),
+            "--upload-id" => upload_id = Some(iter.next().expect("--upload-id needs value").clone()),
             other => {
                 eprintln!("unknown argument: {other}");
                 std::process::exit(2);
             }
         }
     }
-    (report, receipts_dir, out)
+    (report, receipts_dir, out, upload_id)
 }
 
 fn read_receipts(dir: &Path) -> Result<Vec<ExtractedReceipt>, String> {
@@ -73,7 +75,7 @@ fn read_receipts(dir: &Path) -> Result<Vec<ExtractedReceipt>, String> {
 }
 
 fn main() -> ExitCode {
-    let (report_path, receipts_dir, out_path) = parse_args();
+    let (report_path, receipts_dir, out_path, upload_id) = parse_args();
 
     let receipts = match read_receipts(&receipts_dir) {
         Ok(r) => r,
@@ -105,7 +107,7 @@ fn main() -> ExitCode {
     // walking the tree and looking up FIELD_RULES + CONDITIONAL_RULES per path.
     let validation = validate_typed(&report);
 
-    let html = render_workbench_html(&report, &receipts, &validation);
+    let html = render_workbench_html(&report, &receipts, &validation, upload_id.as_deref());
 
     if let Some(parent) = out_path.parent() {
         if let Err(err) = fs::create_dir_all(parent) {
