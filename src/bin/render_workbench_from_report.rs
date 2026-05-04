@@ -8,13 +8,12 @@
 //!                           (one [ExtractedReceipt] array per file).
 //!                           Default: .scratch/spike
 //!   --out <path>            Where to write the rendered HTML.
-//!                           Default: .scratch/workbench/index.html
+//!                           Default: .scratch/spike/workbench.html
+//!                           (alongside the extractions, so relative
+//!                           "Download JSON" links resolve when opened
+//!                           via file://)
 //!
-//! Validation hookup is deferred to M7.d (the HTTP server) — this binary
-//! emits an empty validation list for now, so the issues panel is omitted.
-//! When M7.d wires the real validator, this binary either grows the same
-//! adapter or stays as the eyeball-the-renderer tool while M7.d does its
-//! own end-to-end orchestration.
+//! Validation runs via validate_typed against the reduced report.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -25,11 +24,10 @@ use expense_report_schema::extracted_receipt::ExtractedReceipt;
 use expense_report_schema::validator_typed::validate_typed;
 use expense_report_schema::workbench_simple::render_workbench_html;
 
-fn parse_args() -> (PathBuf, PathBuf, PathBuf, Option<String>) {
+fn parse_args() -> (PathBuf, PathBuf, PathBuf) {
     let mut report = PathBuf::from(".scratch/reduced/report.json");
     let mut receipts_dir = PathBuf::from(".scratch/spike");
-    let mut out = PathBuf::from(".scratch/workbench/index.html");
-    let mut upload_id: Option<String> = None;
+    let mut out = PathBuf::from(".scratch/spike/workbench.html");
 
     let args: Vec<String> = std::env::args().skip(1).collect();
     let mut iter = args.iter();
@@ -40,14 +38,13 @@ fn parse_args() -> (PathBuf, PathBuf, PathBuf, Option<String>) {
                 receipts_dir = PathBuf::from(iter.next().expect("--receipts-dir needs path"))
             }
             "--out" => out = PathBuf::from(iter.next().expect("--out needs path")),
-            "--upload-id" => upload_id = Some(iter.next().expect("--upload-id needs value").clone()),
             other => {
                 eprintln!("unknown argument: {other}");
                 std::process::exit(2);
             }
         }
     }
-    (report, receipts_dir, out, upload_id)
+    (report, receipts_dir, out)
 }
 
 fn read_receipts(dir: &Path) -> Result<Vec<ExtractedReceipt>, String> {
@@ -75,7 +72,7 @@ fn read_receipts(dir: &Path) -> Result<Vec<ExtractedReceipt>, String> {
 }
 
 fn main() -> ExitCode {
-    let (report_path, receipts_dir, out_path, upload_id) = parse_args();
+    let (report_path, receipts_dir, out_path) = parse_args();
 
     let receipts = match read_receipts(&receipts_dir) {
         Ok(r) => r,
@@ -107,7 +104,7 @@ fn main() -> ExitCode {
     // walking the tree and looking up FIELD_RULES + CONDITIONAL_RULES per path.
     let validation = validate_typed(&report);
 
-    let html = render_workbench_html(&report, &receipts, &validation, upload_id.as_deref());
+    let html = render_workbench_html(&report, &receipts, &validation);
 
     if let Some(parent) = out_path.parent() {
         if let Err(err) = fs::create_dir_all(parent) {

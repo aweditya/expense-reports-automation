@@ -27,7 +27,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, abort, request, send_file
+from flask import Flask, abort, redirect, request, send_from_directory
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -76,21 +76,24 @@ def upload():
     saved_paths = save_uploaded_files(files, files_dir)
     extract_all(saved_paths, extractions_dir)
     reduce(extractions_dir, reduced_path)
-    render_workbench(reduced_path, extractions_dir, workbench_path, upload_id)
+    render_workbench(reduced_path, extractions_dir, workbench_path)
 
-    return workbench_path.read_text(encoding="utf-8")
+    # POST/Redirect/GET: send the browser to a bookmarkable URL for the
+    # rendered workbench. Refresh-friendly; back-button-friendly; no
+    # double-submit on reload.
+    return redirect(f"/uploads/{upload_id}/workbench.html", code=303)
 
 
-@app.get("/uploads/<upload_id>/extractions/<filename>")
-def serve_extraction(upload_id: str, filename: str):
-    """Per-document JSON download — wired into the workbench's source-document
-    cards as a 'Download JSON' link."""
+@app.get("/uploads/<upload_id>/<path:filename>")
+def serve_upload_file(upload_id: str, filename: str):
+    """Static-file route for everything under a per-upload directory:
+    workbench.html, extractions/<name>.json, files/<name>, reduced/report.json,
+    etc. The renderer emits relative URLs that resolve against this prefix."""
     safe_id = sanitize_id(upload_id)
-    safe_name = sanitize_filename(filename)
-    path = UPLOADS_ROOT / safe_id / "extractions" / safe_name
-    if not path.is_file():
+    upload_dir = UPLOADS_ROOT / safe_id
+    if not upload_dir.is_dir():
         abort(404)
-    return send_file(path, mimetype="application/json", as_attachment=True)
+    return send_from_directory(upload_dir, filename)
 
 
 # ─── Pipeline orchestration ────────────────────────────────────────────────
@@ -142,14 +145,12 @@ def render_workbench(
     reduced_path: Path,
     extractions_dir: Path,
     workbench_path: Path,
-    upload_id: str,
 ) -> None:
     run_subprocess(
         ["cargo", "run", "--quiet", "--bin", "render_workbench_from_report",
          "--", "--report", str(reduced_path),
          "--receipts-dir", str(extractions_dir),
-         "--out", str(workbench_path),
-         "--upload-id", upload_id],
+         "--out", str(workbench_path)],
         label="render",
     )
 

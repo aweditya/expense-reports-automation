@@ -21,15 +21,17 @@ const CSS: &str = include_str!("workbench_simple.css");
 
 /// Render the full HTML page. `receipts` is the per-receipt extraction
 /// list (used for the source-documents panel); `report` is the reduced
-/// typed report; `validation` is the Pass-2 result; `upload_id` is the
-/// per-upload directory id used to build "Download JSON" links into the
-/// HTTP server's /uploads/<id>/extractions/<filename> route. None when
-/// rendered outside the server context (e.g. CLI preview).
+/// typed report; `validation` is the Pass-2 result.
+///
+/// "Download JSON" links are always emitted as RELATIVE URLs
+/// (`extractions/<stem>.json`). The page is self-contained: whoever
+/// serves the directory containing this HTML (Flask, file://, GCS,
+/// nginx) makes the links work as long as the file is at the relative
+/// path. No backend-specific URL knowledge in the renderer.
 pub fn render_workbench_html(
     report: &ExpenseReport,
     receipts: &[ExtractedReceipt],
     validation: &ValidationReport,
-    upload_id: Option<&str>,
 ) -> String {
     let mut html = String::with_capacity(8192);
     html.push_str("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n");
@@ -59,7 +61,7 @@ pub fn render_workbench_html(
     render_general_information(&mut html, &report.general_information);
     render_transaction_lines(&mut html, report);
     render_transaction_summary(&mut html, &report.transaction_summary);
-    render_source_documents(&mut html, receipts, upload_id);
+    render_source_documents(&mut html, receipts);
     html.push_str("</main>\n");
 
     html.push_str("</div>\n");
@@ -385,34 +387,25 @@ fn render_meal_details(html: &mut String, meal: &ExpenseReportTransactionLinesIt
 
 // ─── Source documents (bottom) ─────────────────────────────────────────────
 
-fn render_source_documents(
-    html: &mut String,
-    receipts: &[ExtractedReceipt],
-    upload_id: Option<&str>,
-) {
+fn render_source_documents(html: &mut String, receipts: &[ExtractedReceipt]) {
     html.push_str("<section class=\"panel source-docs\">\n");
     html.push_str("<p class=\"eyebrow\">Provenance</p>\n<h2>Source Documents</h2>\n");
     html.push_str("<div class=\"doc-grid\">\n");
     for r in receipts {
         let kind = r.line.common.expense_type.value.as_ref().map(|e| e.as_str().replace('_', " ")).unwrap_or("—".into());
         let amount = r.line.common.line_amount_usd.value.map(|t| format!("${:.2}", t)).unwrap_or("—".into());
-        let download_link = match upload_id {
-            Some(id) => {
-                // The Python extractor names its output <stem>.json next to
-                // the source file; the Flask app serves from
-                // /uploads/<id>/extractions/<filename>.
-                let stem = std::path::Path::new(&r.source_filename)
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or(&r.source_filename);
-                format!(
-                    "<a class=\"doc-download\" href=\"/uploads/{}/extractions/{}.json\" download>Download JSON</a>",
-                    escape(id),
-                    escape(stem),
-                )
-            }
-            None => String::new(),
-        };
+        // Relative link: works under any backend that serves the directory
+        // containing this HTML. For the Flask app the workbench is served
+        // from .../uploads/<id>/workbench.html and extractions live at
+        // .../uploads/<id>/extractions/, so the link resolves naturally.
+        let stem = std::path::Path::new(&r.source_filename)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(&r.source_filename);
+        let download_link = format!(
+            "<a class=\"doc-download\" href=\"extractions/{}.json\" download>Download JSON</a>",
+            escape(stem),
+        );
         html.push_str(&format!(
             "<article class=\"doc-card\">\
               <div class=\"doc-topline\"><span class=\"badge\">{}</span><span class=\"doc-amount\">{}</span></div>\
@@ -619,7 +612,7 @@ mod tests {
             sample_receipt("mjsushi.jpeg", "2026-05-02", 79.59, "MJ Sushi"),
         ];
         let report = reduce_to_expense_report(&receipts);
-        let html = render_workbench_html(&report, &receipts, &ValidationReport { issues: vec![] }, None);
+        let html = render_workbench_html(&report, &receipts, &ValidationReport { issues: vec![] });
 
         // Smoke checks.
         assert!(html.contains("<!DOCTYPE html>"));
@@ -636,7 +629,7 @@ mod tests {
         let receipts = vec![sample_receipt("a.jpeg", "2026-04-19", 1.0, "X")];
         let report = reduce_to_expense_report(&receipts);
 
-        let no_issues = render_workbench_html(&report, &receipts, &ValidationReport { issues: vec![] }, None);
+        let no_issues = render_workbench_html(&report, &receipts, &ValidationReport { issues: vec![] });
         // No-issues path: layout is "solo" (no rail), and no <aside> is rendered.
         // Check for the actual rendered link element (class="issue-jump") rather
         // than a substring like "Jump to field" which can spuriously match in
@@ -657,7 +650,6 @@ mod tests {
                     message: "Required field is missing".to_owned(),
                 }],
             },
-            None,
         );
         // Has-issues path: layout is "split", rail is rendered, jump link present.
         assert!(with_issues.contains("layout split"));
