@@ -20,6 +20,52 @@ Keep entries short. The point is recall, not narrative.
 
 ## Entries
 
+### 2026-05-04 — `meta: Default::default()` placeholder eventually surfaced as a visible red dot
+
+**What happened:** In M6.2.e I wrote three derived-field assignments in
+`reduce.rs` like `meta: Default::default()` because "we'll fix the meta
+later." `Default::default()` for `FieldMetadata` is `confidence: Low,
+evidence: [], needs_review: false, flags: []`. The reduction shipped that
+way for several commits without anyone noticing — there were no callers
+yet that *displayed* the meta. M7.d.2 wired the workbench to show
+confidence dots, and the user saw `category: expenses_domestic ●` (red
+dot) on a confidently-derived value and reasonably asked "why is this
+low confidence." The deferred placeholder had become a visible bug.
+
+**Why it was wrong:** `Default::default()` for a meaningful semantic value
+is a lie. The default confidence isn't "I haven't decided" — it's "Low,"
+which the workbench then rendered as "this value is questionable." The
+TODO I had in my head ("we'll fix the meta later") never made it into the
+code as anything grep-able, so the gap stayed invisible until the
+downstream UI surfaced it.
+
+**Rule going forward:** When a derived value's `meta` isn't immediately
+honest, write `meta: todo_meta("reason")` (a small helper that returns a
+default-but-flagged FieldMetadata with a known origin string), so future
+greps for `todo_meta` or for the origin string surface the gap. Or just
+fix the meta inline at the time of writing — usually faster than the
+placeholder.
+
+### 2026-05-04 — bundled two logical changes into one cleanup commit
+
+**What happened:** Step 1 of the M7.d.2 cleanup was supposed to be
+"delete dead amount_confidence." I ran `git add src/reduce.rs` without
+checking that the working tree also had three other added helpers
+(`confidence_floor`, `category_confidence`, `derived_meta`) from the
+earlier confidence-fix work that hadn't been committed yet. The cleanup
+commit (`72f557e`) ended up containing both the deletion AND those new
+helpers — two logical changes in one commit.
+
+**Why it was wrong:** Frequent commits with one logical change each is
+the rule precisely so that history reads cleanly and reverts target the
+right thing. A "cleanup" commit that secretly contains a feature
+addition undermines both.
+
+**Rule going forward:** Before `git add -A` or `git add <file>`, run
+`git diff --cached <file>` and `git diff <file>` and confirm what's
+actually about to land matches what the commit message will say. The
+slow-down-on-visual-iteration rule extends to commit boundaries too.
+
 ### 2026-05-03 — UI mistakes from rushing through visual iteration
 
 **What happened:** During M7.d.1 I made a string of small UI mistakes that
