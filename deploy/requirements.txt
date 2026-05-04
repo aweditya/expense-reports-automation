@@ -1,6 +1,4 @@
 flask
+gunicorn
 google-genai
-google-cloud-documentai
-Pillow
-pillow-heif
 pyyaml

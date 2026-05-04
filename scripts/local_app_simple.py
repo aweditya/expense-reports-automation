@@ -32,13 +32,24 @@ from flask import Flask, abort, redirect, request, send_from_directory
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-PYTHON = REPO_ROOT / ".venv" / "bin" / "python"
+PYTHON = Path(sys.executable)
 SPIKE_EXTRACT = REPO_ROOT / "scripts" / "spike_extract.py"
 UPLOADS_ROOT = REPO_ROOT / ".scratch" / "uploads"
 
 # Cloud Run sets PORT; locally default 8765 (matches existing app's muscle memory).
 HOST = os.environ.get("HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", "8765"))
+
+# In the container we ship pre-built Rust binaries and set RUST_BIN_DIR to
+# their install path. Locally we don't — fall back to `cargo run` so dev
+# iteration picks up uncompiled source changes without a manual rebuild.
+RUST_BIN_DIR = os.environ.get("RUST_BIN_DIR")
+
+
+def rust_bin(name: str) -> list[str]:
+    if RUST_BIN_DIR:
+        return [str(Path(RUST_BIN_DIR) / name)]
+    return ["cargo", "run", "--quiet", "--bin", name, "--"]
 
 
 app = Flask(__name__)
@@ -163,8 +174,10 @@ def extract_all(saved_paths: list[Path], extractions_dir: Path) -> list[Path]:
 
 def reduce(extractions_dir: Path, reduced_path: Path) -> None:
     run_subprocess(
-        ["cargo", "run", "--quiet", "--bin", "reduce_extractions",
-         "--", "--in", str(extractions_dir), "--out", str(reduced_path)],
+        rust_bin("reduce_extractions") + [
+            "--in", str(extractions_dir),
+            "--out", str(reduced_path),
+        ],
         label="reduce",
     )
 
@@ -175,10 +188,11 @@ def render_workbench(
     workbench_path: Path,
 ) -> None:
     run_subprocess(
-        ["cargo", "run", "--quiet", "--bin", "render_workbench_from_report",
-         "--", "--report", str(reduced_path),
-         "--receipts-dir", str(extractions_dir),
-         "--out", str(workbench_path)],
+        rust_bin("render_workbench_from_report") + [
+            "--report", str(reduced_path),
+            "--receipts-dir", str(extractions_dir),
+            "--out", str(workbench_path),
+        ],
         label="render",
     )
 

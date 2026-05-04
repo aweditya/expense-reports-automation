@@ -9,37 +9,45 @@ COPY Cargo.toml Cargo.lock* ./
 COPY src/ src/
 COPY generated/ generated/
 COPY fixtures/ fixtures/
+# `src/lib.rs` still pulls in old workbench modules via `#[path =
+# "../old/..."]`. M8 deletes those declarations + old/ entirely; until
+# then the builder needs the directory.
+COPY old/ old/
 
 RUN cargo build --release \
-    --bin ingest_bundle_workspace \
-    --bin apply_review_revision_to_artifacts \
-    --bin render_current_review_surface
+    --bin reduce_extractions \
+    --bin render_workbench_from_report
 
 # Stage 2: Python runtime with pre-compiled Rust binaries
 FROM python:3.12-slim-bookworm
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    perl \
-    poppler-utils \
-    curl \
-    openssl \
-    && rm -rf /var/lib/apt/lists/*
-
 COPY deploy/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.txt
 
-COPY --from=builder /build/target/release/ingest_bundle_workspace /usr/local/bin/
-COPY --from=builder /build/target/release/apply_review_revision_to_artifacts /usr/local/bin/
-COPY --from=builder /build/target/release/render_current_review_surface /usr/local/bin/
+COPY --from=builder /build/target/release/reduce_extractions /usr/local/bin/
+COPY --from=builder /build/target/release/render_workbench_from_report /usr/local/bin/
 
 COPY scripts/ /app/scripts/
+# spike_extract.py reads the response schema from generated/ at runtime;
+# the rest of generated/ is already baked into the Rust binaries.
+COPY generated/response_schema_meal.json /app/generated/response_schema_meal.json
 
 WORKDIR /app
 
-RUN mkdir -p /workspace
-
-ENV HOST=0.0.0.0
+ENV HOST=0.0.0.0 \
+    PORT=8080 \
+    RUST_BIN_DIR=/usr/local/bin
 
 EXPOSE 8080
 
-CMD ["python3", "scripts/local_app.py", "--workspace-root", "/workspace"]
+# gunicorn loads scripts/local_app_simple.py as the WSGI module.
+# --workers 1 matches Cloud Run --max-instances=1; --threads handles
+# concurrent uploads on the single instance. --timeout 600 matches
+# Cloud Run's request timeout.
+CMD ["gunicorn", "--chdir", "/app/scripts", \
+     "--bind", "0.0.0.0:8080", \
+     "--workers", "1", \
+     "--threads", "8", \
+     "--timeout", "600", \
+     "--access-logfile", "-", \
+     "local_app_simple:app"]

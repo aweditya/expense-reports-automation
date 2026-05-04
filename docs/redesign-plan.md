@@ -368,14 +368,26 @@ Why we did this:
 
 ## Current step
 
-**M7.d.3 (next): Flask error handling.** Wrap each pipeline step
-(extract_all, reduce, render_workbench) in try/except. On failure,
-render a small error page that names the failing step and the file
-(when applicable). Goal: a real upload that fails (Gemini 429, network
-blip, malformed image) doesn't show the user a Flask traceback.
+**M7.e.2 (in flight): Dockerfile + gunicorn.** Building new binaries
+(reduce_extractions, render_workbench_from_report); dropping perl /
+poppler-utils / curl / openssl; switching entrypoint to `gunicorn
+local_app_simple:app`; baking in `RUST_BIN_DIR=/usr/local/bin` so the
+script picks the prebuilt binary in the container and falls back to
+`cargo run` locally. Then M7.e.3 runs the image locally on :8080 to
+catch any path / import issues before pushing.
+
+**M7.e.1 (done, `1b19867`):** Dropped --service-account-key and the
+on-disk JSON entirely. spike_extract.py / local_app_simple.py /
+spike_acceptance_check.py all use ADC now (Cloud Run metadata server in
+prod, `gcloud auth application-default login` locally). Same commit
+fixes a round-trip bug exposed by M6.2.b T2-wrapping: `Wrapped::is_unknown`
++ codegen `skip_serializing_if` so Python-omitted leaves don't get
+re-emitted as `{value:null,_meta:{default}}`.
 
 **M7.d.1 (done, `2f40b02`):** typed validator + workbench layout split.
 **M7.d.2 (done, `1ebce88`):** Flask HTTP server + Download JSON link.
+**M7.d.3 (done):** PipelineError + @app.errorhandler renders a friendly
+error page when extract/reduce/render fail.
 **Codegen wraps T2 (done, `52d7fd3`):** total_usd is Wrapped now.
 **Provenance text for derived fields (done, `0699db8`):** Trip Date /
 Total USD / Category show human-readable provenance under the value.
@@ -383,8 +395,8 @@ Total USD / Category show human-readable provenance under the value.
 backend-agnostic; Flask serves the per-upload dir as static files;
 POST/Redirect/GET means the URL is bookmarkable.
 
-After M7.d.3: M7.e wires the new files into the Dockerfile and
-M7.f deploys to Cloud Run for the real verdict.
+After M7.e.3: M7.f pushes to main, watches Cloud Build, and verifies
+the deployed Cloud Run URL with all four real receipts (the verdict).
 
 **Locked principles for this phase:**
 
