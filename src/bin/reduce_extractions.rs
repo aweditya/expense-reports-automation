@@ -108,6 +108,7 @@ fn main() -> ExitCode {
     let total = report
         .transaction_summary
         .total_usd
+        .value
         .unwrap_or(0.0);
     let earliest = report
         .transaction_summary

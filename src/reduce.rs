@@ -144,14 +144,20 @@ pub fn reduce_to_expense_report(receipts: &[ExtractedReceipt]) -> ExpenseReport 
     let earliest = reduce_earliest_date(receipts);
     let category = reduce_inferred_category(receipts);
 
-    // Derive a confidence floor from the contributing receipts' dates
-    // — same principle as category_confidence.
+    // Derive confidence floors from the contributing receipts' dates
+    // and amounts — same principle as category_confidence.
     let date_confidence = confidence_floor(
         receipts.iter().map(|r| r.line.common.date.meta.confidence)
     );
+    let amount_confidence = confidence_floor(
+        receipts.iter().map(|r| r.line.common.line_amount_usd.meta.confidence)
+    );
 
     report.transaction_lines = Some(lines);
-    report.transaction_summary.total_usd = Some(total);
+    report.transaction_summary.total_usd = Wrapped {
+        value: Some(total),
+        meta: derived_meta(amount_confidence, "reduce.total_usd"),
+    };
     report.transaction_summary.transaction_date = match earliest {
         Some(date) => Wrapped {
             value: Some(date),
@@ -304,7 +310,7 @@ mod tests {
 
         // Total = sum of all four amounts.
         assert!(
-            (report.transaction_summary.total_usd.unwrap() - (163.54 + 123.19 + 387.12 + 79.59))
+            (report.transaction_summary.total_usd.value.unwrap() - (163.54 + 123.19 + 387.12 + 79.59))
                 .abs()
                 < 1e-9
         );

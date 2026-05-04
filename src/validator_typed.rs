@@ -55,7 +55,7 @@ fn walk_general_information(
     check_wrapped(&join(base, "category"), &gi.category, issues);
     walk_payee(&gi.payee, &join(base, "payee"), issues);
     check_optional(&join(base, "rush_processing"), &gi.rush_processing, issues);
-    check_optional(&join(base, "payment_method"), &gi.payment_method, issues);
+    check_wrapped(&join(base, "payment_method"), &gi.payment_method, issues);
     walk_business_purpose(
         &gi.business_purpose,
         &join(base, "business_purpose"),
@@ -107,10 +107,10 @@ fn walk_transaction_summary(
     issues: &mut Vec<ValidationIssue>,
 ) {
     check_optional(&join(base, "transaction_type"), &ts.transaction_type, issues);
-    check_optional(&join(base, "transaction_number"), &ts.transaction_number, issues);
+    check_wrapped(&join(base, "transaction_number"), &ts.transaction_number, issues);
     check_wrapped(&join(base, "transaction_date"), &ts.transaction_date, issues);
     check_optional(&join(base, "status"), &ts.status, issues);
-    check_optional(&join(base, "total_usd"), &ts.total_usd, issues);
+    check_wrapped(&join(base, "total_usd"), &ts.total_usd, issues);
 }
 
 fn walk_transaction_lines(report: &ExpenseReport, issues: &mut Vec<ValidationIssue>) {
@@ -139,7 +139,7 @@ fn walk_line_common(
     check_wrapped(&join(base, "line_amount_usd"), &common.line_amount_usd, issues);
     check_wrapped(&join(base, "original_currency"), &common.original_currency, issues);
     check_wrapped(&join(base, "original_amount"), &common.original_amount, issues);
-    check_optional(&join(base, "exchange_rate"), &common.exchange_rate, issues);
+    check_wrapped(&join(base, "exchange_rate"), &common.exchange_rate, issues);
     check_wrapped(&join(base, "expense_type"), &common.expense_type, issues);
     check_wrapped(&join(base, "remarks"), &common.remarks, issues);
     check_wrapped(&join(base, "country_of_activity"), &common.country_of_activity, issues);
@@ -438,7 +438,7 @@ fn target_present_at(
     match segments.as_slice() {
         ["common", "original_currency"] => line.common.original_currency.value.is_some(),
         ["common", "original_amount"] => line.common.original_amount.value.is_some(),
-        ["common", "exchange_rate"] => line.common.exchange_rate.is_some(),
+        ["common", "exchange_rate"] => line.common.exchange_rate.value.is_some(),
         ["common", "country_of_activity"] => line.common.country_of_activity.value.is_some(),
         ["common", "foreign_activity_type"] => line.common.foreign_activity_type.value.is_some(),
         ["airfare_details"] => line.airfare_details.is_some(),

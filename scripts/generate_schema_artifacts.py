@@ -310,19 +310,19 @@ def rust_field_type(node: SchemaNode) -> str:
     base_type = rust_type(node)
     if node.is_leaf:
         # Wrap by source tier:
-        # - T3 leaves are extracted from documents — they need _meta
-        #   provenance so the workbench can show "this came from this
-        #   quote at this confidence." → `Wrapped<T>`.
+        # - T3 leaves are extracted from documents — provenance comes from
+        #   the receipt content (quote + page + confidence). → `Wrapped<T>`.
+        # - T2 leaves are system-derived (totals, exchange rates, day
+        #   counts) — provenance comes from the reduction step that
+        #   computed them. Same `Wrapped<T>` shape, with system_generated
+        #   evidence and a confidence floor inherited from inputs.
         # - T1 leaves are FA-input — provenance is "the FA typed it" and
-        #   doesn't need a document quote. → `Option<T>` (pragmatic;
-        #   required-ness lives in Pass 2 via FIELD_RULES).
-        # - T2 leaves are system-derived — provenance is "computed by step
-        #   X" and lives in the reduction layer. → `Option<T>`.
+        #   doesn't need a structured _meta block. → `Option<T>`.
         # - Leaves with no source tier (root-level / structural) fall back
         #   to the required-ness rule.
-        if node.effective_source == "T3":
+        if node.effective_source in ("T2", "T3"):
             return f"Wrapped<{base_type}>"
-        if node.effective_source in ("T1", "T2"):
+        if node.effective_source == "T1":
             return f"Option<{base_type}>"
         if node.required and node.required_expression is None:
             return base_type

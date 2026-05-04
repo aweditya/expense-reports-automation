@@ -139,6 +139,7 @@ fn render_summary_cards(html: &mut String, report: &ExpenseReport) {
     let total = report
         .transaction_summary
         .total_usd
+        .value
         .map(|t| format!("${:.2}", t))
         .unwrap_or("—".into());
     let category = report
@@ -258,7 +259,7 @@ fn render_general_information(html: &mut String, gi: &ExpenseReportGeneralInform
     field_card_text(html, "Event Name", &gi.event_name, "expense_report.general_information.event_name", |s: &String| s.clone());
     field_card_optional_string(html, "Authorized By", gi.authorized_by.as_deref(), "expense_report.general_information.authorized_by");
     field_card_optional_enum(html, "Rush Processing", &gi.rush_processing, "expense_report.general_information.rush_processing", |r: &crate::expense_report_model::ExpenseReportGeneralInformationRushProcessingEnum| r.as_str().to_owned());
-    field_card_optional_string(html, "Payment Method", gi.payment_method.as_deref(), "expense_report.general_information.payment_method");
+    field_card_text(html, "Payment Method", &gi.payment_method, "expense_report.general_information.payment_method", |s: &String| s.clone());
 
     // business_purpose is its own nested struct of T1 fields — render as a sub-block.
     html.push_str("</div>\n");
@@ -282,11 +283,11 @@ fn render_transaction_summary(html: &mut String, ts: &ExpenseReportTransactionSu
     html.push_str("<p class=\"eyebrow\">Section 2</p>\n<h2>Transaction Summary</h2>\n");
     html.push_str("<div class=\"field-grid\">\n");
 
-    field_card_text(html, "Transaction Date", &ts.transaction_date, "expense_report.transaction_summary.transaction_date", |d| d.0.clone());
-    field_card_optional_enum(html, "Transaction Type", &ts.transaction_type, "expense_report.transaction_summary.transaction_type", |t| t.as_str().to_owned());
-    field_card_optional_string(html, "Transaction Number", ts.transaction_number.as_deref(), "expense_report.transaction_summary.transaction_number");
-    field_card_optional_enum(html, "Status", &ts.status, "expense_report.transaction_summary.status", |s| s.as_str().to_owned());
-    field_card_optional_money(html, "Total USD", ts.total_usd, "expense_report.transaction_summary.total_usd");
+    field_card_text(html, "Transaction Date", &ts.transaction_date, "expense_report.transaction_summary.transaction_date", |d: &crate::expense_report_model::IsoDate| d.0.clone());
+    field_card_optional_enum(html, "Transaction Type", &ts.transaction_type, "expense_report.transaction_summary.transaction_type", |t: &crate::expense_report_model::ExpenseReportTransactionSummaryTransactionTypeEnum| t.as_str().to_owned());
+    field_card_text(html, "Transaction Number", &ts.transaction_number, "expense_report.transaction_summary.transaction_number", |s: &String| s.clone());
+    field_card_optional_enum(html, "Status", &ts.status, "expense_report.transaction_summary.status", |s: &crate::expense_report_model::ExpenseReportTransactionSummaryStatusEnum| s.as_str().to_owned());
+    field_card_text(html, "Total USD", &ts.total_usd, "expense_report.transaction_summary.total_usd", |t: &f64| format!("${:.2}", t));
 
     html.push_str("</div>\n</section>\n");
 }

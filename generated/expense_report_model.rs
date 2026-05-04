@@ -788,8 +788,8 @@ pub struct ExpenseReportGeneralInformation {
     pub rush_processing: Option<ExpenseReportGeneralInformationRushProcessingEnum>,
     ///  Always 'electronic' — system pre-fills
     /// Source tier: T2
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub payment_method: Option<String>,
+    #[serde(default)]
+    pub payment_method: Wrapped<String>,
     ///  Structured purpose statement entered by the FA. First 30 chars of the combined text
     /// serve as a lookup key.
     /// Source tier: T1
@@ -819,8 +819,8 @@ pub struct ExpenseReportTransactionSummary {
     pub transaction_type: Option<ExpenseReportTransactionSummaryTransactionTypeEnum>,
     ///  Format: ERxxxxxxx. Assigned by the system or existing system.
     /// Source tier: T2
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub transaction_number: Option<String>,
+    #[serde(default)]
+    pub transaction_number: Wrapped<String>,
     ///  Date of the expense (earliest expense date across all receipts in the bundle).
     /// Source tier: T3
     /// Infer from:  Earliest common.date across transaction_lines
@@ -832,8 +832,8 @@ pub struct ExpenseReportTransactionSummary {
     pub status: Option<ExpenseReportTransactionSummaryStatusEnum>,
     ///  Sum of all transaction lines, converted to USD
     /// Source tier: T2
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub total_usd: Option<f64>,
+    #[serde(default)]
+    pub total_usd: Wrapped<f64>,
 
 }
 
@@ -876,8 +876,8 @@ pub struct ExpenseReportTransactionLinesItemCommon {
     /// Conditionally required when:  general_information.category == expenses_foreign
     /// Source tier: T2
     /// Infer from:  Historical rate for common.date from exchange rate API
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub exchange_rate: Option<f64>,
+    #[serde(default)]
+    pub exchange_rate: Wrapped<f64>,
     /// Source tier: T3
     /// Infer from:  LLM classifies from receipt content
     #[serde(default)]
@@ -909,14 +909,14 @@ pub struct ExpenseReportTransactionLinesItemCommon {
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonComparableFaresItem {
     /// Source tier: T2
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub airline: Option<String>,
+    #[serde(default)]
+    pub airline: Wrapped<String>,
     /// Source tier: T2
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub amount: Option<f64>,
+    #[serde(default)]
+    pub amount: Wrapped<f64>,
     /// Source tier: T2
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub class: Option<String>,
+    #[serde(default)]
+    pub class: Wrapped<String>,
 
 }
 
@@ -926,14 +926,14 @@ pub struct ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonCompara
 pub struct ExpenseReportTransactionLinesItemAirfareDetailsPriceComparison {
     ///  Date the comparison was generated
     /// Source tier: T2
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub comparison_date: Option<IsoDate>,
+    #[serde(default)]
+    pub comparison_date: Wrapped<IsoDate>,
     /// Source tier: T2
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub comparable_fares: Option<Vec<ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonComparableFaresItem>>,
     /// Source tier: T2
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source: Option<ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonSourceEnum>,
+    #[serde(default)]
+    pub source: Wrapped<ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonSourceEnum>,
 
 }
 
@@ -1006,8 +1006,8 @@ pub struct ExpenseReportTransactionLinesItemLodgingDetails {
     pub check_out_date: Wrapped<IsoDate>,
     /// Source tier: T2
     /// Infer from:  Computed: check_out_date - check_in_date
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub number_of_nights: Option<f64>,
+    #[serde(default)]
+    pub number_of_nights: Wrapped<f64>,
     ///  In original currency
     /// Source tier: T3
     /// Infer from:  Hotel folio
@@ -1030,8 +1030,8 @@ pub struct ExpenseReportTransactionLinesItemLodgingDetails {
     ///  Number of nights flagged as personal (outside conference dates)
     /// Source tier: T2
     /// Infer from:  Compare hotel dates against conference dates from registration
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub personal_nights_excluded: Option<f64>,
+    #[serde(default)]
+    pub personal_nights_excluded: Wrapped<f64>,
 
 }
 
@@ -1265,21 +1265,21 @@ pub struct ExpenseReportTransactionLinesItem {
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportPerDiemExpensesItemMealDeductionsItem {
     /// Source tier: T2
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub date: Option<IsoDate>,
+    #[serde(default)]
+    pub date: Wrapped<IsoDate>,
     /// Source tier: T2
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub breakfast_provided: Option<bool>,
+    #[serde(default)]
+    pub breakfast_provided: Wrapped<bool>,
     /// Source tier: T2
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub lunch_provided: Option<bool>,
+    #[serde(default)]
+    pub lunch_provided: Wrapped<bool>,
     /// Source tier: T2
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub dinner_provided: Option<bool>,
+    #[serde(default)]
+    pub dinner_provided: Wrapped<bool>,
     ///  Computed from per diem rate breakdown
     /// Source tier: T2
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub deduction_amount: Option<f64>,
+    #[serde(default)]
+    pub deduction_amount: Wrapped<f64>,
 
 }
 
@@ -1287,17 +1287,17 @@ pub struct ExpenseReportPerDiemExpensesItemMealDeductionsItem {
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportPerDiemExpensesItemReimbursementSummaryItem {
     /// Source tier: T2
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub date: Option<IsoDate>,
+    #[serde(default)]
+    pub date: Wrapped<IsoDate>,
     /// Source tier: T2
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub per_diem_amount: Option<f64>,
+    #[serde(default)]
+    pub per_diem_amount: Wrapped<f64>,
     /// Source tier: T2
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub meal_deduction: Option<f64>,
+    #[serde(default)]
+    pub meal_deduction: Wrapped<f64>,
     /// Source tier: T2
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub net_amount: Option<f64>,
+    #[serde(default)]
+    pub net_amount: Wrapped<f64>,
 
 }
 
@@ -1318,8 +1318,8 @@ pub struct ExpenseReportPerDiemExpensesItem {
     pub end_date: Wrapped<IsoDate>,
     /// Source tier: T2
     /// Infer from:  Computed: end_date - start_date + 1
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub number_of_days: Option<f64>,
+    #[serde(default)]
+    pub number_of_days: Wrapped<f64>,
     ///  City, State/Country
     /// Source tier: T3
     /// Infer from:  Destination from flight or hotel docs
@@ -1338,8 +1338,8 @@ pub struct ExpenseReportPerDiemExpensesItem {
     ///  Daily rate in USD from GSA (domestic) or State Dept (foreign)
     /// Source tier: T2
     /// Infer from:  API lookup by location + date
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub per_diem_rate: Option<f64>,
+    #[serde(default)]
+    pub per_diem_rate: Wrapped<f64>,
     /// Source tier: T3
     /// Infer from:  Generated summary of dates and location
     #[serde(default)]
