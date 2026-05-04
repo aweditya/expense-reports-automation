@@ -473,6 +473,19 @@ fn field_card_optional_money(html: &mut String, label: &str, value: Option<f64>,
     field_card_bare(html, label, path, v.as_deref().unwrap_or("—"));
 }
 
+/// Map a derivation origin code (set by reduce.rs when it builds derived
+/// values) to a short human-readable phrase the FA can read directly.
+/// Returns None for codes that describe absence (`not_applicable_for_*`,
+/// `not_present_in_receipt`) — those shouldn't surface as provenance.
+fn human_readable_origin(origin: &str) -> Option<&'static str> {
+    match origin {
+        "reduce.total_usd" => Some("sum of all line amounts"),
+        "reduce.earliest_date" => Some("earliest date across all receipts"),
+        "reduce.inferred_category" => Some("based on receipt currencies"),
+        _ => None,
+    }
+}
+
 fn field_card_inner(html: &mut String, label: &str, path: &str, value: &str, meta: &FieldMetadata) {
     let conf_class = match meta.confidence {
         ConfidenceLevel::High => "conf-high",
@@ -484,18 +497,27 @@ fn field_card_inner(html: &mut String, label: &str, path: &str, value: &str, met
     } else {
         ""
     };
-    // Inline evidence: only the quote (skip origin codes — those are
-    // internal markers like "not_applicable_for_domestic" that aren't
-    // useful to the FA). Always visible under the value when present.
-    let evidence_quote = meta
+    // Inline provenance: prefer a real receipt quote (T3 fields), then
+    // fall back to a human-readable label for derived T2 fields (so the
+    // FA can see WHY the value is what it is). Internal origin codes
+    // like "not_applicable_for_domestic" are filtered out — those are
+    // about absence, not the source of a present value.
+    let evidence_quote = meta.evidence.iter().find_map(|e| e.quote.as_deref());
+    let evidence_origin = meta
         .evidence
         .iter()
-        .find_map(|e| e.quote.as_deref())
-        .unwrap_or("");
-    let evidence_block = if evidence_quote.is_empty() {
-        String::new()
-    } else {
-        format!("<p class=\"field-evidence\">“{}”</p>", escape(evidence_quote))
+        .find_map(|e| e.origin.as_deref())
+        .and_then(human_readable_origin);
+    let evidence_block = match (evidence_quote, evidence_origin) {
+        (Some(q), _) if !q.is_empty() => format!(
+            "<p class=\"field-evidence\">“{}”</p>",
+            escape(q)
+        ),
+        (_, Some(label)) => format!(
+            "<p class=\"field-evidence\">{}</p>",
+            escape(label)
+        ),
+        _ => String::new(),
     };
 
     html.push_str(&format!(
