@@ -79,14 +79,48 @@ fn confidence_floor<I: Iterator<Item = ConfidenceLevel>>(mut levels: I) -> Confi
     acc
 }
 
-/// Confidence in an "any non-USD → foreign" derivation: the floor of the
-/// contributing receipts' `printed_currency` confidences. If every receipt
-/// reported `printed_currency` with `high` confidence, the derived
-/// category is `high` too. If some are missing or `low`, the result is
-/// `low`. The derivation rule itself is unambiguous, so the only loss
-/// of confidence comes from the inputs.
-fn category_confidence(receipts: &[ExtractedReceipt]) -> ConfidenceLevel {
-    confidence_floor(receipts.iter().map(|r| r.extras.printed_currency.meta.confidence))
+/// Confidence in an "any non-USD → foreign" derivation.
+///
+/// Currency-floor by default: floor of every receipt's `printed_currency`
+/// confidence. The prompt asks Gemini to use `medium` when it has to
+/// infer USD from a bare `$` symbol (which is also CAD/AUD/NZD/HKD/MXN/…)
+/// — so a US receipt that just prints `$` truthfully comes back medium,
+/// and the floor is medium even when the report is obviously domestic.
+///
+/// Country lift: if every receipt has `country_of_activity` filled with
+/// `high` confidence and the values are consistent with the inferred
+/// category (all `United States` for domestic; all non-US for foreign),
+/// the address signal overrides the currency-symbol ambiguity and we
+/// lift to `high`. A `$` on a CAD receipt with country=Canada still
+/// flags via the consistency check.
+fn category_confidence(
+    receipts: &[ExtractedReceipt],
+    inferred: ExpenseReportGeneralInformationCategoryEnum,
+) -> ConfidenceLevel {
+    let currency_floor = confidence_floor(
+        receipts.iter().map(|r| r.extras.printed_currency.meta.confidence),
+    );
+
+    let country_signal_ok = !receipts.is_empty()
+        && receipts.iter().all(|r| {
+            let c = &r.line.common.country_of_activity;
+            if c.meta.confidence != ConfidenceLevel::High {
+                return false;
+            }
+            let Some(country) = c.value.as_deref() else { return false; };
+            let is_us = country.eq_ignore_ascii_case("United States");
+            match inferred {
+                ExpenseReportGeneralInformationCategoryEnum::ExpensesDomestic => is_us,
+                ExpenseReportGeneralInformationCategoryEnum::ExpensesForeign => !is_us,
+                _ => false,
+            }
+        });
+
+    if country_signal_ok {
+        ConfidenceLevel::High
+    } else {
+        currency_floor
+    }
 }
 
 /// Construct a `FieldMetadata` for a value derived in the reduction step.
@@ -167,7 +201,7 @@ pub fn reduce_to_expense_report(receipts: &[ExtractedReceipt]) -> ExpenseReport 
     };
     report.general_information.category = Wrapped {
         value: Some(category),
-        meta: derived_meta(category_confidence(receipts), "reduce.inferred_category"),
+        meta: derived_meta(category_confidence(receipts, category), "reduce.inferred_category"),
     };
 
     report
@@ -275,6 +309,101 @@ mod tests {
             reduce_inferred_category(&receipts),
             ExpenseReportGeneralInformationCategoryEnum::ExpensesDomestic
         );
+    }
+
+    fn with_currency_confidence(
+        mut r: ExtractedReceipt,
+        currency_confidence: ConfidenceLevel,
+    ) -> ExtractedReceipt {
+        r.extras.printed_currency.meta.confidence = currency_confidence;
+        r
+    }
+
+    fn with_country(
+        mut r: ExtractedReceipt,
+        country: &str,
+        country_confidence: ConfidenceLevel,
+    ) -> ExtractedReceipt {
+        r.line.common.country_of_activity = Wrapped {
+            value: Some(country.to_owned()),
+            meta: FieldMetadata {
+                confidence: country_confidence,
+                ..FieldMetadata::default()
+            },
+        };
+        r
+    }
+
+    #[test]
+    fn category_confidence_lifts_to_high_when_all_us_addresses_high() {
+        // Live-prod scenario: every receipt prints just "$" (Gemini → medium
+        // on printed_currency), but every merchant address is in the US
+        // (country_of_activity = "United States" with high). The address
+        // signal should override the symbol-vs-string ambiguity.
+        let receipts = vec![
+            with_country(
+                with_currency_confidence(
+                    make_receipt("a.jpeg", "2026-04-19", 1.0, Some("USD")),
+                    ConfidenceLevel::Medium,
+                ),
+                "United States",
+                ConfidenceLevel::High,
+            ),
+            with_country(
+                with_currency_confidence(
+                    make_receipt("b.jpeg", "2026-04-04", 1.0, Some("USD")),
+                    ConfidenceLevel::Medium,
+                ),
+                "United States",
+                ConfidenceLevel::High,
+            ),
+        ];
+        let inferred = reduce_inferred_category(&receipts);
+        assert_eq!(category_confidence(&receipts, inferred), ConfidenceLevel::High);
+    }
+
+    #[test]
+    fn category_confidence_falls_back_to_currency_floor_when_country_inconsistent() {
+        // Mismatched signal — derived category=domestic (USD currency) but
+        // one country is non-US. The address signal can't lift; we fall
+        // back to the currency floor (medium).
+        let receipts = vec![
+            with_country(
+                with_currency_confidence(
+                    make_receipt("a.jpeg", "2026-04-19", 1.0, Some("USD")),
+                    ConfidenceLevel::Medium,
+                ),
+                "United States",
+                ConfidenceLevel::High,
+            ),
+            with_country(
+                with_currency_confidence(
+                    make_receipt("b.jpeg", "2026-04-04", 1.0, Some("USD")),
+                    ConfidenceLevel::Medium,
+                ),
+                "Canada",
+                ConfidenceLevel::High,
+            ),
+        ];
+        let inferred = reduce_inferred_category(&receipts);
+        assert_eq!(category_confidence(&receipts, inferred), ConfidenceLevel::Medium);
+    }
+
+    #[test]
+    fn category_confidence_uses_currency_floor_when_country_missing() {
+        // No country_of_activity filled → no lift, currency floor wins.
+        let receipts = vec![
+            with_currency_confidence(
+                make_receipt("a.jpeg", "2026-04-19", 1.0, Some("USD")),
+                ConfidenceLevel::High,
+            ),
+            with_currency_confidence(
+                make_receipt("b.jpeg", "2026-04-04", 1.0, Some("USD")),
+                ConfidenceLevel::Medium,
+            ),
+        ];
+        let inferred = reduce_inferred_category(&receipts);
+        assert_eq!(category_confidence(&receipts, inferred), ConfidenceLevel::Medium);
     }
 
     #[test]
