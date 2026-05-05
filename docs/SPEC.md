@@ -76,9 +76,9 @@ graph TB
     Flask -->|per file| Extract
     Extract -->|HTTPS| Vertex
     Vertex -->|JSON| Extract
-    Extract -->|.scratch/uploads/&lt;id&gt;/extractions/*.json| Flask
+    Extract -->|.scratch/uploads/{id}/extractions/*.json| Flask
     Flask -->|spawns| Reduce
-    Reduce -->|.scratch/uploads/&lt;id&gt;/reduced/report.json| Flask
+    Reduce -->|.scratch/uploads/{id}/reduced/report.json| Flask
     Flask -->|spawns| Render
     Render -->|workbench.html| Flask
     Flask -->|303 redirect| UI
@@ -118,7 +118,7 @@ sequenceDiagram
     participant Gemini as Gemini API
     participant Reduce as reduce_extractions (Rust)
     participant Render as render_workbench_from_report (Rust)
-    participant Disk as .scratch/uploads/&lt;id&gt;/
+    participant Disk as .scratch/uploads/{id}/
 
     FA->>Browser: pick files, click Process Receipts
     Browser->>IAP: POST /upload (multipart)
@@ -129,7 +129,7 @@ sequenceDiagram
         Flask->>Extract: subprocess: --image f --output extractions/f.json
         Extract->>Gemini: generate_content(prompt, image, response_schema)
         Gemini-->>Extract: structured JSON
-        Extract->>Disk: write extractions/&lt;name&gt;.json
+        Extract->>Disk: write extractions/{name}.json
         Extract-->>Flask: exit 0
     end
 
@@ -144,9 +144,9 @@ sequenceDiagram
     Render->>Disk: write workbench.html
     Render-->>Flask: exit 0
 
-    Flask-->>IAP: 303 See Other → /uploads/&lt;id&gt;/workbench.html
+    Flask-->>IAP: 303 See Other → /uploads/{id}/workbench.html
     IAP-->>Browser: 303
-    Browser->>IAP: GET /uploads/&lt;id&gt;/workbench.html
+    Browser->>IAP: GET /uploads/{id}/workbench.html
     IAP->>Flask: forwarded GET
     Flask->>Disk: send_from_directory
     Flask-->>Browser: HTML
@@ -205,7 +205,7 @@ graph LR
         end
 
         subgraph CR["Cloud Run service: expense-reports (us-west1)"]
-            Container["Container revision<br/>gcr.io/.../expense-reports:&lt;sha&gt;<br/>--max-instances=1<br/>--memory=2Gi<br/>--timeout=600s"]
+            Container["Container revision<br/>gcr.io/.../expense-reports:{sha}<br/>--max-instances=1<br/>--memory=2Gi<br/>--timeout=600s"]
             subgraph Process["Inside the container"]
                 Gunicorn["gunicorn<br/>1 worker × 8 threads<br/>:8080"]
                 Flask2["Flask app<br/>local_app_simple:app"]
