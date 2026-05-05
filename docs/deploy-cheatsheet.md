@@ -1,0 +1,90 @@
+# Deploy cheatsheet
+
+Single page of facts about the deployed system, so I don't rediscover them
+each session. If something here is wrong, fix the code/config first, then
+update this file.
+
+## What runs where
+
+| Thing | Value |
+| --- | --- |
+| GCP project | `soe-agile-agents` |
+| Cloud Run service | `expense-reports` |
+| Region | `us-west1` |
+| Direct Cloud Run URL | https://expense-reports-wgnivgelea-uw.a.run.app |
+| Public-ish URL | https://34.160.32.50.nip.io (HTTPS LB → IAP → Cloud Run) |
+| Image registry | `gcr.io/soe-agile-agents/expense-reports:<short-sha>` |
+| Service account | `603261681824-compute@developer.gserviceaccount.com` (default compute SA) |
+| Auth | IAP (Identity-Aware Proxy) on the LB; Cloud Run is `--no-allow-unauthenticated` |
+| Memory | 2 GiB |
+| CPU throttling | off (`--no-cpu-throttling`) |
+| Timeout | 600s |
+| Min/max instances | 1 / 1 |
+
+## Cloud Build
+
+| Thing | Value |
+| --- | --- |
+| Config | `deploy/cloudbuild.yaml` |
+| Source upload bucket | `gs://soe-agile-agents_cloudbuild` (gcloud-managed) |
+| Trigger | **none configured** — deploy is manual via `scripts/deploy.sh` |
+| Logs | `gcloud builds log <build-id> --project=soe-agile-agents` |
+| Substitutions passed | `COMMIT_SHA` only (everything else is built-in) |
+
+## Deploy gesture
+
+```bash
+git push origin main           # not enough on its own — there's no trigger
+scripts/deploy.sh              # this is what actually deploys HEAD
+scripts/deploy.sh <short-sha>  # tag the image with an explicit SHA
+```
+
+Roadmap: wire a GitHub push trigger so `git push` is the deploy gesture.
+Until that exists, `scripts/deploy.sh` is the only path.
+
+## Auth checklist (run once per machine)
+
+```bash
+gcloud auth login                               # gcloud CLI commands
+gcloud auth application-default login           # ADC for spike_extract.py local runs
+gcloud config set project soe-agile-agents
+gcloud config set run/region us-west1
+gcloud config set builds/region global          # cloudbuild.yaml uses global
+```
+
+When ADC isn't set up locally, `spike_extract.py` 401s and it's not
+obvious whether the bug is auth or code. Do this first.
+
+## Verify the deployed app from the CLI
+
+```bash
+# Direct Cloud Run URL (no IAP) — this works with a gcloud identity token
+TOKEN=$(gcloud auth print-identity-token)
+curl -H "Authorization: Bearer $TOKEN" \
+  https://expense-reports-wgnivgelea-uw.a.run.app/
+
+# IAP-fronted URL — needs an IAP-scoped JWT, which requires the IAP
+# client ID. Easier to use a browser session for the IAP path.
+```
+
+For visual verification, just open https://34.160.32.50.nip.io in a
+browser — IAP handles auth via the SSO session.
+
+## Health probes that have caught real bugs
+
+- `GET /` returns the upload form (200) — means gunicorn + Flask are up.
+- POST a real receipt to `/upload` and follow the 303 — exercises the
+  full extract → reduce → render pipeline.
+- Workbench HTML loads, transaction summary totals are non-zero, and
+  the "Download JSON" link 200s with a parseable report.
+
+## Common mistakes (see also: `redesign-regrets.md`)
+
+- `_PROJECT_ID` is **not** a substitution to pass — `$PROJECT_ID` in
+  cloudbuild.yaml is Cloud Build's built-in. Only pass `COMMIT_SHA`.
+- Cloud Run does **not** auto-set `$GOOGLE_CLOUD_PROJECT`. The deploy
+  step in `cloudbuild.yaml` sets `VERTEX_PROJECT_ID=$PROJECT_ID`
+  explicitly. Don't rely on auto-discovery.
+- The local `.venv/` accumulates packages that the Cloud Build container
+  doesn't have. A green local Python suite isn't proof Cloud Build will
+  pass; the deploy gate is the proof.

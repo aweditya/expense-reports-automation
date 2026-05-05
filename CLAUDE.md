@@ -74,13 +74,35 @@ Outside the redesign, the historical scope (UI-only) still applies.
 
 ## Deployment
 
-- Target: Google Cloud Run in the `soe-agile-agents` GCP project.
-- CI/CD: Cloud Build trigger on push to `main` → run Rust tests + Python tests
-  → build Docker image → deploy. If tests fail, deploy is blocked.
-- Deployment-related changes are limited to: `scripts/local_app.py` (host/port/
-  binary resolution), `Dockerfile`, `cloudbuild.yaml`. Do not modify Rust
-  pipeline code purely for deployment.
+- Target: Google Cloud Run in the `soe-agile-agents` GCP project,
+  region `us-west1`. The full facts table (URLs, image registry, IAP,
+  service account, common gotchas) is in `docs/deploy-cheatsheet.md` —
+  start there, don't rediscover.
+- **Deploy gesture:** there is **no** GitHub push trigger configured
+  yet, so `git push origin main` does not deploy anything. Run
+  `scripts/deploy.sh` to deploy HEAD. The script is a thin wrapper
+  around `gcloud builds submit --config=deploy/cloudbuild.yaml` that
+  resolves the short SHA automatically. (Roadmap: wire a push trigger
+  so `git push` becomes the deploy gesture.)
+- The cloudbuild pipeline runs Rust tests → Python tests → Docker
+  build → push → `gcloud run deploy`. Test failures block deploy.
+- Deployment-related changes are limited to: `scripts/local_app_simple.py`
+  (host/port/binary resolution), `deploy/Dockerfile`, `deploy/cloudbuild.yaml`,
+  `scripts/deploy.sh`. Do not modify Rust pipeline code purely for deployment.
 - The Dockerfile uses a two-stage build: Rust compilation in builder stage,
   pre-compiled binaries copied to Python slim runtime.
-- Cloud Run config: `--max-instances=1`, `--timeout=600`, GCS FUSE for
-  workspace persistence.
+- Cloud Run config: `--max-instances=1`, `--timeout=600`, ephemeral
+  container-local storage for `.scratch/uploads/`.
+
+### Auth checklist (run once per machine before a deploy session)
+
+```bash
+gcloud auth login                               # gcloud CLI commands
+gcloud auth application-default login           # ADC for spike_extract.py
+gcloud config set project soe-agile-agents
+gcloud config set run/region us-west1
+gcloud config set builds/region global
+```
+
+When ADC isn't set up, a 401 from Vertex looks identical to a code bug.
+Do this first.
