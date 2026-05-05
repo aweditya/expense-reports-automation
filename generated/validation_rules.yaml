@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-generated_at_utc: '2026-05-05T17:40:40+00:00'
+generated_at_utc: '2026-05-04T19:46:40+00:00'
 field_rules:
 - path: expense_report
   node_kind: object
@@ -367,6 +367,22 @@ field_rules:
   description: null
   infer_from: null
   validation: null
+- path: expense_report.transaction_summary.transaction_type
+  node_kind: field
+  schema_type: enum
+  rust_type: ExpenseReportTransactionSummaryTransactionTypeEnum
+  required: true
+  required_expression: null
+  source: T1
+  effective_source: T1
+  depends_on: []
+  allowed_values:
+  - domestic
+  - foreign
+  default: null
+  description: FA-entered. Typically matches general_information.category but the portal stores it as a separate field.
+  infer_from: null
+  validation: null
 - path: expense_report.transaction_summary.transaction_number
   node_kind: field
   schema_type: string
@@ -555,6 +571,7 @@ field_rules:
   - airfare_foreign
   - ancillary_airline_fee
   - business_meal
+  - business_meal_with_alcohol
   - car_rental
   - conference_registration
   - gift_card_employee_foreign
@@ -562,6 +579,7 @@ field_rules:
   - ground_transportation_foreign
   - ground_transportation_domestic
   - group_travel_meal
+  - group_travel_meal_with_alcohol
   - human_subject_incentive
   - lodging_domestic
   - lodging_foreign
@@ -1347,7 +1365,7 @@ field_rules:
   schema_type: object
   rust_type: ExpenseReportTransactionLinesItemMealDetails
   required: false
-  required_expression: expense_type in [business_meal, group_travel_meal]
+  required_expression: expense_type in [business_meal, business_meal_with_alcohol, group_travel_meal, group_travel_meal_with_alcohol]
   source: null
   effective_source: null
   depends_on: []
@@ -1445,7 +1463,7 @@ field_rules:
   schema_type: number
   rust_type: f64
   required: false
-  required_expression: meal_details.has_alcohol_on_receipt == true
+  required_expression: expense_type in [business_meal_with_alcohol, group_travel_meal_with_alcohol]
   source: T3
   effective_source: T3
   depends_on: []
@@ -2209,10 +2227,10 @@ conditional_rules:
   expression: expense_type == conference_registration
 - rule_type: required_when
   target_path: expense_report.transaction_lines[].meal_details
-  expression: expense_type in [business_meal, group_travel_meal]
+  expression: expense_type in [business_meal, business_meal_with_alcohol, group_travel_meal, group_travel_meal_with_alcohol]
 - rule_type: required_when
   target_path: expense_report.transaction_lines[].meal_details.alcohol_amount
-  expression: meal_details.has_alcohol_on_receipt == true
+  expression: expense_type in [business_meal_with_alcohol, group_travel_meal_with_alcohol]
 - rule_type: required_when
   target_path: expense_report.transaction_lines[].car_rental_details
   expression: expense_type == car_rental

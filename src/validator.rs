@@ -794,6 +794,7 @@ mod tests {
             (
                 "transaction_summary",
                 ReportValue::object([
+                    ("transaction_type", text("domestic")),
                     ("transaction_date", date("2025-04-29")),
                     ("total_usd", number("0.00")),
                 ]),
@@ -912,6 +913,10 @@ mod tests {
                 metadata(ConfidenceLevel::High, "payee_form", false),
             ),
             (
+                "expense_report.transaction_summary.transaction_type".to_owned(),
+                metadata(ConfidenceLevel::High, "system_generated", false),
+            ),
+            (
                 "expense_report.transaction_summary.transaction_date".to_owned(),
                 metadata(ConfidenceLevel::High, "itinerary.pdf", false),
             ),
@@ -967,6 +972,7 @@ mod tests {
             (
                 "transaction_summary",
                 ReportValue::object([
+                    ("transaction_type", text("domestic")),
                     ("transaction_date", date("2025-04-29")),
                     ("total_usd", number("0.00")),
                 ]),
@@ -1018,6 +1024,7 @@ mod tests {
             (
                 "transaction_summary",
                 ReportValue::object([
+                    ("transaction_type", text("foreign")),
                     ("transaction_date", date("2025-04-29")),
                     ("total_usd", number("77.34")),
                 ]),

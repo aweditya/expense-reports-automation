@@ -151,17 +151,12 @@ expense_report:
   # SECTION 2: Transaction Summary
   # ===========================================================================
   transaction_summary:
-    # transaction_type was modeled because the Stanford portal exposed a
-    # separate field, but the FA reports never seeing it in practice and
-    # general_information.category already carries domestic-vs-foreign.
-    # Commented out rather than deleted in case the portal surfaces it
-    # again later — uncomment to re-enable.
-    # transaction_type:
-    #   type: enum
-    #   required: true
-    #   source: T1
-    #   allowed_values: [domestic, foreign]
-    #   description: "FA-entered. Typically matches general_information.category but the portal stores it as a separate field."
+    transaction_type:
+      type: enum
+      required: true
+      source: T1
+      allowed_values: [domestic, foreign]
+      description: "FA-entered. Typically matches general_information.category but the portal stores it as a separate field."
     transaction_number:
       type: string
       required: false
@@ -228,18 +223,13 @@ expense_report:
             type: enum
             required: true
             source: T3
-            # The "_with_alcohol" suffix variants were collapsed: alcohol
-            # presence is carried by `meal_details.has_alcohol_on_receipt`,
-            # and the workbench renderer assembles the FA-facing string
-            # ("Business Meal with Alcohol") from the two fields. Submission
-            # to Stanford's portal will reassemble the suffixed enum value
-            # there, separately, when that layer exists.
             allowed_values:
               - adjusted_per_diem
               - airfare_domestic
               - airfare_foreign
               - ancillary_airline_fee
               - business_meal
+              - business_meal_with_alcohol
               - car_rental
               - conference_registration
               - gift_card_employee_foreign
@@ -247,6 +237,7 @@ expense_report:
               - ground_transportation_foreign
               - ground_transportation_domestic
               - group_travel_meal
+              - group_travel_meal_with_alcohol
               - human_subject_incentive
               - lodging_domestic
               - lodging_foreign
@@ -516,7 +507,7 @@ expense_report:
                         type: boolean
 
         meal_details:
-          required: "expense_type in [business_meal, group_travel_meal]"
+          required: "expense_type in [business_meal, business_meal_with_alcohol, group_travel_meal, group_travel_meal_with_alcohol]"
           fields:
             venue_name:
               type: string
@@ -541,7 +532,7 @@ expense_report:
               source: T1
             alcohol_amount:
               type: number
-              required: "meal_details.has_alcohol_on_receipt == true"
+              required: "expense_type in [business_meal_with_alcohol, group_travel_meal_with_alcohol]"
               source: T3
               infer_from: "Itemized receipt — sum of alcohol line items"
             tip_amount:

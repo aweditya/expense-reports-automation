@@ -66,7 +66,7 @@ mod tests {
                     "line_amount_usd": {"value": 79.59, "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}},
                     "original_currency": {"value": null, "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}},
                     "original_amount": {"value": null, "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}},
-                    "expense_type": {"value": "business_meal", "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}},
+                    "expense_type": {"value": "business_meal_with_alcohol", "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}},
                     "remarks": {"value": "Dinner at MJ Sushi", "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}},
                     "country_of_activity": {"value": "United States", "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}},
                     "foreign_activity_type": {"value": null, "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}}
