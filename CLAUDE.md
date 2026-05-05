@@ -1,20 +1,38 @@
 # Project Instructions
 
-## Active redesign
+## Architecture
 
-A pipeline redesign is in progress on branch `redesign/single-call-extraction`.
-The previous "UI-only, never touch the backend" scope is **superseded for files
-relevant to that redesign**. Track current state in `docs/redesign-plan.md`.
+Stanford expense-report extraction pipeline. End-to-end flow:
 
-End state: Python owns the Gemini extraction call (structured output typed
-against `schema.yaml`), Rust owns reduction, validation, ledger, and workbench
-rendering. Boundary is a typed JSON file on disk.
+1. FA uploads receipts at the deployed Cloud Run URL.
+2. `scripts/local_app_simple.py` (Flask + gunicorn) saves them and runs
+   the pipeline per upload:
+   - **Extract** (Python): `scripts/spike_extract.py` makes one Gemini
+     call per receipt with a structured `response_schema_meal.json` and
+     writes one typed JSON per receipt.
+   - **Reduce** (Rust): the `reduce_extractions` binary aggregates the
+     per-receipt JSONs into one `ExpenseReport` (typed against
+     `schema.yaml`-generated structs), deriving fields like total USD,
+     trip date, and category along with their confidence.
+   - **Render** (Rust): the `render_workbench_from_report` binary runs
+     `validate_typed` against the report and emits a self-contained
+     workbench HTML file the FA can review.
+3. Workbench shows per-field confidence dots, provenance text, and a
+   sticky issues rail; FA can download the JSON.
 
-Outside the redesign, the historical scope (UI-only) still applies.
+Boundary between Python and Rust is a typed JSON file on disk.
+`schema.yaml` is the source of truth for field shapes and validation
+rules; `scripts/generate_schema_artifacts.py` regenerates `generated/`
+on every schema edit.
+
+History of how this came together is in `docs/redesign-plan.md` and
+`docs/redesign-regrets.md`.
 
 ## Non-negotiable workflow rules
 
-1. **Plan first, act second.** Update `docs/redesign-plan.md` as work progresses.
+1. **Plan first, act second.** Track in-flight multi-step work in a
+   visible plan doc (e.g., `docs/redesign-plan.md` while it was active);
+   update as steps complete.
 2. **No code bloat.** No "for the future" abstractions, no half-finished
    implementations, no scaffolding without a concrete consumer. Three similar
    lines beat a premature abstraction.
@@ -56,11 +74,15 @@ Outside the redesign, the historical scope (UI-only) still applies.
 
 ## Build and test
 
-- `cargo test` runs the full Rust test suite.
-- `python3 -m unittest discover -s tests -p "test_*.py"` runs the Python
-  suite (matches what Cloud Build runs).
-- `cargo test --lib review_workbench` runs workbench-specific tests.
-- The workbench regression fixtures live in `fixtures/workbench_regressions/`.
+- `cargo test` runs the full Rust test suite (~39 tests across the
+  reduce / validator / workbench modules).
+- `python3 -m unittest discover -s tests -p "test_*.py"` runs the
+  Python suite (matches what Cloud Build runs; currently just the
+  cloudbuild.yaml shape check).
+- `./.venv/bin/python scripts/spike_acceptance_check.py` runs the
+  end-to-end acceptance harness against four real receipts in
+  `receipts/`. By default it checks the cached `.scratch/spike/*.json`;
+  pass `--run` to re-invoke Gemini (~3 min, costs API calls).
 
 ## Schema artifacts
 

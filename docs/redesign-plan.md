@@ -368,13 +368,27 @@ Why we did this:
 
 ## Current step
 
-**M7.f (in flight): deploy + verify.** Cloud Build is invoked via the
-new `scripts/deploy.sh` (no more inline gcloud commands). First two
-submits failed for non-app reasons — bad `_PROJECT_ID` substitution,
-then 16 dead-pipeline test failures because the local venv still had
-Pillow installed but the fresh Cloud Build image didn't. Both fixed.
-Re-submitting once test files are deleted; verification is the four
-real receipts on the deployed Cloud Run URL.
+**M8 (done): old-pipeline removal.** The redesign is the system now.
+Big delete in 5 stages, each one push → trigger auto-deploys → eyeball
+the live workbench:
+- M8.1 (`778ca5f`): 31 obsolete binaries from `src/bin/`.
+- M8.2 (`3b81a05`): 7 obsolete tests + 16 obsolete scripts.
+- M8.3 (`8818467`): 29 old modules + slim `src/lib.rs` (28k-line delete).
+- M8.4 (`77689de`): `old/` directory + drop `COPY old/` from Dockerfile.
+- M8.5 (this commit): `fixtures/` orphans + drop `COPY fixtures/` from
+  Dockerfile + rewrite the CLAUDE.md preamble to describe the system
+  as it stands (no more "redesign in progress" framing).
+
+End state: 11 Rust modules, 3 binaries, 6 scripts, 1 Python test.
+Down from 32 modules, 34 binaries, 21 scripts, 9 tests. Pipeline
+identical end-to-end on the deployed Cloud Run URL throughout — every
+M8 stage was verified live before the next one started.
+
+**M7.f (done): the deploy story.** Cloud Build trigger `deploy-on-push`
+in us-west1 fires on push to `^main$`. (Spent half an M7.f session
+building manual `scripts/deploy.sh` infra before noticing the trigger
+existed — see regrets.) `scripts/deploy.sh` kept as a manual escape
+hatch. Verified live on all four real receipts.
 
 **M7.e.4 (done): cleanup before deploy gate.** Deleted
 `tests/test_transcribe_with_google_genai.py` and

@@ -8,7 +8,6 @@ WORKDIR /build
 COPY Cargo.toml Cargo.lock* ./
 COPY src/ src/
 COPY generated/ generated/
-COPY fixtures/ fixtures/
 
 RUN cargo build --release \
     --bin reduce_extractions \
