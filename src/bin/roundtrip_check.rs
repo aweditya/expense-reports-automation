@@ -23,7 +23,7 @@ use expense_report_schema::extracted_receipt::ExtractedReceipt;
 fn main() -> ExitCode {
     let dir = Path::new(".scratch/spike");
     if !dir.exists() {
-        eprintln!("error: {} not found — run scripts/spike_extract.py first", dir.display());
+        eprintln!("error: {} not found — run scripts/extract_meal.py first", dir.display());
         return ExitCode::from(2);
     }
 

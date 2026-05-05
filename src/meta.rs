@@ -136,7 +136,7 @@ mod tests {
 
     #[test]
     fn wrapped_deserializes_python_extractor_output_shape() {
-        // Sample shape Python's spike_extract.py writes for a leaf.
+        // Sample shape Python's per-kind extractor writes for a leaf.
         let json = r#"{
             "value": 79.59,
             "_meta": {
@@ -182,7 +182,7 @@ mod tests {
     fn extractor_output_deserializes_into_transaction_line_item() {
         use crate::expense_report_model::ExpenseReportTransactionLinesItem;
 
-        // Inline JSON mirroring what scripts/spike_extract.py writes for one
+        // Inline JSON mirroring what scripts/extract_meal.py writes for one
         // line. Embedded literally so the test runs without depending on the
         // gitignored .scratch/ outputs.
         let json = r#"{

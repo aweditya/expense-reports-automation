@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""Acceptance check for the spike extractor on the three real receipts.
+"""Acceptance check for the per-kind extractors on real receipts.
 
 By default reads the JSON files already in `.scratch/spike/`. With `--run`,
-re-invokes the extractor against `receipts/{mels1.jpeg,mels2.jpeg,tamarine.png}`
-first. A real run costs three Gemini calls (~2 min) so this is a manual
-sanity script, not a CI test.
+re-invokes the extractor against the source images first. A real run costs
+one Gemini call per receipt (~30s each) so this is a manual sanity
+script, not a CI test.
 
-Per-receipt assertions are hand-coded based on observed M5.3 output.
-They cover the values where being wrong matters (date, total, venue,
-expense kind, alcohol presence). After the Phase-1 enum collapse
-`expense_type` is just `business_meal` for every meal receipt — alcohol
-presence is carried by the separate `has_alcohol_on_receipt` flag.
+Per-receipt assertions are hand-coded based on observed extractor output.
+They cover the values where being wrong matters (date, total, venue /
+origin / destination, expense kind, alcohol presence). After the Phase-1
+enum collapse `expense_type` is just `business_meal` for every meal
+receipt — alcohol presence is carried by the separate
+`has_alcohol_on_receipt` flag.
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-EXTRACTOR = REPO_ROOT / "scripts" / "spike_extract.py"
+EXTRACTOR = REPO_ROOT / "scripts" / "extract_meal.py"
 PYTHON = REPO_ROOT / ".venv" / "bin" / "python"
 
 
@@ -104,7 +105,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--run",
         action="store_true",
-        help="Re-invoke spike_extract.py before checking (3 Gemini calls; "
+        help="Re-invoke extract_meal.py before checking (3 Gemini calls; "
         "uses Application Default Credentials, run "
         "`gcloud auth application-default login` first).",
     )

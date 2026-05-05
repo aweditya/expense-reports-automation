@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""Single Gemini call extracts a transaction line from one receipt.
+"""Per-receipt Gemini extractor for the meal expense kind.
 
-Started as the M4 spike (no response_schema, free-form JSON, hand-inspected).
-M5.2 wired in `generated/response_schema_meal.json` so structural correctness
-is enforced by the SDK rather than the prompt.
+One Gemini call per receipt image, structured against
+`generated/response_schema_meal.json` so the SDK enforces shape. Other
+expense kinds get their own extractor scripts (see `extract_transport.py`)
+dispatched by `local_app_simple.py` based on the FA's per-file kind
+choice in the upload form.
+
+(Originally `spike_extract.py` from M4; renamed when the per-kind
+multi-extractor architecture landed in Phase 2.)
 
 Auth uses Application Default Credentials (ADC). Works on Cloud Run
 automatically via the metadata server. Locally, run once:

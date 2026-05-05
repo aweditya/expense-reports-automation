@@ -57,7 +57,7 @@ steps:
       - '--memory=2Gi'
       - '--no-cpu-throttling'
       - '--no-allow-unauthenticated'
-      # spike_extract.py needs the Vertex project ID. Cloud Run does NOT
+      # The per-kind extractors need the Vertex project ID. Cloud Run does NOT
       # auto-set $GOOGLE_CLOUD_PROJECT (despite some docs implying it
       # does — that's App Engine / Cloud Functions). $PROJECT_ID below
       # is the Cloud Build built-in for the build's project.

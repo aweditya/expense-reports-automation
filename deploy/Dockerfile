@@ -23,9 +23,10 @@ COPY --from=builder /build/target/release/reduce_extractions /usr/local/bin/
 COPY --from=builder /build/target/release/render_workbench_from_report /usr/local/bin/
 
 COPY scripts/ /app/scripts/
-# spike_extract.py reads the response schema from generated/ at runtime;
-# the rest of generated/ is already baked into the Rust binaries.
-COPY generated/response_schema_meal.json /app/generated/response_schema_meal.json
+# Per-kind extractors read response_schema_<kind>.json from generated/ at runtime;
+# the rest of generated/ is already baked into the Rust binaries. Glob lets
+# future per-kind schemas ship without a Dockerfile change.
+COPY generated/response_schema_*.json /app/generated/
 
 WORKDIR /app
 

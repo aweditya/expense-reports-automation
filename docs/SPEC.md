@@ -22,7 +22,7 @@ If a piece of code touches two layers' worth of concern, it is wrong.
 
 | # | Layer | Implemented in | Owns |
 |---|---|---|---|
-| 1 | **Extraction** | `scripts/spike_extract.py` | One Gemini call per uploaded document. Receipt image → typed JSON. |
+| 1 | **Extraction** | `scripts/extract_<kind>.py` (one per expense kind) | One Gemini call per uploaded document. Receipt image → typed JSON. The dispatcher in `local_app_simple.py` picks the script based on the FA's per-file kind choice in the upload form. |
 | 2 | **Derivation** | (inside extraction) | Fields a single document can yield from its own contents. No cross-document signal. |
 | 3 | **Reduction** | `src/reduce.rs` | Combines per-document JSONs into one `ExpenseReport`. Aggregations like `total_usd`, `transaction_date`, derived `category` + confidence. |
 | 4 | **Validation** | `src/validator_typed.rs` (+ `src/validator.rs`) | Checks the assembled `ExpenseReport` against business rules. Produces `ValidationReport` (issues only — never mutates the report). |
@@ -51,7 +51,7 @@ graph TB
     subgraph CR["Cloud Run container"]
         subgraph Py["Python"]
             Flask["scripts/local_app_simple.py<br/>Flask + gunicorn"]
-            Extract["scripts/spike_extract.py<br/>Gemini 3 Flash + response_schema"]
+            Extract["scripts/extract_meal.py<br/>Gemini 3 Flash + response_schema"]
         end
         subgraph Rust["Rust binaries"]
             Reduce["reduce_extractions<br/>(uses src/reduce.rs)"]
@@ -114,7 +114,7 @@ sequenceDiagram
     participant Browser
     participant IAP as Google IAP
     participant Flask as Flask (gunicorn)
-    participant Extract as spike_extract.py
+    participant Extract as extract_meal.py
     participant Gemini as Gemini API
     participant Reduce as reduce_extractions (Rust)
     participant Render as render_workbench_from_report (Rust)
@@ -164,7 +164,7 @@ flowchart TD
     Start([POST /upload]) --> Save[Save raw files to disk]
     Save --> Loop{More files?}
 
-    Loop -->|yes| Ext[Run spike_extract.py on next file]
+    Loop -->|yes| Ext[Run extract_meal.py on next file]
     Ext --> ExtOK{Exit 0?}
     ExtOK -->|no| Err1[Raise PipelineError step=extract]
     ExtOK -->|yes| Loop
@@ -209,7 +209,7 @@ graph LR
             subgraph Process["Inside the container"]
                 Gunicorn["gunicorn<br/>1 worker × 8 threads<br/>:8080"]
                 Flask2["Flask app<br/>local_app_simple:app"]
-                PyExt["spike_extract.py<br/>(subprocess per file)"]
+                PyExt["extract_meal.py<br/>(subprocess per file)"]
                 RustBin["reduce_extractions<br/>render_workbench_from_report<br/>(prebuilt at /usr/local/bin)"]
                 Scratch["/app/.scratch/uploads/<br/>(ephemeral)"]
             end
@@ -337,8 +337,8 @@ A cheat-sheet for "which file does X belong in?"
 
 | Need to … | Lives in | Layer |
 |---|---|---|
-| Add a per-document field Gemini extracts | `schema.yaml` + `scripts/spike_extract.py` (prompt) + regenerate | Extraction |
-| Compute a per-receipt value from other per-receipt values | `scripts/spike_extract.py` (in the same call) or post-process in Python before write | Derivation |
+| Add a per-document field Gemini extracts | `schema.yaml` + `scripts/extract_<kind>.py` (prompt) + regenerate | Extraction |
+| Compute a per-receipt value from other per-receipt values | `scripts/extract_<kind>.py` (in the same call) or post-process in Python before write | Derivation |
 | Aggregate across receipts (sum, earliest, derived enum) | `src/reduce.rs` | Reduction |
 | Add a business rule (e.g. "X required when Y") | `schema.yaml` (`required:` clause, regenerates `validation_rules.rs`) and/or hand-coded in `src/validator_typed.rs` | Validation |
 | Change how a field looks on the workbench | `src/workbench_simple.rs` + `src/workbench_simple.css` | Display |
@@ -366,9 +366,9 @@ A cheat-sheet for "which file does X belong in?"
 | Reduction binary | `src/bin/reduce_extractions.rs` |
 | Render binary | `src/bin/render_workbench_from_report.rs` |
 | Round-trip contract check | `src/bin/roundtrip_check.rs` |
-| Python extractor (Gemini call) | `scripts/spike_extract.py` |
+| Python extractor (Gemini call) | `scripts/extract_meal.py` (and future per-kind: `extract_transport.py`, etc.) |
 | Flask + gunicorn entry point | `scripts/local_app_simple.py` |
-| Acceptance harness | `scripts/spike_acceptance_check.py` |
+| Acceptance harness | `scripts/acceptance_check.py` |
 | Manual deploy escape hatch | `scripts/deploy.sh` |
 | Cloud Build pipeline | `deploy/cloudbuild.yaml` |
 | Container | `deploy/Dockerfile` |

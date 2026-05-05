@@ -1,9 +1,10 @@
 //! Reduce a directory of per-receipt extraction JSONs into one ExpenseReport.
 //!
 //! Reads every `*.json` file under `--in`, deserializes each as a
-//! single-element list of `ExtractedReceipt` (the shape Python's
-//! spike_extract.py writes), and runs the reduction library over the
-//! collected receipts. Writes the result to `--out` as pretty JSON.
+//! single-element list of `ExtractedReceipt` (the shape the per-kind
+//! extractor scripts write — extract_meal.py / extract_transport.py /
+//! etc.), and runs the reduction library over the collected receipts.
+//! Writes the result to `--out` as pretty JSON.
 //!
 //! Pure I/O wrapper around `expense_report_schema::reduce`. All cross-
 //! document logic lives in the library; this binary just walks the
@@ -59,7 +60,7 @@ fn read_receipts(dir: &Path) -> Result<Vec<ExtractedReceipt>, String> {
         if parsed.is_empty() {
             return Err(format!("empty array in {}", path.display()));
         }
-        // spike_extract.py writes a single-element list per file.
+        // Per-kind extractors write a single-element list per file.
         receipts.push(parsed.into_iter().next().unwrap());
     }
     Ok(receipts)

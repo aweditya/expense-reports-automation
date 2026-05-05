@@ -1,7 +1,7 @@
 """Minimal Flask HTTP server for the redesigned expense-report pipeline.
 
 One POST endpoint that takes uploaded receipts, runs:
-  spike_extract per file → reduce_extractions → render_workbench
+  extract_meal per file → reduce_extractions → render_workbench
 and returns the rendered HTML synchronously. No async jobs, no session
 state, no editable inputs (those come post-M7).
 
@@ -33,7 +33,7 @@ from flask import Flask, abort, redirect, request, send_from_directory
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PYTHON = Path(sys.executable)
-SPIKE_EXTRACT = REPO_ROOT / "scripts" / "spike_extract.py"
+EXTRACT_MEAL = REPO_ROOT / "scripts" / "extract_meal.py"
 UPLOADS_ROOT = REPO_ROOT / ".scratch" / "uploads"
 
 # Cloud Run sets PORT; locally default 8765 (matches existing app's muscle memory).
@@ -161,7 +161,7 @@ def extract_all(saved_paths: list[Path], extractions_dir: Path) -> list[Path]:
         run_subprocess(
             [
                 str(PYTHON),
-                str(SPIKE_EXTRACT),
+                str(EXTRACT_MEAL),
                 "--image", str(src),
                 "--output", str(out_path),
             ],

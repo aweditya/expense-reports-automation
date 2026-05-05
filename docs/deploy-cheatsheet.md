@@ -55,13 +55,13 @@ global region only shows manually submitted builds.
 
 ```bash
 gcloud auth login                               # gcloud CLI commands
-gcloud auth application-default login           # ADC for spike_extract.py local runs
+gcloud auth application-default login           # ADC for the per-kind extractors (extract_meal.py, etc.) local runs
 gcloud config set project soe-agile-agents
 gcloud config set run/region us-west1
 gcloud config set builds/region global          # cloudbuild.yaml uses global
 ```
 
-When ADC isn't set up locally, `spike_extract.py` 401s and it's not
+When ADC isn't set up locally, the per-kind extractors 401 and it's not
 obvious whether the bug is auth or code. Do this first.
 
 ## Verify the deployed app from the CLI

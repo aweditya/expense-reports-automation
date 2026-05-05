@@ -7,7 +7,8 @@ Stanford expense-report extraction pipeline. End-to-end flow:
 1. FA uploads receipts at the deployed Cloud Run URL.
 2. `scripts/local_app_simple.py` (Flask + gunicorn) saves them and runs
    the pipeline per upload:
-   - **Extract** (Python): `scripts/spike_extract.py` makes one Gemini
+   - **Extract** (Python): a per-kind extractor (`scripts/extract_meal.py`,
+     `scripts/extract_transport.py`, …) makes one Gemini
      call per receipt with a structured `response_schema_meal.json` and
      writes one typed JSON per receipt.
    - **Reduce** (Rust): the `reduce_extractions` binary aggregates the
@@ -87,7 +88,7 @@ History of how this came together is in `docs/redesign-plan.md` and
 - `python3 -m unittest discover -s tests -p "test_*.py"` runs the
   Python suite (matches what Cloud Build runs; currently just the
   cloudbuild.yaml shape check).
-- `./.venv/bin/python scripts/spike_acceptance_check.py` runs the
+- `./.venv/bin/python scripts/acceptance_check.py` runs the
   end-to-end acceptance harness against four real receipts in
   `receipts/`. By default it checks the cached `.scratch/spike/*.json`;
   pass `--run` to re-invoke Gemini (~3 min, costs API calls).
@@ -132,7 +133,7 @@ History of how this came together is in `docs/redesign-plan.md` and
 
 ```bash
 gcloud auth login                               # gcloud CLI commands
-gcloud auth application-default login           # ADC for spike_extract.py
+gcloud auth application-default login           # ADC for the per-kind extractors (extract_meal.py, etc.)
 gcloud config set project soe-agile-agents
 gcloud config set run/region us-west1
 gcloud config set builds/region global
