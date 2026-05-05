@@ -76,9 +76,9 @@ graph TB
     Flask -->|per file| Extract
     Extract -->|HTTPS| Vertex
     Vertex -->|JSON| Extract
-    Extract -->|.scratch/uploads/{id}/extractions/*.json| Flask
+    Extract -->|extractions/*.json| Flask
     Flask -->|spawns| Reduce
-    Reduce -->|.scratch/uploads/{id}/reduced/report.json| Flask
+    Reduce -->|reduced/report.json| Flask
     Flask -->|spawns| Render
     Render -->|workbench.html| Flask
     Flask -->|303 redirect| UI
