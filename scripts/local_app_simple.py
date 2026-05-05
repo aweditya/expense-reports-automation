@@ -1,7 +1,8 @@
 """Minimal Flask HTTP server for the redesigned expense-report pipeline.
 
-One POST endpoint that takes uploaded receipts, runs:
-  extract_meal per file → reduce_extractions → render_workbench
+One POST endpoint that takes uploaded receipts (each tagged with a
+kind dropdown the FA picks alongside the file), runs:
+  extract_<kind> per file → reduce_extractions → render_workbench
 and returns the rendered HTML synchronously. No async jobs, no session
 state, no editable inputs (those come post-M7).
 
@@ -33,8 +34,15 @@ from flask import Flask, abort, redirect, request, send_from_directory
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PYTHON = Path(sys.executable)
-EXTRACT_MEAL = REPO_ROOT / "scripts" / "extract_meal.py"
 UPLOADS_ROOT = REPO_ROOT / ".scratch" / "uploads"
+
+# Per-kind extractor scripts. The upload form's per-file dropdown maps
+# directly to the keys here; the dispatcher (extract_all) routes each
+# file to the matching script.
+EXTRACTORS: dict[str, Path] = {
+    "meal": REPO_ROOT / "scripts" / "extract_meal.py",
+    "transport": REPO_ROOT / "scripts" / "extract_transport.py",
+}
 
 # Cloud Run sets PORT; locally default 8765 (matches existing app's muscle memory).
 HOST = os.environ.get("HOST", "0.0.0.0")
@@ -81,9 +89,26 @@ def upload_form() -> str:
 
 @app.post("/upload")
 def upload():
-    files = request.files.getlist("receipts")
-    files = [f for f in files if f.filename]
-    if not files:
+    # Form fields are indexed: file_0 / kind_0, file_1 / kind_1, ...
+    # The form JS appends a new (file, kind) pair every time the FA
+    # clicks "+ Add another file."
+    pairs: list[tuple] = []  # (FileStorage, kind_str)
+    for key in sorted(request.files):
+        if not key.startswith("file_"):
+            continue
+        idx = key[len("file_"):]
+        f = request.files[key]
+        if not f or not f.filename:
+            continue
+        kind = request.form.get(f"kind_{idx}", "").strip()
+        if not kind:
+            return (f"Missing kind for file {f.filename!r}.", 400)
+        if kind not in EXTRACTORS:
+            return (f"Unknown kind {kind!r} for file {f.filename!r} "
+                    f"(known: {sorted(EXTRACTORS)}).", 400)
+        pairs.append((f, kind))
+
+    if not pairs:
         return ("No files uploaded.", 400)
 
     upload_id = generate_upload_id()
@@ -97,8 +122,8 @@ def upload():
     extractions_dir.mkdir(parents=True, exist_ok=True)
     reduced_path.parent.mkdir(parents=True, exist_ok=True)
 
-    saved_paths = save_uploaded_files(files, files_dir)
-    extract_all(saved_paths, extractions_dir)
+    saved = save_uploaded_files(pairs, files_dir)
+    extract_all(saved, extractions_dir)
     reduce(extractions_dir, reduced_path)
     render_workbench(reduced_path, extractions_dir, workbench_path)
 
@@ -137,35 +162,50 @@ def serve_upload_file(upload_id: str, filename: str):
 
 # ─── Pipeline orchestration ────────────────────────────────────────────────
 
-def save_uploaded_files(files, dest_dir: Path) -> list[Path]:
-    """Save each uploaded file to dest_dir under a deduped, sanitized name."""
+def save_uploaded_files(pairs, dest_dir: Path) -> list[tuple[Path, str]]:
+    """Save each uploaded file to dest_dir under a deduped, sanitized name.
+    Threads each file's kind through unchanged — the dispatcher (extract_all)
+    needs it to pick the right extractor."""
     seen: set[str] = set()
-    out: list[Path] = []
-    for f in files:
+    out: list[tuple[Path, str]] = []
+    for f, kind in pairs:
         name = dedupe(sanitize_filename(f.filename), seen)
         path = dest_dir / name
         f.save(str(path))
-        out.append(path)
+        out.append((path, kind))
     return out
 
 
-def extract_all(saved_paths: list[Path], extractions_dir: Path) -> list[Path]:
-    """Phase 1: sequential per-file extraction.
-    To parallelize later: replace this body with a ThreadPoolExecutor over
-    the same call. Nothing downstream cares — the contract is
-    list[input paths] -> list[output JSON paths].
+def extract_all(
+    saved: list[tuple[Path, str]], extractions_dir: Path
+) -> list[Path]:
+    """Phase 1: sequential per-file extraction. Each file routes to the
+    extractor matching its FA-supplied kind (meal, transport, …).
+    To parallelize later: replace this body with a ThreadPoolExecutor
+    over the same call. Nothing downstream cares — the contract is
+    list[(input path, kind)] -> list[output JSON paths].
     """
     out: list[Path] = []
-    for src in saved_paths:
+    for src, kind in saved:
+        extractor = EXTRACTORS.get(kind)
+        if extractor is None:
+            # Should be unreachable — /upload validates kind before saving —
+            # but raise a PipelineError rather than crash so the FA sees a
+            # friendly page instead of a Flask traceback.
+            raise PipelineError(
+                step="extract",
+                detail=f"unknown kind {kind!r} for {src.name}",
+                filename=src.name,
+            )
         out_path = extractions_dir / f"{src.stem}.json"
         run_subprocess(
             [
                 str(PYTHON),
-                str(EXTRACT_MEAL),
+                str(extractor),
                 "--image", str(src),
                 "--output", str(out_path),
             ],
-            label=f"extract {src.name}",
+            label=f"extract {kind} {src.name}",
             filename=src.name,
         )
         out.append(out_path)
@@ -256,16 +296,22 @@ UPLOAD_FORM_HTML = """\
 <style>
   body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
          background:#f6f7f9; color:#1a1d1f; }
-  .shell { max-width:560px; margin:80px auto; padding:32px 28px; background:#fff;
+  .shell { max-width:600px; margin:80px auto; padding:32px 28px; background:#fff;
            border:1px solid #e5e7eb; border-radius:8px; }
   .eyebrow { margin:0 0 4px; font-size:11px; font-weight:600; text-transform:uppercase;
              letter-spacing:.08em; color:#6b7280; }
   h1 { margin:0 0 16px; font-size:24px; font-weight:600; }
   p  { margin:0 0 16px; color:#4b5563; font-size:14px; line-height:1.5; }
-  input[type=file] { display:block; margin:16px 0 24px; }
+  .file-row { display:flex; gap:10px; align-items:center; margin:0 0 12px; }
+  .file-row input[type=file] { flex:1; min-width:0; font-size:13px; }
+  .file-row select { padding:6px 8px; border:1px solid #d1d5db; border-radius:4px;
+                     font-size:13px; background:#fff; color:#1a1d1f; cursor:pointer; }
+  .actions { display:flex; gap:12px; align-items:center; margin-top:20px; }
   button { background:#1a1d1f; color:#fff; padding:10px 20px; border:0; border-radius:6px;
            font-size:14px; font-weight:500; cursor:pointer; }
   button:hover { background:#374151; }
+  button.secondary { background:#fff; color:#1a1d1f; border:1px solid #d1d5db; }
+  button.secondary:hover { background:#f3f4f6; }
   .note { font-size:12px; color:#6b7280; margin-top:16px; }
 </style>
 </head>
@@ -273,16 +319,46 @@ UPLOAD_FORM_HTML = """\
 <div class="shell">
   <p class="eyebrow">Stanford Expense Report</p>
   <h1>Upload Receipts</h1>
-  <p>Drop in receipts (PDF, JPEG, PNG). The system extracts the fields,
-     reduces them into a single report, and shows you what's filled and
-     what still needs your input.</p>
+  <p>Pick each receipt (PDF, JPEG, PNG) and tell the system what kind of
+     document it is. We'll extract the fields, reduce them into a single
+     report, and show you what's filled and what still needs your input.</p>
   <form method="post" action="/upload" enctype="multipart/form-data">
-    <input type="file" name="receipts" multiple
-           accept="image/png,image/jpeg,application/pdf">
-    <button type="submit">Process Receipts</button>
+    <div id="file-rows">
+      <div class="file-row">
+        <input type="file" name="file_0" required
+               accept="image/png,image/jpeg,application/pdf">
+        <select name="kind_0" required>
+          <option value="meal">Meal Receipt</option>
+          <option value="transport">Ground Transport</option>
+        </select>
+      </div>
+    </div>
+    <div class="actions">
+      <button type="button" class="secondary" onclick="addFileRow()">+ Add another file</button>
+      <button type="submit">Process Receipts</button>
+    </div>
   </form>
   <p class="note">Please don't refresh the page while processing.</p>
 </div>
+<script>
+  // Each row is one (file, kind) pair. Indexed names match the server-side
+  // parser in /upload (file_0/kind_0, file_1/kind_1, …).
+  let rowCount = 1;
+  function addFileRow() {
+    const row = document.createElement('div');
+    row.className = 'file-row';
+    row.innerHTML = `
+      <input type="file" name="file_${rowCount}" required
+             accept="image/png,image/jpeg,application/pdf">
+      <select name="kind_${rowCount}" required>
+        <option value="meal">Meal Receipt</option>
+        <option value="transport">Ground Transport</option>
+      </select>
+    `;
+    document.getElementById('file-rows').appendChild(row);
+    rowCount++;
+  }
+</script>
 </body>
 </html>
 """

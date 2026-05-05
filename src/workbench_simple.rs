@@ -11,6 +11,7 @@
 
 use crate::expense_report_model::{
     ExpenseReport, ExpenseReportGeneralInformation, ExpenseReportTransactionLinesItem,
+    ExpenseReportTransactionLinesItemGroundTransportDetails,
     ExpenseReportTransactionLinesItemMealDetails, ExpenseReportTransactionSummary,
 };
 use crate::extracted_receipt::ExtractedReceipt;
@@ -376,6 +377,14 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
         html.push_str("</div>\n");
     }
 
+    if let Some(gt) = &line.ground_transport_details {
+        html.push_str("<h4 class=\"subsection-title\">Ground Transport Details</h4>\n");
+        html.push_str("<div class=\"field-grid\">\n");
+        let gp = format!("expense_report.transaction_lines[{idx}].ground_transport_details");
+        render_ground_transport_details(html, gt, &gp);
+        html.push_str("</div>\n");
+    }
+
     html.push_str("</div>\n</details>\n");
 }
 
@@ -384,6 +393,16 @@ fn render_meal_details(html: &mut String, meal: &ExpenseReportTransactionLinesIt
     field_card_optional_money(html, "Tip", meal.tip_amount.value, &format!("{path}.tip_amount"));
     field_card_optional_money(html, "Alcohol", meal.alcohol_amount.value, &format!("{path}.alcohol_amount"));
     field_card_text(html, "Has Alcohol", &meal.has_alcohol_on_receipt, &format!("{path}.has_alcohol_on_receipt"), |b| if *b { "yes".into() } else { "no".into() });
+}
+
+fn render_ground_transport_details(
+    html: &mut String,
+    gt: &ExpenseReportTransactionLinesItemGroundTransportDetails,
+    path: &str,
+) {
+    field_card_text(html, "Service Provider", &gt.service_provider, &format!("{path}.service_provider"), |s: &String| s.clone());
+    field_card_text(html, "Origin", &gt.origin, &format!("{path}.origin"), |s: &String| s.clone());
+    field_card_text(html, "Destination", &gt.destination, &format!("{path}.destination"), |s: &String| s.clone());
 }
 
 // ─── Source documents (bottom) ─────────────────────────────────────────────

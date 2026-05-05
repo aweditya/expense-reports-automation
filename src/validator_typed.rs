@@ -16,6 +16,7 @@ use crate::expense_report_model::{
     ExpenseReport, ExpenseReportGeneralInformation, ExpenseReportGeneralInformationBusinessPurpose,
     ExpenseReportGeneralInformationPayee, ExpenseReportGeneralInformationStudentCertification,
     ExpenseReportTransactionLinesItem, ExpenseReportTransactionLinesItemCommon,
+    ExpenseReportTransactionLinesItemGroundTransportDetails,
     ExpenseReportTransactionLinesItemMealDetails, ExpenseReportTransactionSummary,
 };
 use crate::meta::Wrapped;
@@ -124,9 +125,17 @@ fn walk_transaction_lines(report: &ExpenseReport, issues: &mut Vec<ValidationIss
         if let Some(meal) = &line.meal_details {
             walk_meal_details(meal, &join(&base, "meal_details"), issues);
         }
-        // Other detail blocks (airfare/lodging/etc.) intentionally not walked
-        // here — they're absent for our meal-only corpus today, and adding
-        // walks for them is mechanical work for when we have those receipts.
+        if let Some(gt) = &line.ground_transport_details {
+            walk_ground_transport_details(
+                gt,
+                &join(&base, "ground_transport_details"),
+                issues,
+            );
+        }
+        // Remaining detail blocks (airfare / lodging / car_rental /
+        // conference_registration / gift / human_subject) intentionally
+        // not walked yet — phases beyond Phase 2 add them when we have
+        // real receipts to ground the schema in.
     }
 }
 
@@ -168,6 +177,21 @@ fn walk_meal_details(
     check_wrapped(&join(base, "alcohol_amount"), &meal.alcohol_amount, issues);
     check_wrapped(&join(base, "tip_amount"), &meal.tip_amount, issues);
     check_wrapped(&join(base, "has_alcohol_on_receipt"), &meal.has_alcohol_on_receipt, issues);
+}
+
+fn walk_ground_transport_details(
+    gt: &ExpenseReportTransactionLinesItemGroundTransportDetails,
+    base: &str,
+    issues: &mut Vec<ValidationIssue>,
+) {
+    check_wrapped(&join(base, "origin"), &gt.origin, issues);
+    check_wrapped(&join(base, "destination"), &gt.destination, issues);
+    check_wrapped(&join(base, "service_provider"), &gt.service_provider, issues);
+    // missing_receipt is T1 (FA-set; bare Option<bool>). The schema marks
+    // it required, but it stays None in the per-receipt extraction — the
+    // FA fills it in the workbench / portal. check_optional emits
+    // MissingRequiredField when None on a required field.
+    check_optional(&join(base, "missing_receipt"), &gt.missing_receipt, issues);
 }
 
 // ─── Leaf checks ───────────────────────────────────────────────────────────
