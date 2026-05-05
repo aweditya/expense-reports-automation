@@ -98,9 +98,9 @@ def common_block_schema(expense_type_values: list[str]) -> dict:
                     "enum": ["conference", "research_collaboration", "fieldwork", "other"],
                 }
             ),
-            # source_documents is intentionally NOT in the per-receipt
+            # source_document is intentionally NOT in the per-receipt
             # schema — the FA gave us the file (we already know its name and
-            # type). Reduction populates source_documents from the input
+            # type). Reduction populates source_document from the input
             # context. See Architecture B in docs/redesign-plan.md.
         },
         "required": [

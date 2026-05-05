@@ -208,7 +208,8 @@ def main() -> int:
         return 1
 
     # Inject source_filename — system context, not extracted by Gemini.
-    # Reduction reads this to populate ExpenseReport.source_documents.
+    # Reduction reads this to populate ExpenseReport.transaction_lines[]
+    # .common.source_document.filename.
     if isinstance(parsed, list):
         for entry in parsed:
             if isinstance(entry, dict):

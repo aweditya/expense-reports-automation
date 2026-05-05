@@ -23,7 +23,7 @@ pub struct ExtractedReceipt {
     /// "mjsushi.jpeg"). Injected by the extractor post-Gemini-call from the
     /// input filename — Gemini doesn't extract this from receipt content.
     /// Reduction uses this to populate
-    /// ExpenseReport.transaction_lines[].common.source_documents[].filename.
+    /// ExpenseReport.transaction_lines[].common.source_document.filename.
     #[serde(default)]
     pub source_filename: String,
     /// Schema-shaped fields. `#[serde(flatten)]` reads `common`/`meal_details`/etc.

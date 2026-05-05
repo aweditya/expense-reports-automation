@@ -468,6 +468,12 @@ def generate_rust_model(root: SchemaNode, schema_version: str) -> str:
                 # the round-trip emits `{value: null, _meta: {default}}`
                 # for every absent leaf, which fails the round-trip check.
                 lines.append('    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]')
+            else:
+                # Bare object sub-structs (e.g. source_document). Generated
+                # types derive Default, so missing-from-JSON deserializes
+                # as the empty default. Reduction populates them before
+                # serialize, so the field is always present on the way out.
+                lines.append("    #[serde(default)]")
             lines.append(f"    pub {identifier}: {field_type},")
         lines.append("")
         lines.append("}")

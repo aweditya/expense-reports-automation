@@ -328,7 +328,7 @@ impl core::fmt::Display for ExpenseReportTransactionLinesItemCommonForeignActivi
 /// Source tier: T1
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeEnum {
+pub enum ExpenseReportTransactionLinesItemCommonSourceDocumentDocumentTypeEnum {
     #[default]
     Receipt,
     BookingConfirmation,
@@ -339,7 +339,7 @@ pub enum ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeE
     Other,
 }
 
-impl ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeEnum {
+impl ExpenseReportTransactionLinesItemCommonSourceDocumentDocumentTypeEnum {
     pub const fn as_str(&self) -> &'static str {
         match self {
             Self::Receipt => "receipt",
@@ -353,7 +353,7 @@ impl ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeEnum 
     }
 }
 
-impl core::str::FromStr for ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeEnum {
+impl core::str::FromStr for ExpenseReportTransactionLinesItemCommonSourceDocumentDocumentTypeEnum {
     type Err = &'static str;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
@@ -370,7 +370,7 @@ impl core::str::FromStr for ExpenseReportTransactionLinesItemCommonSourceDocumen
     }
 }
 
-impl core::fmt::Display for ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeEnum {
+impl core::fmt::Display for ExpenseReportTransactionLinesItemCommonSourceDocumentDocumentTypeEnum {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str(self.as_str())
     }
@@ -737,6 +737,7 @@ pub struct ExpenseReportGeneralInformation {
     pub category: Wrapped<ExpenseReportGeneralInformationCategoryEnum>,
     ///  Person being reimbursed
     /// Source tier: T3
+    #[serde(default)]
     pub payee: ExpenseReportGeneralInformationPayee,
     ///  Defaults to 'no' unless explicitly requested
     /// Source tier: T1
@@ -749,6 +750,7 @@ pub struct ExpenseReportGeneralInformation {
     ///  Structured purpose statement entered by the FA. First 30 chars of the combined text
     /// serve as a lookup key.
     /// Source tier: T1
+    #[serde(default)]
     pub business_purpose: ExpenseReportGeneralInformationBusinessPurpose,
     ///  Format: <lab_name> + <Foreign Expenses | Domestic Expenses>
     /// Source tier: T3
@@ -758,6 +760,7 @@ pub struct ExpenseReportGeneralInformation {
     ///  At least one reason must be selected. Determines required approvals.
     /// Depends on:  general_information.payee.affiliation
     /// Source tier: T3
+    #[serde(default)]
     pub student_certification: ExpenseReportGeneralInformationStudentCertification,
     ///  Faculty member or approver name
     /// Source tier: T1
@@ -788,9 +791,11 @@ pub struct ExpenseReportTransactionSummary {
 
 }
 
+///  Reference to the uploaded document this line was extracted from. Filled by the extractor
+/// from the same document that produced the line's other fields.
 /// Source tier: T3
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
-pub struct ExpenseReportTransactionLinesItemCommonSourceDocumentsItem {
+pub struct ExpenseReportTransactionLinesItemCommonSourceDocument {
     ///  Filename the FA uploaded — system context, not extracted.
     /// Source tier: T1
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -798,7 +803,7 @@ pub struct ExpenseReportTransactionLinesItemCommonSourceDocumentsItem {
     ///  Document kind chosen by the FA at upload time.
     /// Source tier: T1
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub document_type: Option<ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeEnum>,
+    pub document_type: Option<ExpenseReportTransactionLinesItemCommonSourceDocumentDocumentTypeEnum>,
 
 }
 
@@ -848,11 +853,11 @@ pub struct ExpenseReportTransactionLinesItemCommon {
     /// Infer from:  Conference registration → 'conference'; otherwise from context
     #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub foreign_activity_type: Wrapped<ExpenseReportTransactionLinesItemCommonForeignActivityTypeEnum>,
-    ///  References to uploaded documents supporting this line. Filled by the extractor from the
-    /// same documents that produced the line's other fields.
+    ///  Reference to the uploaded document this line was extracted from. Filled by the
+    /// extractor from the same document that produced the line's other fields.
     /// Source tier: T3
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub source_documents: Vec<ExpenseReportTransactionLinesItemCommonSourceDocumentsItem>,
+    #[serde(default)]
+    pub source_document: ExpenseReportTransactionLinesItemCommonSourceDocument,
 
 }
 
@@ -931,6 +936,7 @@ pub struct ExpenseReportTransactionLinesItemAirfareDetails {
     pub round_trip: Wrapped<bool>,
     ///  System-generated if not provided by payee
     /// Source tier: T2
+    #[serde(default)]
     pub price_comparison: ExpenseReportTransactionLinesItemAirfareDetailsPriceComparison,
 
 }
@@ -1060,6 +1066,7 @@ pub struct ExpenseReportTransactionLinesItemConferenceRegistrationDetails {
     ///  Which meals the conference provides, by day. Feeds into per diem deductions.
     /// Source tier: T3
     /// Infer from:  Conference program/schedule (e.g., 'lunch provided to all attendees')
+    #[serde(default)]
     pub meals_included: ExpenseReportTransactionLinesItemConferenceRegistrationDetailsMealsIncluded,
 
 }
@@ -1178,6 +1185,7 @@ pub struct ExpenseReportTransactionLinesItemHumanSubjectDetails {
 ///  One entry per distinct expense
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItem {
+    #[serde(default)]
     pub common: ExpenseReportTransactionLinesItemCommon,
     /// Conditionally required when:  expense_type in [airfare_domestic, airfare_foreign]
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1335,7 +1343,9 @@ pub struct ExpenseReportAllocationAndApprovers {
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReport {
+    #[serde(default)]
     pub general_information: ExpenseReportGeneralInformation,
+    #[serde(default)]
     pub transaction_summary: ExpenseReportTransactionSummary,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transaction_lines: Option<Vec<ExpenseReportTransactionLinesItem>>,
@@ -1344,6 +1354,7 @@ pub struct ExpenseReport {
     ///  Placeholder — details to be filled after FA consultation
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mileage_expenses: Option<Vec<ExpenseReportMileageExpensesItem>>,
+    #[serde(default)]
     pub allocation_and_approvers: ExpenseReportAllocationAndApprovers,
 
 }

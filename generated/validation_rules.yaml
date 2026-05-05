@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-generated_at_utc: '2026-05-05T17:49:06+00:00'
+generated_at_utc: '2026-05-05T20:28:34+00:00'
 field_rules:
 - path: expense_report
   node_kind: object
@@ -616,10 +616,10 @@ field_rules:
   description: null
   infer_from: "Conference registration \u2192 'conference'; otherwise from context"
   validation: null
-- path: expense_report.transaction_lines[].common.source_documents
-  node_kind: array
-  schema_type: array
-  rust_type: Vec<ExpenseReportTransactionLinesItemCommonSourceDocumentsItem>
+- path: expense_report.transaction_lines[].common.source_document
+  node_kind: object
+  schema_type: object
+  rust_type: ExpenseReportTransactionLinesItemCommonSourceDocument
   required: true
   required_expression: null
   source: T3
@@ -627,25 +627,11 @@ field_rules:
   depends_on: []
   allowed_values: []
   default: null
-  description: References to uploaded documents supporting this line. Filled by the extractor from the same documents that
-    produced the line's other fields.
+  description: Reference to the uploaded document this line was extracted from. Filled by the extractor from the same document
+    that produced the line's other fields.
   infer_from: null
   validation: null
-- path: expense_report.transaction_lines[].common.source_documents[]
-  node_kind: object
-  schema_type: object
-  rust_type: ExpenseReportTransactionLinesItemCommonSourceDocumentsItem
-  required: false
-  required_expression: null
-  source: null
-  effective_source: T3
-  depends_on: []
-  allowed_values: []
-  default: null
-  description: null
-  infer_from: null
-  validation: null
-- path: expense_report.transaction_lines[].common.source_documents[].filename
+- path: expense_report.transaction_lines[].common.source_document.filename
   node_kind: field
   schema_type: string
   rust_type: String
@@ -659,10 +645,10 @@ field_rules:
   description: "Filename the FA uploaded \u2014 system context, not extracted."
   infer_from: null
   validation: null
-- path: expense_report.transaction_lines[].common.source_documents[].document_type
+- path: expense_report.transaction_lines[].common.source_document.document_type
   node_kind: field
   schema_type: enum
-  rust_type: ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeEnum
+  rust_type: ExpenseReportTransactionLinesItemCommonSourceDocumentDocumentTypeEnum
   required: false
   required_expression: null
   source: T1

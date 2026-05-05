@@ -1035,11 +1035,11 @@ mod tests {
                             ("country_of_activity", text("Singapore")),
                             ("foreign_activity_type", text("conference")),
                             (
-                                "source_documents",
-                                ReportValue::array([ReportValue::object([
+                                "source_document",
+                                ReportValue::object([
                                     ("filename", text("taxi.png")),
                                     ("document_type", text("receipt")),
-                                ])]),
+                                ]),
                             ),
                         ]),
                     ),

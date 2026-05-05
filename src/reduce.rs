@@ -13,8 +13,8 @@
 
 use crate::expense_report_model::{
     ExpenseReport, ExpenseReportGeneralInformationCategoryEnum, ExpenseReportTransactionLinesItem,
-    ExpenseReportTransactionLinesItemCommonSourceDocumentsItem,
-    ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeEnum, IsoDate,
+    ExpenseReportTransactionLinesItemCommonSourceDocument,
+    ExpenseReportTransactionLinesItemCommonSourceDocumentDocumentTypeEnum, IsoDate,
 };
 use crate::extracted_receipt::ExtractedReceipt;
 use crate::meta::{ConfidenceLevel, EvidenceKind, EvidenceReference, FieldMetadata, Wrapped};
@@ -143,7 +143,7 @@ fn derived_meta(confidence: ConfidenceLevel, origin: &str) -> FieldMetadata {
 }
 
 /// Build the `transaction_lines` array. For each receipt: take the
-/// schema-shaped line, attach a single `source_documents` entry naming the
+/// schema-shaped line, attach the single `source_document` naming the
 /// FA-uploaded file. The line is otherwise passed through unchanged —
 /// per-document fields are already populated by the extractor.
 pub fn reduce_transaction_lines(
@@ -153,14 +153,12 @@ pub fn reduce_transaction_lines(
         .iter()
         .map(|r| {
             let mut line = r.line.clone();
-            line.common.source_documents = vec![
-                ExpenseReportTransactionLinesItemCommonSourceDocumentsItem {
-                    filename: Some(r.source_filename.clone()),
-                    document_type: Some(
-                        ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeEnum::Receipt,
-                    ),
-                },
-            ];
+            line.common.source_document = ExpenseReportTransactionLinesItemCommonSourceDocument {
+                filename: Some(r.source_filename.clone()),
+                document_type: Some(
+                    ExpenseReportTransactionLinesItemCommonSourceDocumentDocumentTypeEnum::Receipt,
+                ),
+            };
             line
         })
         .collect()
@@ -410,13 +408,12 @@ mod tests {
         let receipts = vec![make_receipt("mjsushi.jpeg", "2026-05-02", 79.59, Some("USD"))];
         let lines = reduce_transaction_lines(&receipts);
         assert_eq!(lines.len(), 1);
-        let sources = &lines[0].common.source_documents;
-        assert_eq!(sources.len(), 1);
-        assert_eq!(sources[0].filename.as_deref(), Some("mjsushi.jpeg"));
+        let source = &lines[0].common.source_document;
+        assert_eq!(source.filename.as_deref(), Some("mjsushi.jpeg"));
         assert_eq!(
-            sources[0].document_type,
+            source.document_type,
             Some(
-                ExpenseReportTransactionLinesItemCommonSourceDocumentsItemDocumentTypeEnum::Receipt
+                ExpenseReportTransactionLinesItemCommonSourceDocumentDocumentTypeEnum::Receipt
             )
         );
     }
@@ -432,7 +429,7 @@ mod tests {
 
         let report = reduce_to_expense_report(&receipts);
 
-        // 4 lines, each with its own source_documents entry.
+        // 4 lines, each with its own source_document.
         let lines = report.transaction_lines.expect("transaction_lines populated");
         assert_eq!(lines.len(), 4);
 

@@ -143,12 +143,13 @@ fn walk_line_common(
     check_wrapped(&join(base, "remarks"), &common.remarks, issues);
     check_wrapped(&join(base, "country_of_activity"), &common.country_of_activity, issues);
     check_wrapped(&join(base, "foreign_activity_type"), &common.foreign_activity_type, issues);
-    // source_documents required-presence handled via vec emptiness:
-    if let Some(rule) = field_rule(&join(base, "source_documents")) {
-        if rule.required && common.source_documents.is_empty() {
-            issues.push(missing_required(&join(base, "source_documents"), rule));
-        }
-    }
+    // source_document is a non-Optional object (always structurally
+    // present); validate its T1 leaves directly. Reduction always sets
+    // filename from the input file; document_type is whatever the FA
+    // chose at upload time.
+    let sd_base = join(base, "source_document");
+    check_optional(&join(&sd_base, "filename"), &common.source_document.filename, issues);
+    check_optional(&join(&sd_base, "document_type"), &common.source_document.document_type, issues);
 }
 
 fn walk_meal_details(

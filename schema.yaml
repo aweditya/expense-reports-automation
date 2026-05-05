@@ -273,30 +273,35 @@ expense_report:
               - fieldwork
               - other
             infer_from: "Conference registration → 'conference'; otherwise from context"
-          source_documents:
-            type: array
+          # source_documents was an array because multi-document evidence
+          # for one transaction line was hypothetically possible. With
+          # single-call per-document extraction (Phase 1 Pair C) every line
+          # comes from exactly one receipt; the array was always 1-element.
+          # Replaced by a single source_document object. If multi-document
+          # evidence ever needs modeling, leaf-level _meta.evidence[]
+          # already supports it.
+          source_document:
+            type: object
             required: true
             source: T3
-            description: "References to uploaded documents supporting this line. Filled by the extractor from the same documents that produced the line's other fields."
-            items:
-              type: object
-              fields:
-                filename:
-                  type: string
-                  source: T1
-                  description: "Filename the FA uploaded — system context, not extracted."
-                document_type:
-                  type: enum
-                  source: T1
-                  description: "Document kind chosen by the FA at upload time."
-                  allowed_values:
-                    - receipt
-                    - booking_confirmation
-                    - price_comparison
-                    - currency_conversion
-                    - conference_program
-                    - missing_receipt_form
-                    - other
+            description: "Reference to the uploaded document this line was extracted from. Filled by the extractor from the same document that produced the line's other fields."
+            fields:
+              filename:
+                type: string
+                source: T1
+                description: "Filename the FA uploaded — system context, not extracted."
+              document_type:
+                type: enum
+                source: T1
+                description: "Document kind chosen by the FA at upload time."
+                allowed_values:
+                  - receipt
+                  - booking_confirmation
+                  - price_comparison
+                  - currency_conversion
+                  - conference_program
+                  - missing_receipt_form
+                  - other
 
         # --- Expense-type-specific detail blocks ---
         # Only one of these is populated per line, based on expense_type.
