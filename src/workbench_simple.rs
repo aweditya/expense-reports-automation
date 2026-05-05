@@ -331,7 +331,7 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
         .expense_type
         .value
         .as_ref()
-        .map(|e| e.as_str().replace('_', " "))
+        .map(|e| display_expense_type(e, line.meal_details.as_ref()))
         .unwrap_or("—".into());
     let venue = line
         .meal_details
@@ -363,7 +363,7 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
     field_card_optional_money(html, "Amount (USD)", line.common.line_amount_usd.value, &format!("{path_prefix}.line_amount_usd"));
     field_card_text_opt(html, "Original Currency", &line.common.original_currency, &format!("{path_prefix}.original_currency"), |s: &String| s.clone());
     field_card_optional_money(html, "Original Amount", line.common.original_amount.value, &format!("{path_prefix}.original_amount"));
-    field_card_text(html, "Expense Type", &line.common.expense_type, &format!("{path_prefix}.expense_type"), |e| e.as_str().replace('_', " "));
+    field_card_text(html, "Expense Type", &line.common.expense_type, &format!("{path_prefix}.expense_type"), |e| display_expense_type(e, line.meal_details.as_ref()));
     field_card_text(html, "Remarks", &line.common.remarks, &format!("{path_prefix}.remarks"), |s: &String| s.clone());
     field_card_text_opt(html, "Country", &line.common.country_of_activity, &format!("{path_prefix}.country_of_activity"), |s: &String| s.clone());
     html.push_str("</div>\n");
@@ -393,7 +393,7 @@ fn render_source_documents(html: &mut String, receipts: &[ExtractedReceipt]) {
     html.push_str("<p class=\"eyebrow\">Provenance</p>\n<h2>Source Documents</h2>\n");
     html.push_str("<div class=\"doc-grid\">\n");
     for r in receipts {
-        let kind = r.line.common.expense_type.value.as_ref().map(|e| e.as_str().replace('_', " ")).unwrap_or("—".into());
+        let kind = r.line.common.expense_type.value.as_ref().map(|e| display_expense_type(e, r.line.meal_details.as_ref())).unwrap_or("—".into());
         let amount = r.line.common.line_amount_usd.value.map(|t| format!("${:.2}", t)).unwrap_or("—".into());
         // Relative link: works under any backend that serves the directory
         // containing this HTML. For the Flask app the workbench is served
@@ -420,6 +420,53 @@ fn render_source_documents(html: &mut String, receipts: &[ExtractedReceipt]) {
         ));
     }
     html.push_str("</div>\n</section>\n");
+}
+
+// ─── Display assembly: expense_type + alcohol → FA-facing string ──────────
+//
+// The schema collapsed the alcohol-suffix enum variants (Phase 1 Pair A);
+// alcohol presence lives on `meal_details.has_alcohol_on_receipt`. The
+// workbench reassembles the FA-facing string here so what the FA sees in
+// the workbench matches what they'd pick from the Stanford portal's
+// 4-value dropdown for meals. This is display-only — the underlying
+// schema, reduction, and validation never see the suffix.
+//
+// A future submission layer (when it exists) will reassemble the suffixed
+// enum value separately for the portal API; that is not this code's job.
+fn display_expense_type(
+    enum_val: &crate::expense_report_model::ExpenseReportTransactionLinesItemCommonExpenseTypeEnum,
+    meal: Option<&ExpenseReportTransactionLinesItemMealDetails>,
+) -> String {
+    use crate::expense_report_model::ExpenseReportTransactionLinesItemCommonExpenseTypeEnum::*;
+    let base = title_case(enum_val.as_str());
+    // Append " with Alcohol" only for the meal variants when the meal
+    // details report alcohol on the receipt. Other expense kinds aren't
+    // affected.
+    let with_alcohol = matches!(enum_val, BusinessMeal | GroupTravelMeal)
+        && meal
+            .and_then(|m| m.has_alcohol_on_receipt.value)
+            .unwrap_or(false);
+    if with_alcohol {
+        format!("{base} with Alcohol")
+    } else {
+        base
+    }
+}
+
+/// Title-case an underscore-separated identifier:
+/// "business_meal" -> "Business Meal", "ground_transportation_foreign" ->
+/// "Ground Transportation Foreign".
+fn title_case(s: &str) -> String {
+    s.split('_')
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 // ─── Field cards (Pattern A: compact, value + dot + tooltip) ──────────────
@@ -655,5 +702,28 @@ mod tests {
         assert!(with_issues.contains("layout split"));
         assert!(with_issues.contains("<aside class=\"rail\""));
         assert!(with_issues.contains("class=\"issue-jump\""));
+    }
+
+    #[test]
+    fn display_expense_type_assembles_alcohol_suffix_for_meals() {
+        use crate::expense_report_model::ExpenseReportTransactionLinesItemCommonExpenseTypeEnum::*;
+
+        // Helper: build a meal_details with the given alcohol bool.
+        let meal_with = |alcohol: bool| ExpenseReportTransactionLinesItemMealDetails {
+            has_alcohol_on_receipt: Wrapped::known(alcohol),
+            ..Default::default()
+        };
+
+        // business_meal × alcohol toggle
+        assert_eq!(display_expense_type(&BusinessMeal, Some(&meal_with(true))), "Business Meal with Alcohol");
+        assert_eq!(display_expense_type(&BusinessMeal, Some(&meal_with(false))), "Business Meal");
+        // group_travel_meal × alcohol toggle
+        assert_eq!(display_expense_type(&GroupTravelMeal, Some(&meal_with(true))), "Group Travel Meal with Alcohol");
+        assert_eq!(display_expense_type(&GroupTravelMeal, Some(&meal_with(false))), "Group Travel Meal");
+        // No meal_details (e.g. extractor didn't fill it) — no suffix.
+        assert_eq!(display_expense_type(&BusinessMeal, None), "Business Meal");
+        // Non-meal expense kinds — alcohol bool is irrelevant, no suffix even if true.
+        assert_eq!(display_expense_type(&AirfareDomestic, None), "Airfare Domestic");
+        assert_eq!(display_expense_type(&GroundTransportationForeign, Some(&meal_with(true))), "Ground Transportation Foreign");
     }
 }
