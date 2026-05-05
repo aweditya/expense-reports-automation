@@ -20,6 +20,39 @@ Keep entries short. The point is recall, not narrative.
 
 ## Entries
 
+### 2026-05-05 — Phase 1 Chunk 1 split a contract pair across commits
+
+**What happened:** Phase 1's first chunk shipped only the schema half
+of the enum collapse — `expense_type` lost its `_with_alcohol`
+variants in the Rust types, but the Python extractor was still
+emitting them. Cargo tests passed locally because the inline JSON
+fixtures were updated in the same commit, but the live system would
+have failed on every new upload: Python writes `business_meal_with_
+alcohol`, the new Rust lib refuses to deserialize that variant. I
+caught this only because I happened to think about it while preparing
+the next chunk, and we reverted via `git revert` and re-staged as
+"Pair A" with the schema change AND the prompt change in one commit.
+
+**Why it was wrong:** I conflated "small commits" (Rule 3) with
+"small per-file changes." The right unit is a *self-coherent
+contract*, not a *narrow diff*. Schema changes that affect what the
+extractor emits are atomic with the extractor prompt, and shipping
+one without the other moves the system through a broken intermediate
+state that the test suite happens not to catch (because tests use
+fixed fixtures, not live extraction). If the user had been less
+attentive, the next upload after the first chunk's deploy would have
+failed mid-pipeline with a cryptic Rust serde error.
+
+**Rule going forward:** Before splitting a change across commits,
+ask: "if the first commit deploys but the second doesn't, can the
+live pipeline still complete an upload?" If no, the change is a
+contract pair and must ship atomic. The cargo type system enforces
+this for Rust↔Rust contracts, but Python↔Rust contracts (every
+schema change) are by-eye. Specifically: schema change + extractor
+prompt + acceptance-check predicates = always one commit.
+Re-staging Phase 1 into Pair A/B/C + Standalones D/E gave us five
+clean atomic units instead of seven half-deployable ones.
+
 ### 2026-05-05 — shipped Mermaid diagrams without rendering them, twice in a row
 
 **What happened:** Wrote `docs/SPEC.md` with five Mermaid diagrams,
