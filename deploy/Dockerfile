@@ -9,10 +9,6 @@ COPY Cargo.toml Cargo.lock* ./
 COPY src/ src/
 COPY generated/ generated/
 COPY fixtures/ fixtures/
-# `src/lib.rs` still pulls in old workbench modules via `#[path =
-# "../old/..."]`. M8 deletes those declarations + old/ entirely; until
-# then the builder needs the directory.
-COPY old/ old/
 
 RUN cargo build --release \
     --bin reduce_extractions \
