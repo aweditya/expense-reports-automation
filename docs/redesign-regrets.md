@@ -20,6 +20,33 @@ Keep entries short. The point is recall, not narrative.
 
 ## Entries
 
+### 2026-05-04 — claimed Cloud Run auto-sets `$GOOGLE_CLOUD_PROJECT` (it doesn't)
+
+**What happened:** In M7.e.1 I changed `spike_extract.py` to read the
+project from `$VERTEX_PROJECT_ID or $GOOGLE_CLOUD_PROJECT` and added a
+comment saying "Cloud Run sets the latter automatically via the metadata
+server." Both the cloudbuild.yaml and the Cloud Run service config got
+no env var for the project. Result: the deployed app threw "project
+required" the first time the FA tried to upload a receipt — extracted
+from the user-facing error page, not even from logs.
+
+**Why it was wrong:** That's true for App Engine and Cloud Functions.
+Cloud Run sets `$K_SERVICE`, `$K_REVISION`, `$K_CONFIGURATION`, `$PORT`
+— not `$GOOGLE_CLOUD_PROJECT`. I wrote the assertion in code and in a
+code comment without verifying. Locally I always set `VERTEX_PROJECT_ID`
+explicitly so the bug couldn't surface; same for the `docker run`
+smoke test where I passed `-e VERTEX_PROJECT_ID=...`. Production was
+the first env where neither was true.
+
+**Rule going forward:** Never write a code comment asserting cloud-
+runtime behavior I haven't directly tested in *that* runtime. If the
+script runs only when an env var is set, prove the env var is set in
+every place the script will run — locally (shell), in `docker run`
+(`-e`), in Cloud Run (`--set-env-vars` on the deploy step). The
+cloudbuild.yaml deploy step now passes
+`--set-env-vars=VERTEX_PROJECT_ID=$PROJECT_ID` so future deploys carry
+the value; the lying comment in spike_extract.py is removed.
+
 ### 2026-05-04 — ran `gcloud builds submit` as an inline command instead of a script
 
 **What happened:** When push-to-main turned out not to trigger Cloud

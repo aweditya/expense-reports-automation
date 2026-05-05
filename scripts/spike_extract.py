@@ -110,9 +110,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument(
         "--project",
-        default=os.environ.get("VERTEX_PROJECT_ID")
-        or os.environ.get("GOOGLE_CLOUD_PROJECT"),
-        help="GCP project (defaults to $VERTEX_PROJECT_ID or $GOOGLE_CLOUD_PROJECT).",
+        default=os.environ.get("VERTEX_PROJECT_ID"),
+        help="GCP project (defaults to $VERTEX_PROJECT_ID; Cloud Run sets it "
+        "via --set-env-vars in deploy/cloudbuild.yaml).",
     )
     parser.add_argument(
         "--location",
@@ -146,8 +146,8 @@ def main() -> int:
 
     if not args.project:
         sys.exit(
-            "project required: pass --project or set $VERTEX_PROJECT_ID / "
-            "$GOOGLE_CLOUD_PROJECT (Cloud Run sets the latter automatically)."
+            "project required: pass --project or set $VERTEX_PROJECT_ID. "
+            "Cloud Run gets this from --set-env-vars in deploy/cloudbuild.yaml."
         )
 
     # Application Default Credentials: works on Cloud Run via the metadata
