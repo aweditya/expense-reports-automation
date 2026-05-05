@@ -155,44 +155,6 @@ impl core::fmt::Display for ExpenseReportGeneralInformationRushProcessingEnum {
     }
 }
 
-///  FA-entered. Typically matches general_information.category but the portal stores it as a
-/// separate field.
-/// Source tier: T1
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ExpenseReportTransactionSummaryTransactionTypeEnum {
-    #[default]
-    Domestic,
-    Foreign,
-}
-
-impl ExpenseReportTransactionSummaryTransactionTypeEnum {
-    pub const fn as_str(&self) -> &'static str {
-        match self {
-            Self::Domestic => "domestic",
-            Self::Foreign => "foreign",
-        }
-    }
-}
-
-impl core::str::FromStr for ExpenseReportTransactionSummaryTransactionTypeEnum {
-    type Err = &'static str;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value {
-            "domestic" => Ok(Self::Domestic),
-            "foreign" => Ok(Self::Foreign),
-            _ => Err("invalid enum value"),
-        }
-    }
-}
-
-impl core::fmt::Display for ExpenseReportTransactionSummaryTransactionTypeEnum {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
 ///  FA-entered submission state.
 /// Source tier: T1
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
@@ -250,7 +212,6 @@ pub enum ExpenseReportTransactionLinesItemCommonExpenseTypeEnum {
     AirfareForeign,
     AncillaryAirlineFee,
     BusinessMeal,
-    BusinessMealWithAlcohol,
     CarRental,
     ConferenceRegistration,
     GiftCardEmployeeForeign,
@@ -258,7 +219,6 @@ pub enum ExpenseReportTransactionLinesItemCommonExpenseTypeEnum {
     GroundTransportationForeign,
     GroundTransportationDomestic,
     GroupTravelMeal,
-    GroupTravelMealWithAlcohol,
     HumanSubjectIncentive,
     LodgingDomestic,
     LodgingForeign,
@@ -273,7 +233,6 @@ impl ExpenseReportTransactionLinesItemCommonExpenseTypeEnum {
             Self::AirfareForeign => "airfare_foreign",
             Self::AncillaryAirlineFee => "ancillary_airline_fee",
             Self::BusinessMeal => "business_meal",
-            Self::BusinessMealWithAlcohol => "business_meal_with_alcohol",
             Self::CarRental => "car_rental",
             Self::ConferenceRegistration => "conference_registration",
             Self::GiftCardEmployeeForeign => "gift_card_employee_foreign",
@@ -281,7 +240,6 @@ impl ExpenseReportTransactionLinesItemCommonExpenseTypeEnum {
             Self::GroundTransportationForeign => "ground_transportation_foreign",
             Self::GroundTransportationDomestic => "ground_transportation_domestic",
             Self::GroupTravelMeal => "group_travel_meal",
-            Self::GroupTravelMealWithAlcohol => "group_travel_meal_with_alcohol",
             Self::HumanSubjectIncentive => "human_subject_incentive",
             Self::LodgingDomestic => "lodging_domestic",
             Self::LodgingForeign => "lodging_foreign",
@@ -300,7 +258,6 @@ impl core::str::FromStr for ExpenseReportTransactionLinesItemCommonExpenseTypeEn
             "airfare_foreign" => Ok(Self::AirfareForeign),
             "ancillary_airline_fee" => Ok(Self::AncillaryAirlineFee),
             "business_meal" => Ok(Self::BusinessMeal),
-            "business_meal_with_alcohol" => Ok(Self::BusinessMealWithAlcohol),
             "car_rental" => Ok(Self::CarRental),
             "conference_registration" => Ok(Self::ConferenceRegistration),
             "gift_card_employee_foreign" => Ok(Self::GiftCardEmployeeForeign),
@@ -308,7 +265,6 @@ impl core::str::FromStr for ExpenseReportTransactionLinesItemCommonExpenseTypeEn
             "ground_transportation_foreign" => Ok(Self::GroundTransportationForeign),
             "ground_transportation_domestic" => Ok(Self::GroundTransportationDomestic),
             "group_travel_meal" => Ok(Self::GroupTravelMeal),
-            "group_travel_meal_with_alcohol" => Ok(Self::GroupTravelMealWithAlcohol),
             "human_subject_incentive" => Ok(Self::HumanSubjectIncentive),
             "lodging_domestic" => Ok(Self::LodgingDomestic),
             "lodging_foreign" => Ok(Self::LodgingForeign),
@@ -812,11 +768,6 @@ pub struct ExpenseReportGeneralInformation {
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionSummary {
-    ///  FA-entered. Typically matches general_information.category but the portal stores it as
-    /// a separate field.
-    /// Source tier: T1
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub transaction_type: Option<ExpenseReportTransactionSummaryTransactionTypeEnum>,
     ///  Format: ERxxxxxxx. Assigned by the system or existing system.
     /// Source tier: T2
     #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
@@ -1125,8 +1076,7 @@ pub struct ExpenseReportTransactionLinesItemMealDetailsAttendeesItem {
 
 }
 
-/// Conditionally required when:  expense_type in [business_meal, business_meal_with_alcohol,
-/// Conditionally required when: group_travel_meal, group_travel_meal_with_alcohol]
+/// Conditionally required when:  expense_type in [business_meal, group_travel_meal]
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemMealDetails {
     /// Source tier: T3
@@ -1140,8 +1090,7 @@ pub struct ExpenseReportTransactionLinesItemMealDetails {
     /// Source tier: T1
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub meal_purpose: Option<String>,
-    /// Conditionally required when:  expense_type in [business_meal_with_alcohol,
-    /// Conditionally required when: group_travel_meal_with_alcohol]
+    /// Conditionally required when:  meal_details.has_alcohol_on_receipt == true
     /// Source tier: T3
     /// Infer from:  Itemized receipt — sum of alcohol line items
     #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
@@ -1243,9 +1192,7 @@ pub struct ExpenseReportTransactionLinesItem {
     /// Conditionally required when:  expense_type == conference_registration
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub conference_registration_details: Option<ExpenseReportTransactionLinesItemConferenceRegistrationDetails>,
-    /// Conditionally required when:  expense_type in [business_meal,
-    /// Conditionally required when: business_meal_with_alcohol, group_travel_meal,
-    /// Conditionally required when: group_travel_meal_with_alcohol]
+    /// Conditionally required when:  expense_type in [business_meal, group_travel_meal]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub meal_details: Option<ExpenseReportTransactionLinesItemMealDetails>,
     /// Conditionally required when:  expense_type == car_rental

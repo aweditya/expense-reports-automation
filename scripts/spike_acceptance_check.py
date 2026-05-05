@@ -6,11 +6,11 @@ re-invokes the extractor against `receipts/{mels1.jpeg,mels2.jpeg,tamarine.png}`
 first. A real run costs three Gemini calls (~2 min) so this is a manual
 sanity script, not a CI test.
 
-Per-receipt assertions are hand-coded based on observed M5.3 output. They
-cover the values where being wrong matters (date, total, venue, expense
-kind, alcohol presence) and tolerate model noise on volatile fields
-(`expense_type` allowed to be either business_meal or
-business_meal_with_alcohol when alcohol is on the receipt).
+Per-receipt assertions are hand-coded based on observed M5.3 output.
+They cover the values where being wrong matters (date, total, venue,
+expense kind, alcohol presence). After the Phase-1 enum collapse
+`expense_type` is just `business_meal` for every meal receipt — alcohol
+presence is carried by the separate `has_alcohol_on_receipt` flag.
 """
 
 from __future__ import annotations
@@ -41,8 +41,7 @@ RECEIPTS = [
             "common.line_amount_usd.value": 163.54,
             "common.original_currency.value": None,
             "common.original_amount.value": None,
-            "common.expense_type.value": lambda v: v
-            in ("business_meal", "business_meal_with_alcohol"),
+            "common.expense_type.value": "business_meal",
             "meal_details.venue_name.value": lambda v: v
             and "MJ Sushi" in v,
             "meal_details.has_alcohol_on_receipt.value": True,
@@ -74,7 +73,7 @@ RECEIPTS = [
             "common.line_amount_usd.value": 387.12,
             "common.original_currency.value": None,
             "common.original_amount.value": None,
-            "common.expense_type.value": "business_meal_with_alcohol",
+            "common.expense_type.value": "business_meal",
             "meal_details.venue_name.value": lambda v: v
             and "Tamarine" in v,
             "meal_details.has_alcohol_on_receipt.value": True,
@@ -90,8 +89,7 @@ RECEIPTS = [
             "common.line_amount_usd.value": 79.59,
             "common.original_currency.value": None,
             "common.original_amount.value": None,
-            "common.expense_type.value": lambda v: v
-            in ("business_meal", "business_meal_with_alcohol"),
+            "common.expense_type.value": "business_meal",
             "meal_details.venue_name.value": lambda v: v and "MJ Sushi" in v,
             "meal_details.has_alcohol_on_receipt.value": True,
             "extras.printed_currency.value": "USD",

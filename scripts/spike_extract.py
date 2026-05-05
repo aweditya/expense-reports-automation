@@ -38,10 +38,12 @@ enforced by the response schema — fill the values from the receipt.
 
 `expense_type`:
 - Use `business_meal` for a meal the payee took with one or more guests.
-- Use `business_meal_with_alcohol` when alcohol appears on the line items.
-- Use `group_travel_meal` (or `_with_alcohol`) ONLY when the receipt clearly
-  indicates multiple Stanford travelers — multiple guests/diners is NOT a
-  group_travel signal.
+- Use `group_travel_meal` ONLY when the receipt clearly indicates multiple
+  Stanford travelers — multiple guests/diners is NOT a group_travel signal.
+- Alcohol presence is NOT encoded in `expense_type`. Use the dedicated
+  `has_alcohol_on_receipt` boolean (and `alcohol_amount` for the dollar
+  total). The workbench will assemble "Business Meal with Alcohol" or
+  "Group Travel Meal with Alcohol" from those two fields when displaying.
 - Sales tax labels like GST, VAT, HST, and "Sales Tax" are tax categories,
   NOT expense_type signals.
 

@@ -288,7 +288,6 @@ fn render_transaction_summary(html: &mut String, ts: &ExpenseReportTransactionSu
     html.push_str("<div class=\"field-grid\">\n");
 
     field_card_text(html, "Transaction Date", &ts.transaction_date, "expense_report.transaction_summary.transaction_date", |d: &crate::expense_report_model::IsoDate| d.0.clone());
-    field_card_optional_enum(html, "Transaction Type", &ts.transaction_type, "expense_report.transaction_summary.transaction_type", |t: &crate::expense_report_model::ExpenseReportTransactionSummaryTransactionTypeEnum| t.as_str().to_owned());
     field_card_text(html, "Transaction Number", &ts.transaction_number, "expense_report.transaction_summary.transaction_number", |s: &String| s.clone());
     field_card_optional_enum(html, "Status", &ts.status, "expense_report.transaction_summary.status", |s: &crate::expense_report_model::ExpenseReportTransactionSummaryStatusEnum| s.as_str().to_owned());
     field_card_text(html, "Total USD", &ts.total_usd, "expense_report.transaction_summary.total_usd", |t: &f64| format!("${:.2}", t));
