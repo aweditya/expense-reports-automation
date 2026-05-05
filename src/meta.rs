@@ -186,7 +186,6 @@ mod tests {
         // line. Embedded literally so the test runs without depending on the
         // gitignored .scratch/ outputs.
         let json = r#"{
-            "expense_kind": "meal",
             "common": {
                 "date": {"value": "2026-05-02", "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}},
                 "line_amount_usd": {"value": 79.59, "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}},

@@ -166,15 +166,19 @@ def extras_block_schema() -> dict:
 
 
 def transaction_line_schema(expense_type_values: list[str]) -> dict:
+    # The expense_kind discriminator was dropped (Phase 1 Pair B): the
+    # per-kind extractor router (`scripts/extract_<kind>.py`) knows the
+    # kind from the FA's upload-form choice — it doesn't need to be
+    # repeated inside the per-document JSON. The per-kind detail block
+    # (`meal_details`) is the structural discriminator instead.
     return {
         "type": "object",
         "properties": {
-            "expense_kind": {"type": "string", "enum": ["meal"]},
             "common": common_block_schema(expense_type_values),
             "meal_details": meal_details_block_schema(),
             "extras": extras_block_schema(),
         },
-        "required": ["expense_kind", "common", "meal_details", "extras"],
+        "required": ["common", "meal_details", "extras"],
     }
 
 

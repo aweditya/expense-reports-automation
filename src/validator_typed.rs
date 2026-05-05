@@ -515,7 +515,6 @@ mod tests {
         line.meal_details = Some(ExpenseReportTransactionLinesItemMealDetails::default());
         ExtractedReceipt {
             source_filename: filename.to_owned(),
-            expense_kind: "meal".to_owned(),
             line,
             extras: Extras::default(),
         }

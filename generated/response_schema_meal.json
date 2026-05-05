@@ -3,12 +3,6 @@
   "items": {
     "type": "object",
     "properties": {
-      "expense_kind": {
-        "type": "string",
-        "enum": [
-          "meal"
-        ]
-      },
       "common": {
         "type": "object",
         "properties": {
@@ -1146,7 +1140,6 @@
       }
     },
     "required": [
-      "expense_kind",
       "common",
       "meal_details",
       "extras"

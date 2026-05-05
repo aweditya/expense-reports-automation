@@ -26,9 +26,15 @@ pub struct ExtractedReceipt {
     /// ExpenseReport.transaction_lines[].common.source_documents[].filename.
     #[serde(default)]
     pub source_filename: String,
-    pub expense_kind: String,
     /// Schema-shaped fields. `#[serde(flatten)]` reads `common`/`meal_details`/etc.
     /// into the existing `ExpenseReportTransactionLinesItem` shape.
+    ///
+    /// The expense kind (meal/lodging/transport/airfare/conference) is no
+    /// longer carried as a top-level field on the JSON — the per-kind
+    /// extractor script (`scripts/extract_<kind>.py`, dispatched by the
+    /// FA's upload-form choice) implies the kind. Structurally it's still
+    /// visible: only the matching detail block (`meal_details` /
+    /// `lodging_details` / …) is non-null on the line.
     #[serde(flatten)]
     pub line: ExpenseReportTransactionLinesItem,
     pub extras: Extras,
@@ -60,7 +66,6 @@ mod tests {
         let json = r#"[
             {
                 "source_filename": "mjsushi.jpeg",
-                "expense_kind": "meal",
                 "common": {
                     "date": {"value": "2026-05-02", "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}},
                     "line_amount_usd": {"value": 79.59, "_meta": {"confidence": "high", "evidence": [], "needs_review": false, "flags": []}},
@@ -94,7 +99,6 @@ mod tests {
         assert_eq!(receipts.len(), 1);
         let r = &receipts[0];
         assert_eq!(r.source_filename, "mjsushi.jpeg");
-        assert_eq!(r.expense_kind, "meal");
         // Schema-shaped fields flow through #[serde(flatten)] into `line`.
         assert!((r.line.common.line_amount_usd.value.unwrap() - 79.59).abs() < 1e-9);
         // Extras populate alongside.

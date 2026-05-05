@@ -600,7 +600,6 @@ mod tests {
         });
         ExtractedReceipt {
             source_filename: filename.to_owned(),
-            expense_kind: "meal".to_owned(),
             line,
             extras: Extras::default(),
         }

@@ -178,8 +178,12 @@ def main() -> int:
             total_failures += 1
             continue
         line = data[0]
-        if line.get("expense_kind") != "meal":
-            print(f"FAIL  {output.name}: expense_kind != 'meal' (got {line.get('expense_kind')!r})")
+        # The expense_kind discriminator was dropped (Phase 1 Pair B): the
+        # per-kind extractor router knows the kind from the FA's upload-form
+        # choice. The presence of `meal_details` is the structural signal
+        # that this is a meal line.
+        if "meal_details" not in line:
+            print(f"FAIL  {output.name}: meal_details missing (got top-level keys: {list(line.keys())})")
             total_failures += 1
             continue
 
