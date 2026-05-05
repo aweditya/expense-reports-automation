@@ -15,7 +15,9 @@ use crate::expense_report_model::{
 };
 use crate::extracted_receipt::ExtractedReceipt;
 use crate::meta::{ConfidenceLevel, FieldMetadata, Wrapped};
-use crate::validator::{ValidationIssue, ValidationReport, ValidationSeverity};
+use crate::validator::{ValidationReport, ValidationSeverity};
+#[cfg(test)]
+use crate::validator::{ValidationIssue, ValidationIssueKind};
 
 const CSS: &str = include_str!("workbench_simple.css");
 
