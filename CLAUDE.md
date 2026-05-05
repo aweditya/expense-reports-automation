@@ -58,6 +58,14 @@ History of how this came together is in `docs/redesign-plan.md` and
 10. **Flag every new file before creating it.** Even small one-off scripts.
     "I'm adding `path/to/foo.rs` to do X" before the file appears, never
     after. One-off scripts are exactly the files that live forever uncalled.
+11. **Update `docs/SPEC.md` whenever the architecture changes.** Adding a
+    new layer, moving a responsibility between layers, changing the
+    type-contract between layers, or adding/removing a major component
+    all qualify. Update the relevant Mermaid diagrams + text and **render
+    them in GitHub's preview** before claiming the SPEC change is done —
+    Mermaid syntax that parses in your head can still fail in the viewer
+    (see regrets log). Architecture should change rarely; when it does,
+    SPEC.md is the artifact that has to stay true.
 
 ## Working style
 

@@ -20,6 +20,36 @@ Keep entries short. The point is recall, not narrative.
 
 ## Entries
 
+### 2026-05-05 — shipped Mermaid diagrams without rendering them, twice in a row
+
+**What happened:** Wrote `docs/SPEC.md` with five Mermaid diagrams,
+sanity-checked the syntax with grep ("no raw `<>`, no hyphenated IDs"),
+declared it good, committed, pushed. The user opened it in GitHub and
+the sequence diagram failed with a parse error — I'd used `&lt;id&gt;`
+HTML entities inside a `participant ... as` label, and Mermaid's
+sequenceDiagram parser doesn't decode entities. Switched the
+placeholders to `{id}`, pushed the fix. The user opened it again and
+the *component* diagram now failed — `{` in a flowchart edge label is
+diamond-node-opener syntax, different parser context. Two pushes, two
+broken diagrams, both caught by the user.
+
+**Why it was wrong:** Rule 7 ("eyeball the artifact before claiming
+code is done") explicitly applies to anything that produces a
+user-visible artifact, and Mermaid diagrams are exactly that. My
+"sanity check" was running grep over the source for known gotchas —
+that's the equivalent of running a linter and skipping the actual
+build. For diagrams, "render in the actual viewer" is the build step.
+And: each Mermaid block has its *own* parser context (sequenceDiagram
+≠ flowchart), so syntax that's safe in one fails in another. A single
+gotcha-list isn't enough.
+
+**Rule going forward:** For SPEC.md or any other Mermaid-bearing doc:
+either (a) render every diagram via `mmdc` or GitHub's preview before
+claiming complete, or (b) flag explicitly in the commit "diagrams
+unrendered, please verify" so it's clear the artifact wasn't checked.
+Default is (a). Codified into CLAUDE.md as Rule 11 (architecture
+changes must update + render SPEC.md diagrams).
+
 ### 2026-05-04 — declared "no Cloud Build trigger configured" by checking the wrong region
 
 **What happened:** First time the deploy story came up, I ran `gcloud
