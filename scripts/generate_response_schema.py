@@ -1,17 +1,25 @@
 #!/usr/bin/env python3
-"""Generate the SDK response_schema for a list of meal transaction lines.
+"""Generate per-kind SDK response_schemas from schema.yaml.
 
-Reads `schema.yaml` and emits `generated/response_schema_meal.json`. Only the
-meal expense kind is generated — other expense kinds get added to this script
-when receipts of those kinds appear in the corpus.
+Reads `schema.yaml` and emits `generated/response_schema_<kind>.json`
+for each expense kind we extract today (meal, transport). Each per-kind
+schema:
+- restricts `expense_type` to only the variants relevant to that kind
+  (so Gemini can't return `airfare_domestic` for a meal receipt);
+- includes only that kind's detail block (e.g. `meal_details`) plus
+  the shared `common` and `extras` blocks.
 
 The output is OpenAPI-3-style (which is what the Google Gen AI SDK accepts):
 - `nullable: true` for fields whose value can be null
 - enums via `"enum": [...]`
 - no `oneOf` / `anyOf` / `$ref` (limited SDK support)
 
-Hand-built rather than auto-derived from the YAML — this is a small, focused
-slice and a generic converter would be more code than the slice itself.
+Hand-built rather than auto-derived from the YAML — this is a small,
+focused slice and a generic converter would be more code than the
+slice itself. The KIND_EXPENSE_TYPES dict below declares which
+schema.yaml enum variants belong to each kind. Adding a new kind =
+add an entry to KIND_EXPENSE_TYPES + a detail-block function + an
+entry in `KINDS` at the bottom.
 """
 
 from __future__ import annotations
@@ -24,7 +32,17 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCHEMA_PATH = REPO_ROOT / "schema.yaml"
-OUTPUT_PATH = REPO_ROOT / "generated" / "response_schema_meal.json"
+OUTPUT_DIR = REPO_ROOT / "generated"
+
+
+# Which schema.yaml `expense_type` enum variants belong to each
+# extractor kind. Each per-kind response_schema restricts the enum to
+# only these values, so the SDK rejects an out-of-bucket guess (e.g.
+# Gemini emitting `business_meal` for a Lyft receipt).
+KIND_EXPENSE_TYPES: dict[str, list[str]] = {
+    "meal": ["business_meal", "group_travel_meal"],
+    "transport": ["ground_transportation_domestic", "ground_transportation_foreign"],
+}
 
 
 def meta_block_schema() -> dict:
@@ -137,6 +155,20 @@ def meal_details_block_schema() -> dict:
     }
 
 
+def ground_transport_details_block_schema() -> dict:
+    return {
+        "type": "object",
+        "properties": {
+            "origin": leaf({"type": "string"}),
+            "destination": leaf({"type": "string"}),
+            "service_provider": leaf({"type": "string"}),
+            # missing_receipt is intentionally NOT in the per-receipt
+            # schema — it's T1 (FA fills later if a receipt was lost).
+        },
+        "required": ["origin", "destination", "service_provider"],
+    }
+
+
 def extras_block_schema() -> dict:
     """Per-receipt extras — extracted from the receipt but NOT submitted to
     the FA portal. Reduction reads these to derive schema fields the model
@@ -165,39 +197,81 @@ def extras_block_schema() -> dict:
     }
 
 
-def transaction_line_schema(expense_type_values: list[str]) -> dict:
-    # The expense_kind discriminator was dropped (Phase 1 Pair B): the
-    # per-kind extractor router (`scripts/extract_<kind>.py`) knows the
-    # kind from the FA's upload-form choice — it doesn't need to be
-    # repeated inside the per-document JSON. The per-kind detail block
-    # (`meal_details`) is the structural discriminator instead.
+def transaction_line_schema(
+    expense_type_values: list[str],
+    detail_block_name: str,
+    detail_block_schema: dict,
+) -> dict:
+    """One transaction line as Gemini emits it for a single receipt.
+
+    The expense_kind discriminator was dropped (Phase 1 Pair B): the
+    per-kind extractor router (`scripts/extract_<kind>.py`) knows the
+    kind from the FA's upload-form choice — it doesn't need to be
+    repeated inside the per-document JSON. The per-kind detail block
+    (passed in here) is the structural discriminator instead.
+    """
     return {
         "type": "object",
         "properties": {
             "common": common_block_schema(expense_type_values),
-            "meal_details": meal_details_block_schema(),
+            detail_block_name: detail_block_schema,
             "extras": extras_block_schema(),
         },
-        "required": ["common", "meal_details", "extras"],
+        "required": ["common", detail_block_name, "extras"],
     }
 
 
-def build_meal_response_schema(schema_yaml: dict) -> dict:
-    common = schema_yaml["expense_report"]["transaction_lines"]["items"]["fields"]["common"]
-    expense_type_values = list(common["expense_type"]["allowed_values"])
+def build_response_schema(
+    expense_type_values: list[str],
+    detail_block_name: str,
+    detail_block_schema: dict,
+) -> dict:
     return {
         "type": "array",
-        "items": transaction_line_schema(expense_type_values),
+        "items": transaction_line_schema(
+            expense_type_values, detail_block_name, detail_block_schema
+        ),
     }
+
+
+# Per-kind output specs. Adding a new kind: extend KIND_EXPENSE_TYPES,
+# add a `<kind>_details_block_schema()` function above, and append an
+# entry here.
+KINDS: list[tuple[str, str, callable]] = [
+    ("meal", "meal_details", meal_details_block_schema),
+    ("transport", "ground_transport_details", ground_transport_details_block_schema),
+]
+
+
+def validate_kind_expense_types(schema_yaml: dict) -> None:
+    """Sanity check: every kind's expense_type values must exist in the
+    schema.yaml master enum. Catches typos / drift between the codegen's
+    KIND_EXPENSE_TYPES dict and the schema's allowed_values list."""
+    common = schema_yaml["expense_report"]["transaction_lines"]["items"]["fields"]["common"]
+    master = set(common["expense_type"]["allowed_values"])
+    for kind, values in KIND_EXPENSE_TYPES.items():
+        unknown = set(values) - master
+        if unknown:
+            raise SystemExit(
+                f"KIND_EXPENSE_TYPES[{kind!r}] references unknown enum values "
+                f"not in schema.yaml: {sorted(unknown)}"
+            )
 
 
 def main() -> int:
     schema_yaml = yaml.safe_load(SCHEMA_PATH.read_text())
-    response_schema = build_meal_response_schema(schema_yaml)
+    validate_kind_expense_types(schema_yaml)
 
-    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT_PATH.write_text(json.dumps(response_schema, indent=2) + "\n")
-    print(f"wrote {OUTPUT_PATH.relative_to(REPO_ROOT)}")
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    for kind, detail_block_name, detail_block_factory in KINDS:
+        response_schema = build_response_schema(
+            KIND_EXPENSE_TYPES[kind],
+            detail_block_name,
+            detail_block_factory(),
+        )
+        out_path = OUTPUT_DIR / f"response_schema_{kind}.json"
+        out_path.write_text(json.dumps(response_schema, indent=2) + "\n")
+        print(f"wrote {out_path.relative_to(REPO_ROOT)}")
     return 0
 
 

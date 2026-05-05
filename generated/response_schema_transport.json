@@ -320,8 +320,8 @@
               "value": {
                 "type": "string",
                 "enum": [
-                  "business_meal",
-                  "group_travel_meal"
+                  "ground_transportation_domestic",
+                  "ground_transportation_foreign"
                 ]
               },
               "_meta": {
@@ -642,10 +642,10 @@
           "foreign_activity_type"
         ]
       },
-      "meal_details": {
+      "ground_transport_details": {
         "type": "object",
         "properties": {
-          "venue_name": {
+          "origin": {
             "type": "object",
             "properties": {
               "value": {
@@ -721,12 +721,11 @@
               "_meta"
             ]
           },
-          "alcohol_amount": {
+          "destination": {
             "type": "object",
             "properties": {
               "value": {
-                "type": "number",
-                "nullable": true
+                "type": "string"
               },
               "_meta": {
                 "type": "object",
@@ -798,88 +797,11 @@
               "_meta"
             ]
           },
-          "tip_amount": {
+          "service_provider": {
             "type": "object",
             "properties": {
               "value": {
-                "type": "number",
-                "nullable": true
-              },
-              "_meta": {
-                "type": "object",
-                "properties": {
-                  "confidence": {
-                    "type": "string",
-                    "enum": [
-                      "high",
-                      "medium",
-                      "low"
-                    ]
-                  },
-                  "evidence": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "kind": {
-                          "type": "string",
-                          "enum": [
-                            "document_span",
-                            "document",
-                            "system_generated",
-                            "user_input"
-                          ]
-                        },
-                        "filename": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "page": {
-                          "type": "integer",
-                          "nullable": true
-                        },
-                        "quote": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "origin": {
-                          "type": "string",
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "kind"
-                      ]
-                    }
-                  },
-                  "needs_review": {
-                    "type": "boolean"
-                  },
-                  "flags": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  }
-                },
-                "required": [
-                  "confidence",
-                  "evidence",
-                  "needs_review",
-                  "flags"
-                ]
-              }
-            },
-            "required": [
-              "value",
-              "_meta"
-            ]
-          },
-          "has_alcohol_on_receipt": {
-            "type": "object",
-            "properties": {
-              "value": {
-                "type": "boolean"
+                "type": "string"
               },
               "_meta": {
                 "type": "object",
@@ -953,10 +875,9 @@
           }
         },
         "required": [
-          "venue_name",
-          "alcohol_amount",
-          "tip_amount",
-          "has_alcohol_on_receipt"
+          "origin",
+          "destination",
+          "service_provider"
         ]
       },
       "extras": {
@@ -1127,7 +1048,7 @@
     },
     "required": [
       "common",
-      "meal_details",
+      "ground_transport_details",
       "extras"
     ]
   }

@@ -25,18 +25,33 @@ from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-EXTRACTOR = REPO_ROOT / "scripts" / "extract_meal.py"
 PYTHON = REPO_ROOT / ".venv" / "bin" / "python"
 
+# Per-kind extractor scripts. The acceptance harness routes each entry
+# to the right one via its `extractor` field.
+EXTRACTORS = {
+    "meal": REPO_ROOT / "scripts" / "extract_meal.py",
+    "transport": REPO_ROOT / "scripts" / "extract_transport.py",
+}
 
-# Each entry is (image_filename, output_json_filename, expectations).
+
+# Each entry: image, output, extractor (which kind), expectations.
 # Expectations: dict where keys are dotted paths into the transaction line
 # (e.g., "common.date.value"), values are either a literal (strict equality)
 # or a callable taking the actual value and returning True/False.
 RECEIPTS = [
+    # ─── Meals ────────────────────────────────────────────────────────────
+    # NOTE: file names here reference the older corpus (mels1.jpeg etc.);
+    # the actual receipts/ directory now has mels.jpeg + mjsushi1.jpeg +
+    # mjsushi2.jpeg. Without `--run`, this still works against the cached
+    # .scratch/spike/*.json files. With `--run`, these entries will fail
+    # on missing files until the corpus references are refreshed (separate
+    # cleanup; out of scope for the Phase 2 Stage 1b commit that added
+    # the transport entries below).
     {
         "image": "receipts/mels1.jpeg",
         "output": ".scratch/spike/mels1.json",
+        "extractor": "meal",
         "expect": {
             "common.date.value": "2026-04-19",
             "common.line_amount_usd.value": 163.54,
@@ -53,6 +68,7 @@ RECEIPTS = [
     {
         "image": "receipts/mels2.jpeg",
         "output": ".scratch/spike/mels2.json",
+        "extractor": "meal",
         "expect": {
             "common.date.value": "2026-04-04",
             "common.line_amount_usd.value": 123.19,
@@ -69,6 +85,7 @@ RECEIPTS = [
     {
         "image": "receipts/tamarine.png",
         "output": ".scratch/spike/tamarine.json",
+        "extractor": "meal",
         "expect": {
             "common.date.value": "2026-03-05",
             "common.line_amount_usd.value": 387.12,
@@ -85,6 +102,7 @@ RECEIPTS = [
     {
         "image": "receipts/mjsushi.jpeg",
         "output": ".scratch/spike/mjsushi.json",
+        "extractor": "meal",
         "expect": {
             "common.date.value": "2026-05-02",
             "common.line_amount_usd.value": 79.59,
@@ -95,6 +113,116 @@ RECEIPTS = [
             "meal_details.has_alcohol_on_receipt.value": True,
             "extras.printed_currency.value": "USD",
             "extras.merchant_address.value": lambda v: v and "Palo Alto" in v,
+        },
+    },
+
+    # ─── Ground transport (Phase 2 Stage 1b) ──────────────────────────────
+    # Three Lyft "Ride Report" PDFs and three Uber receipt PDFs. All
+    # six are US-domestic. Expected values were eyeballed from the
+    # original PDFs directly. Predicates (lambdas) are used where the
+    # model has reasonable freedom in formatting (e.g. "101 California
+    # Ave" vs "101 California Ave, Palo Alto"); literals are used
+    # where the receipt prints an unambiguous value.
+    {
+        "image": "receipts/lyft1.pdf",
+        "output": ".scratch/spike/lyft1.json",
+        "extractor": "transport",
+        "expect": {
+            "common.date.value": "2026-04-12",
+            "common.line_amount_usd.value": 6.75,
+            "common.original_currency.value": None,
+            "common.original_amount.value": None,
+            "common.expense_type.value": "ground_transportation_domestic",
+            "common.country_of_activity.value": "United States",
+            "ground_transport_details.service_provider.value": lambda v: v and "Lyft" in v,
+            "ground_transport_details.origin.value": lambda v: v and "Oxford" in v,
+            "ground_transport_details.destination.value": lambda v: v and "Bowdoin" in v,
+            "extras.printed_currency.value": "USD",
+        },
+    },
+    {
+        "image": "receipts/lyft2.pdf",
+        "output": ".scratch/spike/lyft2.json",
+        "extractor": "transport",
+        "expect": {
+            "common.date.value": "2026-04-23",
+            "common.line_amount_usd.value": 6.77,
+            "common.original_currency.value": None,
+            "common.original_amount.value": None,
+            "common.expense_type.value": "ground_transportation_domestic",
+            "common.country_of_activity.value": "United States",
+            "ground_transport_details.service_provider.value": lambda v: v and "Lyft" in v,
+            "ground_transport_details.origin.value": lambda v: v and "Campus Dr" in v,
+            "ground_transport_details.destination.value": lambda v: v and "California Ave" in v,
+            "extras.printed_currency.value": "USD",
+        },
+    },
+    {
+        "image": "receipts/lyft3.pdf",
+        "output": ".scratch/spike/lyft3.json",
+        "extractor": "transport",
+        "expect": {
+            "common.date.value": "2026-03-29",
+            "common.line_amount_usd.value": 60.48,
+            "common.original_currency.value": None,
+            "common.original_amount.value": None,
+            "common.expense_type.value": "ground_transportation_domestic",
+            "common.country_of_activity.value": "United States",
+            "ground_transport_details.service_provider.value": lambda v: v and "Lyft" in v,
+            "ground_transport_details.origin.value": lambda v: v and "Airport" in v,
+            "ground_transport_details.destination.value": lambda v: v and "Campus Dr" in v,
+            "extras.printed_currency.value": "USD",
+        },
+    },
+    {
+        "image": "receipts/uber1.pdf",
+        "output": ".scratch/spike/uber1.json",
+        "extractor": "transport",
+        "expect": {
+            "common.date.value": "2026-04-20",
+            "common.line_amount_usd.value": 8.95,
+            "common.original_currency.value": None,
+            "common.original_amount.value": None,
+            "common.expense_type.value": "ground_transportation_domestic",
+            "common.country_of_activity.value": "United States",
+            "ground_transport_details.service_provider.value": lambda v: v and "Uber" in v,
+            "ground_transport_details.origin.value": lambda v: v and "Jane Stanford" in v,
+            "ground_transport_details.destination.value": lambda v: v and "Campus Dr" in v,
+            "extras.printed_currency.value": "USD",
+        },
+    },
+    {
+        "image": "receipts/uber2.pdf",
+        "output": ".scratch/spike/uber2.json",
+        "extractor": "transport",
+        "expect": {
+            "common.date.value": "2026-05-01",
+            "common.line_amount_usd.value": 46.93,
+            "common.original_currency.value": None,
+            "common.original_amount.value": None,
+            "common.expense_type.value": "ground_transportation_domestic",
+            "common.country_of_activity.value": "United States",
+            "ground_transport_details.service_provider.value": lambda v: v and "Uber" in v,
+            "ground_transport_details.origin.value": lambda v: v and "Campus Dr" in v,
+            "ground_transport_details.destination.value": lambda v: v and "Tennessee" in v,
+            "extras.printed_currency.value": "USD",
+        },
+    },
+    {
+        "image": "receipts/uber3.pdf",
+        "output": ".scratch/spike/uber3.json",
+        "extractor": "transport",
+        "expect": {
+            "common.date.value": "2026-03-29",
+            "common.line_amount_usd.value": 46.24,
+            "common.original_currency.value": None,
+            "common.original_amount.value": None,
+            "common.expense_type.value": "ground_transportation_domestic",
+            "common.country_of_activity.value": "United States",
+            "ground_transport_details.service_provider.value": lambda v: v and "Uber" in v,
+            "ground_transport_details.origin.value": lambda v: v and "Getty Center" in v,
+            "ground_transport_details.destination.value": lambda v: v and "Broadway" in v,
+            "extras.printed_currency.value": "USD",
         },
     },
 ]
@@ -118,11 +246,14 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def run_extractor(image: Path, output: Path) -> None:
+def run_extractor(image: Path, output: Path, kind: str) -> None:
+    extractor = EXTRACTORS.get(kind)
+    if extractor is None:
+        raise SystemExit(f"unknown extractor kind {kind!r} (known: {sorted(EXTRACTORS)})")
     subprocess.run(
         [
             str(PYTHON),
-            str(EXTRACTOR),
+            str(extractor),
             "--image",
             str(image),
             "--output",
@@ -162,8 +293,9 @@ def main() -> int:
         for entry in RECEIPTS:
             image = REPO_ROOT / entry["image"]
             output = REPO_ROOT / entry["output"]
-            print(f"running extractor on {image.name} ...")
-            run_extractor(image, output)
+            kind = entry["extractor"]
+            print(f"running {kind} extractor on {image.name} ...")
+            run_extractor(image, output, kind)
 
     total_failures = 0
     for entry in RECEIPTS:
