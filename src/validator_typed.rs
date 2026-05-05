@@ -42,6 +42,7 @@ pub fn validate_typed(report: &ExpenseReport) -> ValidationReport {
     );
     walk_transaction_lines(report, &mut issues);
     check_conditional_rules(report, &mut issues);
+    check_category_country_consistency(report, &mut issues);
     ValidationReport { issues }
 }
 
@@ -482,6 +483,96 @@ fn target_present_at_root(target: &str, report: &ExpenseReport) -> bool {
     }
 }
 
+// ─── Pass-2 cross-field rules ──────────────────────────────────────────────
+
+/// Domestic-vs-foreign consistency between the report-level
+/// `general_information.category` (FA-confirmed) and each line's
+/// `common.country_of_activity` (extracted from the receipt's address).
+///
+/// Rules:
+/// - `expenses_domestic`: every line with a known country must be
+///   "United States". A foreign country on a domestic report is suspicious.
+/// - `expenses_foreign`: at least one line must have a non-US country.
+///   A foreign report with no foreign-country lines suggests the category
+///   is wrong.
+///
+/// Lines with a null `country_of_activity` are ignored — they carry no
+/// signal to compare against. Severity is **Warning**, not Error: the
+/// FA might legitimately have a domestic taxi receipt during a foreign
+/// trip, and we don't want to block the workflow on legitimate edge
+/// cases. The issues panel surfaces them for FA review.
+///
+/// Other categories (`athletic_use_only`, `hr_use_only`, `human_subjects`,
+/// `relocation`) don't carry a domestic/foreign claim, so they're
+/// out of scope for this rule.
+fn check_category_country_consistency(
+    report: &ExpenseReport,
+    issues: &mut Vec<ValidationIssue>,
+) {
+    use crate::expense_report_model::ExpenseReportGeneralInformationCategoryEnum::*;
+
+    let Some(category) = report.general_information.category.value.as_ref() else {
+        return;
+    };
+    let Some(lines) = report.transaction_lines.as_ref() else {
+        return;
+    };
+
+    let category_path = "expense_report.general_information.category";
+
+    match category {
+        ExpensesDomestic => {
+            for (idx, line) in lines.iter().enumerate() {
+                let Some(country) = line.common.country_of_activity.value.as_ref() else {
+                    continue;
+                };
+                if !country.eq_ignore_ascii_case("United States") {
+                    let path = format!(
+                        "expense_report.transaction_lines[{idx}].common.country_of_activity"
+                    );
+                    issues.push(ValidationIssue {
+                        severity: ValidationSeverity::Warning,
+                        kind: ValidationIssueKind::ManualReviewRequired,
+                        path,
+                        schema_path: "expense_report.transaction_lines[].common.country_of_activity"
+                            .to_owned(),
+                        message: format!(
+                            "Line {} country is {country:?} but the report category is \
+                             expenses_domestic — confirm whether this should be a foreign report.",
+                            idx + 1
+                        ),
+                    });
+                }
+            }
+        }
+        ExpensesForeign => {
+            let any_foreign = lines.iter().any(|line| {
+                line.common
+                    .country_of_activity
+                    .value
+                    .as_deref()
+                    .is_some_and(|c| !c.eq_ignore_ascii_case("United States"))
+            });
+            if !any_foreign {
+                issues.push(ValidationIssue {
+                    severity: ValidationSeverity::Warning,
+                    kind: ValidationIssueKind::ManualReviewRequired,
+                    path: category_path.to_owned(),
+                    schema_path: category_path.to_owned(),
+                    message: "Report category is expenses_foreign but every line's \
+                              country_of_activity is United States or null — confirm \
+                              whether this should be a domestic report."
+                        .to_owned(),
+                });
+            }
+        }
+        _ => {
+            // Non-domestic-foreign categories don't carry the claim;
+            // nothing to check.
+        }
+    }
+}
+
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 fn join(base: &str, child: &str) -> String {
@@ -622,6 +713,117 @@ mod tests {
             paths.iter().any(|p| p.ends_with(".airfare_details")),
             "expected airfare_details to be flagged; saw: {paths:?}"
         );
+    }
+
+    /// Helper for the country-consistency tests: build a meal line with
+    /// the given country_of_activity (None for unknown).
+    fn meal_line_with_country(amount: f64, country: Option<&str>) -> ExpenseReportTransactionLinesItem {
+        let mut line = ExpenseReportTransactionLinesItem::default();
+        line.common.expense_type = Wrapped {
+            value: Some(ExpenseReportTransactionLinesItemCommonExpenseTypeEnum::BusinessMeal),
+            meta: FieldMetadata::default(),
+        };
+        line.common.line_amount_usd = Wrapped { value: Some(amount), meta: FieldMetadata::default() };
+        line.common.country_of_activity = match country {
+            Some(c) => Wrapped { value: Some(c.to_owned()), meta: FieldMetadata::default() },
+            None => Wrapped::unknown(),
+        };
+        line
+    }
+
+    fn report_with(
+        category: ExpenseReportGeneralInformationCategoryEnum,
+        lines: Vec<ExpenseReportTransactionLinesItem>,
+    ) -> ExpenseReport {
+        let mut report = ExpenseReport::default();
+        report.general_information.category = Wrapped {
+            value: Some(category),
+            meta: FieldMetadata::default(),
+        };
+        report.transaction_lines = Some(lines);
+        report
+    }
+
+    fn country_consistency_warnings(report: &ExpenseReport) -> Vec<String> {
+        validate_typed(report)
+            .issues
+            .into_iter()
+            .filter(|i| i.severity == ValidationSeverity::Warning
+                && i.kind == ValidationIssueKind::ManualReviewRequired)
+            .map(|i| i.path)
+            .collect()
+    }
+
+    #[test]
+    fn category_country_consistency_domestic_with_us_lines_clean() {
+        let report = report_with(
+            ExpenseReportGeneralInformationCategoryEnum::ExpensesDomestic,
+            vec![
+                meal_line_with_country(100.0, Some("United States")),
+                meal_line_with_country(200.0, Some("United States")),
+            ],
+        );
+        assert!(country_consistency_warnings(&report).is_empty());
+    }
+
+    #[test]
+    fn category_country_consistency_domestic_with_foreign_line_warns() {
+        let report = report_with(
+            ExpenseReportGeneralInformationCategoryEnum::ExpensesDomestic,
+            vec![
+                meal_line_with_country(100.0, Some("United States")),
+                meal_line_with_country(50.0, Some("Canada")),
+            ],
+        );
+        let paths = country_consistency_warnings(&report);
+        assert_eq!(paths.len(), 1);
+        assert!(paths[0].contains("transaction_lines[1].common.country_of_activity"));
+    }
+
+    #[test]
+    fn category_country_consistency_skips_null_countries() {
+        // A line with no country signal must not trigger the rule
+        // (e.g. extractor couldn't infer the country). Mixed with one
+        // valid US line — should still be clean.
+        let report = report_with(
+            ExpenseReportGeneralInformationCategoryEnum::ExpensesDomestic,
+            vec![
+                meal_line_with_country(100.0, Some("United States")),
+                meal_line_with_country(50.0, None),
+            ],
+        );
+        assert!(country_consistency_warnings(&report).is_empty());
+    }
+
+    #[test]
+    fn category_country_consistency_foreign_with_at_least_one_foreign_line_clean() {
+        // Foreign trip with a domestic taxi line is fine (FA may have
+        // had a US airport ride). At-least-one foreign line satisfies
+        // the rule.
+        let report = report_with(
+            ExpenseReportGeneralInformationCategoryEnum::ExpensesForeign,
+            vec![
+                meal_line_with_country(50.0, Some("United States")),
+                meal_line_with_country(200.0, Some("Singapore")),
+            ],
+        );
+        assert!(country_consistency_warnings(&report).is_empty());
+    }
+
+    #[test]
+    fn category_country_consistency_foreign_with_only_us_lines_warns() {
+        // Category claims foreign but no line is non-US — surfaces a
+        // category warning, not a per-line one.
+        let report = report_with(
+            ExpenseReportGeneralInformationCategoryEnum::ExpensesForeign,
+            vec![
+                meal_line_with_country(100.0, Some("United States")),
+                meal_line_with_country(50.0, None),
+            ],
+        );
+        let paths = country_consistency_warnings(&report);
+        assert_eq!(paths.len(), 1);
+        assert_eq!(paths[0], "expense_report.general_information.category");
     }
 
     #[test]
