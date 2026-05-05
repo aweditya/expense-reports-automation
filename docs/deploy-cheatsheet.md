@@ -26,21 +26,30 @@ update this file.
 | Thing | Value |
 | --- | --- |
 | Config | `deploy/cloudbuild.yaml` |
-| Source upload bucket | `gs://soe-agile-agents_cloudbuild` (gcloud-managed) |
-| Trigger | **none configured** — deploy is manual via `scripts/deploy.sh` |
-| Logs | `gcloud builds log <build-id> --project=soe-agile-agents` |
-| Substitutions passed | `COMMIT_SHA` only (everything else is built-in) |
+| Source upload bucket | `gs://soe-agile-agents_cloudbuild` (gcloud-managed; manual submits only) |
+| Trigger | `deploy-on-push` in **us-west1** — fires on push to `^main$`, runs `deploy/cloudbuild.yaml`. Connected to repo `aweditya/expense-reports-automation`. |
+| Logs | `gcloud builds log <build-id> --project=soe-agile-agents --region=us-west1` for trigger-fired builds; drop `--region` for manual submits. |
+| Substitutions | Trigger sets `COMMIT_SHA`, `SHORT_SHA`, `BRANCH_NAME`, etc. automatically. Manual submits via `scripts/deploy.sh` pass only `COMMIT_SHA`. |
 
 ## Deploy gesture
 
 ```bash
-git push origin main           # not enough on its own — there's no trigger
-scripts/deploy.sh              # this is what actually deploys HEAD
+git push origin main           # this is the deploy. The deploy-on-push
+                               # trigger in us-west1 picks it up.
+
+# Watch the build that just got created:
+gcloud builds list --region=us-west1 --project=soe-agile-agents --limit=3
+
+# Manual escape hatch (redeploy without code change, deploy a non-main
+# branch, or recover from a webhook hiccup) — NOT for routine deploys
+# (would double-build with the trigger):
+scripts/deploy.sh
 scripts/deploy.sh <short-sha>  # tag the image with an explicit SHA
 ```
 
-Roadmap: wire a GitHub push trigger so `git push` is the deploy gesture.
-Until that exists, `scripts/deploy.sh` is the only path.
+The trigger is **regional** (us-west1), so trigger-fired builds do NOT
+appear in `gcloud builds list` without `--region=us-west1`. The default
+global region only shows manually submitted builds.
 
 ## Auth checklist (run once per machine)
 

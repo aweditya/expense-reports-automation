@@ -20,6 +20,36 @@ Keep entries short. The point is recall, not narrative.
 
 ## Entries
 
+### 2026-05-04 — declared "no Cloud Build trigger configured" by checking the wrong region
+
+**What happened:** First time the deploy story came up, I ran `gcloud
+builds triggers list --project=soe-agile-agents` and saw "Listed 0
+items." From that I concluded "no GitHub trigger exists; deploy is
+manual." I built `scripts/deploy.sh`, wrote a regret about inline
+gcloud commands, updated CLAUDE.md to say "deploy = scripts/deploy.sh
+until we wire a trigger," and ran four manual deploys today. Then the
+user pointed at the GCP console and there was a `deploy-on-push`
+trigger for the repo, in `us-west1`, that had been firing on every
+push the whole time. Every commit I pushed today auto-deployed AND I
+re-deployed it manually — double-build, double-tarball-upload.
+
+**Why it was wrong:** Cloud Build triggers can be created either
+globally or in a specific region. `gcloud builds triggers list`
+defaults to the global region and silently omits regional triggers.
+`gcloud builds list` has the same default — which is why none of the
+trigger-fired builds in us-west1 showed up when I checked recent build
+history either, reinforcing the wrong conclusion. Two commands lying
+the same way looked like agreement; really they were both blinkered.
+
+**Rule going forward:** When checking for the absence of cloud
+infrastructure, pass `--region=...` (or `--regions=-` to list all)
+explicitly before declaring "none configured." This applies to
+triggers, builds, Cloud Run services, secrets — anything that has a
+regional namespace. CLAUDE.md and `docs/deploy-cheatsheet.md` updated:
+deploy gesture is `git push origin main` (the trigger does the rest);
+`scripts/deploy.sh` stays as a manual escape hatch but is no longer
+the primary path.
+
 ### 2026-05-04 — claimed Cloud Run auto-sets `$GOOGLE_CLOUD_PROJECT` (it doesn't)
 
 **What happened:** In M7.e.1 I changed `spike_extract.py` to read the

@@ -78,12 +78,16 @@ Outside the redesign, the historical scope (UI-only) still applies.
   region `us-west1`. The full facts table (URLs, image registry, IAP,
   service account, common gotchas) is in `docs/deploy-cheatsheet.md` —
   start there, don't rediscover.
-- **Deploy gesture:** there is **no** GitHub push trigger configured
-  yet, so `git push origin main` does not deploy anything. Run
-  `scripts/deploy.sh` to deploy HEAD. The script is a thin wrapper
-  around `gcloud builds submit --config=deploy/cloudbuild.yaml` that
-  resolves the short SHA automatically. (Roadmap: wire a push trigger
-  so `git push` becomes the deploy gesture.)
+- **Deploy gesture:** `git push origin main`. The Cloud Build trigger
+  `deploy-on-push` in **us-west1** (not global!) fires on push to
+  `^main$`, runs `deploy/cloudbuild.yaml`, and deploys to Cloud Run.
+  `scripts/deploy.sh` exists as a manual escape hatch (redeploy without
+  a code change, deploy a non-main branch, recover from a webhook
+  hiccup) — don't use it for routine deploys, that just double-builds.
+- To watch a build in flight after pushing, query the **regional**
+  builds list: `gcloud builds list --region=us-west1 --project=
+  soe-agile-agents --limit=5`. The default `gcloud builds list` looks
+  at the global region and won't show trigger-fired builds.
 - The cloudbuild pipeline runs Rust tests → Python tests → Docker
   build → push → `gcloud run deploy`. Test failures block deploy.
 - Deployment-related changes are limited to: `scripts/local_app_simple.py`
