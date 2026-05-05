@@ -106,7 +106,6 @@ fn walk_transaction_summary(
     base: &str,
     issues: &mut Vec<ValidationIssue>,
 ) {
-    check_optional(&join(base, "transaction_type"), &ts.transaction_type, issues);
     check_wrapped(&join(base, "transaction_number"), &ts.transaction_number, issues);
     check_wrapped(&join(base, "transaction_date"), &ts.transaction_date, issues);
     check_optional(&join(base, "status"), &ts.status, issues);

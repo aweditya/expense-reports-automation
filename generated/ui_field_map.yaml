@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-generated_at_utc: '2026-05-04T19:46:40+00:00'
+generated_at_utc: '2026-05-05T17:40:40+00:00'
 sections:
 - key: general_information
   label: General Information
@@ -195,17 +195,6 @@ sections:
   path: expense_report.transaction_summary
   repeated: false
   fields:
-  - path: expense_report.transaction_summary.transaction_type
-    label: Transaction Type
-    control: select
-    source: T1
-    entry_mode: user_confirmed_input
-    required: true
-    required_expression: null
-    review_priority: medium
-    allowed_values:
-    - domestic
-    - foreign
   - path: expense_report.transaction_summary.transaction_number
     label: Transaction Number
     control: text
@@ -311,7 +300,6 @@ sections:
     - airfare_foreign
     - ancillary_airline_fee
     - business_meal
-    - business_meal_with_alcohol
     - car_rental
     - conference_registration
     - gift_card_employee_foreign
@@ -319,7 +307,6 @@ sections:
     - ground_transportation_foreign
     - ground_transportation_domestic
     - group_travel_meal
-    - group_travel_meal_with_alcohol
     - human_subject_incentive
     - lodging_domestic
     - lodging_foreign
@@ -764,7 +751,7 @@ sections:
     source: T3
     entry_mode: model_prefill_review
     required: false
-    required_expression: expense_type in [business_meal_with_alcohol, group_travel_meal_with_alcohol]
+    required_expression: meal_details.has_alcohol_on_receipt == true
     review_priority: high
     allowed_values: []
   - path: expense_report.transaction_lines[].meal_details.tip_amount
