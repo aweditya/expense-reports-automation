@@ -368,13 +368,26 @@ Why we did this:
 
 ## Current step
 
-**M7.e.2 (in flight): Dockerfile + gunicorn.** Building new binaries
-(reduce_extractions, render_workbench_from_report); dropping perl /
-poppler-utils / curl / openssl; switching entrypoint to `gunicorn
-local_app_simple:app`; baking in `RUST_BIN_DIR=/usr/local/bin` so the
-script picks the prebuilt binary in the container and falls back to
-`cargo run` locally. Then M7.e.3 runs the image locally on :8080 to
-catch any path / import issues before pushing.
+**M7.f (in flight): deploy + verify.** Cloud Build is invoked via the
+new `scripts/deploy.sh` (no more inline gcloud commands). First two
+submits failed for non-app reasons — bad `_PROJECT_ID` substitution,
+then 16 dead-pipeline test failures because the local venv still had
+Pillow installed but the fresh Cloud Build image didn't. Both fixed.
+Re-submitting once test files are deleted; verification is the four
+real receipts on the deployed Cloud Run URL.
+
+**M7.e.4 (done): cleanup before deploy gate.** Deleted
+`tests/test_transcribe_with_google_genai.py` and
+`tests/test_transcribe_with_document_ai.py` (M8 will delete the scripts
+they cover). Added `scripts/deploy.sh`. Added three regret entries
+covering the deploy-flow mistakes.
+
+**M7.e.2/.3 (done, `3356407`):** Dockerfile rewrite: only the new
+binaries; dropped perl / poppler-utils / curl / openssl; switched to
+`gunicorn local_app_simple:app`; `RUST_BIN_DIR=/usr/local/bin` env
+var so the script uses prebuilt binaries in-container, falls back to
+`cargo run` locally. Verified end-to-end against `mjsushi.jpeg` in a
+local container with mounted ADC.
 
 **M7.e.1 (done, `1b19867`):** Dropped --service-account-key and the
 on-disk JSON entirely. spike_extract.py / local_app_simple.py /
