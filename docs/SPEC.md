@@ -45,13 +45,15 @@ What each module is and how they wire together.
 ```mermaid
 graph TB
     subgraph FA["FA's browser"]
-        UI[Upload form / Workbench HTML]
+        UI[Upload form: per-file kind dropdown / Workbench HTML]
     end
 
     subgraph CR["Cloud Run container"]
         subgraph Py["Python"]
-            Flask["scripts/local_app_simple.py<br/>Flask + gunicorn"]
-            Extract["scripts/extract_meal.py<br/>Gemini 3 Flash + response_schema"]
+            Flask["scripts/local_app_simple.py<br/>Flask + gunicorn<br/>(dispatcher routes per FA-chosen kind)"]
+            ExtMeal["scripts/extract_meal.py"]
+            ExtTransport["scripts/extract_transport.py"]
+            ExtLib["scripts/extractor_lib.py<br/>(shared: CLI, ADC, Gemini call)"]
         end
         subgraph Rust["Rust binaries"]
             Reduce["reduce_extractions<br/>(uses src/reduce.rs)"]
@@ -71,12 +73,20 @@ graph TB
     Vertex["Vertex AI / Gemini API"]
     Schema["schema.yaml<br/>(source of truth)"]
     Codegen["scripts/generate_schema_artifacts.py<br/>scripts/generate_response_schema.py"]
+    RsMeal["generated/response_schema_meal.json"]
+    RsTransport["generated/response_schema_transport.json"]
 
-    UI -->|POST /upload| Flask
-    Flask -->|per file| Extract
-    Extract -->|HTTPS| Vertex
-    Vertex -->|JSON| Extract
-    Extract -->|extractions/*.json| Flask
+    UI -->|POST /upload<br/>file_N + kind_N| Flask
+    Flask -->|kind=meal| ExtMeal
+    Flask -->|kind=transport| ExtTransport
+    ExtMeal --- ExtLib
+    ExtTransport --- ExtLib
+    ExtMeal -->|HTTPS| Vertex
+    ExtTransport -->|HTTPS| Vertex
+    Vertex -->|JSON| ExtMeal
+    Vertex -->|JSON| ExtTransport
+    ExtMeal -->|extractions/*.json| Flask
+    ExtTransport -->|extractions/*.json| Flask
     Flask -->|spawns| Reduce
     Reduce -->|reduced/report.json| Flask
     Flask -->|spawns| Render
@@ -87,7 +97,10 @@ graph TB
     Schema -.->|generates| Codegen
     Codegen -.->|emits| ER
     Codegen -.->|emits| VR
-    Codegen -.->|emits| Extract
+    Codegen -.->|emits| RsMeal
+    Codegen -.->|emits| RsTransport
+    RsMeal -.read by.-> ExtMeal
+    RsTransport -.read by.-> ExtTransport
 
     Reduce --- Reducer
     Render --- Vald
@@ -113,19 +126,20 @@ sequenceDiagram
     actor FA
     participant Browser
     participant IAP as Google IAP
-    participant Flask as Flask (gunicorn)
-    participant Extract as extract_meal.py
+    participant Flask as Flask (gunicorn + dispatcher)
+    participant Extract as extract_(kind).py
     participant Gemini as Gemini API
     participant Reduce as reduce_extractions (Rust)
     participant Render as render_workbench_from_report (Rust)
     participant Disk as .scratch/uploads/{id}/
 
-    FA->>Browser: pick files, click Process Receipts
-    Browser->>IAP: POST /upload (multipart)
+    FA->>Browser: pick files + kind per file, click Process Receipts
+    Browser->>IAP: POST /upload (multipart with file_N + kind_N pairs)
     IAP->>Flask: forwarded request (auth verified)
     Flask->>Disk: save raw files to files/
 
-    loop for each uploaded file
+    loop for each (uploaded file, kind) pair
+        Note over Flask: dispatcher picks extract_meal.py or<br/>extract_transport.py from FA's kind choice
         Flask->>Extract: subprocess: --image f --output extractions/f.json
         Extract->>Gemini: generate_content(prompt, image, response_schema)
         Gemini-->>Extract: structured JSON
@@ -161,11 +175,16 @@ The decision flow inside a single upload, including failure paths.
 
 ```mermaid
 flowchart TD
-    Start([POST /upload]) --> Save[Save raw files to disk]
+    Start([POST /upload]) --> Validate{All file_N + kind_N pairs<br/>well-formed?}
+    Validate -->|no| Err0[Return 400: missing or unknown kind]
+    Validate -->|yes| Save[Save raw files to disk]
     Save --> Loop{More files?}
 
-    Loop -->|yes| Ext[Run extract_meal.py on next file]
-    Ext --> ExtOK{Exit 0?}
+    Loop -->|yes| Kind{file's kind?}
+    Kind -->|meal| ExtM[Run extract_meal.py]
+    Kind -->|transport| ExtT[Run extract_transport.py]
+    ExtM --> ExtOK{Exit 0?}
+    ExtT --> ExtOK
     ExtOK -->|no| Err1[Raise PipelineError step=extract]
     ExtOK -->|yes| Loop
 
@@ -183,6 +202,7 @@ flowchart TD
     Err3 --> ErrorPage
 
     Redirect --> Done([FA sees workbench])
+    Err0 --> Done3([FA sees 400])
     ErrorPage --> Done2([FA sees error page])
 ```
 
@@ -209,7 +229,7 @@ graph LR
             subgraph Process["Inside the container"]
                 Gunicorn["gunicorn<br/>1 worker × 8 threads<br/>:8080"]
                 Flask2["Flask app<br/>local_app_simple:app"]
-                PyExt["extract_meal.py<br/>(subprocess per file)"]
+                PyExt["extract_meal.py / extract_transport.py<br/>(subprocess per file, kind chosen by FA)"]
                 RustBin["reduce_extractions<br/>render_workbench_from_report<br/>(prebuilt at /usr/local/bin)"]
                 Scratch["/app/.scratch/uploads/<br/>(ephemeral)"]
             end
@@ -343,7 +363,7 @@ A cheat-sheet for "which file does X belong in?"
 | Add a business rule (e.g. "X required when Y") | `schema.yaml` (`required:` clause, regenerates `validation_rules.rs`) and/or hand-coded in `src/validator_typed.rs` | Validation |
 | Change how a field looks on the workbench | `src/workbench_simple.rs` + `src/workbench_simple.css` | Display |
 | Future: emit a Stanford-portal payload | new `src/submit.rs` (does not exist yet) | Submission |
-| Add a new expense kind (hotel/cab/airfare/conference) | new `scripts/extract_<kind>.py` + new `generated/response_schema_<kind>.json` + per-kind detail block already in `schema.yaml` | Extraction |
+| Add a new expense kind (hotel/cab/airfare/conference) | (1) per-kind detail block already in `schema.yaml`; (2) `scripts/generate_response_schema.py` — add the kind to `KIND_EXPENSE_TYPES` + a detail-block factory + an entry in `KINDS`; (3) new `scripts/extract_<kind>.py` (~60 lines using `extractor_lib`); (4) new dropdown option + dispatcher entry in `scripts/local_app_simple.py`; (5) workbench renderer + validator walk for the new detail block; (6) acceptance harness entries. The Dockerfile globs `generated/response_schema_*.json`, so no Dockerfile change. | Extraction + Display + Validation |
 
 ---
 
@@ -356,7 +376,7 @@ A cheat-sheet for "which file does X belong in?"
 | Codegen — Gemini response_schema | `scripts/generate_response_schema.py` |
 | Generated Rust types | `generated/expense_report_model.rs` |
 | Generated validation-rule constants | `generated/validation_rules.rs` |
-| Generated response_schema for meal | `generated/response_schema_meal.json` |
+| Generated response_schemas (per kind) | `generated/response_schema_meal.json`, `generated/response_schema_transport.json` |
 | Per-document I/O type | `src/extracted_receipt.rs` |
 | Provenance wrapper + metadata | `src/meta.rs`, `src/draft.rs` |
 | Reduction | `src/reduce.rs` |
@@ -366,7 +386,8 @@ A cheat-sheet for "which file does X belong in?"
 | Reduction binary | `src/bin/reduce_extractions.rs` |
 | Render binary | `src/bin/render_workbench_from_report.rs` |
 | Round-trip contract check | `src/bin/roundtrip_check.rs` |
-| Python extractor (Gemini call) | `scripts/extract_meal.py` (and future per-kind: `extract_transport.py`, etc.) |
+| Per-kind Python extractors (Gemini call) | `scripts/extract_meal.py`, `scripts/extract_transport.py` |
+| Shared extractor infrastructure | `scripts/extractor_lib.py` (CLI parsing, ADC client, Gemini call, response handling) |
 | Flask + gunicorn entry point | `scripts/local_app_simple.py` |
 | Acceptance harness | `scripts/acceptance_check.py` |
 | Manual deploy escape hatch | `scripts/deploy.sh` |
