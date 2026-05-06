@@ -44,6 +44,7 @@ pub fn render_workbench_html(
 
     render_hero(&mut html, report, validation);
     render_summary_cards(&mut html, report);
+    render_breakdown(&mut html, report);
 
     // Layout split: left rail (issues) + center column (form sections).
     // Rail is hidden via CSS when there are no issues so the center column
@@ -213,6 +214,104 @@ fn render_summary_cards(html: &mut String, report: &ExpenseReport) {
         // Confidence card has no plain-text value worth copying.
         None,
     ));
+    html.push_str("</section>\n");
+}
+
+// ─── Breakdown chart ──────────────────────────────────────────────────────
+
+/// One bucket of the per-kind expense breakdown.
+struct BreakdownSegment {
+    label: &'static str,
+    icon: &'static str,
+    color: &'static str,
+    amount: f64,
+}
+
+/// Group transaction lines by expense kind (which detail block is non-null)
+/// and sum line_amount_usd within each group. Lines with no amount are
+/// excluded; zero-total kinds are filtered out so the chart stays clean.
+fn kind_breakdown(report: &ExpenseReport) -> Vec<BreakdownSegment> {
+    // Stable order: meal first, then transport, then the future kinds we
+    // haven't shipped yet (in insertion order). Predictable layout when
+    // the FA looks at multiple reports side by side.
+    let mut totals: Vec<BreakdownSegment> = vec![
+        BreakdownSegment { label: "Meal",     icon: "🍽️", color: "#f97316", amount: 0.0 },
+        BreakdownSegment { label: "Transport", icon: "🚗", color: "#3b82f6", amount: 0.0 },
+        BreakdownSegment { label: "Airfare",   icon: "✈️", color: "#8b5cf6", amount: 0.0 },
+        BreakdownSegment { label: "Lodging",   icon: "🏨", color: "#10b981", amount: 0.0 },
+        BreakdownSegment { label: "Conference",icon: "🎟️", color: "#ec4899", amount: 0.0 },
+        BreakdownSegment { label: "Car Rental",icon: "🚙", color: "#14b8a6", amount: 0.0 },
+        BreakdownSegment { label: "Gift",      icon: "🎁", color: "#eab308", amount: 0.0 },
+        BreakdownSegment { label: "Human Subject", icon: "🧪", color: "#6b7280", amount: 0.0 },
+        BreakdownSegment { label: "Other",     icon: "📄", color: "#9ca3af", amount: 0.0 },
+    ];
+
+    let lines = match report.transaction_lines.as_ref() {
+        Some(v) => v,
+        None => return Vec::new(),
+    };
+
+    for line in lines {
+        let Some(amt) = line.common.line_amount_usd.value else { continue; };
+        let bucket = if line.meal_details.is_some() { 0 }
+            else if line.ground_transport_details.is_some() { 1 }
+            else if line.airfare_details.is_some() { 2 }
+            else if line.lodging_details.is_some() { 3 }
+            else if line.conference_registration_details.is_some() { 4 }
+            else if line.car_rental_details.is_some() { 5 }
+            else if line.gift_details.is_some() { 6 }
+            else if line.human_subject_details.is_some() { 7 }
+            else { 8 };
+        totals[bucket].amount += amt;
+    }
+
+    totals.into_iter().filter(|s| s.amount > 0.0).collect()
+}
+
+fn render_breakdown(html: &mut String, report: &ExpenseReport) {
+    let segments = kind_breakdown(report);
+    if segments.is_empty() {
+        return;
+    }
+    let total: f64 = segments.iter().map(|s| s.amount).sum();
+    if total <= 0.0 {
+        return;
+    }
+
+    html.push_str("<section class=\"panel breakdown\">\n");
+    html.push_str("<p class=\"eyebrow\">Spend by kind</p>\n");
+    html.push_str(&format!("<h2 class=\"breakdown-total\">${:.2}</h2>\n", total));
+
+    // Stacked horizontal bar. Each segment is a flex child sized by its
+    // share of the total.
+    html.push_str("<div class=\"breakdown-bar\">\n");
+    for seg in &segments {
+        let pct = seg.amount / total * 100.0;
+        html.push_str(&format!(
+            "<div class=\"breakdown-segment\" style=\"width:{:.4}%; background:{};\" title=\"{} {} (${:.2}, {:.0}%)\"></div>\n",
+            pct, seg.color, escape(seg.icon), escape(seg.label), seg.amount, pct,
+        ));
+    }
+    html.push_str("</div>\n");
+
+    // Legend below the bar: emoji + label + amount + percent. Each row
+    // aligns with a colored swatch on the left so the legend reads as
+    // "what color = what kind."
+    html.push_str("<ul class=\"breakdown-legend\">\n");
+    for seg in &segments {
+        let pct = seg.amount / total * 100.0;
+        html.push_str(&format!(
+            "<li class=\"breakdown-legend-item\">\
+              <span class=\"breakdown-swatch\" style=\"background:{};\" aria-hidden=\"true\"></span>\
+              <span class=\"breakdown-icon\" aria-hidden=\"true\">{}</span>\
+              <span class=\"breakdown-label\">{}</span>\
+              <span class=\"breakdown-amount\">${:.2}</span>\
+              <span class=\"breakdown-pct\">{:.0}%</span>\
+             </li>\n",
+            seg.color, escape(seg.icon), escape(seg.label), seg.amount, pct,
+        ));
+    }
+    html.push_str("</ul>\n");
     html.push_str("</section>\n");
 }
 
@@ -1066,6 +1165,48 @@ mod tests {
             friendly_field_label("expense_report.transaction_lines[1].ground_transport_details.origin"),
             "Line 2: Origin"
         );
+    }
+
+    #[test]
+    fn kind_breakdown_groups_and_sums() {
+        // Build a report with 2 meal lines + 1 transport line, each
+        // with a known amount. Verify segments contain only the kinds
+        // present, in the canonical order (meal first, then transport).
+        let mut report = ExpenseReport::default();
+        let mut lines = Vec::new();
+        for amount in [100.0, 50.0] {
+            let mut line = ExpenseReportTransactionLinesItem::default();
+            line.common.line_amount_usd = Wrapped::known(amount);
+            line.meal_details = Some(ExpenseReportTransactionLinesItemMealDetails::default());
+            lines.push(line);
+        }
+        let mut transport_line = ExpenseReportTransactionLinesItem::default();
+        transport_line.common.line_amount_usd = Wrapped::known(25.0);
+        transport_line.ground_transport_details =
+            Some(ExpenseReportTransactionLinesItemGroundTransportDetails::default());
+        lines.push(transport_line);
+        report.transaction_lines = Some(lines);
+
+        let segments = kind_breakdown(&report);
+        assert_eq!(segments.len(), 2, "only kinds with non-zero totals should appear");
+        assert_eq!(segments[0].label, "Meal");
+        assert!((segments[0].amount - 150.0).abs() < 1e-9);
+        assert_eq!(segments[1].label, "Transport");
+        assert!((segments[1].amount - 25.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn kind_breakdown_excludes_amountless_lines() {
+        // Lines without line_amount_usd shouldn't contribute to any
+        // bucket — they're skipped, not counted as $0.
+        let mut report = ExpenseReport::default();
+        let mut line = ExpenseReportTransactionLinesItem::default();
+        line.meal_details = Some(ExpenseReportTransactionLinesItemMealDetails::default());
+        // line.common.line_amount_usd left as Wrapped::unknown() — value=None
+        report.transaction_lines = Some(vec![line]);
+
+        let segments = kind_breakdown(&report);
+        assert!(segments.is_empty(), "amountless line should produce no segments");
     }
 
     #[test]
