@@ -78,6 +78,19 @@ pub fn render_workbench_html(
 }
 
 const JUMP_SCRIPT: &str = r#"<script>
+// On page load: walk the issues panel and tag the corresponding field
+// cards with `.has-issue`. Lets CSS pale-red those cards without the
+// renderer needing to thread issue paths through every field-card
+// helper. Recovers the same coupling at the display layer that's
+// already encoded in the issues panel's <a href=#...> anchors.
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('a.issue-jump').forEach(function(link) {
+    const id = link.getAttribute('href').slice(1);
+    const target = document.getElementById(id);
+    if (target) target.classList.add('has-issue');
+  });
+});
+
 // Click an issue → highlight the target field card. If the target is
 // already visible, skip the browser's scroll-to-top behavior (still
 // highlight). If it's out of view, let the browser scroll normally.
@@ -231,7 +244,7 @@ fn render_issues_panel(html: &mut String, validation: &ValidationReport) {
             "<li class=\"issue-card {severity_class}\">\
              <p class=\"issue-path\">{}</p>\
              <p class=\"issue-message\">{}</p>\
-             <a class=\"issue-jump\" href=\"#{}\">Jump to field →</a>\
+             <a class=\"issue-jump\" href=\"#{}\" aria-label=\"Jump to field\">→</a>\
              </li>\n",
             escape(&issue.path),
             escape(&issue.message),

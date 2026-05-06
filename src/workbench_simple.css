@@ -169,12 +169,28 @@ body {
   font-size: 13px;
   color: #111827;
 }
+/* Compact arrow link instead of "Jump to field →" text. The renderer
+   emits the link with just an arrow glyph; styled here as a circular
+   button so the click target is visible and obvious. */
 .issue-jump {
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #fff;
   color: #2563eb;
+  font-size: 14px;
+  line-height: 1;
   text-decoration: none;
+  border: 1px solid #d1d5db;
+  transition: background 0.1s ease, border-color 0.1s ease;
 }
-.issue-jump:hover { text-decoration: underline; }
+.issue-jump:hover {
+  background: #eff6ff;
+  border-color: #2563eb;
+}
 
 /* Field cards (Pattern A: compact value + dot + tooltip) ──────────────── */
 .field-grid {
@@ -186,10 +202,28 @@ body {
   padding: 10px 12px;
   background: #f9fafb;
   border: 1px solid #f3f4f6;
+  border-left: 3px solid transparent;
   border-radius: 4px;
   cursor: default;
 }
-/* Active state set via JS when an issue's "Jump to field" is clicked.
+/* Amber tint for fields the FA should look at: low confidence OR
+   explicit needs-review flag. The signal is encoded in the existing
+   markup (`.conf-low` dot, `.needs-review` tag) so CSS can pick it up
+   without the renderer doing extra work. */
+.field-card:has(.conf-low),
+.field-card:has(.needs-review) {
+  background: #fffbeb;
+  border-left-color: #f59e0b;
+}
+/* Pale red for fields the validator emitted a hard issue on. The
+   `has-issue` class is added by JS at page load by reading the
+   already-rendered issues panel and marking each target field card.
+   Red wins over amber — issues are stronger than uncertainty. */
+.field-card.has-issue {
+  background: #fef2f2;
+  border-left-color: #ef4444;
+}
+/* Active state set via JS when an issue's jump arrow is clicked.
    Deliberately NOT using :target — that would highlight the field whose id
    matches the URL fragment on page load, even when the user hasn't clicked
    anything. The JS owns the highlight; it's only on after a real click. */
@@ -253,11 +287,13 @@ body {
   cursor: pointer;
   font-size: 13px;
   list-style: none;
-  background: #fff;
+  /* Tinted band so the line header reads as distinct from its body. */
+  background: #f3f4f6;
   border-bottom: 1px solid transparent;
 }
+.line-summary:hover { background: #e5e7eb; }
 .line-summary::-webkit-details-marker { display: none; }
-.line-card[open] .line-summary { border-bottom-color: #f3f4f6; }
+.line-card[open] .line-summary { border-bottom-color: #d1d5db; }
 .line-chev {
   display: inline-block;
   width: 0;
