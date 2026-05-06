@@ -500,11 +500,13 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
         .map(|e| display_expense_type(e, line.meal_details.as_ref()))
         .unwrap_or("—".into());
     let headline = line_summary_headline(line);
+    let icon = line_kind_icon(line);
 
     html.push_str(&format!(
         "<details class=\"line-card\" open>\n\
          <summary class=\"line-summary\">\
            <span class=\"line-chev\" aria-hidden=\"true\"></span>\
+           <span class=\"line-icon\" aria-hidden=\"true\">{}</span>\
            <span class=\"line-index\">#{}</span>\
            <span class=\"line-venue\">{}</span>\
            <span class=\"line-kind\">{}</span>\
@@ -512,6 +514,7 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
            <span class=\"line-amount\">{}</span>\
          </summary>\n\
          <div class=\"line-body\">\n",
+        icon,
         idx + 1,
         escape(&headline),
         escape(&summary_kind),
@@ -631,6 +634,37 @@ fn display_expense_type(
     } else {
         base
     }
+}
+
+/// Per-kind icon for the line summary header. Emoji-based so the
+/// workbench stays self-contained — no asset shipping, no SVG markup.
+/// Falls back to a generic receipt for unknown kinds.
+fn line_kind_icon(line: &ExpenseReportTransactionLinesItem) -> &'static str {
+    if line.meal_details.is_some() {
+        return "🍽️";
+    }
+    if line.ground_transport_details.is_some() {
+        return "🚗";
+    }
+    if line.airfare_details.is_some() {
+        return "✈️";
+    }
+    if line.lodging_details.is_some() {
+        return "🏨";
+    }
+    if line.conference_registration_details.is_some() {
+        return "🎟️";
+    }
+    if line.car_rental_details.is_some() {
+        return "🚙";
+    }
+    if line.gift_details.is_some() {
+        return "🎁";
+    }
+    if line.human_subject_details.is_some() {
+        return "🧪";
+    }
+    "📄"
 }
 
 /// Per-kind headline for the collapsed transaction-line summary header.
@@ -967,6 +1001,24 @@ mod tests {
             friendly_field_label("expense_report.transaction_lines[1].ground_transport_details.origin"),
             "Line 2: Origin"
         );
+    }
+
+    #[test]
+    fn line_kind_icon_per_detail_block() {
+        // Default line (no detail block) gets the generic fallback.
+        let bare = ExpenseReportTransactionLinesItem::default();
+        assert_eq!(line_kind_icon(&bare), "📄");
+
+        // Meal line.
+        let mut meal_line = ExpenseReportTransactionLinesItem::default();
+        meal_line.meal_details = Some(ExpenseReportTransactionLinesItemMealDetails::default());
+        assert_eq!(line_kind_icon(&meal_line), "🍽️");
+
+        // Transport line.
+        let mut transport_line = ExpenseReportTransactionLinesItem::default();
+        transport_line.ground_transport_details =
+            Some(ExpenseReportTransactionLinesItemGroundTransportDetails::default());
+        assert_eq!(line_kind_icon(&transport_line), "🚗");
     }
 
     #[test]
