@@ -89,6 +89,42 @@ body {
   padding: 16px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
+  transition: border-color 0.1s ease, background 0.1s ease;
+}
+.summary-card--copyable { cursor: copy; }
+.summary-card--copyable:hover {
+  border-color: #2563eb;
+  background: #f8fafc;
+}
+.field-card--copyable { cursor: copy; }
+.field-card--copyable:hover {
+  border-color: #2563eb;
+}
+
+/* Copy-to-clipboard toast. Hidden by default; JS adds .visible
+   for ~1.5s after each successful copy. Anchored bottom-center. */
+.copy-toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: #1a1d1f;
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 1000;
+  max-width: 80vw;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.copy-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 .summary-label {
   margin: 0 0 6px;

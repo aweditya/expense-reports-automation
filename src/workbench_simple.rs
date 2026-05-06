@@ -67,9 +67,11 @@ pub fn render_workbench_html(
 
     html.push_str("</div>\n");
     html.push_str("</div>\n");
-    // Tiny in-view-aware jump handler: if the target field is already
-    // visible in the viewport, just flash the amber highlight without
-    // scrolling. Otherwise let the browser do its default anchor scroll.
+    // Toast for click-to-copy feedback. Hidden by default; the JS
+    // handler toggles `.visible` on copy and clears it after 1.5s.
+    html.push_str("<div id=\"copy-toast\" class=\"copy-toast\" role=\"status\" aria-live=\"polite\"></div>\n");
+    // Tiny in-view-aware jump handler + click-to-copy handler — see
+    // JUMP_SCRIPT below for the in-script comments.
     html.push_str(JUMP_SCRIPT);
     html.push_str("</body>\n</html>\n");
     html
@@ -108,6 +110,36 @@ document.addEventListener('click', function(e) {
   if (inView) {
     e.preventDefault();
     history.replaceState(null, '', '#' + id);
+  }
+});
+
+// Click a card with [data-copy-value] → copy that value to clipboard
+// and show a brief toast. Skips if the click was on the issue-jump
+// arrow inside the card (so jump and copy don't conflict).
+let copyToastTimer = null;
+function showCopyToast(text) {
+  const toast = document.getElementById('copy-toast');
+  if (!toast) return;
+  toast.textContent = text;
+  toast.classList.add('visible');
+  if (copyToastTimer) clearTimeout(copyToastTimer);
+  copyToastTimer = setTimeout(function() {
+    toast.classList.remove('visible');
+  }, 1500);
+}
+document.addEventListener('click', function(e) {
+  // If the click went to an issue-jump arrow, let that handler win.
+  if (e.target.closest('a.issue-jump')) return;
+  const target = e.target.closest('[data-copy-value]');
+  if (!target) return;
+  const value = target.getAttribute('data-copy-value');
+  if (!value) return;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(value).then(function() {
+      showCopyToast('Copied: ' + value);
+    }).catch(function() {
+      showCopyToast('Copy failed');
+    });
   }
 });
 </script>
@@ -169,22 +201,34 @@ fn render_summary_cards(html: &mut String, report: &ExpenseReport) {
     let conf = confidence_breakdown(report);
 
     html.push_str("<section class=\"summary-cards\">\n");
-    html.push_str(&summary_card("Trip Date", &trip_date));
-    html.push_str(&summary_card("Total USD", &total));
-    html.push_str(&summary_card("Category", &category));
+    html.push_str(&summary_card("Trip Date", &trip_date, Some(&trip_date)));
+    html.push_str(&summary_card("Total USD", &total, Some(&total)));
+    html.push_str(&summary_card("Category", &category, Some(&category)));
     html.push_str(&summary_card(
         "Confidence",
         &format!(
             "{} <span class=\"conf-dot conf-high\"></span> {} <span class=\"conf-dot conf-medium\"></span> {} <span class=\"conf-dot conf-low\"></span>",
             conf.high, conf.medium, conf.low
         ),
+        // Confidence card has no plain-text value worth copying.
+        None,
     ));
     html.push_str("</section>\n");
 }
 
-fn summary_card(label: &str, value: &str) -> String {
+fn summary_card(label: &str, value: &str, copy_value: Option<&str>) -> String {
+    // copy_value is None when `value` is HTML (e.g. the Confidence card
+    // uses inline spans for the dot legend) — those aren't worth copying
+    // anyway. Plain-text cards get the copy attribute + the cursor hint.
+    let (extras, class) = match copy_value {
+        Some(v) if v != "—" => (
+            format!(" data-copy-value=\"{}\" title=\"Click to copy\"", escape(v)),
+            " summary-card--copyable",
+        ),
+        _ => (String::new(), ""),
+    };
     format!(
-        "<article class=\"summary-card\"><p class=\"summary-label\">{}</p><p class=\"summary-value\">{}</p></article>\n",
+        "<article class=\"summary-card{class}\"{extras}><p class=\"summary-label\">{}</p><p class=\"summary-value\">{}</p></article>\n",
         escape(label),
         value // value is constructed safely above (all our own strings)
     )
@@ -800,8 +844,9 @@ fn field_card_inner(html: &mut String, label: &str, path: &str, value: &str, met
         _ => String::new(),
     };
 
+    let copy_attrs = copy_attrs_for(value);
     html.push_str(&format!(
-        "<div class=\"field-card\" id=\"{}\">\
+        "<div class=\"field-card{copy_class}\" id=\"{}\"{copy_attrs}>\
            <p class=\"field-label\">{}</p>\
            <p class=\"field-value\">{} <span class=\"conf-dot {}\"></span></p>\
            {}\
@@ -813,20 +858,40 @@ fn field_card_inner(html: &mut String, label: &str, path: &str, value: &str, met
         conf_class,
         evidence_block,
         needs_review_tag,
+        copy_class = if copy_attrs.is_empty() { "" } else { " field-card--copyable" },
+        copy_attrs = copy_attrs,
     ));
 }
 
 fn field_card_bare(html: &mut String, label: &str, path: &str, value: &str) {
     // For T1/T2 fields without a Wrapped/_meta — no confidence dot.
+    let copy_attrs = copy_attrs_for(value);
     html.push_str(&format!(
-        "<div class=\"field-card\" id=\"{}\">\
+        "<div class=\"field-card{copy_class}\" id=\"{}\"{copy_attrs}>\
            <p class=\"field-label\">{}</p>\
            <p class=\"field-value\">{}</p>\
          </div>\n",
         field_anchor(path),
         escape(label),
         escape(value),
+        copy_class = if copy_attrs.is_empty() { "" } else { " field-card--copyable" },
+        copy_attrs = copy_attrs,
     ));
+}
+
+/// Build the `data-copy-value` + `title` attributes for a card value.
+/// Empty string when the value is missing ("—") or blank — those aren't
+/// worth offering to copy.
+fn copy_attrs_for(value: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed == "—" {
+        String::new()
+    } else {
+        format!(
+            " data-copy-value=\"{}\" title=\"Click to copy\"",
+            escape(trimmed)
+        )
+    }
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
