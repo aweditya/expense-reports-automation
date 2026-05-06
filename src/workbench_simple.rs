@@ -334,11 +334,7 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
         .as_ref()
         .map(|e| display_expense_type(e, line.meal_details.as_ref()))
         .unwrap_or("—".into());
-    let venue = line
-        .meal_details
-        .as_ref()
-        .and_then(|m| m.venue_name.value.as_deref())
-        .unwrap_or("");
+    let headline = line_summary_headline(line);
 
     html.push_str(&format!(
         "<details class=\"line-card\" open>\n\
@@ -352,7 +348,7 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
          </summary>\n\
          <div class=\"line-body\">\n",
         idx + 1,
-        escape(if venue.is_empty() { "(no venue)" } else { venue }),
+        escape(&headline),
         escape(&summary_kind),
         escape(&summary_date),
         escape(&summary_amount),
@@ -470,6 +466,31 @@ fn display_expense_type(
     } else {
         base
     }
+}
+
+/// Per-kind headline for the collapsed transaction-line summary header.
+/// For meal lines, it's the venue name (the most distinctive identifier
+/// for "which restaurant was this?"); for transport lines, the service
+/// provider plays the same role ("Lyft" / "Uber"). Future per-kind
+/// blocks should extend this with their natural headline.
+fn line_summary_headline(line: &ExpenseReportTransactionLinesItem) -> String {
+    if let Some(meal) = &line.meal_details {
+        if let Some(venue) = meal.venue_name.value.as_deref() {
+            if !venue.is_empty() {
+                return venue.to_owned();
+            }
+        }
+        return "(no venue)".to_owned();
+    }
+    if let Some(gt) = &line.ground_transport_details {
+        if let Some(provider) = gt.service_provider.value.as_deref() {
+            if !provider.is_empty() {
+                return provider.to_owned();
+            }
+        }
+        return "(no service provider)".to_owned();
+    }
+    "—".to_owned()
 }
 
 /// Title-case an underscore-separated identifier:
