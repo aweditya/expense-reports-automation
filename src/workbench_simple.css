@@ -141,6 +141,29 @@ body {
   margin: 0 0 12px;
   font-size: 16px;
 }
+/* Issues are bucketed into FA-facing categories ("Missing fields",
+   "Needs review", "Other issues"). The section header carries the
+   "what action is needed" context, so each card just needs its
+   field label + the jump arrow. Empty sections are not rendered. */
+.issue-section {
+  margin-bottom: 14px;
+}
+.issue-section:last-child {
+  margin-bottom: 0;
+}
+.issue-section-title {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7280;
+}
+.issue-count {
+  color: #9ca3af;
+  font-weight: 500;
+  margin-left: 4px;
+}
 .issue-list {
   list-style: none;
   margin: 0;
@@ -153,21 +176,22 @@ body {
   background: #f9fafb;
   padding: 8px 10px;
   border-radius: 4px;
+  /* Card content is now a single label + jump arrow. Lay out as two
+     columns: label flexes, arrow sits on the right. */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 .issue-error { border-left-color: #ef4444; }
 .issue-warning { border-left-color: #f59e0b; }
 .issue-info { border-left-color: #3b82f6; }
-.issue-path {
-  margin: 0 0 2px;
-  font-family: ui-monospace, "SF Mono", Monaco, Consolas, monospace;
-  font-size: 10px;
-  color: #6b7280;
-  word-break: break-all;
-}
-.issue-message {
-  margin: 0 0 4px;
+.issue-label {
+  margin: 0;
   font-size: 13px;
   color: #111827;
+  flex: 1;
+  min-width: 0;
 }
 /* Compact arrow link instead of "Jump to field →" text. The renderer
    emits the link with just an arrow glyph; styled here as a circular

@@ -16,9 +16,7 @@ use crate::expense_report_model::{
 };
 use crate::extracted_receipt::ExtractedReceipt;
 use crate::meta::{ConfidenceLevel, FieldMetadata, Wrapped};
-use crate::validator::{ValidationReport, ValidationSeverity};
-#[cfg(test)]
-use crate::validator::{ValidationIssue, ValidationIssueKind};
+use crate::validator::{ValidationIssue, ValidationIssueKind, ValidationReport, ValidationSeverity};
 
 const CSS: &str = include_str!("workbench_simple.css");
 
@@ -231,27 +229,181 @@ fn walk_confidence(value: &serde_json::Value, acc: &mut ConfBreakdown) {
 
 // ─── Issues queue ──────────────────────────────────────────────────────────
 
+/// FA-facing buckets for the issues panel. The category header itself
+/// tells the FA what action is needed, so each issue card stays terse —
+/// no per-card "you must fill this in" verbosity required.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum IssueCategory {
+    MissingFields,
+    NeedsReview,
+    Other,
+}
+
+impl IssueCategory {
+    fn label(self) -> &'static str {
+        match self {
+            IssueCategory::MissingFields => "Missing fields",
+            IssueCategory::NeedsReview => "Needs review",
+            IssueCategory::Other => "Other issues",
+        }
+    }
+}
+
+fn issue_category(kind: ValidationIssueKind) -> IssueCategory {
+    use ValidationIssueKind::*;
+    match kind {
+        MissingRequiredField | MissingDependency => IssueCategory::MissingFields,
+        ManualReviewRequired | LowConfidenceWithoutReview => IssueCategory::NeedsReview,
+        // Data-integrity / schema-internal kinds. Rare in practice;
+        // shown only when present so the rail isn't cluttered with an
+        // empty section.
+        TypeMismatch
+        | InvalidEnumValue
+        | MissingFieldMetadata
+        | MissingEvidenceReference
+        | OrphanFieldMetadata
+        | InvalidEvidenceReference
+        | UnsupportedExpression
+        | UnresolvedExpressionReference
+        | InternalSchemaError => IssueCategory::Other,
+    }
+}
+
 fn render_issues_panel(html: &mut String, validation: &ValidationReport) {
     html.push_str("<section class=\"panel issues-panel\">\n");
-    html.push_str("<p class=\"eyebrow\">Queue</p>\n<h2>Issues</h2>\n<ul class=\"issue-list\">\n");
+    html.push_str("<p class=\"eyebrow\">Queue</p>\n<h2>Issues</h2>\n");
+
+    // Group by FA-facing category, preserving original order within each
+    // bucket. Empty categories are hidden — a clean report shows nothing.
+    let mut by_category: std::collections::BTreeMap<IssueCategory, Vec<&ValidationIssue>> =
+        std::collections::BTreeMap::new();
     for issue in &validation.issues {
-        let severity_class = match issue.severity {
-            ValidationSeverity::Error => "issue-error",
-            ValidationSeverity::Warning => "issue-warning",
-        };
-        let anchor = field_anchor(&issue.path);
-        html.push_str(&format!(
-            "<li class=\"issue-card {severity_class}\">\
-             <p class=\"issue-path\">{}</p>\
-             <p class=\"issue-message\">{}</p>\
-             <a class=\"issue-jump\" href=\"#{}\" aria-label=\"Jump to field\">→</a>\
-             </li>\n",
-            escape(&issue.path),
-            escape(&issue.message),
-            anchor
-        ));
+        by_category
+            .entry(issue_category(issue.kind))
+            .or_default()
+            .push(issue);
     }
-    html.push_str("</ul>\n</section>\n");
+
+    for (category, issues) in by_category.iter() {
+        html.push_str(&format!(
+            "<div class=\"issue-section\">\n\
+             <h3 class=\"issue-section-title\">{} <span class=\"issue-count\">({})</span></h3>\n\
+             <ul class=\"issue-list\">\n",
+            escape((*category).label()),
+            issues.len(),
+        ));
+        for issue in issues {
+            let severity_class = match issue.severity {
+                ValidationSeverity::Error => "issue-error",
+                ValidationSeverity::Warning => "issue-warning",
+            };
+            let anchor = field_anchor(&issue.path);
+            html.push_str(&format!(
+                "<li class=\"issue-card {severity_class}\">\
+                 <p class=\"issue-label\">{}</p>\
+                 <a class=\"issue-jump\" href=\"#{}\" aria-label=\"Jump to field\">→</a>\
+                 </li>\n",
+                escape(&friendly_field_label(&issue.path)),
+                anchor
+            ));
+        }
+        html.push_str("</ul>\n</div>\n");
+    }
+
+    html.push_str("</section>\n");
+}
+
+/// Map a dotted schema path to an FA-readable label for the issues
+/// panel. Examples:
+///   expense_report.general_information.payee.name -> "Payee Name"
+///   expense_report.general_information.business_purpose.who -> "Business Purpose: Who"
+///   expense_report.transaction_lines[0].common.country_of_activity -> "Line 1: Country of Activity"
+///   expense_report.transaction_summary.transaction_date -> "Trip Date"
+///
+/// A small override map handles cases where the workbench display name
+/// differs from the schema path (e.g. transaction_date appears as "Trip
+/// Date" in the summary card, so the issue label matches).
+fn friendly_field_label(path: &str) -> String {
+    // Overrides for fields where the schema name and the workbench
+    // display name differ. Match against the suffix so the lookup is
+    // stable across Line N / non-Line contexts.
+    let overrides: &[(&str, &str)] = &[
+        ("transaction_summary.transaction_date", "Trip Date"),
+        ("transaction_summary.total_usd", "Total USD"),
+        ("transaction_summary.transaction_number", "Transaction Number"),
+        ("general_information.category", "Category"),
+        ("general_information.payment_method", "Payment Method"),
+        ("general_information.event_name", "Event Name"),
+        ("general_information.authorized_by", "Authorized By"),
+        ("general_information.rush_processing", "Rush Processing"),
+    ];
+    for (suffix, label) in overrides {
+        if path.ends_with(suffix) {
+            return (*label).to_owned();
+        }
+    }
+
+    // Strip the expense_report. prefix.
+    let stripped = path.strip_prefix("expense_report.").unwrap_or(path);
+
+    // Split on '.', skipping group prefixes like "general_information"
+    // (the bucket headers in the issues panel already convey context).
+    // For transaction_lines[N], extract the index and prepend "Line N+1:".
+    let parts: Vec<&str> = stripped.split('.').collect();
+    let mut prefix = String::new();
+    let mut tail_start = 0;
+
+    if let Some(first) = parts.first() {
+        if let Some(idx_str) = first
+            .strip_prefix("transaction_lines[")
+            .and_then(|s| s.strip_suffix(']'))
+        {
+            if let Ok(idx) = idx_str.parse::<usize>() {
+                prefix = format!("Line {}: ", idx + 1);
+                tail_start = 1;
+            }
+        }
+        if first == &"general_information"
+            || first == &"transaction_summary"
+            || first == &"per_diem_expenses"
+            || first == &"mileage_expenses"
+            || first == &"allocation_and_approvers"
+        {
+            tail_start = 1;
+        }
+    }
+
+    // Drop block names that just structure the schema and add no
+    // FA-facing context — the field name itself is informative. Keep
+    // `payee`, `business_purpose`, etc. because they DO give context
+    // ("Payee: Name" vs just "Name"; "Business Purpose: Who" vs "Who").
+    let intermediate_blocks = [
+        "common",
+        "meal_details",
+        "ground_transport_details",
+        "airfare_details",
+        "lodging_details",
+        "conference_registration_details",
+        "car_rental_details",
+        "gift_details",
+        "human_subject_details",
+    ];
+    let tail: Vec<String> = parts[tail_start..]
+        .iter()
+        .enumerate()
+        .filter_map(|(i, p)| {
+            // Keep the LAST component always (it's the field name).
+            // Strip intermediate group names like "common".
+            let is_last = i == parts[tail_start..].len() - 1;
+            if !is_last && intermediate_blocks.contains(p) {
+                None
+            } else {
+                Some(title_case(p))
+            }
+        })
+        .collect();
+
+    format!("{}{}", prefix, tail.join(": "))
 }
 
 fn field_anchor(path: &str) -> String {
@@ -778,5 +930,53 @@ mod tests {
         // Non-meal expense kinds — alcohol bool is irrelevant, no suffix even if true.
         assert_eq!(display_expense_type(&AirfareDomestic, None), "Airfare Domestic");
         assert_eq!(display_expense_type(&GroundTransportationForeign, Some(&meal_with(true))), "Ground Transportation Foreign");
+    }
+
+    #[test]
+    fn friendly_field_label_examples() {
+        // Override map wins over generic title-casing.
+        assert_eq!(
+            friendly_field_label("expense_report.transaction_summary.transaction_date"),
+            "Trip Date"
+        );
+        assert_eq!(
+            friendly_field_label("expense_report.general_information.category"),
+            "Category"
+        );
+
+        // Plain general_information field: drop the bucket prefix, title-case.
+        assert_eq!(
+            friendly_field_label("expense_report.general_information.payee.name"),
+            "Payee: Name"
+        );
+        assert_eq!(
+            friendly_field_label("expense_report.general_information.business_purpose.who"),
+            "Business Purpose: Who"
+        );
+
+        // Transaction-line field: extract index, drop "common"/detail-block names.
+        assert_eq!(
+            friendly_field_label("expense_report.transaction_lines[0].common.country_of_activity"),
+            "Line 1: Country Of Activity"
+        );
+        assert_eq!(
+            friendly_field_label("expense_report.transaction_lines[2].meal_details.venue_name"),
+            "Line 3: Venue Name"
+        );
+        assert_eq!(
+            friendly_field_label("expense_report.transaction_lines[1].ground_transport_details.origin"),
+            "Line 2: Origin"
+        );
+    }
+
+    #[test]
+    fn issue_category_buckets() {
+        use crate::validator::ValidationIssueKind::*;
+        assert_eq!(issue_category(MissingRequiredField), IssueCategory::MissingFields);
+        assert_eq!(issue_category(MissingDependency), IssueCategory::MissingFields);
+        assert_eq!(issue_category(ManualReviewRequired), IssueCategory::NeedsReview);
+        assert_eq!(issue_category(LowConfidenceWithoutReview), IssueCategory::NeedsReview);
+        assert_eq!(issue_category(TypeMismatch), IssueCategory::Other);
+        assert_eq!(issue_category(InternalSchemaError), IssueCategory::Other);
     }
 }
