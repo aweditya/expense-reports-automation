@@ -51,6 +51,11 @@ def meta_block_schema() -> dict:
         "type": "object",
         "properties": {
             "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
+            # One short sentence justifying the confidence choice. Required
+            # so the model is forced to produce it for every leaf — the FA
+            # uses it to understand "why was this medium?" without flipping
+            # back to the receipt.
+            "confidence_reason": {"type": "string"},
             "evidence": {
                 "type": "array",
                 "items": {
@@ -76,7 +81,7 @@ def meta_block_schema() -> dict:
             "needs_review": {"type": "boolean"},
             "flags": {"type": "array", "items": {"type": "string"}},
         },
-        "required": ["confidence", "evidence", "needs_review", "flags"],
+        "required": ["confidence", "confidence_reason", "evidence", "needs_review", "flags"],
     }
 
 

@@ -854,6 +854,7 @@ mod tests {
             evidence,
             needs_review,
             flags: Vec::new(),
+            confidence_reason: None,
         }
     }
 
@@ -1095,6 +1096,7 @@ mod tests {
                 evidence: vec![generated_evidence("system_generated")],
                 needs_review: false,
                 flags: Vec::new(),
+                confidence_reason: None,
             },
         );
 
@@ -1123,6 +1125,7 @@ mod tests {
                 evidence: Vec::new(),
                 needs_review: false,
                 flags: Vec::new(),
+                confidence_reason: None,
             },
         );
 

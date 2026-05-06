@@ -291,6 +291,7 @@ classDiagram
 
     class FieldMetadata {
         +ConfidenceLevel confidence
+        +Option~String~ confidence_reason
         +Vec~EvidenceReference~ evidence
         +bool needs_review
         +Vec~String~ flags

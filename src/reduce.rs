@@ -139,6 +139,10 @@ fn derived_meta(confidence: ConfidenceLevel, origin: &str) -> FieldMetadata {
         }],
         needs_review: false,
         flags: Vec::new(),
+        // Reduction-derived fields don't need a confidence_reason —
+        // the existing system_generated origin already explains the
+        // derivation; the workbench shows it via human_readable_origin.
+        confidence_reason: None,
     }
 }
 

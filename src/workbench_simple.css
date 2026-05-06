@@ -455,6 +455,19 @@ body {
   color: #9ca3af;
   line-height: 1.4;
 }
+/* Confidence justification — shown only on medium/low cards. Slightly
+   more prominent than the evidence quote since it carries actionable
+   info ("here's why I'm not sure"). */
+.field-reason {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: #92400e;
+  line-height: 1.4;
+}
+.field-reason::first-letter {
+  /* "Medium:" / "Low:" reads better with the prefix in semibold. */
+  font-weight: 600;
+}
 
 /* Source documents ────────────────────────────────────────────────────── */
 .doc-grid {

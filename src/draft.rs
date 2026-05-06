@@ -45,6 +45,13 @@ pub struct FieldMetadata {
     pub evidence: Vec<EvidenceReference>,
     pub needs_review: bool,
     pub flags: Vec<String>,
+    /// One short sentence the extractor wrote justifying the confidence
+    /// level. Helps the FA understand "why was this medium and not high?"
+    /// without having to look at the receipt themselves.
+    /// Optional with `#[serde(default)]` so older cached extractions
+    /// (pre-Stage-6, no confidence_reason field) still deserialize.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confidence_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -215,6 +222,18 @@ fn parse_field_metadata(
         None => Vec::new(),
     };
 
+    // Optional one-line justification for the chosen confidence level.
+    // Older drafts (pre-Stage-6) won't have it; missing → None.
+    let confidence_reason = match object.remove("confidence_reason") {
+        Some(ReportValue::String(value)) => Some(value),
+        Some(_) => {
+            return Err(ParseDraftReportError::InvalidMetadata(format!(
+                "_meta.confidence_reason at {path} must be a string"
+            )))
+        }
+        None => None,
+    };
+
     if !object.is_empty() {
         return Err(ParseDraftReportError::InvalidMetadata(format!(
             "_meta at {path} contains unexpected keys"
@@ -226,6 +245,7 @@ fn parse_field_metadata(
         evidence,
         needs_review,
         flags,
+        confidence_reason,
     })
 }
 

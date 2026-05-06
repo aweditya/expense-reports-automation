@@ -943,11 +943,30 @@ fn field_card_inner(html: &mut String, label: &str, path: &str, value: &str, met
         _ => String::new(),
     };
 
+    // Confidence reason: shown only for non-high fields, since high
+    // confidence with no quote available is the common case for derived
+    // values (and a "high — value is correct" justification is noise).
+    // Older cached extractions without the field render the same as
+    // before (no extra line).
+    let reason_block = match (meta.confidence, meta.confidence_reason.as_deref()) {
+        (ConfidenceLevel::Medium | ConfidenceLevel::Low, Some(r)) if !r.is_empty() => format!(
+            "<p class=\"field-reason\">{}: {}</p>",
+            match meta.confidence {
+                ConfidenceLevel::Medium => "Medium",
+                ConfidenceLevel::Low => "Low",
+                _ => unreachable!(),
+            },
+            escape(r),
+        ),
+        _ => String::new(),
+    };
+
     let copy_attrs = copy_attrs_for(value);
     html.push_str(&format!(
         "<div class=\"field-card{copy_class}\" id=\"{}\"{copy_attrs}>\
            <p class=\"field-label\">{}</p>\
            <p class=\"field-value\">{} <span class=\"conf-dot {}\"></span></p>\
+           {}\
            {}\
            {}\
          </div>\n",
@@ -956,6 +975,7 @@ fn field_card_inner(html: &mut String, label: &str, path: &str, value: &str, met
         escape(value),
         conf_class,
         evidence_block,
+        reason_block,
         needs_review_tag,
         copy_class = if copy_attrs.is_empty() { "" } else { " field-card--copyable" },
         copy_attrs = copy_attrs,
@@ -1035,6 +1055,7 @@ mod tests {
                 evidence: vec![],
                 needs_review: false,
                 flags: vec![],
+                confidence_reason: None,
             },
         };
         line.common.line_amount_usd = Wrapped {

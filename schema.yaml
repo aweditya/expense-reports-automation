@@ -789,6 +789,9 @@ _meta_convention:
     type: enum
     description: "Ordinal — high, medium, or low. Not a calibrated probability."
     allowed_values: [high, medium, low]
+  confidence_reason:
+    type: string
+    description: "One short sentence (≤15 words) the extractor wrote justifying the confidence level. Helps the FA understand 'why was this medium and not high?' without re-checking the receipt. Required for every leaf in fresh extractions; optional in older cached data (deserializes to None)."
   evidence:
     type: array
     description: "One or more pointers to where the value came from. Required for every leaf."

@@ -84,6 +84,7 @@ impl Default for FieldMetadata {
             evidence: Vec::new(),
             needs_review: false,
             flags: Vec::new(),
+            confidence_reason: None,
         }
     }
 }
@@ -108,6 +109,7 @@ mod tests {
                 }],
                 needs_review: false,
                 flags: Vec::new(),
+                confidence_reason: None,
             },
         };
 
