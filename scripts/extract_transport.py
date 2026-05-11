@@ -96,13 +96,14 @@ is enforced by the response schema — fill the values from the receipt.
 - `confidence_reason` is ONE short sentence (≤15 words) explaining WHY
   you picked that confidence level. The FA reads this to understand
   "why was this medium and not high?" without flipping back to the
-  receipt. Examples:
-    high: "Pickup address printed in full on the receipt."
+  receipt.
+  - REQUIRED for every `medium` and `low` confidence value (these are
+    the cases the FA most needs to understand).
+  - For `high` confidence values you may OMIT the field entirely — the
+    workbench doesn't surface it, and writing it just bloats the output.
+  Examples:
     medium: "USD inferred from `$` symbol; receipt doesn't say USD literally."
     low: "Field not visible on receipt; guessed from context."
-  Must be present for every leaf, including nulls (in which case the
-  reason explains why the field is null, e.g. "Not applicable for
-  domestic receipts.").
 - `evidence` for present values: `kind: document_span` with `filename`,
   `page`, and an exact `quote` from the receipt.
 - `evidence` for null values: `kind: system_generated` with one of

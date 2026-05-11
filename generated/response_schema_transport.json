@@ -75,7 +75,6 @@
                 },
                 "required": [
                   "confidence",
-                  "confidence_reason",
                   "evidence",
                   "needs_review",
                   "flags"
@@ -155,7 +154,6 @@
                 },
                 "required": [
                   "confidence",
-                  "confidence_reason",
                   "evidence",
                   "needs_review",
                   "flags"
@@ -237,7 +235,6 @@
                 },
                 "required": [
                   "confidence",
-                  "confidence_reason",
                   "evidence",
                   "needs_review",
                   "flags"
@@ -318,7 +315,6 @@
                 },
                 "required": [
                   "confidence",
-                  "confidence_reason",
                   "evidence",
                   "needs_review",
                   "flags"
@@ -402,7 +398,6 @@
                 },
                 "required": [
                   "confidence",
-                  "confidence_reason",
                   "evidence",
                   "needs_review",
                   "flags"
@@ -482,7 +477,6 @@
                 },
                 "required": [
                   "confidence",
-                  "confidence_reason",
                   "evidence",
                   "needs_review",
                   "flags"
@@ -563,7 +557,6 @@
                 },
                 "required": [
                   "confidence",
-                  "confidence_reason",
                   "evidence",
                   "needs_review",
                   "flags"
@@ -650,7 +643,6 @@
                 },
                 "required": [
                   "confidence",
-                  "confidence_reason",
                   "evidence",
                   "needs_review",
                   "flags"
@@ -745,7 +737,6 @@
                 },
                 "required": [
                   "confidence",
-                  "confidence_reason",
                   "evidence",
                   "needs_review",
                   "flags"
@@ -825,7 +816,6 @@
                 },
                 "required": [
                   "confidence",
-                  "confidence_reason",
                   "evidence",
                   "needs_review",
                   "flags"
@@ -905,7 +895,6 @@
                 },
                 "required": [
                   "confidence",
-                  "confidence_reason",
                   "evidence",
                   "needs_review",
                   "flags"
@@ -997,7 +986,6 @@
                 },
                 "required": [
                   "confidence",
-                  "confidence_reason",
                   "evidence",
                   "needs_review",
                   "flags"
@@ -1079,7 +1067,6 @@
                 },
                 "required": [
                   "confidence",
-                  "confidence_reason",
                   "evidence",
                   "needs_review",
                   "flags"

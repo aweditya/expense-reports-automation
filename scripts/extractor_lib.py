@@ -123,8 +123,12 @@ def run_extraction(
             response_mime_type="application/json",
             response_schema=response_schema,
             # Gemini 3 includes "thinking" tokens in this budget. Tamarine
-            # spent 7860 thinking tokens; 8192 is too small. Be generous.
-            max_output_tokens=32768,
+            # spent 7860 thinking tokens at 8192 = too small. After Stage 6
+            # added confidence_reason on every leaf the output volume grew
+            # again — uber1.pdf blew past 32768 mid-JSON. Bumping to 65536
+            # leaves headroom for multi-page PDFs (Uber receipts are 2 pages,
+            # future hotel folios will be longer).
+            max_output_tokens=65536,
             temperature=0.0,
         ),
     )

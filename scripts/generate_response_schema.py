@@ -51,10 +51,12 @@ def meta_block_schema() -> dict:
         "type": "object",
         "properties": {
             "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
-            # One short sentence justifying the confidence choice. Required
-            # so the model is forced to produce it for every leaf — the FA
-            # uses it to understand "why was this medium?" without flipping
-            # back to the receipt.
+            # One short sentence justifying the confidence choice. Optional
+            # in the schema (so partial outputs still parse if the model
+            # truncates) but the prompt asks for it on medium/low fields,
+            # which is the only case the workbench renders it. High cards
+            # often skip it — they're noise to justify when the value is
+            # clearly printed.
             "confidence_reason": {"type": "string"},
             "evidence": {
                 "type": "array",
@@ -81,7 +83,7 @@ def meta_block_schema() -> dict:
             "needs_review": {"type": "boolean"},
             "flags": {"type": "array", "items": {"type": "string"}},
         },
-        "required": ["confidence", "confidence_reason", "evidence", "needs_review", "flags"],
+        "required": ["confidence", "evidence", "needs_review", "flags"],
     }
 
 
