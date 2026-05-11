@@ -635,16 +635,15 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
         .as_ref()
         .map(|d| d.0.clone())
         .unwrap_or("—".into());
-    let summary_kind = line
-        .common
-        .expense_type
-        .value
-        .as_ref()
-        .map(|e| display_expense_type(e, line.meal_details.as_ref()))
-        .unwrap_or("—".into());
     let headline = line_summary_headline(line);
     let icon = line_kind_icon(line);
 
+    // Note: previously this row also rendered a "kind text" span (e.g.
+    // "Business Meal with Alcohol"). FA feedback: that text duplicates
+    // what the left-side icon already conveys. Dropped — the icon is
+    // the visual indicator. The full string still appears on the
+    // expense_type field card inside the body for anyone who needs the
+    // exact words.
     html.push_str(&format!(
         "<details class=\"line-card\" open>\n\
          <summary class=\"line-summary\">\
@@ -652,7 +651,6 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
            <span class=\"line-icon\" aria-hidden=\"true\">{}</span>\
            <span class=\"line-index\">#{}</span>\
            <span class=\"line-venue\">{}</span>\
-           <span class=\"line-kind\">{}</span>\
            <span class=\"line-date\">{}</span>\
            <span class=\"line-amount\">{}</span>\
          </summary>\n\
@@ -660,7 +658,6 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
         icon,
         idx + 1,
         escape(&headline),
-        escape(&summary_kind),
         escape(&summary_date),
         escape(&summary_amount),
     ));

@@ -399,8 +399,11 @@ body {
 }
 .line-summary {
   display: grid;
-  /* chev | kind icon | index | headline | kind text | date | amount */
-  grid-template-columns: 14px 22px 32px 1fr auto auto auto;
+  /* chev | kind icon | index | headline | date | amount
+     (Stage 6 follow-up: dropped the verbose "kind text" column —
+     the left-side icon already conveys the kind, the text was just
+     duplication.) */
+  grid-template-columns: 14px 22px 32px 1fr auto auto;
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
@@ -436,7 +439,7 @@ body {
   color: #9ca3af;
 }
 .line-venue { font-weight: 600; color: #111827; }
-.line-date, .line-kind { color: #6b7280; font-size: 12px; }
+.line-date { color: #6b7280; font-size: 12px; }
 .line-amount { font-weight: 600; color: #111827; }
 .line-body { padding: 14px 16px 16px; }
 .line-body .subsection-title {
