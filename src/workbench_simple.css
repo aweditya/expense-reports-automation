@@ -455,9 +455,12 @@ body {
   color: #9ca3af;
   line-height: 1.4;
 }
-/* Confidence justification — shown only on medium/low cards. Slightly
-   more prominent than the evidence quote since it carries actionable
-   info ("here's why I'm not sure"). */
+/* Confidence justification — shown for every leaf when the extractor
+   wrote one. Two tiers:
+   - default (medium/low): amber, slightly prominent — "look at this"
+   - --high: gray, unobtrusive — "audit trail, trust by default"
+   Both keep the same compact size so multiple cards in a grid don't
+   shift around when reasons are present. */
 .field-reason {
   margin: 4px 0 0;
   font-size: 11px;
@@ -465,8 +468,11 @@ body {
   line-height: 1.4;
 }
 .field-reason::first-letter {
-  /* "Medium:" / "Low:" reads better with the prefix in semibold. */
+  /* "Medium:" / "Low:" / "High:" reads better with the prefix in semibold. */
   font-weight: 600;
+}
+.field-reason--high {
+  color: #6b7280;
 }
 
 /* Source documents ────────────────────────────────────────────────────── */

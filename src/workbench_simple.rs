@@ -943,21 +943,23 @@ fn field_card_inner(html: &mut String, label: &str, path: &str, value: &str, met
         _ => String::new(),
     };
 
-    // Confidence reason: shown only for non-high fields, since high
-    // confidence with no quote available is the common case for derived
-    // values (and a "high — value is correct" justification is noise).
-    // Older cached extractions without the field render the same as
-    // before (no extra line).
-    let reason_block = match (meta.confidence, meta.confidence_reason.as_deref()) {
-        (ConfidenceLevel::Medium | ConfidenceLevel::Low, Some(r)) if !r.is_empty() => format!(
-            "<p class=\"field-reason\">{}: {}</p>",
-            match meta.confidence {
-                ConfidenceLevel::Medium => "Medium",
-                ConfidenceLevel::Low => "Low",
-                _ => unreachable!(),
-            },
-            escape(r),
-        ),
+    // Confidence reason: shown for ALL confidence levels when present.
+    // This is both FA-facing context AND a debugging/audit signal — the
+    // FA (or anyone reviewing extractions) can read the model's
+    // justification and decide whether to trust the value. High-conf
+    // reasons are rendered in unobtrusive gray; medium/low get the
+    // prominent amber styling that flags "look at this." Older cached
+    // extractions without the field render the same as before (no extra
+    // line).
+    let reason_block = match meta.confidence_reason.as_deref() {
+        Some(r) if !r.is_empty() => {
+            let (label, class) = match meta.confidence {
+                ConfidenceLevel::High => ("High", "field-reason field-reason--high"),
+                ConfidenceLevel::Medium => ("Medium", "field-reason"),
+                ConfidenceLevel::Low => ("Low", "field-reason"),
+            };
+            format!("<p class=\"{class}\">{label}: {}</p>", escape(r))
+        }
         _ => String::new(),
     };
 

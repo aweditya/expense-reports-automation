@@ -20,6 +20,53 @@ Keep entries short. The point is recall, not narrative.
 
 ## Entries
 
+### 2026-05-11 — schema rule blew the model output budget on the largest receipt
+
+**What happened:** UI Polish Stage 6 added `confidence_reason` as a
+required field on every `_meta` block. Every leaf — ~13 per transport
+line, more for meals — now needed a justification sentence. I shipped
+the change without measuring how the new rule interacted with the
+existing `max_output_tokens=32768` cap. First production upload of
+uber1.pdf (a 2-page Uber receipt) exhausted the combined thinking +
+output budget; Gemini's response truncated mid-JSON; `json.loads()`
+correctly refused; the FA saw a "FAILED to parse JSON" friendly error
+page.
+
+The pipeline's error handling worked as designed (truncation caught
+cleanly, diagnostics written to disk, friendly page rendered). The
+**design** was wrong: the schema rule had a per-leaf cost I never
+multiplied out against the corpus's largest input.
+
+Hotfix bumped `max_output_tokens` to 65536, dropped `confidence_reason`
+from the schema's `required` list (so partial outputs parse), and
+relaxed the prompt to "required only for medium/low" — which gave the
+FA the workbench-visible reasons but lost the audit signal on
+high-confidence values.
+
+A subsequent design pass (same day) walked back the "high may omit"
+rule. The user pointed out that confidence_reason isn't only an FA
+UX feature — it's a debugging tool: if you can't audit why the model
+called something high, you've lost half the value of the field. New
+rule: required for every leaf, ≤5 words for high, ≤15 for medium/low.
+Display surfaces high-confidence reasons in unobtrusive gray; medium/
+low keep the prominent amber.
+
+**Why both decisions were wrong:**
+- The original Stage 6 was budget-blind. I treated "add a per-leaf
+  justification" as a free schema rule when it wasn't.
+- The hotfix overcorrected. I optimized for "no truncation" by
+  amputating a feature instead of dialing it down.
+
+**Rule going forward:** Schema or prompt changes that affect output
+volume must be measured against the largest input in the corpus
+*before* shipping. For new such rules, run `acceptance_check.py
+--run` on the largest-page-count receipts (uber1, uber2 today) to
+catch the budget interaction. The Gemini API costs a couple of
+cents per call; the alternative is shipping a feature that breaks
+the moment a real upload tests it. Cloud Run is the verdict, but
+local pre-flight on the corpus's worst case is still cheaper than
+a deploy + revert + hotfix cycle.
+
 ### 2026-05-05 — Phase 1 Chunk 1 split a contract pair across commits
 
 **What happened:** Phase 1's first chunk shipped only the schema half
