@@ -189,19 +189,18 @@ fn derive_lodging_fields(
         .as_mut()
         .expect("called on a line with lodging_details");
 
-    // daily_rate = mean of nightly_rates[].rate
-    if let Some(nights) = extras.nightly_rates.value.as_ref() {
-        if !nights.is_empty() {
-            let sum: f64 = nights.iter().map(|n| n.rate).sum();
-            let avg = sum / nights.len() as f64;
-            lodging.daily_rate = Wrapped {
-                value: Some(avg),
-                meta: derived_meta(
-                    extras.nightly_rates.meta.confidence,
-                    "reduce.lodging.daily_rate",
-                ),
-            };
-        }
+    // daily_rate = mean of nightly_rates[].rate. Confidence is `high`
+    // when the breakdown is present (the leaf-wrapper that previously
+    // carried per-array confidence is gone — Vertex rejects leaf-of-
+    // array). When the array is empty (model didn't recover the
+    // breakdown), daily_rate stays Wrapped::unknown.
+    if !extras.nightly_rates.is_empty() {
+        let sum: f64 = extras.nightly_rates.iter().map(|n| n.rate).sum();
+        let avg = sum / extras.nightly_rates.len() as f64;
+        lodging.daily_rate = Wrapped {
+            value: Some(avg),
+            meta: derived_meta(ConfidenceLevel::High, "reduce.lodging.daily_rate"),
+        };
     }
 
     // number_of_nights = check_out - check_in (in days)
@@ -326,7 +325,7 @@ mod tests {
             extras: Extras {
                 merchant_address: Wrapped::unknown(),
                 printed_currency,
-                nightly_rates: Wrapped::unknown(),
+                nightly_rates: Vec::new(),
             },
         }
     }
@@ -556,7 +555,6 @@ mod tests {
         check_in: &str,
         check_out: &str,
         rates: &[f64],
-        rates_confidence: ConfidenceLevel,
     ) -> ExtractedReceipt {
         use crate::expense_report_model::ExpenseReportTransactionLinesItemLodgingDetails;
         use crate::extracted_receipt::NightlyRate;
@@ -589,13 +587,7 @@ mod tests {
             extras: Extras {
                 merchant_address: Wrapped::unknown(),
                 printed_currency: Wrapped::unknown(),
-                nightly_rates: Wrapped {
-                    value: Some(nights),
-                    meta: FieldMetadata {
-                        confidence: rates_confidence,
-                        ..FieldMetadata::default()
-                    },
-                },
+                nightly_rates: nights,
             },
         }
     }
@@ -608,13 +600,12 @@ mod tests {
             "2026-04-19",
             "2026-04-22",
             &[189.0, 189.0, 250.0],
-            ConfidenceLevel::High,
         )];
         let lines = reduce_transaction_lines(&receipts);
         let lodging = lines[0].lodging_details.as_ref().expect("lodging present");
         let daily_rate = lodging.daily_rate.value.expect("daily_rate populated");
         assert!((daily_rate - 209.3333).abs() < 0.001, "got {daily_rate}");
-        // High-confidence nightly_rates → high-confidence daily_rate.
+        // Non-empty nightly_rates → high-confidence daily_rate.
         assert_eq!(lodging.daily_rate.meta.confidence, ConfidenceLevel::High);
     }
 
@@ -626,7 +617,6 @@ mod tests {
             "2024-01-14",
             "2024-01-20",
             &[134.0; 6],
-            ConfidenceLevel::High,
         )];
         let lines = reduce_transaction_lines(&receipts);
         let lodging = lines[0].lodging_details.as_ref().unwrap();
@@ -640,7 +630,6 @@ mod tests {
             "2024-01-13",
             "2024-01-14",
             &[177.0],
-            ConfidenceLevel::High,
         )];
         let lines = reduce_transaction_lines(&receipts);
         let lodging = lines[0].lodging_details.as_ref().unwrap();
@@ -652,7 +641,6 @@ mod tests {
             "2024-01-14",
             "2024-01-20",
             &[134.0; 6],
-            ConfidenceLevel::High,
         )];
         let lines = reduce_transaction_lines(&receipts);
         let lodging = lines[0].lodging_details.as_ref().unwrap();
@@ -670,18 +658,18 @@ mod tests {
     }
 
     #[test]
-    fn lodging_daily_rate_inherits_nightly_rates_confidence() {
-        // Medium confidence on the array → medium on daily_rate.
+    fn lodging_daily_rate_unknown_when_breakdown_empty() {
+        // No nightly_rates emitted (model couldn't recover the breakdown):
+        // daily_rate stays unknown, no derivation runs.
         let receipts = vec![make_lodging_receipt(
             "hotel.pdf",
             "2026-04-19",
             "2026-04-22",
-            &[189.0, 189.0, 250.0],
-            ConfidenceLevel::Medium,
+            &[],
         )];
         let lines = reduce_transaction_lines(&receipts);
         let lodging = lines[0].lodging_details.as_ref().unwrap();
-        assert_eq!(lodging.daily_rate.meta.confidence, ConfidenceLevel::Medium);
+        assert_eq!(lodging.daily_rate.value, None);
     }
 
     #[test]

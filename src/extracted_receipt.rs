@@ -55,19 +55,24 @@ pub struct Extras {
     pub printed_currency: Wrapped<String>,
     /// Per-night rate breakdown — only emitted by the lodging extractor.
     /// Reduction averages `rate` across entries to populate
-    /// `lodging_details.daily_rate` (T2-derived). Empty / unknown for
-    /// non-lodging receipts; the field defaults via `#[serde(default)]`
-    /// so meal/transport extractions deserialize without it.
-    #[serde(default)]
-    pub nightly_rates: Wrapped<Vec<NightlyRate>>,
+    /// `lodging_details.daily_rate` (T2-derived). Empty for non-lodging
+    /// receipts and for lodging folios where the model couldn't recover
+    /// the breakdown.
+    ///
+    /// Plain `Vec` rather than `Wrapped<Vec<…>>`: Vertex's Schema
+    /// validator rejects leaf-wrapped arrays with a generic 400. The
+    /// "single confidence on the whole breakdown" signal we'd have
+    /// carried on the wrapper shows up implicitly downstream — reduction
+    /// marks `daily_rate.meta.confidence` as `high` when entries are
+    /// present, `low` (Wrapped::unknown) when they aren't.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub nightly_rates: Vec<NightlyRate>,
 }
 
 /// One night of a lodging stay. The `date`, `rate`, and `taxes_and_fees`
-/// are bare values (no per-leaf `_meta`) — the parent `Wrapped<Vec<…>>`
-/// carries a single confidence on the whole breakdown. This keeps the
-/// per-night cost compact in the output budget (Stage 6 regret:
-/// per-leaf `_meta` blocks across a multi-night folio truncated the
-/// model's output).
+/// are bare values (no per-leaf `_meta`) — keeping per-night cost
+/// compact in the output budget (Stage 6 regret: per-leaf `_meta` blocks
+/// across a multi-night folio truncated the model's output).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct NightlyRate {
     /// ISO 8601 date (YYYY-MM-DD) for the night.

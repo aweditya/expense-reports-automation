@@ -251,7 +251,7 @@ RECEIPTS = [
             "extras.printed_currency.value": "USD",
             # 1-night stay → exactly 1 nightly_rates entry. Reduction
             # averages this trivially to populate daily_rate.
-            "extras.nightly_rates.value": lambda v: v and len(v) == 1
+            "extras.nightly_rates": lambda v: v and len(v) == 1
                 and abs(v[0]["rate"] - 177.0) < 0.01,
         },
     },
@@ -273,7 +273,7 @@ RECEIPTS = [
             "extras.printed_currency.value": "USD",
             # 6-night flat-rate stay. Reduction's average should equal
             # the per-night rate.
-            "extras.nightly_rates.value": lambda v: v and len(v) == 6
+            "extras.nightly_rates": lambda v: v and len(v) == 6
                 and all(abs(n["rate"] - 134.0) < 0.01 for n in v),
         },
     },
@@ -288,7 +288,7 @@ RECEIPTS = [
             "lodging_details.is_shared_lodging.value": False,
             "extras.printed_currency.value": "USD",
             # Loose: not yet read in detail; verify only the kind/shape.
-            "extras.nightly_rates.value": lambda v: v and len(v) >= 1,
+            "extras.nightly_rates": lambda v: v and len(v) >= 1,
         },
     },
     {
@@ -301,7 +301,7 @@ RECEIPTS = [
             "lodging_details.hotel_name.value": lambda v: v and "Homewood" in v,
             "lodging_details.is_shared_lodging.value": False,
             "extras.printed_currency.value": "USD",
-            "extras.nightly_rates.value": lambda v: v and len(v) >= 1,
+            "extras.nightly_rates": lambda v: v and len(v) >= 1,
         },
     },
     {
@@ -314,7 +314,7 @@ RECEIPTS = [
             "lodging_details.hotel_name.value": lambda v: v and "Hyatt" in v,
             "lodging_details.location.value": lambda v: v and "Las Vegas" in v,
             "extras.printed_currency.value": "USD",
-            "extras.nightly_rates.value": lambda v: v and len(v) >= 1,
+            "extras.nightly_rates": lambda v: v and len(v) >= 1,
         },
     },
 ]

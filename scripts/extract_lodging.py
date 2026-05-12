@@ -115,11 +115,10 @@ is enforced by the response schema — fill the values from the folio.
   them — flat rates trivially average to themselves.
 - If the folio shows ONLY a total without per-night breakdown, emit
   a single entry per night with `rate = total / number_of_nights`
-  and `taxes_and_fees = 0.0`, and use `medium` confidence on the
-  whole `nightly_rates` array.
-- Carry a single confidence on the whole array (not per-night):
-  `high` if every line is clearly itemized, `medium` if you had to
-  back-compute from a total, `low` if the breakdown is unclear.
+  and `taxes_and_fees = 0.0`. (The `nightly_rates` array itself is
+  bare — no `_meta` block carries confidence; reduction signals
+  uncertainty downstream by leaving `lodging_details.daily_rate`
+  unset if the array is empty.)
 
 # _meta convention
 

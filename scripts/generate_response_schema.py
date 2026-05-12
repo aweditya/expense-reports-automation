@@ -232,32 +232,36 @@ def lodging_details_block_schema() -> dict:
 def nightly_rates_schema() -> dict:
     """Per-night rate breakdown — only emitted by the lodging extractor.
     Reduction averages the rates to populate lodging_details.daily_rate.
-    Wrapped so a single confidence carries on the whole breakdown (avoids
-    a `_meta` block per night × per field, which would blow the token
-    budget — see the Stage 6 truncation regret)."""
-    return leaf(
-        {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "date": {
-                        "type": "string",
-                        "description": "ISO 8601 date (YYYY-MM-DD)",
-                    },
-                    "rate": {
-                        "type": "number",
-                        "description": "Room rate that night, in the printed currency.",
-                    },
-                    "taxes_and_fees": {
-                        "type": "number",
-                        "description": "Sum of all taxes/fees that night (VAT, occupancy tax, city tax). Zero if not broken out.",
-                    },
+
+    Bare array (no leaf wrapper). A leaf-wrapped array (`{value: array,
+    _meta: {...}}`) is rejected by Vertex's Schema validator with a
+    generic 400 — the validator doesn't accept leaves whose value is
+    an array of objects. The signal we'd have carried on the wrapper
+    (single confidence) shows up implicitly: reduction marks the
+    derived `daily_rate.meta.confidence` as `high` when the breakdown
+    is present, `low` when absent.
+    """
+    return {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {
+                "date": {
+                    "type": "string",
+                    "description": "ISO 8601 date (YYYY-MM-DD)",
                 },
-                "required": ["date", "rate", "taxes_and_fees"],
+                "rate": {
+                    "type": "number",
+                    "description": "Room rate that night, in the printed currency.",
+                },
+                "taxes_and_fees": {
+                    "type": "number",
+                    "description": "Sum of all taxes/fees that night (VAT, occupancy tax, city tax). Zero if not broken out.",
+                },
             },
-        }
-    )
+            "required": ["date", "rate", "taxes_and_fees"],
+        },
+    }
 
 
 def extras_block_schema(include_nightly_rates: bool = False) -> dict:
