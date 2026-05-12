@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-generated_at_utc: '2026-05-05T20:28:34+00:00'
+generated_at_utc: '2026-05-12T19:18:55+00:00'
 sections:
 - key: general_information
   label: General Information
@@ -555,8 +555,8 @@ sections:
   - path: expense_report.transaction_lines[].lodging_details.daily_rate
     label: Daily Rate
     control: currency
-    source: T3
-    entry_mode: model_prefill_review
+    source: T2
+    entry_mode: computed_readonly
     required: true
     required_expression: null
     review_priority: high

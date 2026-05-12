@@ -12,6 +12,7 @@
 use crate::expense_report_model::{
     ExpenseReport, ExpenseReportGeneralInformation, ExpenseReportTransactionLinesItem,
     ExpenseReportTransactionLinesItemGroundTransportDetails,
+    ExpenseReportTransactionLinesItemLodgingDetails,
     ExpenseReportTransactionLinesItemMealDetails, ExpenseReportTransactionSummary,
 };
 use crate::extracted_receipt::ExtractedReceipt;
@@ -689,6 +690,14 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
         html.push_str("</div>\n");
     }
 
+    if let Some(lodging) = &line.lodging_details {
+        html.push_str("<h4 class=\"subsection-title\">Lodging Details</h4>\n");
+        html.push_str("<div class=\"field-grid\">\n");
+        let lp = format!("expense_report.transaction_lines[{idx}].lodging_details");
+        render_lodging_details(html, lodging, &lp);
+        html.push_str("</div>\n");
+    }
+
     html.push_str("</div>\n</details>\n");
 }
 
@@ -707,6 +716,29 @@ fn render_ground_transport_details(
     field_card_text(html, "Service Provider", &gt.service_provider, &format!("{path}.service_provider"), |s: &String| s.clone());
     field_card_text(html, "Origin", &gt.origin, &format!("{path}.origin"), |s: &String| s.clone());
     field_card_text(html, "Destination", &gt.destination, &format!("{path}.destination"), |s: &String| s.clone());
+}
+
+fn render_lodging_details(
+    html: &mut String,
+    lodging: &ExpenseReportTransactionLinesItemLodgingDetails,
+    path: &str,
+) {
+    field_card_text(html, "Hotel", &lodging.hotel_name, &format!("{path}.hotel_name"), |s: &String| s.clone());
+    field_card_text(html, "Location", &lodging.location, &format!("{path}.location"), |s: &String| s.clone());
+    field_card_text(html, "Check In", &lodging.check_in_date, &format!("{path}.check_in_date"), |d| d.0.clone());
+    field_card_text(html, "Check Out", &lodging.check_out_date, &format!("{path}.check_out_date"), |d| d.0.clone());
+    // number_of_nights is T2 (derived by reduction). Render as integer
+    // even though the underlying type is f64 — nights are whole numbers.
+    field_card_text(html, "Nights", &lodging.number_of_nights, &format!("{path}.number_of_nights"), |n| format!("{}", *n as i64));
+    field_card_text(html, "Daily Rate", &lodging.daily_rate, &format!("{path}.daily_rate"), |r| format!("${:.2}", r));
+    field_card_text(html, "Booking Method", &lodging.booking_method, &format!("{path}.booking_method"), |b| title_case(b.as_str()));
+    field_card_text(html, "Shared Lodging", &lodging.is_shared_lodging, &format!("{path}.is_shared_lodging"), |b| if *b { "yes".into() } else { "no".into() });
+    // shared_with_transaction_number is T1 (FA fills only if shared);
+    // render only the card when is_shared_lodging is true to keep the
+    // grid uncluttered on the common case.
+    if let Some(true) = lodging.is_shared_lodging.value {
+        field_card_optional_string(html, "Shared With", lodging.shared_with_transaction_number.as_deref(), &format!("{path}.shared_with_transaction_number"));
+    }
 }
 
 // ─── Source documents (bottom) ─────────────────────────────────────────────

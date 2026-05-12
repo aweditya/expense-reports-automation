@@ -17,6 +17,7 @@ use crate::expense_report_model::{
     ExpenseReportGeneralInformationPayee, ExpenseReportGeneralInformationStudentCertification,
     ExpenseReportTransactionLinesItem, ExpenseReportTransactionLinesItemCommon,
     ExpenseReportTransactionLinesItemGroundTransportDetails,
+    ExpenseReportTransactionLinesItemLodgingDetails,
     ExpenseReportTransactionLinesItemMealDetails, ExpenseReportTransactionSummary,
 };
 use crate::meta::Wrapped;
@@ -132,9 +133,12 @@ fn walk_transaction_lines(report: &ExpenseReport, issues: &mut Vec<ValidationIss
                 issues,
             );
         }
-        // Remaining detail blocks (airfare / lodging / car_rental /
+        if let Some(lodging) = &line.lodging_details {
+            walk_lodging_details(lodging, &join(&base, "lodging_details"), issues);
+        }
+        // Remaining detail blocks (airfare / car_rental /
         // conference_registration / gift / human_subject) intentionally
-        // not walked yet — phases beyond Phase 2 add them when we have
+        // not walked yet — phases beyond Phase 3 add them when we have
         // real receipts to ground the schema in.
     }
 }
@@ -192,6 +196,31 @@ fn walk_ground_transport_details(
     // FA fills it in the workbench / portal. check_optional emits
     // MissingRequiredField when None on a required field.
     check_optional(&join(base, "missing_receipt"), &gt.missing_receipt, issues);
+}
+
+fn walk_lodging_details(
+    lodging: &ExpenseReportTransactionLinesItemLodgingDetails,
+    base: &str,
+    issues: &mut Vec<ValidationIssue>,
+) {
+    check_wrapped(&join(base, "hotel_name"), &lodging.hotel_name, issues);
+    check_wrapped(&join(base, "location"), &lodging.location, issues);
+    check_wrapped(&join(base, "check_in_date"), &lodging.check_in_date, issues);
+    check_wrapped(&join(base, "check_out_date"), &lodging.check_out_date, issues);
+    check_wrapped(&join(base, "number_of_nights"), &lodging.number_of_nights, issues);
+    check_wrapped(&join(base, "daily_rate"), &lodging.daily_rate, issues);
+    check_wrapped(&join(base, "booking_method"), &lodging.booking_method, issues);
+    check_wrapped(&join(base, "is_shared_lodging"), &lodging.is_shared_lodging, issues);
+    // shared_with_transaction_number is T1 (bare Option<String>),
+    // conditionally required by an expression rule: "is_shared_lodging
+    // == true". The expression rule walker (check_conditional_rules) will
+    // surface the issue when applicable; here we only check unconditional
+    // required-presence — which means: never error on it, since it's
+    // only required conditionally.
+    let _ = lodging.shared_with_transaction_number.as_ref();
+    // personal_nights_excluded is T2 optional — derived later, not by
+    // the extractor. Walking it produces no issues.
+    check_wrapped(&join(base, "personal_nights_excluded"), &lodging.personal_nights_excluded, issues);
 }
 
 // ─── Leaf checks ───────────────────────────────────────────────────────────

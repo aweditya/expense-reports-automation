@@ -965,9 +965,12 @@ pub struct ExpenseReportTransactionLinesItemLodgingDetails {
     /// Infer from:  Computed: check_out_date - check_in_date
     #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub number_of_nights: Wrapped<f64>,
-    ///  In original currency
-    /// Source tier: T3
-    /// Infer from:  Hotel folio
+    ///  Single per-night rate the FA sees in the workbench. Computed by reduction as the mean
+    /// of extras.nightly_rates[].rate from the per-document JSON — handles flat-rate folios
+    /// trivially (mean of N identical values = the value) and folios with varying nightly rates
+    /// (conference-rate nights + walk-in nights) by averaging.
+    /// Source tier: T2
+    /// Infer from:  reduce.daily_rate: mean(extras.nightly_rates[].rate)
     #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub daily_rate: Wrapped<f64>,
     /// Source tier: T3

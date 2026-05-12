@@ -42,6 +42,7 @@ UPLOADS_ROOT = REPO_ROOT / ".scratch" / "uploads"
 EXTRACTORS: dict[str, Path] = {
     "meal": REPO_ROOT / "scripts" / "extract_meal.py",
     "transport": REPO_ROOT / "scripts" / "extract_transport.py",
+    "lodging": REPO_ROOT / "scripts" / "extract_lodging.py",
 }
 
 # Cloud Run sets PORT; locally default 8765 (matches existing app's muscle memory).
@@ -330,6 +331,7 @@ UPLOAD_FORM_HTML = """\
         <select name="kind_0" required>
           <option value="meal">Meal Receipt</option>
           <option value="transport">Ground Transport</option>
+          <option value="lodging">Lodging Folio</option>
         </select>
       </div>
     </div>
@@ -353,6 +355,7 @@ UPLOAD_FORM_HTML = """\
       <select name="kind_${rowCount}" required>
         <option value="meal">Meal Receipt</option>
         <option value="transport">Ground Transport</option>
+        <option value="lodging">Lodging Folio</option>
       </select>
     `;
     document.getElementById('file-rows').appendChild(row);

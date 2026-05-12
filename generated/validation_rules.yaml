@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-generated_at_utc: '2026-05-05T20:28:34+00:00'
+generated_at_utc: '2026-05-12T19:18:55+00:00'
 field_rules:
 - path: expense_report
   node_kind: object
@@ -1022,13 +1022,15 @@ field_rules:
   rust_type: f64
   required: true
   required_expression: null
-  source: T3
-  effective_source: T3
+  source: T2
+  effective_source: T2
   depends_on: []
   allowed_values: []
   default: null
-  description: In original currency
-  infer_from: Hotel folio
+  description: "Single per-night rate the FA sees in the workbench. Computed by reduction as the mean of extras.nightly_rates[].rate\
+    \ from the per-document JSON \u2014 handles flat-rate folios trivially (mean of N identical values = the value) and folios\
+    \ with varying nightly rates (conference-rate nights + walk-in nights) by averaging."
+  infer_from: 'reduce.daily_rate: mean(extras.nightly_rates[].rate)'
   validation: null
 - path: expense_report.transaction_lines[].lodging_details.booking_method
   node_kind: field
