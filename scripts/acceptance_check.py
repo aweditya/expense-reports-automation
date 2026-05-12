@@ -32,6 +32,7 @@ PYTHON = REPO_ROOT / ".venv" / "bin" / "python"
 EXTRACTORS = {
     "meal": REPO_ROOT / "scripts" / "extract_meal.py",
     "transport": REPO_ROOT / "scripts" / "extract_transport.py",
+    "lodging": REPO_ROOT / "scripts" / "extract_lodging.py",
 }
 
 
@@ -223,6 +224,97 @@ RECEIPTS = [
             "ground_transport_details.origin.value": lambda v: v and "Getty Center" in v,
             "ground_transport_details.destination.value": lambda v: v and "Broadway" in v,
             "extras.printed_currency.value": "USD",
+        },
+    },
+
+    # ─── Lodging (Phase 3 Stage 1) ────────────────────────────────────────
+    # English-only US hotel folios for v1. Multilingual (the German/French/
+    # Japanese folios in the corpus) is a v2 follow-up per the FA's request
+    # to keep the first cut simple. Predicates use loose `contains` matches
+    # for hotel name + location since the model has formatting freedom;
+    # literals for dates and totals (verified by direct PDF read).
+    {
+        "image": "receipts/Hyatt-Jan13-14.pdf",
+        "output": ".scratch/spike/hyatt-jan13-14.json",
+        "extractor": "lodging",
+        "expect": {
+            "common.line_amount_usd.value": 200.68,
+            "common.original_currency.value": None,
+            "common.original_amount.value": None,
+            "common.expense_type.value": "lodging_domestic",
+            "common.country_of_activity.value": "United States",
+            "lodging_details.hotel_name.value": lambda v: v and "Hyatt Place" in v,
+            "lodging_details.location.value": lambda v: v and "Las Vegas" in v,
+            "lodging_details.check_in_date.value": "2024-01-13",
+            "lodging_details.check_out_date.value": "2024-01-14",
+            "lodging_details.is_shared_lodging.value": False,
+            "extras.printed_currency.value": "USD",
+            # 1-night stay → exactly 1 nightly_rates entry. Reduction
+            # averages this trivially to populate daily_rate.
+            "extras.nightly_rates.value": lambda v: v and len(v) == 1
+                and abs(v[0]["rate"] - 177.0) < 0.01,
+        },
+    },
+    {
+        "image": "receipts/Sheraton-Novi-14-21.pdf",
+        "output": ".scratch/spike/sheraton-novi-14-21.json",
+        "extractor": "lodging",
+        "expect": {
+            "common.line_amount_usd.value": 912.58,
+            "common.original_currency.value": None,
+            "common.original_amount.value": None,
+            "common.expense_type.value": "lodging_domestic",
+            "common.country_of_activity.value": "United States",
+            "lodging_details.hotel_name.value": lambda v: v and "Sheraton" in v,
+            "lodging_details.location.value": lambda v: v and "Novi" in v,
+            "lodging_details.check_in_date.value": "2024-01-14",
+            "lodging_details.check_out_date.value": "2024-01-20",
+            "lodging_details.is_shared_lodging.value": False,
+            "extras.printed_currency.value": "USD",
+            # 6-night flat-rate stay. Reduction's average should equal
+            # the per-night rate.
+            "extras.nightly_rates.value": lambda v: v and len(v) == 6
+                and all(abs(n["rate"] - 134.0) < 0.01 for n in v),
+        },
+    },
+    {
+        "image": "receipts/Hilton-3185261353-SFO3-5-Jan.pdf",
+        "output": ".scratch/spike/hilton-sfo-3-5-jan.json",
+        "extractor": "lodging",
+        "expect": {
+            "common.expense_type.value": "lodging_domestic",
+            "common.country_of_activity.value": "United States",
+            "lodging_details.hotel_name.value": lambda v: v and "Hilton" in v,
+            "lodging_details.is_shared_lodging.value": False,
+            "extras.printed_currency.value": "USD",
+            # Loose: not yet read in detail; verify only the kind/shape.
+            "extras.nightly_rates.value": lambda v: v and len(v) >= 1,
+        },
+    },
+    {
+        "image": "receipts/Homewood-Suites-19-22-Sep.pdf",
+        "output": ".scratch/spike/homewood-19-22-sep.json",
+        "extractor": "lodging",
+        "expect": {
+            "common.expense_type.value": "lodging_domestic",
+            "common.country_of_activity.value": "United States",
+            "lodging_details.hotel_name.value": lambda v: v and "Homewood" in v,
+            "lodging_details.is_shared_lodging.value": False,
+            "extras.printed_currency.value": "USD",
+            "extras.nightly_rates.value": lambda v: v and len(v) >= 1,
+        },
+    },
+    {
+        "image": "receipts/lodging_2026-01-04_hyatt-place-las-vegas.pdf",
+        "output": ".scratch/spike/hyatt-vegas-jan-2026.json",
+        "extractor": "lodging",
+        "expect": {
+            "common.expense_type.value": "lodging_domestic",
+            "common.country_of_activity.value": "United States",
+            "lodging_details.hotel_name.value": lambda v: v and "Hyatt" in v,
+            "lodging_details.location.value": lambda v: v and "Las Vegas" in v,
+            "extras.printed_currency.value": "USD",
+            "extras.nightly_rates.value": lambda v: v and len(v) >= 1,
         },
     },
 ]

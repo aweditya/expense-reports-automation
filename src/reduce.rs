@@ -241,6 +241,7 @@ mod tests {
             extras: Extras {
                 merchant_address: Wrapped::unknown(),
                 printed_currency,
+                nightly_rates: Wrapped::unknown(),
             },
         }
     }

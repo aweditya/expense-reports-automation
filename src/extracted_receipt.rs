@@ -53,6 +53,31 @@ pub struct Extras {
     /// inferred from a symbol). Drives `original_currency` and FX.
     #[serde(default)]
     pub printed_currency: Wrapped<String>,
+    /// Per-night rate breakdown — only emitted by the lodging extractor.
+    /// Reduction averages `rate` across entries to populate
+    /// `lodging_details.daily_rate` (T2-derived). Empty / unknown for
+    /// non-lodging receipts; the field defaults via `#[serde(default)]`
+    /// so meal/transport extractions deserialize without it.
+    #[serde(default)]
+    pub nightly_rates: Wrapped<Vec<NightlyRate>>,
+}
+
+/// One night of a lodging stay. The `date`, `rate`, and `taxes_and_fees`
+/// are bare values (no per-leaf `_meta`) — the parent `Wrapped<Vec<…>>`
+/// carries a single confidence on the whole breakdown. This keeps the
+/// per-night cost compact in the output budget (Stage 6 regret:
+/// per-leaf `_meta` blocks across a multi-night folio truncated the
+/// model's output).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct NightlyRate {
+    /// ISO 8601 date (YYYY-MM-DD) for the night.
+    pub date: String,
+    /// Room rate that night, in the printed currency (currency itself
+    /// lives in `extras.printed_currency`).
+    pub rate: f64,
+    /// Sum of all taxes/fees that night (VAT, occupancy tax, city tax).
+    /// Zero if the folio doesn't break them out.
+    pub taxes_and_fees: f64,
 }
 
 #[cfg(test)]

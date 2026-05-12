@@ -422,9 +422,9 @@ expense_report:
             daily_rate:
               type: number
               required: true
-              source: T3
-              description: "In original currency"
-              infer_from: "Hotel folio"
+              source: T2
+              description: "Single per-night rate the FA sees in the workbench. Computed by reduction as the mean of extras.nightly_rates[].rate from the per-document JSON — handles flat-rate folios trivially (mean of N identical values = the value) and folios with varying nightly rates (conference-rate nights + walk-in nights) by averaging."
+              infer_from: "reduce.daily_rate: mean(extras.nightly_rates[].rate)"
             booking_method:
               type: enum
               required: true

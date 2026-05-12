@@ -42,6 +42,7 @@ OUTPUT_DIR = REPO_ROOT / "generated"
 KIND_EXPENSE_TYPES: dict[str, list[str]] = {
     "meal": ["business_meal", "group_travel_meal"],
     "transport": ["ground_transportation_domestic", "ground_transportation_foreign"],
+    "lodging": ["lodging_domestic", "lodging_foreign"],
 }
 
 
@@ -176,31 +177,123 @@ def ground_transport_details_block_schema() -> dict:
     }
 
 
-def extras_block_schema() -> dict:
-    """Per-receipt extras — extracted from the receipt but NOT submitted to
-    the FA portal. Reduction reads these to derive schema fields the model
-    can't know in isolation (foreign vs domestic, original currency, FX).
-    See Architecture B in docs/redesign-plan.md.
+def lodging_details_block_schema() -> dict:
+    """Per-receipt lodging detail block.
+
+    Excludes:
+      - number_of_nights: T2, computed by reduction from check_in/check_out.
+      - daily_rate: T2, computed by reduction from extras.nightly_rates[]
+        (mean of the nightly rates). The FA-facing single rate stays simple
+        while the per-night breakdown lives in the per-document JSON for
+        audit.
+      - shared_with_transaction_number: T1, FA fills only when relevant.
+      - personal_nights_excluded: T2, derived from conference dates.
     """
     return {
         "type": "object",
         "properties": {
-            "merchant_address": leaf(
+            "hotel_name": leaf({"type": "string"}),
+            "location": leaf(
                 {
                     "type": "string",
-                    "nullable": True,
-                    "description": "Full printed merchant address (street + city + region + country if visible).",
+                    "description": "City and country (e.g. 'San Francisco, USA').",
                 }
             ),
-            "printed_currency": leaf(
+            "check_in_date": leaf(
+                {"type": "string", "description": "ISO 8601 date (YYYY-MM-DD)"}
+            ),
+            "check_out_date": leaf(
+                {"type": "string", "description": "ISO 8601 date (YYYY-MM-DD)"}
+            ),
+            "booking_method": leaf(
                 {
                     "type": "string",
-                    "nullable": True,
-                    "description": "ISO 4217 code if printed, else best-effort (e.g. 'USD' from a $ sign).",
+                    "enum": [
+                        "conference_hotel",
+                        "stanford_travel_egencia",
+                        "stanford_travel_key_travel",
+                        "other",
+                    ],
                 }
             ),
+            "is_shared_lodging": leaf({"type": "boolean"}),
         },
-        "required": ["merchant_address", "printed_currency"],
+        "required": [
+            "hotel_name",
+            "location",
+            "check_in_date",
+            "check_out_date",
+            "booking_method",
+            "is_shared_lodging",
+        ],
+    }
+
+
+def nightly_rates_schema() -> dict:
+    """Per-night rate breakdown — only emitted by the lodging extractor.
+    Reduction averages the rates to populate lodging_details.daily_rate.
+    Wrapped so a single confidence carries on the whole breakdown (avoids
+    a `_meta` block per night × per field, which would blow the token
+    budget — see the Stage 6 truncation regret)."""
+    return leaf(
+        {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "description": "ISO 8601 date (YYYY-MM-DD)",
+                    },
+                    "rate": {
+                        "type": "number",
+                        "description": "Room rate that night, in the printed currency.",
+                    },
+                    "taxes_and_fees": {
+                        "type": "number",
+                        "description": "Sum of all taxes/fees that night (VAT, occupancy tax, city tax). Zero if not broken out.",
+                    },
+                },
+                "required": ["date", "rate", "taxes_and_fees"],
+            },
+        }
+    )
+
+
+def extras_block_schema(include_nightly_rates: bool = False) -> dict:
+    """Per-receipt extras — extracted from the receipt but NOT submitted to
+    the FA portal. Reduction reads these to derive schema fields the model
+    can't know in isolation (foreign vs domestic, original currency, FX,
+    daily_rate average for lodging). See Architecture B in docs/redesign-plan.md.
+
+    `include_nightly_rates`: only the lodging kind needs the per-night
+    breakdown — meal and transport pass through with the merchant_address
+    + printed_currency pair only.
+    """
+    properties = {
+        "merchant_address": leaf(
+            {
+                "type": "string",
+                "nullable": True,
+                "description": "Full printed merchant address (street + city + region + country if visible).",
+            }
+        ),
+        "printed_currency": leaf(
+            {
+                "type": "string",
+                "nullable": True,
+                "description": "ISO 4217 code if printed, else best-effort (e.g. 'USD' from a $ sign).",
+            }
+        ),
+    }
+    required = ["merchant_address", "printed_currency"]
+    if include_nightly_rates:
+        properties["nightly_rates"] = nightly_rates_schema()
+        required.append("nightly_rates")
+    return {
+        "type": "object",
+        "properties": properties,
+        "required": required,
     }
 
 
@@ -208,6 +301,7 @@ def transaction_line_schema(
     expense_type_values: list[str],
     detail_block_name: str,
     detail_block_schema: dict,
+    include_nightly_rates: bool = False,
 ) -> dict:
     """One transaction line as Gemini emits it for a single receipt.
 
@@ -216,13 +310,15 @@ def transaction_line_schema(
     kind from the FA's upload-form choice — it doesn't need to be
     repeated inside the per-document JSON. The per-kind detail block
     (passed in here) is the structural discriminator instead.
+
+    `include_nightly_rates` adds extras.nightly_rates (lodging only).
     """
     return {
         "type": "object",
         "properties": {
             "common": common_block_schema(expense_type_values),
             detail_block_name: detail_block_schema,
-            "extras": extras_block_schema(),
+            "extras": extras_block_schema(include_nightly_rates=include_nightly_rates),
         },
         "required": ["common", detail_block_name, "extras"],
     }
@@ -232,21 +328,27 @@ def build_response_schema(
     expense_type_values: list[str],
     detail_block_name: str,
     detail_block_schema: dict,
+    include_nightly_rates: bool = False,
 ) -> dict:
     return {
         "type": "array",
         "items": transaction_line_schema(
-            expense_type_values, detail_block_name, detail_block_schema
+            expense_type_values,
+            detail_block_name,
+            detail_block_schema,
+            include_nightly_rates=include_nightly_rates,
         ),
     }
 
 
 # Per-kind output specs. Adding a new kind: extend KIND_EXPENSE_TYPES,
 # add a `<kind>_details_block_schema()` function above, and append an
-# entry here.
-KINDS: list[tuple[str, str, callable]] = [
-    ("meal", "meal_details", meal_details_block_schema),
-    ("transport", "ground_transport_details", ground_transport_details_block_schema),
+# entry here. The 4th tuple item is `include_nightly_rates` — only
+# lodging needs it (per-night breakdown for daily_rate averaging).
+KINDS: list[tuple[str, str, callable, bool]] = [
+    ("meal", "meal_details", meal_details_block_schema, False),
+    ("transport", "ground_transport_details", ground_transport_details_block_schema, False),
+    ("lodging", "lodging_details", lodging_details_block_schema, True),
 ]
 
 
@@ -270,11 +372,12 @@ def main() -> int:
     validate_kind_expense_types(schema_yaml)
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    for kind, detail_block_name, detail_block_factory in KINDS:
+    for kind, detail_block_name, detail_block_factory, include_nightly_rates in KINDS:
         response_schema = build_response_schema(
             KIND_EXPENSE_TYPES[kind],
             detail_block_name,
             detail_block_factory(),
+            include_nightly_rates=include_nightly_rates,
         )
         out_path = OUTPUT_DIR / f"response_schema_{kind}.json"
         out_path.write_text(json.dumps(response_schema, indent=2) + "\n")
