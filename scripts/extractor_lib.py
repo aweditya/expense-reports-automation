@@ -1,15 +1,29 @@
 #!/usr/bin/env python3
 """Shared infrastructure for per-kind Gemini extractor scripts.
 
-Per-kind extractor scripts (`extract_meal.py`, `extract_transport.py`, …)
-all share the same shape: parse CLI args, set up a Vertex AI Gemini
-client via ADC, load an image, send one structured-output call, write
-the parsed JSON. The only per-kind variation is the **prompt text** and
-the **response_schema path** — both are passed in by the caller.
+Per-kind extractor scripts (`extract_meal.py`, `extract_transport.py`,
+`extract_lodging.py`) all share the same shape: parse CLI args, set up a
+Vertex AI Gemini client via ADC, load an image, send one or more
+structured-output calls, write the parsed JSON. The only per-kind
+variation is the **prompt text(s)**, the **response_schema path(s)**,
+and how to combine multiple call results.
 
-This module owns everything else so adding a new expense kind is a
-~30-line script (prompt + schema path + one call into here), not a
-~220-line copy-paste.
+This module owns:
+
+- CLI parsing (`parse_args`)
+- MIME detection (`detect_mime_type`)
+- One Gemini structured-output call (`single_call`) — the primitive
+  every extractor uses, once for single-call kinds (meal, transport)
+  or N times in parallel for multi-call kinds (lodging).
+- The "single call → write" full flow for single-call kinds
+  (`run_extraction`).
+
+Adding a new single-call kind is a ~30-line script: prompt + schema
+path + one call into `run_extraction`. Adding a multi-call kind (only
+lodging today, due to a Vertex schema property-count ceiling that
+trips above ~5 detail-block fields) requires the script to orchestrate
+`single_call` itself — see `scripts/extract_lodging.py` for the
+pattern.
 
 Auth is Application Default Credentials (ADC). On Cloud Run that's
 the runtime service account via the metadata server. Locally:
@@ -23,10 +37,23 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 
 DEFAULT_MODEL = "gemini-3-flash-preview"
 DEFAULT_LOCATION = "global"
+DEFAULT_MAX_OUTPUT_TOKENS = 65536
+
+
+class GeminiCallFailed(Exception):
+    """One Gemini structured-output call failed (truncation, schema rejection,
+    or any other JSON-parse failure of the response).
+
+    Diagnostics (raw response text + structured failure info) are written
+    to disk before this is raised — the message includes the file paths
+    so the FA-facing error page and the operator both have something to
+    chase.
+    """
 
 
 def parse_args(description: str | None = None) -> argparse.Namespace:
@@ -76,12 +103,106 @@ def _load_response_schema(path: Path):
     return types.Schema.model_validate(schema_dict)
 
 
+def single_call(
+    *,
+    client,
+    model: str,
+    prompt: str,
+    response_schema_path: Path,
+    image_filename: str,
+    image_bytes: bytes,
+    mime: str,
+    output_base: Path,
+    diag_label: str = "",
+) -> Any:
+    """One Gemini structured-output call. Returns the parsed JSON.
+
+    Caller passes a pre-built `client` and pre-loaded `image_bytes` so
+    that multi-call orchestrators (`extract_lodging.py`) build them
+    once and reuse across N parallel calls. `image_filename` is inlined
+    into the prompt prefix for the model's filename context; `mime` is
+    for the inline-data part.
+
+    `output_base` is used only on failure: the raw response text is
+    dumped to `<output_base>[.{diag_label}].raw.txt` and structured
+    diagnostics to `<output_base>[.{diag_label}].error.txt`. For
+    single-call kinds, leave `diag_label=""`. For multi-call kinds,
+    `diag_label="main"` / `"extras"` keeps the per-call diagnostics
+    distinct so you can tell which call truncated.
+
+    Raises `GeminiCallFailed` if the response can't be parsed as JSON
+    (typically because the model truncated mid-output). Returns
+    whatever `json.loads` produces — almost always a list, since our
+    response schemas are `type: array`.
+    """
+    from google.genai import types
+
+    response_schema = _load_response_schema(response_schema_path)
+
+    response = client.models.generate_content(
+        model=model,
+        contents=[
+            f"Filename: {image_filename}\n\n{prompt}",
+            types.Part.from_bytes(data=image_bytes, mime_type=mime),
+        ],
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=response_schema,
+            # Gemini 3 includes "thinking" tokens in this budget. Tamarine
+            # spent 7860 thinking tokens at 8192 = too small. After Stage 6
+            # added confidence_reason on every leaf the output volume grew
+            # again — uber1.pdf blew past 32768 mid-JSON. 65536 leaves
+            # headroom for multi-page PDFs (Uber receipts are 2 pages,
+            # hotel folios can be longer).
+            max_output_tokens=DEFAULT_MAX_OUTPUT_TOKENS,
+            temperature=0.0,
+        ),
+    )
+
+    raw_text = response.text or ""
+
+    try:
+        return json.loads(raw_text)
+    except json.JSONDecodeError as err:
+        suffix = f".{diag_label}" if diag_label else ""
+        raw_path = output_base.with_suffix(output_base.suffix + f"{suffix}.raw.txt")
+        err_path = output_base.with_suffix(output_base.suffix + f"{suffix}.error.txt")
+        output_base.parent.mkdir(parents=True, exist_ok=True)
+        raw_path.write_text(raw_text)
+        diag = {
+            "json_decode_error": str(err),
+            "raw_text_length": len(raw_text),
+            "candidates": [
+                {
+                    "finish_reason": str(getattr(c, "finish_reason", None)),
+                    "safety_ratings": [
+                        str(r) for r in (getattr(c, "safety_ratings", None) or [])
+                    ],
+                    "content_parts": len(
+                        (getattr(c, "content", None) and c.content.parts) or []
+                    ),
+                }
+                for c in (getattr(response, "candidates", None) or [])
+            ],
+            "prompt_feedback": str(getattr(response, "prompt_feedback", None)),
+            "usage_metadata": str(getattr(response, "usage_metadata", None)),
+        }
+        err_path.write_text(json.dumps(diag, indent=2))
+        label = diag_label or "single call"
+        raise GeminiCallFailed(
+            f"FAILED to parse JSON ({label}). Raw -> {raw_path}, diag -> {err_path}"
+        ) from err
+
+
 def run_extraction(
     args: argparse.Namespace,
     prompt: str,
     response_schema_path: Path,
 ) -> int:
     """One Gemini call → structured JSON → disk.
+
+    Used by single-call kinds (meal, transport). Multi-call kinds
+    (lodging) orchestrate `single_call` themselves.
 
     `args` comes from `parse_args()`. `prompt` is the kind-specific
     instructions; `response_schema_path` points to
@@ -99,7 +220,6 @@ def run_extraction(
         )
 
     from google import genai
-    from google.genai import types
 
     # ADC: works on Cloud Run via the metadata server, and locally after
     # `gcloud auth application-default login`. The SDK picks credentials
@@ -111,54 +231,22 @@ def run_extraction(
     image_bytes = args.image.read_bytes()
     mime = detect_mime_type(args.image)
 
-    response_schema = _load_response_schema(response_schema_path)
-
-    response = client.models.generate_content(
-        model=args.model,
-        contents=[
-            f"Filename: {args.image.name}\n\n{prompt}",
-            types.Part.from_bytes(data=image_bytes, mime_type=mime),
-        ],
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=response_schema,
-            # Gemini 3 includes "thinking" tokens in this budget. Tamarine
-            # spent 7860 thinking tokens at 8192 = too small. After Stage 6
-            # added confidence_reason on every leaf the output volume grew
-            # again — uber1.pdf blew past 32768 mid-JSON. Bumping to 65536
-            # leaves headroom for multi-page PDFs (Uber receipts are 2 pages,
-            # future hotel folios will be longer).
-            max_output_tokens=65536,
-            temperature=0.0,
-        ),
-    )
-
-    raw_text = response.text or ""
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-
     try:
-        parsed = json.loads(raw_text)
-    except json.JSONDecodeError as err:
-        raw_path = args.output.with_suffix(args.output.suffix + ".raw.txt")
-        err_path = args.output.with_suffix(args.output.suffix + ".error.txt")
-        raw_path.write_text(raw_text)
-        diag = {
-            "json_decode_error": str(err),
-            "raw_text_length": len(raw_text),
-            "candidates": [
-                {
-                    "finish_reason": str(getattr(c, "finish_reason", None)),
-                    "safety_ratings": [str(r) for r in (getattr(c, "safety_ratings", None) or [])],
-                    "content_parts": len((getattr(c, "content", None) and c.content.parts) or []),
-                }
-                for c in (getattr(response, "candidates", None) or [])
-            ],
-            "prompt_feedback": str(getattr(response, "prompt_feedback", None)),
-            "usage_metadata": str(getattr(response, "usage_metadata", None)),
-        }
-        err_path.write_text(json.dumps(diag, indent=2))
-        print(f"FAILED to parse JSON. Raw -> {raw_path}, diag -> {err_path}", file=sys.stderr)
+        parsed = single_call(
+            client=client,
+            model=args.model,
+            prompt=prompt,
+            response_schema_path=response_schema_path,
+            image_filename=args.image.name,
+            image_bytes=image_bytes,
+            mime=mime,
+            output_base=args.output,
+        )
+    except GeminiCallFailed as err:
+        print(err, file=sys.stderr)
         return 1
+
+    args.output.parent.mkdir(parents=True, exist_ok=True)
 
     # Inject source_filename — system context, not extracted by Gemini.
     # Reduction reads this to populate ExpenseReport.transaction_lines[]
