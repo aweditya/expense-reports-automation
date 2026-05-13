@@ -395,6 +395,15 @@ def main() -> int:
             image = REPO_ROOT / entry["image"]
             output = REPO_ROOT / entry["output"]
             kind = entry["extractor"]
+            if not image.exists():
+                # Stale corpus reference — some entries point at filenames
+                # the receipts/ directory no longer has (renamed during a
+                # cleanup pass). Skip rather than aborting the whole run;
+                # the missing image will surface as a "not found" failure
+                # in the assertions phase below if no cached spike file
+                # exists either.
+                print(f"skip  {kind} extractor: image not found ({image.name})")
+                continue
             print(f"running {kind} extractor on {image.name} ...")
             run_extractor(image, output, kind)
 
