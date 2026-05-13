@@ -326,6 +326,7 @@ mod tests {
                 merchant_address: Wrapped::unknown(),
                 printed_currency,
                 nightly_rates: Vec::new(),
+                segments: Vec::new(),
             },
         }
     }
@@ -588,6 +589,7 @@ mod tests {
                 merchant_address: Wrapped::unknown(),
                 printed_currency: Wrapped::unknown(),
                 nightly_rates: nights,
+                segments: Vec::new(),
             },
         }
     }

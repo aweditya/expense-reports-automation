@@ -474,42 +474,6 @@ impl core::fmt::Display for ExpenseReportTransactionLinesItemAirfareDetailsClass
     }
 }
 
-/// Source tier: T2
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonSourceEnum {
-    #[default]
-    PayeeProvided,
-    SystemGenerated,
-}
-
-impl ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonSourceEnum {
-    pub const fn as_str(&self) -> &'static str {
-        match self {
-            Self::PayeeProvided => "payee_provided",
-            Self::SystemGenerated => "system_generated",
-        }
-    }
-}
-
-impl core::str::FromStr for ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonSourceEnum {
-    type Err = &'static str;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value {
-            "payee_provided" => Ok(Self::PayeeProvided),
-            "system_generated" => Ok(Self::SystemGenerated),
-            _ => Err("invalid enum value"),
-        }
-    }
-}
-
-impl core::fmt::Display for ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonSourceEnum {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
 /// Source tier: T3
 /// Infer from:  If hotel matches conference venue → conference_hotel; else check booking source
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
@@ -861,38 +825,6 @@ pub struct ExpenseReportTransactionLinesItemCommon {
 
 }
 
-/// Source tier: T2
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
-pub struct ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonComparableFaresItem {
-    /// Source tier: T2
-    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
-    pub airline: Wrapped<String>,
-    /// Source tier: T2
-    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
-    pub amount: Wrapped<f64>,
-    /// Source tier: T2
-    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
-    pub class: Wrapped<String>,
-
-}
-
-///  System-generated if not provided by payee
-/// Source tier: T2
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
-pub struct ExpenseReportTransactionLinesItemAirfareDetailsPriceComparison {
-    ///  Date the comparison was generated
-    /// Source tier: T2
-    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
-    pub comparison_date: Wrapped<IsoDate>,
-    /// Source tier: T2
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub comparable_fares: Option<Vec<ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonComparableFaresItem>>,
-    /// Source tier: T2
-    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
-    pub source: Wrapped<ExpenseReportTransactionLinesItemAirfareDetailsPriceComparisonSourceEnum>,
-
-}
-
 /// Conditionally required when:  expense_type in [airfare_domestic, airfare_foreign]
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemAirfareDetails {
@@ -934,10 +866,6 @@ pub struct ExpenseReportTransactionLinesItemAirfareDetails {
     /// Infer from:  Itinerary shows return leg
     #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub round_trip: Wrapped<bool>,
-    ///  System-generated if not provided by payee
-    /// Source tier: T2
-    #[serde(default)]
-    pub price_comparison: ExpenseReportTransactionLinesItemAirfareDetailsPriceComparison,
 
 }
 

@@ -67,6 +67,12 @@ pub struct Extras {
     /// present, `low` (Wrapped::unknown) when they aren't.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub nightly_rates: Vec<NightlyRate>,
+    /// Per-flight-segment breakdown — only emitted by the airfare extractor.
+    /// Reduction uses entries to derive segment count (and eventually total
+    /// flight time / multi-airline detection). Empty for non-airfare
+    /// receipts. Same bare-array rationale as `nightly_rates` above.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub segments: Vec<Segment>,
 }
 
 /// One night of a lodging stay. The `date`, `rate`, and `taxes_and_fees`
@@ -83,6 +89,23 @@ pub struct NightlyRate {
     /// Sum of all taxes/fees that night (VAT, occupancy tax, city tax).
     /// Zero if the folio doesn't break them out.
     pub taxes_and_fees: f64,
+}
+
+/// One leg of an airfare itinerary. Bare values, no per-leaf `_meta`,
+/// same rationale as `NightlyRate` — keeping per-segment cost compact
+/// in the output budget. A round-trip ticket emits 2 entries; a
+/// multi-segment trip (e.g. SFO→ORD→FRA + return) emits 3-4.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct Segment {
+    /// Carrier code + number (e.g. "UA1448", "AI179").
+    pub flight_number: String,
+    /// IATA code of the segment's origin (e.g. "SFO", "BOM").
+    pub from_airport: String,
+    /// IATA code of the segment's destination.
+    pub to_airport: String,
+    /// ISO 8601 local departure datetime (e.g. "2025-11-23T10:30").
+    /// Local to the departure airport's timezone — no offset suffix.
+    pub departure_datetime: String,
 }
 
 #[cfg(test)]

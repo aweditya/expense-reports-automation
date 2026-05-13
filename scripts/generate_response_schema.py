@@ -55,6 +55,7 @@ KIND_EXPENSE_TYPES: dict[str, list[str]] = {
     "meal": ["business_meal", "group_travel_meal"],
     "transport": ["ground_transportation_domestic", "ground_transportation_foreign"],
     "lodging": ["lodging_domestic", "lodging_foreign"],
+    "airfare": ["airfare_domestic", "airfare_foreign"],
 }
 
 
@@ -241,6 +242,149 @@ def lodging_details_block_schema() -> dict:
     }
 
 
+def _airfare_detail_field_schemas() -> dict:
+    """Per-leaf schemas for the 9 airfare_details fields. Defined once;
+    `airfare_details_block_schema()` selects subsets by name for the
+    3-call split. Keep in lock-step with schema.yaml's airfare_details."""
+    return {
+        "travelers_name": leaf({"type": "string"}),
+        "ticket_number": leaf({"type": "string"}),
+        # ticket_amount kept alongside common.line_amount_usd: it's the
+        # printed amount on the ticket in whatever currency the ticket
+        # prints. For domestic USD it equals line_amount_usd; for foreign
+        # it equals common.original_amount and reduction uses it as the
+        # source for FX into line_amount_usd.
+        "ticket_amount": leaf({"type": "number"}),
+        "booking_method": leaf(
+            {
+                "type": "string",
+                "enum": [
+                    "stanford_travel_egencia",
+                    "stanford_travel_key_travel",
+                    "stanford_travel_connect_ua",
+                    "stanford_travel_connect_dl",
+                    "stanford_travel_connect_aa",
+                    "stanford_travel_connect_as",
+                    "stanford_travel_connect_ha",
+                    "other",
+                ],
+            }
+        ),
+        "airline": leaf({"type": "string"}),
+        "class_of_ticket": leaf(
+            {
+                "type": "string",
+                "enum": ["coach", "premium_economy", "business", "first"],
+            }
+        ),
+        "departure_airport": leaf(
+            {"type": "string", "description": "IATA code"}
+        ),
+        "destination_airport": leaf(
+            {"type": "string", "description": "IATA code"}
+        ),
+        "round_trip": leaf({"type": "boolean"}),
+    }
+
+
+def airfare_details_block_schema(fields: list[str] | None = None) -> dict:
+    """Per-receipt airfare detail block.
+
+    Excludes:
+      - price_comparison: T2/system-derived; out of scope for v1 (the
+        FA either provides one or reduction looks one up). Removed
+        from schema.yaml as part of the airfare extractor work.
+
+    9 leaves total — over Vertex's schema property-count ceiling for a
+    single call. The airfare extractor uses a 3-call split (lodging
+    used 2; airfare needs 3 because its detail block is bigger):
+
+      - `airfare_main`: common + 5 flight-centric fields
+      - `airfare_aux`: 4 booking/payment-centric fields only
+      - `airfare_extras`: extras + segments[] bare array
+
+    Both `airfare_main` and `airfare_aux` emit under the same
+    `airfare_details` key; the extractor 1-deep-merges them on the
+    Python side before writing the per-doc JSON. Reduction sees the
+    union as a single complete `airfare_details` object — same shape
+    a hypothetical single-call would have produced.
+
+    Pass `fields=None` for the full block (used by tests / single-call
+    fallback). Pass a subset list for the per-call split.
+
+    Probe locally with `scripts/probe_response_schemas.py` after any
+    leaf-count change.
+    """
+    all_fields = _airfare_detail_field_schemas()
+    if fields is None:
+        fields = list(all_fields.keys())
+    return {
+        "type": "object",
+        "properties": {k: all_fields[k] for k in fields},
+        "required": list(fields),
+    }
+
+
+# Field-name groupings for the 3-call split. Defined as constants so
+# `extract_airfare.py` can reuse them when building per-call prompts —
+# keeps the prompt-vs-schema field lists from drifting.
+AIRFARE_FLIGHT_FIELDS = [
+    "airline",
+    "departure_airport",
+    "destination_airport",
+    "class_of_ticket",
+    "round_trip",
+]
+AIRFARE_BOOKING_FIELDS = [
+    "travelers_name",
+    "ticket_number",
+    "ticket_amount",
+    "booking_method",
+]
+
+
+def segments_schema() -> dict:
+    """Per-flight-segment breakdown — only emitted by the airfare extractor.
+
+    Bare array, same pattern as `nightly_rates_schema()`. Reduction
+    uses entries to derive segment count and (eventually) total flight
+    time. Each entry carries the minimum needed to display the
+    multi-segment trip: flight_number, from/to IATA codes, and the
+    segment's departure datetime. Per-segment airline + class can be
+    added later if multi-airline trips become a real corpus pattern.
+    """
+    return {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {
+                "flight_number": {
+                    "type": "string",
+                    "description": "Carrier code + number (e.g. 'UA1448', 'AI179').",
+                },
+                "from_airport": {
+                    "type": "string",
+                    "description": "IATA code of the segment's origin.",
+                },
+                "to_airport": {
+                    "type": "string",
+                    "description": "IATA code of the segment's destination.",
+                },
+                "departure_datetime": {
+                    "type": "string",
+                    "description": "ISO 8601 local departure datetime (e.g. '2025-11-23T10:30').",
+                },
+            },
+            "required": [
+                "flight_number",
+                "from_airport",
+                "to_airport",
+                "departure_datetime",
+            ],
+        },
+    }
+
+
 def nightly_rates_schema() -> dict:
     """Per-night rate breakdown — only emitted by the lodging extractor.
     Reduction averages the rates to populate lodging_details.daily_rate.
@@ -276,15 +420,22 @@ def nightly_rates_schema() -> dict:
     }
 
 
-def extras_block_schema(include_nightly_rates: bool = False) -> dict:
+def extras_block_schema(
+    include_nightly_rates: bool = False,
+    include_segments: bool = False,
+) -> dict:
     """Per-receipt extras — extracted from the receipt but NOT submitted to
     the FA portal. Reduction reads these to derive schema fields the model
     can't know in isolation (foreign vs domestic, original currency, FX,
-    daily_rate average for lodging). See Architecture B in docs/redesign-plan.md.
+    daily_rate average for lodging, segment count for airfare).
+    See Architecture B in docs/redesign-plan.md.
 
     `include_nightly_rates`: only the lodging kind needs the per-night
     breakdown — meal and transport pass through with the merchant_address
     + printed_currency pair only.
+
+    `include_segments`: only the airfare kind needs the per-flight-segment
+    breakdown.
     """
     properties = {
         "merchant_address": leaf(
@@ -306,6 +457,9 @@ def extras_block_schema(include_nightly_rates: bool = False) -> dict:
     if include_nightly_rates:
         properties["nightly_rates"] = nightly_rates_schema()
         required.append("nightly_rates")
+    if include_segments:
+        properties["segments"] = segments_schema()
+        required.append("segments")
     return {
         "type": "object",
         "properties": properties,
@@ -322,14 +476,16 @@ def transaction_line_schema(
     include_detail: bool = True,
     include_extras: bool = True,
     include_nightly_rates: bool = False,
+    include_segments: bool = False,
 ) -> dict:
     """One transaction line (or a sub-slice of one) as Gemini emits it.
 
     Single-call kinds (meal, transport) use the default — common +
-    detail block + extras all included. Multi-call kinds (lodging) emit
-    two schemas: one with `include_extras=False` for the "main" call,
-    another with `include_common=False, include_detail=False,
-    include_nightly_rates=True` for the "extras" call.
+    detail block + extras all included. Multi-call kinds (lodging,
+    airfare) emit two schemas: a "main" with `include_extras=False`
+    and an "extras" with `include_common=False, include_detail=False,
+    include_nightly_rates=True` (lodging) or `include_segments=True`
+    (airfare).
 
     The expense_kind discriminator was dropped (Phase 1 Pair B): the
     per-kind extractor router (`scripts/extract_<kind>.py`) knows the
@@ -353,7 +509,8 @@ def transaction_line_schema(
         required.append(detail_block_name)
     if include_extras:
         properties["extras"] = extras_block_schema(
-            include_nightly_rates=include_nightly_rates
+            include_nightly_rates=include_nightly_rates,
+            include_segments=include_segments,
         )
         required.append("extras")
     return {"type": "object", "properties": properties, "required": required}
@@ -404,6 +561,43 @@ SCHEMAS_TO_GENERATE: list[tuple[str, dict]] = [
             include_common=False,
             include_detail=False,
             include_nightly_rates=True,
+        ),
+    ),
+    # Airfare: 3-call split (lodging used 2; airfare needs 3 because its
+    # detail block has 9 leaves vs lodging's 6). The probe with all 9
+    # detail leaves in `airfare_main` returned a 400 from Vertex
+    # (17 total leaves at common 8 + detail 9, over the ceiling).
+    # Splitting airfare_details across two calls (main: 5 flight-centric
+    # fields; aux: 4 booking/payment-centric fields) keeps each call
+    # comfortably under the limit. Both emit under the SAME
+    # `airfare_details` key so the extractor can 1-deep-merge them
+    # before writing the per-doc JSON. Reduction sees the union as a
+    # single complete object — same shape a hypothetical single-call
+    # would have produced.
+    (
+        "response_schema_airfare_main.json",
+        dict(
+            expense_type_values=KIND_EXPENSE_TYPES["airfare"],
+            detail_block_name="airfare_details",
+            detail_block=airfare_details_block_schema(AIRFARE_FLIGHT_FIELDS),
+            include_extras=False,
+        ),
+    ),
+    (
+        "response_schema_airfare_aux.json",
+        dict(
+            detail_block_name="airfare_details",
+            detail_block=airfare_details_block_schema(AIRFARE_BOOKING_FIELDS),
+            include_common=False,
+            include_extras=False,
+        ),
+    ),
+    (
+        "response_schema_airfare_extras.json",
+        dict(
+            include_common=False,
+            include_detail=False,
+            include_segments=True,
         ),
     ),
 ]

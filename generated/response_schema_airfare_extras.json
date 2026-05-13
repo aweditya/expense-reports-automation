@@ -1,0 +1,213 @@
+{
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "extras": {
+        "type": "object",
+        "properties": {
+          "merchant_address": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string",
+                "nullable": true,
+                "description": "Full printed merchant address (street + city + region + country if visible)."
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "confidence_reason": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "printed_currency": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string",
+                "nullable": true,
+                "description": "ISO 4217 code if printed, else best-effort (e.g. 'USD' from a $ sign)."
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "confidence_reason": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "flight_number": {
+                  "type": "string",
+                  "description": "Carrier code + number (e.g. 'UA1448', 'AI179')."
+                },
+                "from_airport": {
+                  "type": "string",
+                  "description": "IATA code of the segment's origin."
+                },
+                "to_airport": {
+                  "type": "string",
+                  "description": "IATA code of the segment's destination."
+                },
+                "departure_datetime": {
+                  "type": "string",
+                  "description": "ISO 8601 local departure datetime (e.g. '2025-11-23T10:30')."
+                }
+              },
+              "required": [
+                "flight_number",
+                "from_airport",
+                "to_airport",
+                "departure_datetime"
+              ]
+            }
+          }
+        },
+        "required": [
+          "merchant_address",
+          "printed_currency",
+          "segments"
+        ]
+      }
+    },
+    "required": [
+      "extras"
+    ]
+  }
+}

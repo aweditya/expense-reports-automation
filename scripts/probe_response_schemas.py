@@ -42,6 +42,9 @@ SCHEMA_FILES = [
     "response_schema_transport.json",
     "response_schema_lodging_main.json",
     "response_schema_lodging_extras.json",
+    "response_schema_airfare_main.json",
+    "response_schema_airfare_aux.json",
+    "response_schema_airfare_extras.json",
 ]
 
 MODEL = "gemini-3-flash-preview"

@@ -366,29 +366,6 @@ expense_report:
               required: true
               source: T3
               infer_from: "Itinerary shows return leg"
-            price_comparison:
-              type: object
-              required: true
-              source: T2
-              description: "System-generated if not provided by payee"
-              fields:
-                comparison_date:
-                  type: date
-                  description: "Date the comparison was generated"
-                comparable_fares:
-                  type: array
-                  items:
-                    type: object
-                    fields:
-                      airline:
-                        type: string
-                      amount:
-                        type: number
-                      class:
-                        type: string
-                source:
-                  type: enum
-                  allowed_values: [payee_provided, system_generated]
 
         lodging_details:
           required: "expense_type in [lodging_domestic, lodging_foreign]"

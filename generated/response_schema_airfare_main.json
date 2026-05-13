@@ -1,0 +1,1090 @@
+{
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "common": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string",
+                "description": "ISO 8601 date (YYYY-MM-DD)"
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "confidence_reason": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "line_amount_usd": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "number"
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "confidence_reason": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "original_currency": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string",
+                "nullable": true,
+                "description": "ISO 4217 code or null if USD"
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "confidence_reason": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "original_amount": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "confidence_reason": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "expense_type": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string",
+                "enum": [
+                  "airfare_domestic",
+                  "airfare_foreign"
+                ]
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "confidence_reason": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "remarks": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "confidence_reason": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "country_of_activity": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string",
+                "nullable": true
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "confidence_reason": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "foreign_activity_type": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string",
+                "nullable": true,
+                "enum": [
+                  "conference",
+                  "research_collaboration",
+                  "fieldwork",
+                  "other"
+                ]
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "confidence_reason": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          }
+        },
+        "required": [
+          "date",
+          "line_amount_usd",
+          "original_currency",
+          "original_amount",
+          "expense_type",
+          "remarks",
+          "country_of_activity",
+          "foreign_activity_type"
+        ]
+      },
+      "airfare_details": {
+        "type": "object",
+        "properties": {
+          "airline": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "confidence_reason": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "departure_airport": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string",
+                "description": "IATA code"
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "confidence_reason": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "destination_airport": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string",
+                "description": "IATA code"
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "confidence_reason": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "class_of_ticket": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string",
+                "enum": [
+                  "coach",
+                  "premium_economy",
+                  "business",
+                  "first"
+                ]
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "confidence_reason": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "round_trip": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "boolean"
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "confidence_reason": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          }
+        },
+        "required": [
+          "airline",
+          "departure_airport",
+          "destination_airport",
+          "class_of_ticket",
+          "round_trip"
+        ]
+      }
+    },
+    "required": [
+      "common",
+      "airfare_details"
+    ]
+  }
+}

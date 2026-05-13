@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-generated_at_utc: '2026-05-12T19:18:55+00:00'
+generated_at_utc: '2026-05-13T23:27:53+00:00'
 sections:
 - key: general_information
   label: General Information
@@ -460,53 +460,6 @@ sections:
     required_expression: null
     review_priority: medium
     allowed_values: []
-  - path: expense_report.transaction_lines[].airfare_details.price_comparison.comparison_date
-    label: Comparison Date
-    control: date
-    source: T2
-    entry_mode: computed_readonly
-    required: false
-    required_expression: null
-    review_priority: low
-    allowed_values: []
-  - path: expense_report.transaction_lines[].airfare_details.price_comparison.comparable_fares[].airline
-    label: Airline
-    control: text
-    source: T2
-    entry_mode: computed_readonly
-    required: false
-    required_expression: null
-    review_priority: low
-    allowed_values: []
-  - path: expense_report.transaction_lines[].airfare_details.price_comparison.comparable_fares[].amount
-    label: Amount
-    control: currency
-    source: T2
-    entry_mode: computed_readonly
-    required: false
-    required_expression: null
-    review_priority: low
-    allowed_values: []
-  - path: expense_report.transaction_lines[].airfare_details.price_comparison.comparable_fares[].class
-    label: Class
-    control: text
-    source: T2
-    entry_mode: computed_readonly
-    required: false
-    required_expression: null
-    review_priority: low
-    allowed_values: []
-  - path: expense_report.transaction_lines[].airfare_details.price_comparison.source
-    label: Source
-    control: select
-    source: T2
-    entry_mode: computed_readonly
-    required: false
-    required_expression: null
-    review_priority: low
-    allowed_values:
-    - payee_provided
-    - system_generated
   - path: expense_report.transaction_lines[].lodging_details.hotel_name
     label: Hotel Name
     control: text
