@@ -22,7 +22,7 @@ If a piece of code touches two layers' worth of concern, it is wrong.
 
 | # | Layer | Implemented in | Owns |
 |---|---|---|---|
-| 1 | **Extraction** | `scripts/extract_<kind>.py` (one per expense kind) | One Gemini call per uploaded document. Receipt image → typed JSON. The dispatcher in `local_app_simple.py` picks the script based on the FA's per-file kind choice in the upload form. |
+| 1 | **Extraction** | `scripts/extract_<kind>.py` (one per expense kind) | One Gemini call per uploaded document — receipt image → typed JSON — for most kinds (meal, transport). Kinds whose detail block exceeds Vertex's schema property-count ceiling (lodging today; > ~5 `_meta`-wrapped T2/T3 leaves) make **two parallel calls** with their schema split across them; the per-kind script merges the outputs back into the same per-doc JSON shape. The dispatcher in `local_app_simple.py` picks the script based on the FA's per-file kind choice in the upload form. See §7 for when to use the multi-call pattern. |
 | 2 | **Derivation** | (inside extraction) | Fields a single document can yield from its own contents. No cross-document signal. |
 | 3 | **Reduction** | `src/reduce.rs` | Combines per-document JSONs into one `ExpenseReport`. Aggregations like `total_usd`, `transaction_date`, derived `category` + confidence. |
 | 4 | **Validation** | `src/validator_typed.rs` (+ `src/validator.rs`) | Checks the assembled `ExpenseReport` against business rules. Produces `ValidationReport` (issues only — never mutates the report). |
@@ -364,7 +364,7 @@ A cheat-sheet for "which file does X belong in?"
 | Add a business rule (e.g. "X required when Y") | `schema.yaml` (`required:` clause, regenerates `validation_rules.rs`) and/or hand-coded in `src/validator_typed.rs` | Validation |
 | Change how a field looks on the workbench | `src/workbench_simple.rs` + `src/workbench_simple.css` | Display |
 | Future: emit a Stanford-portal payload | new `src/submit.rs` (does not exist yet) | Submission |
-| Add a new expense kind (hotel/cab/airfare/conference) | (1) per-kind detail block already in `schema.yaml`; (2) `scripts/generate_response_schema.py` — add the kind to `KIND_EXPENSE_TYPES` + a detail-block factory + an entry in `KINDS`; (3) new `scripts/extract_<kind>.py` (~60 lines using `extractor_lib`); (4) new dropdown option + dispatcher entry in `scripts/local_app_simple.py`; (5) workbench renderer + validator walk for the new detail block; (6) acceptance harness entries. The Dockerfile globs `generated/response_schema_*.json`, so no Dockerfile change. | Extraction + Display + Validation |
+| Add a new expense kind (hotel/cab/airfare/conference) | (1) per-kind detail block already in `schema.yaml`; (2) `scripts/generate_response_schema.py` — add the kind to `KIND_EXPENSE_TYPES` + a detail-block factory + an entry in `SCHEMAS_TO_GENERATE`; (3) new `scripts/extract_<kind>.py` (~30 lines using `run_extraction` from `extractor_lib`); (4) new dropdown option + dispatcher entry in `scripts/local_app_simple.py`; (5) workbench renderer + validator walk for the new detail block; (6) acceptance harness entries. The Dockerfile globs `generated/response_schema_*.json`, so no Dockerfile change. **If the kind's detail block has more than ~5 T2/T3 leaves** (Vertex's schema property-count ceiling), it needs the two-call pattern: emit two schemas from `SCHEMAS_TO_GENERATE` (one with `include_extras=False`, one with `include_common=False, include_detail=False`), and have the extractor orchestrate two parallel `single_call` invocations and merge the results — see `scripts/extract_lodging.py`. | Extraction + Display + Validation |
 
 ---
 
@@ -377,7 +377,7 @@ A cheat-sheet for "which file does X belong in?"
 | Codegen — Gemini response_schema | `scripts/generate_response_schema.py` |
 | Generated Rust types | `generated/expense_report_model.rs` |
 | Generated validation-rule constants | `generated/validation_rules.rs` |
-| Generated response_schemas (per kind) | `generated/response_schema_meal.json`, `generated/response_schema_transport.json` |
+| Generated response_schemas (per call) | `generated/response_schema_meal.json`, `generated/response_schema_transport.json`, `generated/response_schema_lodging_main.json`, `generated/response_schema_lodging_extras.json` (lodging is split across two parallel calls — see §1 and §7) |
 | Per-document I/O type | `src/extracted_receipt.rs` |
 | Provenance wrapper + metadata | `src/meta.rs`, `src/draft.rs` |
 | Reduction | `src/reduce.rs` |
@@ -387,8 +387,9 @@ A cheat-sheet for "which file does X belong in?"
 | Reduction binary | `src/bin/reduce_extractions.rs` |
 | Render binary | `src/bin/render_workbench_from_report.rs` |
 | Round-trip contract check | `src/bin/roundtrip_check.rs` |
-| Per-kind Python extractors (Gemini call) | `scripts/extract_meal.py`, `scripts/extract_transport.py` |
-| Shared extractor infrastructure | `scripts/extractor_lib.py` (CLI parsing, ADC client, Gemini call, response handling) |
+| Per-kind Python extractors (Gemini call) | `scripts/extract_meal.py`, `scripts/extract_transport.py`, `scripts/extract_lodging.py` (lodging orchestrates two parallel calls via `ThreadPoolExecutor` and merges the outputs) |
+| Shared extractor infrastructure | `scripts/extractor_lib.py` (CLI parsing, ADC client, `single_call` primitive, `run_extraction` for single-call kinds) |
+| Schema-acceptance pre-deploy probe | `scripts/probe_response_schemas.py` (sends a 1×1 PNG generate_content per generated schema; catches Vertex-rejected schemas before push) |
 | Flask + gunicorn entry point | `scripts/local_app_simple.py` |
 | Acceptance harness | `scripts/acceptance_check.py` |
 | Manual deploy escape hatch | `scripts/deploy.sh` |
