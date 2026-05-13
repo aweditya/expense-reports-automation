@@ -58,25 +58,40 @@ def get_client() -> genai.Client:
     return genai.Client(vertexai=True, project=project, location="global")
 
 
-def probe(client: genai.Client, schema_dict: dict) -> tuple[bool, str]:
+def probe(
+    client: genai.Client,
+    schema_dict: dict,
+    use_json_schema: bool = False,
+) -> tuple[bool, str]:
     """Send a minimal generate_content call. Returns (ok, message).
 
-    `ok=False` covers both SDK-side validation rejection (Pydantic
-    ValidationError) and Vertex-side rejection (genai.errors.ClientError
-    400). The message preserves enough of the upstream error to tell
-    them apart.
+    `use_json_schema=False` (default): pass via `response_schema`, which
+    goes through the SDK's Pydantic `types.Schema` model — strict subset
+    of OpenAPI 3, no `$ref`, no `oneOf`/`anyOf`.
+
+    `use_json_schema=True`: pass via `response_json_schema`, the SDK's
+    raw-JSON-Schema entry point — accepts the full spec including `$ref`,
+    delegates validation to Vertex's underlying engine. Use this to
+    probe whether Vertex itself (not the SDK) supports a feature.
+
+    `ok=False` covers both SDK-side rejection (Pydantic ValidationError)
+    and Vertex-side rejection (ClientError 400). The message preserves
+    enough of the upstream error to tell them apart.
     """
     try:
-        schema = types.Schema.model_validate(schema_dict)
+        config_kwargs: dict = {
+            "response_mime_type": "application/json",
+            "max_output_tokens": 50,
+            "temperature": 0.0,
+        }
+        if use_json_schema:
+            config_kwargs["response_json_schema"] = schema_dict
+        else:
+            config_kwargs["response_schema"] = types.Schema.model_validate(schema_dict)
         client.models.generate_content(
             model=MODEL,
             contents=["test"],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=schema,
-                max_output_tokens=50,
-                temperature=0.0,
-            ),
+            config=types.GenerateContentConfig(**config_kwargs),
         )
         return True, "OK"
     except Exception as e:
@@ -137,23 +152,59 @@ def bisect_lodging(client: genai.Client) -> int:
         for fname in list(ld_props.keys()):
             ld_props[fname] = ld_props[fname]["properties"]["value"]
 
-    mutations: list[tuple[str, Callable[[dict], None]]] = [
-        ("baseline (unchanged)", lambda m: None),
-        *[(f"drop lodging_details.{f}", drop_field(f)) for f in ld_fields],
-        ("strip descriptions in lodging_details values", strip_descriptions),
-        ("booking_method: drop enum (bare string)", relax_booking_method_enum),
-        ("strip _meta from all lodging_details leaves", strip_meta_from_details),
+    def use_ref_for_meta(m: dict) -> None:
+        """Define _meta once at the schema root and $ref it from every leaf.
+
+        Tests whether Vertex's Schema validator dereferences `$ref`. The
+        codegen author noted "limited SDK support for $ref" — this is the
+        actual probe of that. If it passes, we collapse all three kinds'
+        schemas via codegen and stop hitting the property-count limit.
+        """
+        meta_def: dict | None = None
+
+        def walk(node):
+            nonlocal meta_def
+            if isinstance(node, dict):
+                props = node.get("properties")
+                if isinstance(props, dict) and "_meta" in props:
+                    if meta_def is None:
+                        meta_def = copy.deepcopy(props["_meta"])
+                    props["_meta"] = {"$ref": "#/$defs/Meta"}
+                for v in node.values():
+                    walk(v)
+            elif isinstance(node, list):
+                for item in node:
+                    walk(item)
+
+        walk(m)
+        if meta_def is not None:
+            m["$defs"] = {"Meta": meta_def}
+
+    # Each tuple: (label, mutate_fn, use_json_schema). The third item
+    # is True only for $ref tests, which require the raw-JSON-Schema
+    # SDK entry point (the typed `response_schema` Pydantic model
+    # rejects `$ref` outright).
+    mutations: list[tuple[str, Callable[[dict], None], bool]] = [
+        ("baseline (unchanged)", lambda m: None, False),
+        *[(f"drop lodging_details.{f}", drop_field(f), False) for f in ld_fields],
+        ("strip descriptions in lodging_details values", strip_descriptions, False),
+        ("booking_method: drop enum (bare string)", relax_booking_method_enum, False),
+        ("strip _meta from all lodging_details leaves", strip_meta_from_details, False),
+        ("$ref _meta via response_schema (typed)", use_ref_for_meta, False),
+        ("$ref _meta via response_json_schema (raw)", use_ref_for_meta, True),
     ]
 
     SCRATCH_DIR.mkdir(parents=True, exist_ok=True)
     out_path = SCRATCH_DIR / "lodging_bisect.txt"
     lines: list[str] = []
-    for label, mutate in mutations:
+    for label, mutate, use_json_schema in mutations:
         m = copy.deepcopy(base)
         mutate(m)
-        ok, msg = probe(client, m)
+        ok, msg = probe(client, m, use_json_schema=use_json_schema)
         marker = "OK  " if ok else "FAIL"
         line = f"{marker}  {label}"
+        if not ok:
+            line += f"\n      → {msg}"
         print(line)
         lines.append(line)
 
