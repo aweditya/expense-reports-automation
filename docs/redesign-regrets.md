@@ -20,6 +20,22 @@ Keep entries short. The point is recall, not narrative.
 
 ## Entries
 
+### 2026-05-12 — shipped lodging extractor without ever asking Vertex if it accepted the schema
+
+**What happened:** Phase 3 added `scripts/extract_lodging.py` + `generated/response_schema_lodging.json`. Updated `acceptance_check.py` with 5 lodging fixtures but didn't `--run` it before pushing. First production upload returned a generic Vertex 400 — Vertex was rejecting the schema itself, before Gemini ever looked at the folio. A 30-second local probe (one `generate_content` call against the new schema with a 1×1 PNG) would have surfaced it immediately. Meal and transport had this rail by accident: the iterative Phase 2 prompt-tuning always ran `--run` on real receipts, so any schema rejection would have shown up in that loop. For lodging I developed "by inspection" (check that cargo tests pass, check that the schema looks structurally similar to meal) and skipped the live call.
+
+**Why it was wrong:** Rule 6 says "CLI testing is sanity-only; the deployed Cloud Run site is the verdict." I read it as "skip CLI, go to Cloud Run." It actually means CLI is the sanity check FIRST, Cloud Run is the FINAL verdict — sequential, not alternatives. Skipping CLI turned Cloud Run into a debugger, and the debugger output is "the FA can't upload."
+
+**Rule going forward:** Adding a new extractor kind is a contract pair (new prompt + new generated schema). Both halves verified locally against Vertex before pushing — minimally via a fast schema probe (`scripts/probe_response_schemas.py`), ideally via `acceptance_check.py --run` against one real receipt of that kind. Cargo tests passing is not evidence that Vertex accepts the schema.
+
+### 2026-05-12 — shipped a hotfix on an unverified hypothesis
+
+**What happened:** After the lodging 400 surfaced, I hypothesized "Vertex rejects leaf-wrapped arrays" (the `{value: array, _meta: {...}}` shape on `nightly_rates`), unwrapped it to a bare `Vec<NightlyRate>`, deployed in `e17d437`. Cargo tests passed. The same 400 returned on the next upload. Bisection an hour later showed the offending region is somewhere inside `lodging_details`, not in `extras`. I had not run the bisection BEFORE pushing the hotfix.
+
+**Why it was wrong:** Hypothesis-driven debugging is fine. Hypothesis-driven *shipping* is not. The hotfix went out on plausibility, not evidence. The probe that would have falsified the hypothesis is the same probe I should have run before the original deploy.
+
+**Rule going forward:** A hypothesis fix for a production bug must include a test that would FAIL without the fix and PASS with it, run before the push. For schema-rejection bugs: probe with the pre-fix schema (must fail) and the post-fix schema (must pass). If I can't construct that test, the fix is a guess and doesn't ship.
+
 ### 2026-05-11 — schema rule blew the model output budget on the largest receipt
 
 **What happened:** UI Polish Stage 6 added `confidence_reason` as a
