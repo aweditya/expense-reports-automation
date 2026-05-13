@@ -33,6 +33,7 @@ EXTRACTORS = {
     "meal": REPO_ROOT / "scripts" / "extract_meal.py",
     "transport": REPO_ROOT / "scripts" / "extract_transport.py",
     "lodging": REPO_ROOT / "scripts" / "extract_lodging.py",
+    "airfare": REPO_ROOT / "scripts" / "extract_airfare.py",
 }
 
 # Detail block expected on a per-doc JSON for each extractor kind. The
@@ -42,6 +43,7 @@ DETAIL_BLOCK_BY_KIND = {
     "meal": "meal_details",
     "transport": "ground_transport_details",
     "lodging": "lodging_details",
+    "airfare": "airfare_details",
 }
 
 
@@ -324,6 +326,104 @@ RECEIPTS = [
             "lodging_details.location.value": lambda v: v and "Las Vegas" in v,
             "extras.printed_currency.value": "USD",
             "extras.nightly_rates": lambda v: v and len(v) >= 1,
+        },
+    },
+
+    # ─── Airfare (Phase 4 Stage 2) ────────────────────────────────────────
+    # Four real-corpus tickets: Egencia/United (round-trip, Stanford
+    # workflow), Air India (one-way international, INR currency triggers
+    # the FX mock in reduction), Gmail-saved United e-ticket (round-trip
+    # USD), Southwest (one-way USD, fare-family naming). Predicates are
+    # loose for fields the model has formatting freedom on (airline
+    # name, traveler name); literal where the ticket prints unambiguous
+    # values (route IATAs, totals, dates). The 3-call multi-call
+    # extractor merges results into a single airfare_details block; the
+    # round_trip predicate lives in the flight-call subset, ticket_amount
+    # in the booking-call subset, segments[] in the extras-call subset.
+    {
+        "image": "receipts/airfare_2026-03-21_egencia-united-sfo-pit-roundtrip.pdf",
+        "output": ".scratch/spike/airfare-egencia-united-sfo-pit.json",
+        "extractor": "airfare",
+        "expect": {
+            "common.line_amount_usd.value": 843.60,
+            "common.original_currency.value": None,
+            "common.original_amount.value": None,
+            "common.expense_type.value": "airfare_domestic",
+            "common.country_of_activity.value": "United States",
+            "airfare_details.airline.value": lambda v: v and "United" in v,
+            "airfare_details.departure_airport.value": "SFO",
+            "airfare_details.destination_airport.value": "PIT",
+            "airfare_details.class_of_ticket.value": "coach",
+            "airfare_details.round_trip.value": True,
+            "airfare_details.booking_method.value": "stanford_travel_egencia",
+            "airfare_details.ticket_amount.value": 843.60,
+            "extras.printed_currency.value": "USD",
+            # Round-trip = at least 2 segments (could be 4 with connections;
+            # this particular Egencia is non-stop SFO↔PIT both ways).
+            "extras.segments": lambda v: v and len(v) >= 2,
+        },
+    },
+    {
+        "image": "receipts/airfare_2024-09-02_air-india-bom-sfo-oneway.pdf",
+        "output": ".scratch/spike/airfare-air-india-bom-sfo.json",
+        "extractor": "airfare",
+        "expect": {
+            # USD null because reduction does the FX (mock rate ~$0.012/INR).
+            # Predicate lives in the FX-mock test in src/reduce.rs, not here.
+            "common.line_amount_usd.value": None,
+            "common.original_currency.value": "INR",
+            "common.original_amount.value": 80896,
+            "common.expense_type.value": "airfare_foreign",
+            "airfare_details.airline.value": lambda v: v and "Air India" in v,
+            "airfare_details.departure_airport.value": "BOM",
+            "airfare_details.destination_airport.value": "SFO",
+            "airfare_details.round_trip.value": False,
+            "airfare_details.ticket_amount.value": 80896,
+            "extras.printed_currency.value": "INR",
+            # One-way = at least 1 segment (BOM→SFO direct, sometimes
+            # split via DEL/HKG depending on routing).
+            "extras.segments": lambda v: v and len(v) >= 1,
+        },
+    },
+    {
+        "image": "receipts/airfare_2025-11-23_united-sfo-ord-roundtrip.pdf",
+        "output": ".scratch/spike/airfare-united-sfo-ord.json",
+        "extractor": "airfare",
+        "expect": {
+            "common.line_amount_usd.value": 519.97,
+            "common.original_currency.value": None,
+            "common.original_amount.value": None,
+            "common.expense_type.value": "airfare_domestic",
+            "common.country_of_activity.value": "United States",
+            "airfare_details.airline.value": lambda v: v and "United" in v,
+            "airfare_details.departure_airport.value": "SFO",
+            "airfare_details.destination_airport.value": "ORD",
+            "airfare_details.class_of_ticket.value": "coach",
+            "airfare_details.round_trip.value": True,
+            "airfare_details.ticket_amount.value": 519.97,
+            "extras.printed_currency.value": "USD",
+            "extras.segments": lambda v: v and len(v) >= 2,
+        },
+    },
+    {
+        "image": "receipts/airfare_2026-03-23_southwest-sfo-phx-oneway.pdf",
+        "output": ".scratch/spike/airfare-southwest-sfo-phx.json",
+        "extractor": "airfare",
+        "expect": {
+            "common.line_amount_usd.value": 102.40,
+            "common.original_currency.value": None,
+            "common.original_amount.value": None,
+            "common.expense_type.value": "airfare_domestic",
+            "common.country_of_activity.value": "United States",
+            "airfare_details.airline.value": lambda v: v and "Southwest" in v,
+            "airfare_details.departure_airport.value": "SFO",
+            "airfare_details.destination_airport.value": "PHX",
+            # Southwest "Basic" maps to coach.
+            "airfare_details.class_of_ticket.value": "coach",
+            "airfare_details.round_trip.value": False,
+            "airfare_details.ticket_amount.value": 102.40,
+            "extras.printed_currency.value": "USD",
+            "extras.segments": lambda v: v and len(v) >= 1,
         },
     },
 ]
