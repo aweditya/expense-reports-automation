@@ -35,6 +35,15 @@ EXTRACTORS = {
     "lodging": REPO_ROOT / "scripts" / "extract_lodging.py",
 }
 
+# Detail block expected on a per-doc JSON for each extractor kind. The
+# guard below uses this to fail fast if the extractor produced the
+# wrong shape (e.g. a meal extractor emitting `ground_transport_details`).
+DETAIL_BLOCK_BY_KIND = {
+    "meal": "meal_details",
+    "transport": "ground_transport_details",
+    "lodging": "lodging_details",
+}
+
 
 # Each entry: image, output, extractor (which kind), expectations.
 # Expectations: dict where keys are dotted paths into the transaction line
@@ -403,12 +412,17 @@ def main() -> int:
             total_failures += 1
             continue
         line = data[0]
-        # The expense_kind discriminator was dropped (Phase 1 Pair B): the
-        # per-kind extractor router knows the kind from the FA's upload-form
-        # choice. The presence of `meal_details` is the structural signal
-        # that this is a meal line.
-        if "meal_details" not in line:
-            print(f"FAIL  {output.name}: meal_details missing (got top-level keys: {list(line.keys())})")
+        # The expense_kind discriminator was dropped (Phase 1 Pair B):
+        # the per-kind extractor router knows the kind from the FA's
+        # upload-form choice. The presence of the matching detail block
+        # is the structural signal that the extractor emitted the right
+        # shape — meal_details for meal, lodging_details for lodging, etc.
+        expected_detail_block = DETAIL_BLOCK_BY_KIND[entry["extractor"]]
+        if expected_detail_block not in line:
+            print(
+                f"FAIL  {output.name}: {expected_detail_block} missing "
+                f"(got top-level keys: {list(line.keys())})"
+            )
             total_failures += 1
             continue
 

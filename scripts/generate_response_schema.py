@@ -1,25 +1,37 @@
 #!/usr/bin/env python3
 """Generate per-kind SDK response_schemas from schema.yaml.
 
-Reads `schema.yaml` and emits `generated/response_schema_<kind>.json`
-for each expense kind we extract today (meal, transport). Each per-kind
-schema:
-- restricts `expense_type` to only the variants relevant to that kind
-  (so Gemini can't return `airfare_domestic` for a meal receipt);
-- includes only that kind's detail block (e.g. `meal_details`) plus
-  the shared `common` and `extras` blocks.
+Reads `schema.yaml` and emits one or more
+`generated/response_schema_<name>.json` files. Most kinds get one file
+(`response_schema_meal.json`, `response_schema_transport.json`). The
+lodging kind is split across two parallel Gemini calls due to Vertex's
+schema property-count ceiling — see `docs/redesign-regrets.md` 2026-05-13
+— and emits two files (`response_schema_lodging_main.json` carries
+common + lodging_details; `response_schema_lodging_extras.json` carries
+the extras block including the per-night rate breakdown). The
+orchestration of the two calls lives in `scripts/extract_lodging.py`;
+this file just produces the schemas.
 
-The output is OpenAPI-3-style (which is what the Google Gen AI SDK accepts):
+Each schema:
+- restricts `expense_type` (when `common` is included) to only the
+  variants relevant to that kind, so Gemini can't return
+  `airfare_domestic` for a meal receipt;
+- includes only the detail block (and/or extras) the corresponding
+  Gemini call is supposed to extract.
+
+The output is OpenAPI-3-style (which is what the Google Gen AI SDK
+accepts):
 - `nullable: true` for fields whose value can be null
 - enums via `"enum": [...]`
-- no `oneOf` / `anyOf` / `$ref` (limited SDK support)
+- no `oneOf` / `anyOf` / `$ref` (proved out via
+  `scripts/probe_response_schemas.py`; both `response_schema` and
+  `response_json_schema` reject `$ref` at different layers)
 
 Hand-built rather than auto-derived from the YAML — this is a small,
 focused slice and a generic converter would be more code than the
-slice itself. The KIND_EXPENSE_TYPES dict below declares which
-schema.yaml enum variants belong to each kind. Adding a new kind =
-add an entry to KIND_EXPENSE_TYPES + a detail-block function + an
-entry in `KINDS` at the bottom.
+slice itself. Adding a new kind: add to `KIND_EXPENSE_TYPES`, add a
+detail-block factory, append an entry (or entries) to
+`SCHEMAS_TO_GENERATE` at the bottom.
 """
 
 from __future__ import annotations
@@ -302,57 +314,98 @@ def extras_block_schema(include_nightly_rates: bool = False) -> dict:
 
 
 def transaction_line_schema(
-    expense_type_values: list[str],
-    detail_block_name: str,
-    detail_block_schema: dict,
+    *,
+    expense_type_values: list[str] | None = None,
+    detail_block_name: str | None = None,
+    detail_block: dict | None = None,
+    include_common: bool = True,
+    include_detail: bool = True,
+    include_extras: bool = True,
     include_nightly_rates: bool = False,
 ) -> dict:
-    """One transaction line as Gemini emits it for a single receipt.
+    """One transaction line (or a sub-slice of one) as Gemini emits it.
+
+    Single-call kinds (meal, transport) use the default — common +
+    detail block + extras all included. Multi-call kinds (lodging) emit
+    two schemas: one with `include_extras=False` for the "main" call,
+    another with `include_common=False, include_detail=False,
+    include_nightly_rates=True` for the "extras" call.
 
     The expense_kind discriminator was dropped (Phase 1 Pair B): the
     per-kind extractor router (`scripts/extract_<kind>.py`) knows the
     kind from the FA's upload-form choice — it doesn't need to be
-    repeated inside the per-document JSON. The per-kind detail block
-    (passed in here) is the structural discriminator instead.
-
-    `include_nightly_rates` adds extras.nightly_rates (lodging only).
+    repeated inside the per-document JSON. The detail block (when
+    present) is the structural discriminator instead.
     """
-    return {
-        "type": "object",
-        "properties": {
-            "common": common_block_schema(expense_type_values),
-            detail_block_name: detail_block_schema,
-            "extras": extras_block_schema(include_nightly_rates=include_nightly_rates),
-        },
-        "required": ["common", detail_block_name, "extras"],
-    }
+    properties: dict = {}
+    required: list[str] = []
+    if include_common:
+        assert expense_type_values is not None, (
+            "include_common requires expense_type_values"
+        )
+        properties["common"] = common_block_schema(expense_type_values)
+        required.append("common")
+    if include_detail:
+        assert detail_block_name and detail_block, (
+            "include_detail requires both detail_block_name and detail_block"
+        )
+        properties[detail_block_name] = detail_block
+        required.append(detail_block_name)
+    if include_extras:
+        properties["extras"] = extras_block_schema(
+            include_nightly_rates=include_nightly_rates
+        )
+        required.append("extras")
+    return {"type": "object", "properties": properties, "required": required}
 
 
-def build_response_schema(
-    expense_type_values: list[str],
-    detail_block_name: str,
-    detail_block_schema: dict,
-    include_nightly_rates: bool = False,
-) -> dict:
-    return {
-        "type": "array",
-        "items": transaction_line_schema(
-            expense_type_values,
-            detail_block_name,
-            detail_block_schema,
-            include_nightly_rates=include_nightly_rates,
+# Each entry produces one `generated/response_schema_<name>.json` file.
+# Single-call kinds (meal, transport) have one entry. Multi-call kinds
+# (lodging) have multiple — one per Gemini call. The orchestration of
+# the calls lives in `scripts/extract_<kind>.py`; this list just owns
+# the schema files that get generated.
+SCHEMAS_TO_GENERATE: list[tuple[str, dict]] = [
+    (
+        "response_schema_meal.json",
+        dict(
+            expense_type_values=KIND_EXPENSE_TYPES["meal"],
+            detail_block_name="meal_details",
+            detail_block=meal_details_block_schema(),
         ),
-    }
-
-
-# Per-kind output specs. Adding a new kind: extend KIND_EXPENSE_TYPES,
-# add a `<kind>_details_block_schema()` function above, and append an
-# entry here. The 4th tuple item is `include_nightly_rates` — only
-# lodging needs it (per-night breakdown for daily_rate averaging).
-KINDS: list[tuple[str, str, callable, bool]] = [
-    ("meal", "meal_details", meal_details_block_schema, False),
-    ("transport", "ground_transport_details", ground_transport_details_block_schema, False),
-    ("lodging", "lodging_details", lodging_details_block_schema, True),
+    ),
+    (
+        "response_schema_transport.json",
+        dict(
+            expense_type_values=KIND_EXPENSE_TYPES["transport"],
+            detail_block_name="ground_transport_details",
+            detail_block=ground_transport_details_block_schema(),
+        ),
+    ),
+    # Lodging is split across two parallel Gemini calls (see
+    # extract_lodging.py and docs/redesign-regrets.md 2026-05-13). Each
+    # call's schema must fit under Vertex's property-count ceiling
+    # (~5 detail-block leaves with inlined _meta is the practical
+    # limit). The "main" call extracts common + lodging_details; the
+    # "extras" call extracts the extras block with the per-night rate
+    # breakdown. The dicts are merged in extract_lodging.py to produce
+    # the same per-doc JSON shape a single call would have produced.
+    (
+        "response_schema_lodging_main.json",
+        dict(
+            expense_type_values=KIND_EXPENSE_TYPES["lodging"],
+            detail_block_name="lodging_details",
+            detail_block=lodging_details_block_schema(),
+            include_extras=False,
+        ),
+    ),
+    (
+        "response_schema_lodging_extras.json",
+        dict(
+            include_common=False,
+            include_detail=False,
+            include_nightly_rates=True,
+        ),
+    ),
 ]
 
 
@@ -376,14 +429,10 @@ def main() -> int:
     validate_kind_expense_types(schema_yaml)
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    for kind, detail_block_name, detail_block_factory, include_nightly_rates in KINDS:
-        response_schema = build_response_schema(
-            KIND_EXPENSE_TYPES[kind],
-            detail_block_name,
-            detail_block_factory(),
-            include_nightly_rates=include_nightly_rates,
-        )
-        out_path = OUTPUT_DIR / f"response_schema_{kind}.json"
+    for filename, kwargs in SCHEMAS_TO_GENERATE:
+        line_schema = transaction_line_schema(**kwargs)
+        response_schema = {"type": "array", "items": line_schema}
+        out_path = OUTPUT_DIR / filename
         out_path.write_text(json.dumps(response_schema, indent=2) + "\n")
         print(f"wrote {out_path.relative_to(REPO_ROOT)}")
     return 0
