@@ -936,6 +936,7 @@ fn human_readable_origin(origin: &str) -> Option<&'static str> {
         "reduce.inferred_category" => Some("based on receipt currencies"),
         "reduce.lodging.daily_rate" => Some("average of per-night rates"),
         "reduce.lodging.number_of_nights" => Some("check-out minus check-in"),
+        "reduce.fx.mock" => Some("converted via mock FX rate (placeholder; real-time tool TBD)"),
         _ => None,
     }
 }

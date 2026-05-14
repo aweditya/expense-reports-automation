@@ -146,11 +146,68 @@ fn derived_meta(confidence: ConfidenceLevel, origin: &str) -> FieldMetadata {
     }
 }
 
+/// Mock USD-per-unit rates for foreign currencies, accurate to ~2024-2025
+/// averages. Used by `apply_mock_fx` when the extractor leaves
+/// `common.line_amount_usd` null on a foreign-currency receipt
+/// (origin: `needs_fx_conversion`). Returns `None` for currencies we
+/// don't have a rate for; reduction leaves `line_amount_usd` unset in
+/// that case so the validator surfaces it.
+///
+/// MOCK / TODO: this is a placeholder. Real-time integration is a
+/// follow-up — either a free FX API (exchangerate-api.com, frankfurter.app)
+/// or a Gemini grounded-search call. The workbench surfaces the
+/// `reduce.fx.mock` origin so any FA reviewing a converted amount
+/// knows it came from this mock, not a real-time rate.
+fn mock_usd_rate(currency: &str) -> Option<f64> {
+    match currency {
+        "INR" => Some(0.012),  // ~83 INR/USD
+        "EUR" => Some(1.07),   // ~0.93 EUR/USD
+        "GBP" => Some(1.27),   // ~0.79 GBP/USD
+        "JPY" => Some(0.0067), // ~150 JPY/USD
+        _ => None,
+    }
+}
+
+/// Fill `common.line_amount_usd` from `original_amount` × mock FX rate
+/// when the extractor left it null on a foreign-currency receipt. No-op
+/// when `line_amount_usd` is already set, when either of the source
+/// fields is missing, or when the currency isn't in `mock_usd_rate`'s
+/// table. Marks the derived value `needs_review: true` so the FA knows
+/// to verify it before submission (the rate is a mock, not real-time).
+fn apply_mock_fx(line: &mut ExpenseReportTransactionLinesItem) {
+    if line.common.line_amount_usd.value.is_some() {
+        return;
+    }
+    let amount = match line.common.original_amount.value {
+        Some(a) => a,
+        None => return,
+    };
+    let currency = match line.common.original_currency.value.as_deref() {
+        Some(c) => c,
+        None => return,
+    };
+    let rate = match mock_usd_rate(currency) {
+        Some(r) => r,
+        None => return,
+    };
+    let mut meta = derived_meta(ConfidenceLevel::Medium, "reduce.fx.mock");
+    // Mock rate; the FA should confirm before submission. (Other
+    // reduction-derived fields are deterministic from extractor input —
+    // this one depends on a placeholder rate, which is the difference.)
+    meta.needs_review = true;
+    line.common.line_amount_usd = Wrapped {
+        value: Some(amount * rate),
+        meta,
+    };
+}
+
 /// Build the `transaction_lines` array. For each receipt: take the
 /// schema-shaped line, attach the single `source_document` naming the
-/// FA-uploaded file, and run per-kind derivations (currently only
-/// lodging — average nightly_rates into daily_rate and compute
-/// number_of_nights from check-in/check-out).
+/// FA-uploaded file, fill `line_amount_usd` from a mock FX rate when
+/// the extractor deferred (foreign-currency receipts; airfare today),
+/// and run per-kind derivations (currently only lodging — average
+/// nightly_rates into daily_rate and compute number_of_nights from
+/// check-in/check-out).
 pub fn reduce_transaction_lines(
     receipts: &[ExtractedReceipt],
 ) -> Vec<ExpenseReportTransactionLinesItem> {
@@ -164,6 +221,10 @@ pub fn reduce_transaction_lines(
                     ExpenseReportTransactionLinesItemCommonSourceDocumentDocumentTypeEnum::Receipt,
                 ),
             };
+            // Generic across kinds: if extractor deferred FX (foreign
+            // ticket etc.), fill line_amount_usd from a mock rate. No-op
+            // when line_amount_usd is already set.
+            apply_mock_fx(&mut line);
             // Lodging-specific: average per-night rates → daily_rate,
             // compute nights from check-in/check-out. Both are T2 fields
             // the extractor doesn't fill.
@@ -684,5 +745,85 @@ mod tests {
         assert_eq!(nights_between("2024-01-20", "2024-01-14"), None);
         // Malformed.
         assert_eq!(nights_between("not-a-date", "2024-01-14"), None);
+    }
+
+    #[test]
+    fn mock_usd_rate_returns_known_currencies() {
+        assert_eq!(mock_usd_rate("INR"), Some(0.012));
+        assert_eq!(mock_usd_rate("EUR"), Some(1.07));
+        assert_eq!(mock_usd_rate("GBP"), Some(1.27));
+        assert_eq!(mock_usd_rate("JPY"), Some(0.0067));
+        // USD doesn't need conversion; not in the table.
+        assert_eq!(mock_usd_rate("USD"), None);
+        // Unknown currency: caller leaves line_amount_usd unset.
+        assert_eq!(mock_usd_rate("XYZ"), None);
+    }
+
+    #[test]
+    fn apply_mock_fx_fills_line_amount_usd_for_foreign_currency() {
+        // Air India BOM→SFO ticket: extractor leaves line_amount_usd
+        // null with origin "needs_fx_conversion"; reduction fills it.
+        let mut line = ExpenseReportTransactionLinesItem::default();
+        line.common.original_amount = Wrapped {
+            value: Some(80896.0),
+            meta: FieldMetadata::default(),
+        };
+        line.common.original_currency = Wrapped {
+            value: Some("INR".to_owned()),
+            meta: FieldMetadata::default(),
+        };
+        // line_amount_usd starts as Wrapped::unknown() (default).
+        assert!(line.common.line_amount_usd.value.is_none());
+
+        apply_mock_fx(&mut line);
+
+        let usd = line.common.line_amount_usd.value.expect("filled");
+        // 80896 INR × 0.012 = 970.752 USD.
+        assert!((usd - 970.752).abs() < 0.001, "got {}", usd);
+        assert_eq!(line.common.line_amount_usd.meta.confidence, ConfidenceLevel::Medium);
+        assert!(line.common.line_amount_usd.meta.needs_review);
+        assert_eq!(
+            line.common.line_amount_usd.meta.evidence[0].origin.as_deref(),
+            Some("reduce.fx.mock"),
+        );
+    }
+
+    #[test]
+    fn apply_mock_fx_leaves_line_amount_usd_alone_when_already_set() {
+        // Domestic USD ticket: extractor already filled line_amount_usd.
+        // FX mock is a no-op; the existing high-confidence value stays.
+        let mut line = ExpenseReportTransactionLinesItem::default();
+        line.common.line_amount_usd = Wrapped {
+            value: Some(519.97),
+            meta: FieldMetadata {
+                confidence: ConfidenceLevel::High,
+                ..Default::default()
+            },
+        };
+
+        apply_mock_fx(&mut line);
+
+        assert_eq!(line.common.line_amount_usd.value, Some(519.97));
+        assert_eq!(line.common.line_amount_usd.meta.confidence, ConfidenceLevel::High);
+    }
+
+    #[test]
+    fn apply_mock_fx_leaves_unknown_when_currency_unrecognized() {
+        // Foreign ticket in a currency we don't have a mock rate for:
+        // line_amount_usd stays unset; the validator surfaces it
+        // downstream as "missing required field" and the FA fills it.
+        let mut line = ExpenseReportTransactionLinesItem::default();
+        line.common.original_amount = Wrapped {
+            value: Some(1000.0),
+            meta: FieldMetadata::default(),
+        };
+        line.common.original_currency = Wrapped {
+            value: Some("XYZ".to_owned()),
+            meta: FieldMetadata::default(),
+        };
+
+        apply_mock_fx(&mut line);
+
+        assert!(line.common.line_amount_usd.value.is_none());
     }
 }
