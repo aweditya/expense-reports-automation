@@ -199,6 +199,16 @@ fn apply_mock_fx(line: &mut ExpenseReportTransactionLinesItem) {
         value: Some(amount * rate),
         meta,
     };
+    // Also surface the rate itself on the line so the FA can audit
+    // exactly what conversion factor was used. Same medium confidence +
+    // needs-review treatment — both fields are downstream of the same
+    // mock and share its caveats.
+    let mut rate_meta = derived_meta(ConfidenceLevel::Medium, "reduce.fx.mock");
+    rate_meta.needs_review = true;
+    line.common.exchange_rate = Wrapped {
+        value: Some(rate),
+        meta: rate_meta,
+    };
 }
 
 /// Build the `transaction_lines` array. For each receipt: take the
@@ -784,6 +794,16 @@ mod tests {
         assert!(line.common.line_amount_usd.meta.needs_review);
         assert_eq!(
             line.common.line_amount_usd.meta.evidence[0].origin.as_deref(),
+            Some("reduce.fx.mock"),
+        );
+        // exchange_rate filled with the same rate, so the FA can audit
+        // the conversion. Same medium confidence + needs-review.
+        let rate = line.common.exchange_rate.value.expect("rate filled");
+        assert!((rate - 0.012).abs() < 1e-9, "got rate {}", rate);
+        assert_eq!(line.common.exchange_rate.meta.confidence, ConfidenceLevel::Medium);
+        assert!(line.common.exchange_rate.meta.needs_review);
+        assert_eq!(
+            line.common.exchange_rate.meta.evidence[0].origin.as_deref(),
             Some("reduce.fx.mock"),
         );
     }
