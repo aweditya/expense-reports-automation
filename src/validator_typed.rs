@@ -599,22 +599,37 @@ fn check_category_country_consistency(
             }
         }
         ExpensesForeign => {
-            let any_foreign = lines.iter().any(|line| {
-                line.common
+            // A report is legitimately foreign if ANY line has either a
+            // non-US country_of_activity OR a non-USD original_currency.
+            // Both are independent signals: an Air India BOM→SFO ticket
+            // is foreign by currency (INR) even though the model labels
+            // its country as "United States" (the trip's purpose-end
+            // destination, per the airfare prompt). Country alone is too
+            // strict and false-flags those tickets.
+            let any_foreign_signal = lines.iter().any(|line| {
+                let has_foreign_country = line
+                    .common
                     .country_of_activity
                     .value
                     .as_deref()
-                    .is_some_and(|c| !c.eq_ignore_ascii_case("United States"))
+                    .is_some_and(|c| !c.eq_ignore_ascii_case("United States"));
+                let has_foreign_currency = line
+                    .common
+                    .original_currency
+                    .value
+                    .as_deref()
+                    .is_some_and(|c| !c.is_empty() && !c.eq_ignore_ascii_case("USD"));
+                has_foreign_country || has_foreign_currency
             });
-            if !any_foreign {
+            if !any_foreign_signal {
                 issues.push(ValidationIssue {
                     severity: ValidationSeverity::Warning,
                     kind: ValidationIssueKind::ManualReviewRequired,
                     path: category_path.to_owned(),
                     schema_path: category_path.to_owned(),
-                    message: "Report category is expenses_foreign but every line's \
-                              country_of_activity is United States or null — confirm \
-                              whether this should be a domestic report."
+                    message: "Report category is expenses_foreign but no line has a \
+                              non-US country_of_activity or a non-USD original_currency \
+                              — confirm whether this should be a domestic report."
                         .to_owned(),
                 });
             }
@@ -865,7 +880,8 @@ mod tests {
 
     #[test]
     fn category_country_consistency_foreign_with_only_us_lines_warns() {
-        // Category claims foreign but no line is non-US — surfaces a
+        // Category claims foreign but no line has any foreign signal
+        // (neither non-US country nor non-USD currency) — surfaces a
         // category warning, not a per-line one.
         let report = report_with(
             ExpenseReportGeneralInformationCategoryEnum::ExpensesForeign,
@@ -877,6 +893,33 @@ mod tests {
         let paths = country_consistency_warnings(&report);
         assert_eq!(paths.len(), 1);
         assert_eq!(paths[0], "expense_report.general_information.category");
+    }
+
+    #[test]
+    fn category_country_consistency_foreign_with_non_usd_currency_clean() {
+        // Production scenario from Phase 4 Stage 7: Air India BOM→SFO
+        // ticket has country_of_activity="United States" (per the airfare
+        // prompt: "country of FURTHEST destination") but original_currency
+        // ="INR" — the report IS legitimately foreign by currency. The
+        // check should accept currency as a foreign signal independently
+        // of country, and NOT flag the category card.
+        let mut foreign_currency_line = meal_line_with_country(970.0, Some("United States"));
+        foreign_currency_line.common.original_currency = Wrapped {
+            value: Some("INR".to_owned()),
+            meta: FieldMetadata::default(),
+        };
+        let report = report_with(
+            ExpenseReportGeneralInformationCategoryEnum::ExpensesForeign,
+            vec![
+                foreign_currency_line,
+                meal_line_with_country(100.0, Some("United States")),
+            ],
+        );
+        let paths = country_consistency_warnings(&report);
+        assert!(
+            !paths.iter().any(|p| p == "expense_report.general_information.category"),
+            "category should NOT warn when at least one line has non-USD currency; saw: {paths:?}"
+        );
     }
 
     #[test]
