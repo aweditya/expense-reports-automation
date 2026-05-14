@@ -20,6 +20,34 @@ Keep entries short. The point is recall, not narrative.
 
 ## Entries
 
+### 2026-05-14 — production eyeball caught a validator edge case the local corpus didn't exercise; broader: rules/prompts are pre-FA-validation guesses
+
+**What happened:** Phase 4 Stage 6 deployed cleanly (build SUCCESS in 155s, revision live, image SHA matched). I declared Stage 7 ready for the user's verdict. User uploaded the smallest realistic FA workflow — 2 receipts: Air India BOM→SFO (foreign by currency) + Southwest SFO→PHX (USD-domestic). The Category card came back with a green high-confidence dot but a red border. Cause: `check_category_country_consistency` in `validator_typed.rs` warned "report category is foreign but every line's country_of_activity is United States or null"; JS added `has-issue` class; CSS painted red. My local cargo tests + 19-receipt acceptance suite + workbench eyeball did not surface this. The 19-receipt corpus had multiple lines with various country values and the 2-line shape (with US-destination foreign-currency airfare) wasn't exercised.
+
+The validator rule was structurally too narrow — it treated "non-US country" as the sole signal of foreignness, missing that "non-USD original_currency" is an independent and equally-valid signal. For a BOM→SFO ticket the destination is US (per the airfare prompt: "country of furthest destination = trip's purpose-end") but the currency is INR. Two foreign signals that disagree by design; the rule only honored one. Hotfix in `d0fbdfe` extended the rule to a disjunction; corpus still flagged correctly when no foreign signal at all is present.
+
+The broader observation, raised by the user during the post-mortem, is more important than the specific bug: **most of the pipeline's prompts and validator rules encode educated guesses about FA workflow, none of which has been validated by an actual FA conversation.** Examples just from Phase 4:
+
+- "country_of_activity = trip purpose-end" (airfare prompt — my call)
+- "if foreign category, expect non-US country" (validator rule — pre-existing)
+- "stanford_travel_egencia value implies Egencia is the booking origin" (booking_method enum — schema author's call)
+- "ticket_amount in printed currency, line_amount_usd derived" (split between extractor and reduction — my call)
+- "remarks should be one short sentence summarizing the trip" (every extractor prompt — convention)
+
+Each is plausible. Most haven't met an FA. The Air India case is one example where two such guesses collided into a visible bug; there are almost certainly others not yet exercised by the corpus.
+
+**Why both layers were wrong:**
+
+1. *Specific* — I treated "local 19-receipt suite passes + workbench renders + push succeeds" as deploy-ready. The minimum realistic FA upload (1–3 receipts) is a different shape than 19, and rules with hidden assumptions can fire differently. I should have explicitly tested the minimal-corpus case.
+
+2. *Broader* — building features against a self-curated corpus and self-written rules creates a closed loop where each piece confirms the others without external grounding. The system "works" because everything in it agrees with everything else — but the FA isn't in the loop, so we can't know whether the agreement is right.
+
+**Rule going forward:**
+
+- *Specific:* For any new validator rule or new extractor prompt, run the local verification on at least one minimal-corpus shape (1–3 receipts of the new kind) IN ADDITION to the full suite. Edge cases hide in the small inputs.
+
+- *Broader:* The current prompts and validator rules are explicitly **pre-FA-validation**. Treat them as best-guess defaults until an actual FA review happens. When the FA conversation lands, schedule a focused audit pass: walk every conditional rule, every prompt's reasoning rules, and every enum's value names against what the FA actually does. Until then, every "this rule fires unexpectedly" finding (like this one) is data — capture it instead of just hotfixing, so the audit has a concrete starting list.
+
 ### 2026-05-13 — FX is a hardcoded mock, not real-time
 
 **What happened:** Phase 4 added foreign-currency support for airfare (the corpus's first non-USD receipts; Air India ticket in INR). Reduction needs to fill `common.line_amount_usd` for foreign tickets where the extractor leaves it null. Built `mock_usd_rate(currency)` in `src/reduce.rs` as a 4-entry constant table (INR, EUR, GBP, JPY → ~2024-2025 averages). `apply_mock_fx` calls it with a single argument: the currency code. Date is ignored.
