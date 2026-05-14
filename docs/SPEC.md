@@ -364,7 +364,7 @@ A cheat-sheet for "which file does X belong in?"
 | Add a business rule (e.g. "X required when Y") | `schema.yaml` (`required:` clause, regenerates `validation_rules.rs`) and/or hand-coded in `src/validator_typed.rs` | Validation |
 | Change how a field looks on the workbench | `src/workbench_simple.rs` + `src/workbench_simple.css` | Display |
 | Future: emit a Stanford-portal payload | new `src/submit.rs` (does not exist yet) | Submission |
-| Add a new expense kind (hotel/cab/airfare/conference) | (1) per-kind detail block already in `schema.yaml`; (2) `scripts/generate_response_schema.py` — add the kind to `KIND_EXPENSE_TYPES` + a detail-block factory + an entry in `SCHEMAS_TO_GENERATE`; (3) new `scripts/extract_<kind>.py` (~30 lines using `run_extraction` from `extractor_lib`); (4) new dropdown option + dispatcher entry in `scripts/local_app_simple.py`; (5) workbench renderer + validator walk for the new detail block; (6) acceptance harness entries. The Dockerfile globs `generated/response_schema_*.json`, so no Dockerfile change. **If the kind's detail block has more than ~5 T2/T3 leaves** (Vertex's schema property-count ceiling), it needs the two-call pattern: emit two schemas from `SCHEMAS_TO_GENERATE` (one with `include_extras=False`, one with `include_common=False, include_detail=False`), and have the extractor orchestrate two parallel `single_call` invocations and merge the results — see `scripts/extract_lodging.py`. | Extraction + Display + Validation |
+| Add a new expense kind (hotel/cab/airfare/conference) | (1) per-kind detail block already in `schema.yaml`; (2) `scripts/generate_response_schema.py` — add the kind to `KIND_EXPENSE_TYPES` + a detail-block factory + an entry in `SCHEMAS_TO_GENERATE`; (3) new `scripts/extract_<kind>.py` (~30 lines using `run_extraction` from `extractor_lib`); (4) new dropdown option + dispatcher entry in `scripts/local_app_simple.py`; (5a) **add `render_<kind>_details(html, <kind>, path)` in `src/workbench_simple.rs` mirroring `render_lodging_details` / `render_airfare_details`**; (5b) **add the corresponding `if let Some(<kind>) = &line.<kind>_details` branch in `render_transaction_line`**; (5c) extend `line_summary_headline` with a per-kind headline; (5d) walk the new detail block in `src/validator_typed.rs`; (6) acceptance harness entries in `scripts/acceptance_check.py` (`EXTRACTORS` + `DETAIL_BLOCK_BY_KIND` + per-receipt fixtures with predicates). The Dockerfile globs `generated/response_schema_*.json`, so no Dockerfile change. Mental check: upload a {kind} receipt — does the FA see all the {kind}-specific fields on the workbench? If no, step (5) isn't done. **If the detail block has more than ~5 T2/T3 leaves** (Vertex's schema property-count ceiling), it needs the multi-call pattern: emit multiple schemas from `SCHEMAS_TO_GENERATE` (with `include_common`/`include_detail`/`include_extras` knobs) and orchestrate parallel `single_call` invocations + merge in the extractor — see `scripts/extract_lodging.py` (2-call) or `scripts/extract_airfare.py` (3-call when the detail block is too big to fit in one main call). | Extraction + Display + Validation |
 
 ---
 
@@ -377,8 +377,8 @@ A cheat-sheet for "which file does X belong in?"
 | Codegen — Gemini response_schema | `scripts/generate_response_schema.py` |
 | Generated Rust types | `generated/expense_report_model.rs` |
 | Generated validation-rule constants | `generated/validation_rules.rs` |
-| Generated response_schemas (per call) | `generated/response_schema_meal.json`, `generated/response_schema_transport.json`, `generated/response_schema_lodging_main.json`, `generated/response_schema_lodging_extras.json` (lodging is split across two parallel calls — see §1 and §7) |
-| Per-document I/O type | `src/extracted_receipt.rs` |
+| Generated response_schemas (per call) | `generated/response_schema_meal.json`, `generated/response_schema_transport.json`, `generated/response_schema_lodging_main.json`, `generated/response_schema_lodging_extras.json`, `generated/response_schema_airfare_main.json`, `generated/response_schema_airfare_aux.json`, `generated/response_schema_airfare_extras.json` (lodging is split across 2 parallel calls; airfare across 3 — see §1 and §7) |
+| Per-document I/O type | `src/extracted_receipt.rs` (incl. `Extras`, `NightlyRate`, `Segment` bare-array entries) |
 | Provenance wrapper + metadata | `src/meta.rs`, `src/draft.rs` |
 | Reduction | `src/reduce.rs` |
 | Traversal-driven validation | `src/validator_typed.rs` |
@@ -387,7 +387,7 @@ A cheat-sheet for "which file does X belong in?"
 | Reduction binary | `src/bin/reduce_extractions.rs` |
 | Render binary | `src/bin/render_workbench_from_report.rs` |
 | Round-trip contract check | `src/bin/roundtrip_check.rs` |
-| Per-kind Python extractors (Gemini call) | `scripts/extract_meal.py`, `scripts/extract_transport.py`, `scripts/extract_lodging.py` (lodging orchestrates two parallel calls via `ThreadPoolExecutor` and merges the outputs) |
+| Per-kind Python extractors (Gemini call) | `scripts/extract_meal.py`, `scripts/extract_transport.py`, `scripts/extract_lodging.py` (orchestrates 2 parallel calls via `ThreadPoolExecutor` and merges), `scripts/extract_airfare.py` (orchestrates 3 parallel calls — main/aux/extras — and 1-deep-merges `airfare_details` from main+aux) |
 | Shared extractor infrastructure | `scripts/extractor_lib.py` (CLI parsing, ADC client, `single_call` primitive, `run_extraction` for single-call kinds) |
 | Schema-acceptance pre-deploy probe | `scripts/probe_response_schemas.py` (sends a 1×1 PNG generate_content per generated schema; catches Vertex-rejected schemas before push) |
 | Flask + gunicorn entry point | `scripts/local_app_simple.py` |

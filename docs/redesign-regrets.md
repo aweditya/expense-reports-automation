@@ -20,6 +20,42 @@ Keep entries short. The point is recall, not narrative.
 
 ## Entries
 
+### 2026-05-13 — FX is a hardcoded mock, not real-time
+
+**What happened:** Phase 4 added foreign-currency support for airfare (the corpus's first non-USD receipts; Air India ticket in INR). Reduction needs to fill `common.line_amount_usd` for foreign tickets where the extractor leaves it null. Built `mock_usd_rate(currency)` in `src/reduce.rs` as a 4-entry constant table (INR, EUR, GBP, JPY → ~2024-2025 averages). `apply_mock_fx` calls it with a single argument: the currency code. Date is ignored.
+
+The mock unblocks the demo end-to-end — Air India's ₹80,896 ticket converts to $970.75 and the workbench renders correctly with provenance. But the rate has no relationship to the actual FX rate on the transaction date (Sep 2 2024). The FA reviewing a converted amount has no way to verify it against a real source.
+
+The correct implementation is **date-aware FX lookup**, signature `lookup_usd_rate(currency: &str, date: &IsoDate) -> Option<f64>`. Three viable backends: a free FX API like `frankfurter.app` (supports `GET /2024-09-02?from=INR&to=USD`), a local snapshot of ECB/IMF historical rates (~10 KB JSON for major currencies × major dates), or a Gemini grounded-search call (more expensive but consistent with the existing extraction pattern).
+
+**Why it's worth flagging instead of just shipping:** The mock has the right *shape* — extractor defers, reduction fills, workbench surfaces the origin (`reduce.fx.mock` → "converted via mock FX rate (placeholder; real-time tool TBD)"). When the real tool lands, the change is one function body, no architectural lift. But the surface is misleading: the FA sees "$970.75 medium confidence needs review" with the placeholder caveat, but they have no way to know HOW wrong the rate could be. For a $970 ticket the drift is ~$5; for a $10K booking it could be hundreds.
+
+**Rule going forward:** When reduction depends on external data (FX, conference dates, GSA per-diem, …), the origin code must explicitly mark the source as a placeholder if it is one. The workbench's `human_readable_origin` string is the FA-facing surface; today it says "placeholder; real-time tool TBD" which is honest. That string is the contract — don't drop it once a real tool exists, *replace* it with the new source's description ("converted via frankfurter.app on 2024-09-02"). Date-aware FX is captured as a Phase 5 follow-up; it's small enough to be one focused commit when the placeholder is no longer good enough.
+
+### 2026-05-13 — Schema conditional rules need a periodic audit; stale references and wrong-scope expressions accumulated silently
+
+**What happened:** Phase 4 Stage 4's workbench eyeball surfaced a "MISSING FIELDS (85)" count in the issues rail — most of which were false positives. Investigation revealed two distinct schema-rule problems:
+
+1. **Wrong-scope conditional expressions.** Five common-block fields (`original_currency`, `original_amount`, `exchange_rate`, `country_of_activity`, `foreign_activity_type`) had `required:` expressions scoped to the *report-level* (`general_information.category == expenses_foreign`) when the rule's intent was *per-line* ("this line's expense_type is foreign"). For a mixed-currency report (1 INR + 18 USD receipts), the report tipped foreign overall, so all 18 USD lines got falsely flagged for missing original_amount/etc. — even though those USD lines correctly had null values with `origin: not_applicable_for_domestic`.
+
+2. **Stale rule references.** Two ConditionalRule expressions reference enum values (`international_lodging`, `international_meals`) that don't exist in the master `expense_type` enum — leftovers from an older schema. They never fire (no value can match), so they're dead weight. Discovered while grepping conditional rules; would never have surfaced in normal use.
+
+I initially framed (1) as "the validator needs new capability" — looking at the code revealed the validator's reference resolution is already scope-aware (12 other rules use per-line expressions correctly). The bug was purely in the schema author choosing `general_information.category` when `expense_type` was the right reference. Fix was a 5-line schema.yaml edit (Stage 4.5A, commit `16835e4`); issues count dropped 85 → 13 with no validator code change.
+
+**Why both happened:** schema.yaml conditional rules don't get exercised every codegen run. They sit silently until a corpus or a manual eyeball surfaces the disagreement. Wrong-scope rules were probably correct when the corpus was uniform (all-domestic or all-foreign); the airfare phase introduced the first mixed-currency report. Stale references presumably survived a schema rename without grep-for-references.
+
+**Rule going forward:** When adding/removing/renaming an enum value in `schema.yaml`, grep `validation_rules.rs` AND `schema.yaml` itself for references to the changed value. When writing a new conditional rule, default to the most-local scope reference (`expense_type` from the line, `meal_details.has_alcohol_on_receipt` from the line, etc.); promote to a report-level reference (`general_information.category`) only when the rule explicitly applies report-wide. Stage 4.5A added a regression test (`original_currency_not_required_on_domestic_line_in_foreign_report` in `validator_typed.rs`) so this exact scope confusion can't reappear silently. Audit pass for the two stale `international_*` references is captured as a follow-up cleanup commit.
+
+### 2026-05-13 — Phase 4 Stage 2 contract-pair was incomplete (missed render_airfare_details)
+
+**What happened:** Phase 4 Stage 2 added `scripts/extract_airfare.py` + dispatcher wiring in `local_app_simple.py` + acceptance harness fixtures + the contract-pair commit message claimed it was atomic. It wasn't — I forgot `render_airfare_details` in `src/workbench_simple.rs`. The data was being extracted correctly into per-doc JSON and reduced into the report; the renderer just had no per-kind subsection for airfare lines. Workbench showed only the 7 common-block cards for airfare receipts and zero of the 9 airfare-specific cards (Airline, Departure, Destination, Class, Round Trip, Traveler, Ticket Number, Ticket Amount, Booking Method).
+
+Caught only when the user opened the workbench during Stage 4 verification. Fixed in a separate commit (`606f2d6`) with a 28-line `render_airfare_details` function mirroring `render_lodging_details`.
+
+**Why it happened:** my mental model of "the contract pair" was the data path (Python emits → Rust deserializes → Rust reduces → JSON shape unchanged). I missed that the *display* path is also part of the contract for a new kind — the FA needs to see those fields, not just have them sit in JSON. The SPEC.md §7 "add a new kind" recipe lists workbench rendering as step (5), but I read past it under "renderer + validator walk for the new detail block" without internalizing that it meant *adding a new render function*.
+
+**Rule going forward:** SPEC.md §7's "add a new kind" recipe needs to be more explicit: step (5) should be split into "(5a) add `render_<kind>_details(html, <kind>, path)` in `workbench_simple.rs`; (5b) add the corresponding branch in `render_transaction_line`; (5c) add the validator walk for the new detail block." When implementing a new kind, mentally walk the FA's experience: "I upload a {kind} receipt; do I see all the {kind}-specific fields on the workbench?" If no, the contract pair isn't complete. Update committed in this docs sweep.
+
 ### 2026-05-13 — Vertex's Schema validator has a property-count ceiling that breaks above ~5 detail-block leaves
 
 **What happened:** Lodging needed six T2/T3 fields in its detail block (hotel_name, location, check_in_date, check_out_date, booking_method, is_shared_lodging). The generated response_schema combined those with the eight `common` leaves and the `extras` block; every leaf inlines the full `_meta` subtree (~20 properties for confidence/evidence/needs_review/flags). Vertex rejected the schema with a generic 400 INVALID_ARGUMENT. A bisection (run via a one-off mutation harness, now deleted, that drops fields one at a time from the lodging schema and probes Vertex with each variant) showed: drop any one of the six detail fields ⇒ passes; strip `_meta` from all six ⇒ passes; descriptions and the booking_method enum were NOT the trigger. Best estimate: Vertex has a transitive property-count ceiling around 320–340 inlined properties, which six `_meta`-wrapped detail leaves push over.
