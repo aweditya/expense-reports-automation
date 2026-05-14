@@ -211,17 +211,17 @@ expense_report:
             infer_from: "Receipt amount × exchange rate (if foreign)"
           original_currency:
             type: string
-            required: "general_information.category == expenses_foreign"
+            required: "expense_type in [airfare_foreign, gift_card_employee_foreign, gifts_foreign_activity, ground_transportation_foreign, lodging_foreign]"
             source: T3
             infer_from: "Currency symbol/code on receipt"
           original_amount:
             type: number
-            required: "general_information.category == expenses_foreign"
+            required: "expense_type in [airfare_foreign, gift_card_employee_foreign, gifts_foreign_activity, ground_transportation_foreign, lodging_foreign]"
             source: T3
             infer_from: "Amount as printed on receipt"
           exchange_rate:
             type: number
-            required: "general_information.category == expenses_foreign"
+            required: "expense_type in [airfare_foreign, gift_card_employee_foreign, gifts_foreign_activity, ground_transportation_foreign, lodging_foreign]"
             source: T2
             infer_from: "Historical rate for common.date from exchange rate API"
           expense_type:
@@ -260,12 +260,12 @@ expense_report:
             infer_from: "Generated from receipt details and trip context"
           country_of_activity:
             type: string
-            required: "general_information.category == expenses_foreign"
+            required: "expense_type in [airfare_foreign, gift_card_employee_foreign, gifts_foreign_activity, ground_transportation_foreign, lodging_foreign]"
             source: T3
             infer_from: "Destination country from flight/hotel docs"
           foreign_activity_type:
             type: enum
-            required: "general_information.category == expenses_foreign"
+            required: "expense_type in [airfare_foreign, gift_card_employee_foreign, gifts_foreign_activity, ground_transportation_foreign, lodging_foreign]"
             source: T3
             allowed_values:
               - conference

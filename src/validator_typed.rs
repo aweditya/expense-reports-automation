@@ -880,8 +880,38 @@ mod tests {
     }
 
     #[test]
-    fn original_currency_required_when_category_foreign() {
-        // Build a report with category=foreign and a line missing original_currency.
+    fn original_currency_required_when_line_expense_type_is_foreign() {
+        // Per-line scope: the conditional rule for original_currency is
+        // `expense_type in [airfare_foreign, lodging_foreign, ...]`. A line
+        // whose own expense_type is foreign must have original_currency
+        // filled, regardless of the report-level category.
+        let mut report = ExpenseReport::default();
+        let mut line = ExpenseReportTransactionLinesItem::default();
+        line.common.expense_type = Wrapped {
+            value: Some(ExpenseReportTransactionLinesItemCommonExpenseTypeEnum::AirfareForeign),
+            meta: FieldMetadata::default(),
+        };
+        line.common.line_amount_usd = Wrapped { value: Some(100.0), meta: FieldMetadata::default() };
+        // original_currency.value is None — should be flagged.
+        report.transaction_lines = Some(vec![line]);
+
+        let result = validate_typed(&report);
+        let paths: Vec<&str> = result.issues.iter().map(|i| i.path.as_str()).collect();
+        assert!(
+            paths.iter().any(|p| p.contains("original_currency")),
+            "expected original_currency to be flagged on a foreign line; saw: {paths:?}"
+        );
+    }
+
+    #[test]
+    fn original_currency_not_required_on_domestic_line_in_foreign_report() {
+        // The bug this regression-tests: previously the rule was scoped to
+        // `general_information.category == expenses_foreign`, so a USD-
+        // domestic line in a mixed-currency report (one foreign receipt
+        // tipping the report's category to expenses_foreign) got falsely
+        // flagged as missing original_currency. Per-line scope means the
+        // domestic line's own expense_type drives the requirement, not the
+        // report-wide category.
         let mut report = ExpenseReport::default();
         report.general_information.category = Wrapped {
             value: Some(ExpenseReportGeneralInformationCategoryEnum::ExpensesForeign),
@@ -889,18 +919,19 @@ mod tests {
         };
         let mut line = ExpenseReportTransactionLinesItem::default();
         line.common.expense_type = Wrapped {
-            value: Some(ExpenseReportTransactionLinesItemCommonExpenseTypeEnum::BusinessMeal),
+            value: Some(ExpenseReportTransactionLinesItemCommonExpenseTypeEnum::AirfareDomestic),
             meta: FieldMetadata::default(),
         };
         line.common.line_amount_usd = Wrapped { value: Some(100.0), meta: FieldMetadata::default() };
-        // original_currency.value is None
+        // original_currency.value is None — but the LINE is domestic, so
+        // it must NOT be flagged even though the report is foreign overall.
         report.transaction_lines = Some(vec![line]);
 
         let result = validate_typed(&report);
         let paths: Vec<&str> = result.issues.iter().map(|i| i.path.as_str()).collect();
         assert!(
-            paths.iter().any(|p| p.contains("original_currency")),
-            "expected original_currency to be flagged; saw: {paths:?}"
+            !paths.iter().any(|p| p.contains("original_currency")),
+            "domestic line should not flag original_currency even in a foreign report; saw: {paths:?}"
         );
     }
 }

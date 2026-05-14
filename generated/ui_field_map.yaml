@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-generated_at_utc: '2026-05-13T23:27:53+00:00'
+generated_at_utc: '2026-05-14T06:14:49+00:00'
 sections:
 - key: general_information
   label: General Information
@@ -265,7 +265,8 @@ sections:
     source: T3
     entry_mode: model_prefill_review
     required: false
-    required_expression: general_information.category == expenses_foreign
+    required_expression: expense_type in [airfare_foreign, gift_card_employee_foreign, gifts_foreign_activity, ground_transportation_foreign,
+      lodging_foreign]
     review_priority: high
     allowed_values: []
   - path: expense_report.transaction_lines[].common.original_amount
@@ -274,7 +275,8 @@ sections:
     source: T3
     entry_mode: model_prefill_review
     required: false
-    required_expression: general_information.category == expenses_foreign
+    required_expression: expense_type in [airfare_foreign, gift_card_employee_foreign, gifts_foreign_activity, ground_transportation_foreign,
+      lodging_foreign]
     review_priority: high
     allowed_values: []
   - path: expense_report.transaction_lines[].common.exchange_rate
@@ -283,7 +285,8 @@ sections:
     source: T2
     entry_mode: computed_readonly
     required: false
-    required_expression: general_information.category == expenses_foreign
+    required_expression: expense_type in [airfare_foreign, gift_card_employee_foreign, gifts_foreign_activity, ground_transportation_foreign,
+      lodging_foreign]
     review_priority: high
     allowed_values: []
   - path: expense_report.transaction_lines[].common.expense_type
@@ -326,7 +329,8 @@ sections:
     source: T3
     entry_mode: model_prefill_review
     required: false
-    required_expression: general_information.category == expenses_foreign
+    required_expression: expense_type in [airfare_foreign, gift_card_employee_foreign, gifts_foreign_activity, ground_transportation_foreign,
+      lodging_foreign]
     review_priority: medium
     allowed_values: []
   - path: expense_report.transaction_lines[].common.foreign_activity_type
@@ -335,7 +339,8 @@ sections:
     source: T3
     entry_mode: model_prefill_review
     required: false
-    required_expression: general_information.category == expenses_foreign
+    required_expression: expense_type in [airfare_foreign, gift_card_employee_foreign, gifts_foreign_activity, ground_transportation_foreign,
+      lodging_foreign]
     review_priority: medium
     allowed_values:
     - conference

@@ -280,7 +280,9 @@ impl core::fmt::Display for ExpenseReportTransactionLinesItemCommonExpenseTypeEn
     }
 }
 
-/// Conditionally required when:  general_information.category == expenses_foreign
+/// Conditionally required when:  expense_type in [airfare_foreign, gift_card_employee_foreign,
+/// Conditionally required when: gifts_foreign_activity, ground_transportation_foreign,
+/// Conditionally required when: lodging_foreign]
 /// Source tier: T3
 /// Infer from:  Conference registration → 'conference'; otherwise from context
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
@@ -783,17 +785,23 @@ pub struct ExpenseReportTransactionLinesItemCommon {
     /// Infer from:  Receipt amount × exchange rate (if foreign)
     #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub line_amount_usd: Wrapped<f64>,
-    /// Conditionally required when:  general_information.category == expenses_foreign
+    /// Conditionally required when:  expense_type in [airfare_foreign,
+    /// Conditionally required when: gift_card_employee_foreign, gifts_foreign_activity,
+    /// Conditionally required when: ground_transportation_foreign, lodging_foreign]
     /// Source tier: T3
     /// Infer from:  Currency symbol/code on receipt
     #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub original_currency: Wrapped<String>,
-    /// Conditionally required when:  general_information.category == expenses_foreign
+    /// Conditionally required when:  expense_type in [airfare_foreign,
+    /// Conditionally required when: gift_card_employee_foreign, gifts_foreign_activity,
+    /// Conditionally required when: ground_transportation_foreign, lodging_foreign]
     /// Source tier: T3
     /// Infer from:  Amount as printed on receipt
     #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub original_amount: Wrapped<f64>,
-    /// Conditionally required when:  general_information.category == expenses_foreign
+    /// Conditionally required when:  expense_type in [airfare_foreign,
+    /// Conditionally required when: gift_card_employee_foreign, gifts_foreign_activity,
+    /// Conditionally required when: ground_transportation_foreign, lodging_foreign]
     /// Source tier: T2
     /// Infer from:  Historical rate for common.date from exchange rate API
     #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
@@ -807,12 +815,16 @@ pub struct ExpenseReportTransactionLinesItemCommon {
     /// Infer from:  Generated from receipt details and trip context
     #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub remarks: Wrapped<String>,
-    /// Conditionally required when:  general_information.category == expenses_foreign
+    /// Conditionally required when:  expense_type in [airfare_foreign,
+    /// Conditionally required when: gift_card_employee_foreign, gifts_foreign_activity,
+    /// Conditionally required when: ground_transportation_foreign, lodging_foreign]
     /// Source tier: T3
     /// Infer from:  Destination country from flight/hotel docs
     #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub country_of_activity: Wrapped<String>,
-    /// Conditionally required when:  general_information.category == expenses_foreign
+    /// Conditionally required when:  expense_type in [airfare_foreign,
+    /// Conditionally required when: gift_card_employee_foreign, gifts_foreign_activity,
+    /// Conditionally required when: ground_transportation_foreign, lodging_foreign]
     /// Source tier: T3
     /// Infer from:  Conference registration → 'conference'; otherwise from context
     #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]

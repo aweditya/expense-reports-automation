@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-generated_at_utc: '2026-05-13T23:27:53+00:00'
+generated_at_utc: '2026-05-14T06:14:49+00:00'
 field_rules:
 - path: expense_report
   node_kind: object
@@ -503,7 +503,8 @@ field_rules:
   schema_type: string
   rust_type: String
   required: false
-  required_expression: general_information.category == expenses_foreign
+  required_expression: expense_type in [airfare_foreign, gift_card_employee_foreign, gifts_foreign_activity, ground_transportation_foreign,
+    lodging_foreign]
   source: T3
   effective_source: T3
   depends_on: []
@@ -517,7 +518,8 @@ field_rules:
   schema_type: number
   rust_type: f64
   required: false
-  required_expression: general_information.category == expenses_foreign
+  required_expression: expense_type in [airfare_foreign, gift_card_employee_foreign, gifts_foreign_activity, ground_transportation_foreign,
+    lodging_foreign]
   source: T3
   effective_source: T3
   depends_on: []
@@ -531,7 +533,8 @@ field_rules:
   schema_type: number
   rust_type: f64
   required: false
-  required_expression: general_information.category == expenses_foreign
+  required_expression: expense_type in [airfare_foreign, gift_card_employee_foreign, gifts_foreign_activity, ground_transportation_foreign,
+    lodging_foreign]
   source: T2
   effective_source: T2
   depends_on: []
@@ -589,7 +592,8 @@ field_rules:
   schema_type: string
   rust_type: String
   required: false
-  required_expression: general_information.category == expenses_foreign
+  required_expression: expense_type in [airfare_foreign, gift_card_employee_foreign, gifts_foreign_activity, ground_transportation_foreign,
+    lodging_foreign]
   source: T3
   effective_source: T3
   depends_on: []
@@ -603,7 +607,8 @@ field_rules:
   schema_type: enum
   rust_type: ExpenseReportTransactionLinesItemCommonForeignActivityTypeEnum
   required: false
-  required_expression: general_information.category == expenses_foreign
+  required_expression: expense_type in [airfare_foreign, gift_card_employee_foreign, gifts_foreign_activity, ground_transportation_foreign,
+    lodging_foreign]
   source: T3
   effective_source: T3
   depends_on: []
@@ -2053,19 +2058,24 @@ conditional_rules:
   expression: Must fall within trip date window
 - rule_type: required_when
   target_path: expense_report.transaction_lines[].common.original_currency
-  expression: general_information.category == expenses_foreign
+  expression: expense_type in [airfare_foreign, gift_card_employee_foreign, gifts_foreign_activity, ground_transportation_foreign,
+    lodging_foreign]
 - rule_type: required_when
   target_path: expense_report.transaction_lines[].common.original_amount
-  expression: general_information.category == expenses_foreign
+  expression: expense_type in [airfare_foreign, gift_card_employee_foreign, gifts_foreign_activity, ground_transportation_foreign,
+    lodging_foreign]
 - rule_type: required_when
   target_path: expense_report.transaction_lines[].common.exchange_rate
-  expression: general_information.category == expenses_foreign
+  expression: expense_type in [airfare_foreign, gift_card_employee_foreign, gifts_foreign_activity, ground_transportation_foreign,
+    lodging_foreign]
 - rule_type: required_when
   target_path: expense_report.transaction_lines[].common.country_of_activity
-  expression: general_information.category == expenses_foreign
+  expression: expense_type in [airfare_foreign, gift_card_employee_foreign, gifts_foreign_activity, ground_transportation_foreign,
+    lodging_foreign]
 - rule_type: required_when
   target_path: expense_report.transaction_lines[].common.foreign_activity_type
-  expression: general_information.category == expenses_foreign
+  expression: expense_type in [airfare_foreign, gift_card_employee_foreign, gifts_foreign_activity, ground_transportation_foreign,
+    lodging_foreign]
 - rule_type: required_when
   target_path: expense_report.transaction_lines[].airfare_details
   expression: expense_type in [airfare_domestic, airfare_foreign]
