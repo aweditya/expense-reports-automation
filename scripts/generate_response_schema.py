@@ -121,8 +121,13 @@ def common_block_schema(expense_type_values: list[str]) -> dict:
         "properties": {
             "date": leaf({"type": "string", "description": "ISO 8601 date (YYYY-MM-DD)"}),
             # Money is a number (f64). f64 has ~15-17 decimal digits of
-            # precision — sufficient for travel-expense amounts.
-            "line_amount_usd": leaf({"type": "number"}),
+            # precision — sufficient for travel-expense amounts. `nullable`
+            # so airfare's PROMPT_MAIN can leave this null on foreign
+            # tickets (origin: needs_fx_conversion) for reduction's
+            # mock_usd_rate to fill — without it, the model is forced to
+            # emit a sentinel like 0 which apply_mock_fx then mistakes
+            # for "already set." See Phase 4 Stage 4 verification notes.
+            "line_amount_usd": leaf({"type": "number", "nullable": True}),
             "original_currency": leaf(
                 {"type": "string", "nullable": True, "description": "ISO 4217 code or null if USD"}
             ),

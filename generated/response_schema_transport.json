@@ -90,7 +90,8 @@
             "type": "object",
             "properties": {
               "value": {
-                "type": "number"
+                "type": "number",
+                "nullable": true
               },
               "_meta": {
                 "type": "object",
