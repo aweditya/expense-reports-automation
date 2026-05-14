@@ -325,11 +325,15 @@ body {
   border-radius: 4px;
   cursor: default;
 }
-/* Amber tint for fields the FA should look at: low confidence OR
-   explicit needs-review flag. The signal is encoded in the existing
-   markup (`.conf-low` dot, `.needs-review` tag) so CSS can pick it up
-   without the renderer doing extra work. */
+/* Amber tint for fields the FA should look at: medium-or-low confidence
+   OR explicit needs-review flag. Medium gets the amber too because the
+   confidence dot is amber-colored — the border should match the dot
+   for visual consistency (a card with an amber dot but a gray border
+   reads as "the model is unsure about this but the UI doesn't care").
+   The signal is encoded in the existing markup (`.conf-low`, `.conf-
+   medium`, `.needs-review`) so CSS picks it up without renderer work. */
 .field-card:has(.conf-low),
+.field-card:has(.conf-medium),
 .field-card:has(.needs-review) {
   background: #fffbeb;
   border-left-color: #f59e0b;

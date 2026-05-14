@@ -676,9 +676,37 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
         line.common.line_amount_usd.value,
         &format!("{path_prefix}.original_amount"),
     );
+    // Exchange rate is USD per unit of foreign currency (e.g. 0.012 for
+    // INR). Currency context appended when known so "0.0120 USD/INR"
+    // reads as a rate rather than a bare decimal. Domestic lines have
+    // value=None and render as "—" — not flagged as missing because the
+    // schema's per-line conditional (Stage 4.5A) only requires this
+    // field on foreign-typed lines.
+    let original_currency_for_rate = line.common.original_currency.value.as_deref();
+    field_card_text(
+        html,
+        "Exchange Rate",
+        &line.common.exchange_rate,
+        &format!("{path_prefix}.exchange_rate"),
+        |r| match original_currency_for_rate {
+            Some(c) => format!("{:.4} USD/{}", r, c),
+            None => format!("{:.4}", r),
+        },
+    );
     field_card_text(html, "Expense Type", &line.common.expense_type, &format!("{path_prefix}.expense_type"), |e| display_expense_type(e, line.meal_details.as_ref()));
     field_card_text(html, "Remarks", &line.common.remarks, &format!("{path_prefix}.remarks"), |s: &String| s.clone());
     field_card_text_opt(html, "Country", &line.common.country_of_activity, &format!("{path_prefix}.country_of_activity"), |s: &String| s.clone());
+    // Foreign Activity Type: enum (conference / research_collaboration /
+    // fieldwork / other) only meaningful for foreign-typed lines. Renders
+    // "—" for domestic; per-line conditional means no missing-field flag
+    // on those.
+    field_card_text(
+        html,
+        "Foreign Activity Type",
+        &line.common.foreign_activity_type,
+        &format!("{path_prefix}.foreign_activity_type"),
+        |a| title_case(a.as_str()),
+    );
     html.push_str("</div>\n");
 
     if let Some(meal) = &line.meal_details {
