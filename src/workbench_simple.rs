@@ -669,7 +669,13 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
     field_card_text(html, "Date", &line.common.date, &format!("{path_prefix}.date"), |d| d.0.clone());
     field_card_optional_money(html, "Amount (USD)", line.common.line_amount_usd.value, &format!("{path_prefix}.line_amount_usd"));
     field_card_text_opt(html, "Original Currency", &line.common.original_currency, &format!("{path_prefix}.original_currency"), |s: &String| s.clone());
-    field_card_optional_money(html, "Original Amount", line.common.original_amount.value, &format!("{path_prefix}.original_amount"));
+    field_card_original_amount(
+        html,
+        line.common.original_amount.value,
+        line.common.original_currency.value.as_deref(),
+        line.common.line_amount_usd.value,
+        &format!("{path_prefix}.original_amount"),
+    );
     field_card_text(html, "Expense Type", &line.common.expense_type, &format!("{path_prefix}.expense_type"), |e| display_expense_type(e, line.meal_details.as_ref()));
     field_card_text(html, "Remarks", &line.common.remarks, &format!("{path_prefix}.remarks"), |s: &String| s.clone());
     field_card_text_opt(html, "Country", &line.common.country_of_activity, &format!("{path_prefix}.country_of_activity"), |s: &String| s.clone());
@@ -703,7 +709,9 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
         html.push_str("<h4 class=\"subsection-title\">Airfare Details</h4>\n");
         html.push_str("<div class=\"field-grid\">\n");
         let ap = format!("expense_report.transaction_lines[{idx}].airfare_details");
-        render_airfare_details(html, airfare, &ap);
+        // Pass the original_currency through so Ticket Amount renders
+        // with the right symbol (₹ for foreign, $ for USD).
+        render_airfare_details(html, airfare, &ap, line.common.original_currency.value.as_deref());
         html.push_str("</div>\n");
     }
 
@@ -754,6 +762,7 @@ fn render_airfare_details(
     html: &mut String,
     airfare: &ExpenseReportTransactionLinesItemAirfareDetails,
     path: &str,
+    printed_currency: Option<&str>,
 ) {
     field_card_text(html, "Airline", &airfare.airline, &format!("{path}.airline"), |s: &String| s.clone());
     field_card_text(html, "Departure", &airfare.departure_airport, &format!("{path}.departure_airport"), |s: &String| s.clone());
@@ -762,10 +771,16 @@ fn render_airfare_details(
     field_card_text(html, "Round Trip", &airfare.round_trip, &format!("{path}.round_trip"), |b| if *b { "yes".into() } else { "no".into() });
     field_card_text(html, "Traveler", &airfare.travelers_name, &format!("{path}.travelers_name"), |s: &String| s.clone());
     field_card_text(html, "Ticket Number", &airfare.ticket_number, &format!("{path}.ticket_number"), |s: &String| s.clone());
-    // Ticket Amount: in the printed currency (USD for domestic, INR/EUR/etc.
-    // for foreign). Formatted as $ here as a stop-gap; Stage 4.5C adds
-    // currency-aware formatting alongside the same fix for Original Amount.
-    field_card_text(html, "Ticket Amount", &airfare.ticket_amount, &format!("{path}.ticket_amount"), |a| format!("${:.2}", a));
+    // Ticket Amount is in the printed currency (USD for domestic, INR/
+    // EUR/etc. for foreign). The closure captures `printed_currency` so
+    // the right symbol (₹ for INR, $ for USD, …) is used.
+    field_card_text(
+        html,
+        "Ticket Amount",
+        &airfare.ticket_amount,
+        &format!("{path}.ticket_amount"),
+        |a| format_money_with_currency(*a, printed_currency),
+    );
     field_card_text(html, "Booking Method", &airfare.booking_method, &format!("{path}.booking_method"), |b| title_case(b.as_str()));
 }
 
@@ -870,8 +885,10 @@ fn line_kind_icon(line: &ExpenseReportTransactionLinesItem) -> &'static str {
 /// Per-kind headline for the collapsed transaction-line summary header.
 /// For meal lines, it's the venue name (the most distinctive identifier
 /// for "which restaurant was this?"); for transport lines, the service
-/// provider plays the same role ("Lyft" / "Uber"). Future per-kind
-/// blocks should extend this with their natural headline.
+/// provider plays the same role ("Lyft" / "Uber"); for airfare, the
+/// airline + route ("Air India BOM→SFO" / "United SFO↔ORD"); for
+/// lodging, the hotel name. Future per-kind blocks should extend this
+/// with their natural headline.
 fn line_summary_headline(line: &ExpenseReportTransactionLinesItem) -> String {
     if let Some(meal) = &line.meal_details {
         if let Some(venue) = meal.venue_name.value.as_deref() {
@@ -888,6 +905,24 @@ fn line_summary_headline(line: &ExpenseReportTransactionLinesItem) -> String {
             }
         }
         return "(no service provider)".to_owned();
+    }
+    if let Some(airfare) = &line.airfare_details {
+        let airline = airfare.airline.value.as_deref().unwrap_or("");
+        let dep = airfare.departure_airport.value.as_deref().unwrap_or("");
+        let dest = airfare.destination_airport.value.as_deref().unwrap_or("");
+        if !airline.is_empty() && !dep.is_empty() && !dest.is_empty() {
+            let arrow = if airfare.round_trip.value == Some(true) { "↔" } else { "→" };
+            return format!("{} {}{}{}", airline, dep, arrow, dest);
+        }
+        return "(airfare)".to_owned();
+    }
+    if let Some(lodging) = &line.lodging_details {
+        if let Some(hotel) = lodging.hotel_name.value.as_deref() {
+            if !hotel.is_empty() {
+                return hotel.to_owned();
+            }
+        }
+        return "(no hotel name)".to_owned();
     }
     "—".to_owned()
 }
@@ -951,6 +986,53 @@ fn field_card_optional_string(html: &mut String, label: &str, value: Option<&str
 fn field_card_optional_money(html: &mut String, label: &str, value: Option<f64>, path: &str) {
     let v = value.map(|t| format!("${:.2}", t));
     field_card_bare(html, label, path, v.as_deref().unwrap_or("—"));
+}
+
+/// Format an amount with the right currency symbol (₹ for INR, € for EUR,
+/// etc.). When `currency` is None or "USD" the dollar sign is used. ISO
+/// codes we don't have a symbol for fall back to a code prefix:
+/// "AUD 1234.56". Used by the Original Amount and Ticket Amount cards
+/// where the currency varies per receipt.
+fn format_money_with_currency(amount: f64, currency: Option<&str>) -> String {
+    let code = currency.unwrap_or("USD");
+    let symbol = match code {
+        "USD" => "$",
+        "EUR" => "€",
+        "GBP" => "£",
+        "JPY" | "CNY" => "¥",
+        "INR" => "₹",
+        _ => "",
+    };
+    if symbol.is_empty() {
+        format!("{} {:.2}", code, amount)
+    } else {
+        format!("{}{:.2}", symbol, amount)
+    }
+}
+
+/// Original Amount card. Currency-aware (Bug 1) and falls back to the
+/// USD line amount when the model left the original empty (Bug 4 — USD
+/// receipts have no separate "original" since printed currency IS USD;
+/// without the fallback the card looks like an unfilled FA-required field).
+fn field_card_original_amount(
+    html: &mut String,
+    original_amount: Option<f64>,
+    original_currency: Option<&str>,
+    line_amount_usd: Option<f64>,
+    path: &str,
+) {
+    // Prefer the model's original_amount when set (foreign receipts);
+    // fall back to line_amount_usd (domestic USD where original is
+    // semantically "the printed USD total"). Currency follows: explicit
+    // original_currency on foreign, implicit USD on the fallback.
+    let (value, currency): (Option<f64>, Option<&str>) = match original_amount {
+        Some(a) => (Some(a), original_currency),
+        None => (line_amount_usd, Some("USD")),
+    };
+    let display = value
+        .map(|a| format_money_with_currency(a, currency))
+        .unwrap_or_else(|| "—".to_owned());
+    field_card_bare(html, "Original Amount", path, &display);
 }
 
 /// Map a derivation origin code (set by reduce.rs when it builds derived
