@@ -11,6 +11,7 @@
 
 use crate::expense_report_model::{
     ExpenseReport, ExpenseReportGeneralInformation, ExpenseReportTransactionLinesItem,
+    ExpenseReportTransactionLinesItemAirfareDetails,
     ExpenseReportTransactionLinesItemGroundTransportDetails,
     ExpenseReportTransactionLinesItemLodgingDetails,
     ExpenseReportTransactionLinesItemMealDetails, ExpenseReportTransactionSummary,
@@ -698,6 +699,14 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
         html.push_str("</div>\n");
     }
 
+    if let Some(airfare) = &line.airfare_details {
+        html.push_str("<h4 class=\"subsection-title\">Airfare Details</h4>\n");
+        html.push_str("<div class=\"field-grid\">\n");
+        let ap = format!("expense_report.transaction_lines[{idx}].airfare_details");
+        render_airfare_details(html, airfare, &ap);
+        html.push_str("</div>\n");
+    }
+
     html.push_str("</div>\n</details>\n");
 }
 
@@ -739,6 +748,25 @@ fn render_lodging_details(
     if let Some(true) = lodging.is_shared_lodging.value {
         field_card_optional_string(html, "Shared With", lodging.shared_with_transaction_number.as_deref(), &format!("{path}.shared_with_transaction_number"));
     }
+}
+
+fn render_airfare_details(
+    html: &mut String,
+    airfare: &ExpenseReportTransactionLinesItemAirfareDetails,
+    path: &str,
+) {
+    field_card_text(html, "Airline", &airfare.airline, &format!("{path}.airline"), |s: &String| s.clone());
+    field_card_text(html, "Departure", &airfare.departure_airport, &format!("{path}.departure_airport"), |s: &String| s.clone());
+    field_card_text(html, "Destination", &airfare.destination_airport, &format!("{path}.destination_airport"), |s: &String| s.clone());
+    field_card_text(html, "Class", &airfare.class_of_ticket, &format!("{path}.class_of_ticket"), |c| title_case(c.as_str()));
+    field_card_text(html, "Round Trip", &airfare.round_trip, &format!("{path}.round_trip"), |b| if *b { "yes".into() } else { "no".into() });
+    field_card_text(html, "Traveler", &airfare.travelers_name, &format!("{path}.travelers_name"), |s: &String| s.clone());
+    field_card_text(html, "Ticket Number", &airfare.ticket_number, &format!("{path}.ticket_number"), |s: &String| s.clone());
+    // Ticket Amount: in the printed currency (USD for domestic, INR/EUR/etc.
+    // for foreign). Formatted as $ here as a stop-gap; Stage 4.5C adds
+    // currency-aware formatting alongside the same fix for Original Amount.
+    field_card_text(html, "Ticket Amount", &airfare.ticket_amount, &format!("{path}.ticket_amount"), |a| format!("${:.2}", a));
+    field_card_text(html, "Booking Method", &airfare.booking_method, &format!("{path}.booking_method"), |b| title_case(b.as_str()));
 }
 
 // ─── Source documents (bottom) ─────────────────────────────────────────────
