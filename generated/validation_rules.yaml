@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-generated_at_utc: '2026-05-14T06:14:49+00:00'
+generated_at_utc: '2026-05-15T17:10:33+00:00'
 field_rules:
 - path: expense_report
   node_kind: object
@@ -138,7 +138,9 @@ field_rules:
   depends_on: []
   allowed_values: []
   default: null
-  description: Structured purpose statement entered by the FA. First 30 chars of the combined text serve as a lookup key.
+  description: "Structured purpose statement. Phase 5 conference flow re-tiers most sub-fields away from T1 \u2014 primary\
+    \ producer is now the conference synthesis (T4) or supporting-doc aggregation (T2) when conference data is uploaded; T1\
+    \ fallback when not. See docs/phase-5-design.md."
   infer_from: null
   validation: null
 - path: expense_report.general_information.business_purpose.who
@@ -147,13 +149,13 @@ field_rules:
   rust_type: String
   required: true
   required_expression: null
-  source: null
-  effective_source: T1
+  source: T4
+  effective_source: T4
   depends_on: []
   allowed_values: []
   default: null
   description: null
-  infer_from: "Suggestion only \u2014 payee name and affiliation"
+  infer_from: 'Synthesis: participant_role + receipt''s attendee_name; T1 fallback when no conference docs'
   validation: null
 - path: expense_report.general_information.business_purpose.what
   node_kind: field
@@ -161,13 +163,13 @@ field_rules:
   rust_type: String
   required: true
   required_expression: null
-  source: null
-  effective_source: T1
+  source: T4
+  effective_source: T4
   depends_on: []
   allowed_values: []
   default: null
   description: null
-  infer_from: "Suggestion only \u2014 conference name from registration receipt; or meeting purpose from context"
+  infer_from: 'Synthesis: composed sentence about what the trip is for; T1 fallback when no conference docs'
   validation: null
 - path: expense_report.general_information.business_purpose.when
   node_kind: field
@@ -175,13 +177,13 @@ field_rules:
   rust_type: String
   required: true
   required_expression: null
-  source: null
-  effective_source: T1
+  source: T2
+  effective_source: T2
   depends_on: []
   allowed_values: []
   default: null
   description: null
-  infer_from: "Suggestion only \u2014 trip dates from flight itinerary"
+  infer_from: 'Reduction: min/max of supporting_conference_doc.scheduled_dates; T1 fallback when no supporting docs'
   validation: null
 - path: expense_report.general_information.business_purpose.where
   node_kind: field
@@ -189,13 +191,13 @@ field_rules:
   rust_type: String
   required: true
   required_expression: null
-  source: null
-  effective_source: T1
+  source: T2
+  effective_source: T2
   depends_on: []
   allowed_values: []
   default: null
   description: null
-  infer_from: "Suggestion only \u2014 destination city/country from flight or hotel docs"
+  infer_from: 'Reduction: union of supporting_conference_doc.venues_mentioned; T1 fallback when no supporting docs'
   validation: null
 - path: expense_report.general_information.business_purpose.why
   node_kind: field
@@ -203,13 +205,13 @@ field_rules:
   rust_type: String
   required: true
   required_expression: null
-  source: null
-  effective_source: T1
+  source: T4
+  effective_source: T4
   depends_on: []
   allowed_values: []
   default: null
   description: null
-  infer_from: "Suggestion only \u2014 presenting at conference (if name appears in program), research collaboration, etc."
+  infer_from: "Synthesis: composed sentence \u2014 presenting / collaboration / etc.; T1 fallback when no conference docs"
   validation: null
 - path: expense_report.general_information.business_purpose.key_30char
   node_kind: field
@@ -217,12 +219,13 @@ field_rules:
   rust_type: String
   required: true
   required_expression: null
-  source: T1
-  effective_source: T1
+  source: T2
+  effective_source: T2
   depends_on: []
   allowed_values: []
   default: null
-  description: 30-character lookup key entered by the FA
+  description: 30-character lookup key. Reduction derives from event_name + earliest scheduled date (e.g. 'ASPLOS-2026');
+    T1 fallback when neither is available.
   infer_from: null
   validation: null
 - path: expense_report.general_information.event_name
@@ -231,13 +234,14 @@ field_rules:
   rust_type: String
   required: true
   required_expression: null
-  source: T3
-  effective_source: T3
+  source: T4
+  effective_source: T4
   depends_on: []
   allowed_values: []
   default: null
-  description: 'Format: <lab_name> + <Foreign Expenses | Domestic Expenses>'
-  infer_from: Lab affiliation + category
+  description: 'Conference / event name. Phase 5: synthesized from canonical_event_name across conference receipts + supporting
+    docs. T1 fallback when no conference docs uploaded.'
+  infer_from: 'Synthesis: canonical_event_name from synthesis_conference_bundle'
   validation: null
 - path: expense_report.general_information.student_certification
   node_kind: object
@@ -1079,7 +1083,7 @@ field_rules:
   allowed_values: []
   default: null
   description: null
-  infer_from: Registration receipt
+  infer_from: Registration receipt header / ticket text
   validation: null
 - path: expense_report.transaction_lines[].conference_registration_details.order_number
   node_kind: field
@@ -1093,7 +1097,56 @@ field_rules:
   allowed_values: []
   default: null
   description: null
-  infer_from: Registration receipt
+  infer_from: "Registration receipt \u2014 order confirmation / registration ID"
+  validation: null
+- path: expense_report.transaction_lines[].conference_registration_details.ticket_type
+  node_kind: field
+  schema_type: string
+  rust_type: String
+  required: true
+  required_expression: null
+  source: T3
+  effective_source: T3
+  depends_on: []
+  allowed_values: []
+  default: null
+  description: null
+  infer_from: "Registration receipt \u2014 what was purchased (e.g. 'Main Conference Only', 'Workshops/Tutorials', 'Full Pass\
+    \ + Banquet')"
+  validation: null
+- path: expense_report.transaction_lines[].conference_registration_details.attendee_name
+  node_kind: field
+  schema_type: string
+  rust_type: String
+  required: true
+  required_expression: null
+  source: T3
+  effective_source: T3
+  depends_on: []
+  allowed_values: []
+  default: null
+  description: null
+  infer_from: "Registration receipt \u2014 attendee/registrant field"
+  validation: null
+- path: expense_report.transaction_lines[].conference_registration_details.registration_system
+  node_kind: field
+  schema_type: enum
+  rust_type: ExpenseReportTransactionLinesItemConferenceRegistrationDetailsRegistrationSystemEnum
+  required: true
+  required_expression: null
+  source: T3
+  effective_source: T3
+  depends_on: []
+  allowed_values:
+  - whova
+  - cvent
+  - acm_regonline
+  - eventbrite
+  - usenix
+  - other
+  default: null
+  description: null
+  infer_from: Registration receipt format/branding (Whova logo, ACM portal style, etc.); default 'other' if unrecognized
   validation: null
 - path: expense_report.transaction_lines[].conference_registration_details.conference_start_date
   node_kind: field
@@ -1101,13 +1154,13 @@ field_rules:
   rust_type: IsoDate
   required: true
   required_expression: null
-  source: T3
-  effective_source: T3
+  source: T2
+  effective_source: T2
   depends_on: []
   allowed_values: []
   default: null
   description: null
-  infer_from: Conference program or registration confirmation
+  infer_from: 'Reduction: min of supporting_conference_doc.scheduled_dates; T1 fallback when no supporting docs'
   validation: null
 - path: expense_report.transaction_lines[].conference_registration_details.conference_end_date
   node_kind: field
@@ -1115,13 +1168,13 @@ field_rules:
   rust_type: IsoDate
   required: true
   required_expression: null
-  source: T3
-  effective_source: T3
+  source: T2
+  effective_source: T2
   depends_on: []
   allowed_values: []
   default: null
   description: null
-  infer_from: Conference program or registration confirmation
+  infer_from: 'Reduction: max of supporting_conference_doc.scheduled_dates; T1 fallback when no supporting docs'
   validation: null
 - path: expense_report.transaction_lines[].conference_registration_details.meals_included
   node_kind: object
@@ -1129,13 +1182,14 @@ field_rules:
   rust_type: ExpenseReportTransactionLinesItemConferenceRegistrationDetailsMealsIncluded
   required: true
   required_expression: null
-  source: T3
-  effective_source: T3
+  source: T1
+  effective_source: T1
   depends_on: []
   allowed_values: []
   default: null
-  description: Which meals the conference provides, by day. Feeds into per diem deductions.
-  infer_from: Conference program/schedule (e.g., 'lunch provided to all attendees')
+  description: 'Which meals the conference provides, by day. Feeds into per diem deductions. Phase 5 v1: FA fills this manually;
+    could become T2 from supporting_conference_doc extraction later.'
+  infer_from: null
   validation: null
 - path: expense_report.transaction_lines[].conference_registration_details.meals_included.schedule
   node_kind: array
@@ -1144,7 +1198,7 @@ field_rules:
   required: false
   required_expression: null
   source: null
-  effective_source: T3
+  effective_source: T1
   depends_on: []
   allowed_values: []
   default: null
@@ -1158,7 +1212,7 @@ field_rules:
   required: false
   required_expression: null
   source: null
-  effective_source: T3
+  effective_source: T1
   depends_on: []
   allowed_values: []
   default: null
@@ -1172,7 +1226,7 @@ field_rules:
   required: false
   required_expression: null
   source: null
-  effective_source: T3
+  effective_source: T1
   depends_on: []
   allowed_values: []
   default: null
@@ -1186,7 +1240,7 @@ field_rules:
   required: false
   required_expression: null
   source: null
-  effective_source: T3
+  effective_source: T1
   depends_on: []
   allowed_values: []
   default: null
@@ -1200,7 +1254,7 @@ field_rules:
   required: false
   required_expression: null
   source: null
-  effective_source: T3
+  effective_source: T1
   depends_on: []
   allowed_values: []
   default: null
@@ -1214,7 +1268,7 @@ field_rules:
   required: false
   required_expression: null
   source: null
-  effective_source: T3
+  effective_source: T1
   depends_on: []
   allowed_values: []
   default: null

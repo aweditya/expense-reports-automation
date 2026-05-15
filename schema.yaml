@@ -80,40 +80,45 @@ expense_report:
       type: object
       required: true
       source: T1
-      description: "Structured purpose statement entered by the FA. First 30 chars of the combined text serve as a lookup key."
+      description: "Structured purpose statement. Phase 5 conference flow re-tiers most sub-fields away from T1 — primary producer is now the conference synthesis (T4) or supporting-doc aggregation (T2) when conference data is uploaded; T1 fallback when not. See docs/phase-5-design.md."
       fields:
         who:
           type: string
           required: true
-          infer_from: "Suggestion only — payee name and affiliation"
+          source: T4
+          infer_from: "Synthesis: participant_role + receipt's attendee_name; T1 fallback when no conference docs"
         what:
           type: string
           required: true
-          infer_from: "Suggestion only — conference name from registration receipt; or meeting purpose from context"
+          source: T4
+          infer_from: "Synthesis: composed sentence about what the trip is for; T1 fallback when no conference docs"
         when:
           type: string
           required: true
-          infer_from: "Suggestion only — trip dates from flight itinerary"
+          source: T2
+          infer_from: "Reduction: min/max of supporting_conference_doc.scheduled_dates; T1 fallback when no supporting docs"
         where:
           type: string
           required: true
-          infer_from: "Suggestion only — destination city/country from flight or hotel docs"
+          source: T2
+          infer_from: "Reduction: union of supporting_conference_doc.venues_mentioned; T1 fallback when no supporting docs"
         why:
           type: string
           required: true
-          infer_from: "Suggestion only — presenting at conference (if name appears in program), research collaboration, etc."
+          source: T4
+          infer_from: "Synthesis: composed sentence — presenting / collaboration / etc.; T1 fallback when no conference docs"
         key_30char:
           type: string
           required: true
-          source: T1
-          description: "30-character lookup key entered by the FA"
+          source: T2
+          description: "30-character lookup key. Reduction derives from event_name + earliest scheduled date (e.g. 'ASPLOS-2026'); T1 fallback when neither is available."
 
     event_name:
       type: string
       required: true
-      source: T3
-      description: "Format: <lab_name> + <Foreign Expenses | Domestic Expenses>"
-      infer_from: "Lab affiliation + category"
+      source: T4
+      description: "Conference / event name. Phase 5: synthesized from canonical_event_name across conference receipts + supporting docs. T1 fallback when no conference docs uploaded."
+      infer_from: "Synthesis: canonical_event_name from synthesis_conference_bundle"
 
     student_certification:
       type: object
@@ -455,33 +460,62 @@ expense_report:
 
         conference_registration_details:
           required: "expense_type == conference_registration"
+          # Phase 5 design: 5 T3 leaves (conference_name, order_number,
+          # ticket_type, attendee_name, registration_system) — at the
+          # single-call ceiling, probe-verified. Dates are re-tiered to T2
+          # because most registration receipts (Whova, etc.) DON'T print
+          # conference dates — those come from supporting docs (program
+          # PDFs) and reduction aggregates them. meals_included is T1
+          # (FA fills) for v1; could become T2 from supporting docs later
+          # if conference programs reliably print meal info.
           fields:
             conference_name:
               type: string
               required: true
               source: T3
-              infer_from: "Registration receipt"
+              infer_from: "Registration receipt header / ticket text"
             order_number:
               type: string
               required: true
               source: T3
-              infer_from: "Registration receipt"
+              infer_from: "Registration receipt — order confirmation / registration ID"
+            ticket_type:
+              type: string
+              required: true
+              source: T3
+              infer_from: "Registration receipt — what was purchased (e.g. 'Main Conference Only', 'Workshops/Tutorials', 'Full Pass + Banquet')"
+            attendee_name:
+              type: string
+              required: true
+              source: T3
+              infer_from: "Registration receipt — attendee/registrant field"
+            registration_system:
+              type: enum
+              required: true
+              source: T3
+              allowed_values:
+                - whova
+                - cvent
+                - acm_regonline
+                - eventbrite
+                - usenix
+                - other
+              infer_from: "Registration receipt format/branding (Whova logo, ACM portal style, etc.); default 'other' if unrecognized"
             conference_start_date:
               type: date
               required: true
-              source: T3
-              infer_from: "Conference program or registration confirmation"
+              source: T2
+              infer_from: "Reduction: min of supporting_conference_doc.scheduled_dates; T1 fallback when no supporting docs"
             conference_end_date:
               type: date
               required: true
-              source: T3
-              infer_from: "Conference program or registration confirmation"
+              source: T2
+              infer_from: "Reduction: max of supporting_conference_doc.scheduled_dates; T1 fallback when no supporting docs"
             meals_included:
               type: object
               required: true
-              source: T3
-              description: "Which meals the conference provides, by day. Feeds into per diem deductions."
-              infer_from: "Conference program/schedule (e.g., 'lunch provided to all attendees')"
+              source: T1
+              description: "Which meals the conference provides, by day. Feeds into per diem deductions. Phase 5 v1: FA fills this manually; could become T2 from supporting_conference_doc extraction later."
               fields:
                 schedule:
                   type: array

@@ -520,6 +520,56 @@ impl core::fmt::Display for ExpenseReportTransactionLinesItemLodgingDetailsBooki
 }
 
 /// Source tier: T3
+/// Infer from:  Registration receipt format/branding (Whova logo, ACM portal style, etc.);
+/// Infer from: default 'other' if unrecognized
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExpenseReportTransactionLinesItemConferenceRegistrationDetailsRegistrationSystemEnum {
+    #[default]
+    Whova,
+    Cvent,
+    AcmRegonline,
+    Eventbrite,
+    Usenix,
+    Other,
+}
+
+impl ExpenseReportTransactionLinesItemConferenceRegistrationDetailsRegistrationSystemEnum {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Whova => "whova",
+            Self::Cvent => "cvent",
+            Self::AcmRegonline => "acm_regonline",
+            Self::Eventbrite => "eventbrite",
+            Self::Usenix => "usenix",
+            Self::Other => "other",
+        }
+    }
+}
+
+impl core::str::FromStr for ExpenseReportTransactionLinesItemConferenceRegistrationDetailsRegistrationSystemEnum {
+    type Err = &'static str;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "whova" => Ok(Self::Whova),
+            "cvent" => Ok(Self::Cvent),
+            "acm_regonline" => Ok(Self::AcmRegonline),
+            "eventbrite" => Ok(Self::Eventbrite),
+            "usenix" => Ok(Self::Usenix),
+            "other" => Ok(Self::Other),
+            _ => Err("invalid enum value"),
+        }
+    }
+}
+
+impl core::fmt::Display for ExpenseReportTransactionLinesItemConferenceRegistrationDetailsRegistrationSystemEnum {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Source tier: T3
 /// Infer from:  Destination from flight/hotel docs determines domestic vs. international;
 /// Infer from: location determines AK/HI vs. continental
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
@@ -628,37 +678,42 @@ pub struct ExpenseReportGeneralInformationPayee {
 
 }
 
-///  Structured purpose statement entered by the FA. First 30 chars of the combined text serve
-/// as a lookup key.
+///  Structured purpose statement. Phase 5 conference flow re-tiers most sub-fields away from T1
+/// — primary producer is now the conference synthesis (T4) or supporting-doc aggregation (T2)
+/// when conference data is uploaded; T1 fallback when not. See docs/phase-5-design.md.
 /// Source tier: T1
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportGeneralInformationBusinessPurpose {
-    /// Source tier: T1
-    /// Infer from:  Suggestion only — payee name and affiliation
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub who: Option<String>,
-    /// Source tier: T1
-    /// Infer from:  Suggestion only — conference name from registration receipt; or meeting
-    /// Infer from: purpose from context
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub what: Option<String>,
-    /// Source tier: T1
-    /// Infer from:  Suggestion only — trip dates from flight itinerary
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub when: Option<String>,
-    /// Source tier: T1
-    /// Infer from:  Suggestion only — destination city/country from flight or hotel docs
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub r#where: Option<String>,
-    /// Source tier: T1
-    /// Infer from:  Suggestion only — presenting at conference (if name appears in program),
-    /// Infer from: research collaboration, etc.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub why: Option<String>,
-    ///  30-character lookup key entered by the FA
-    /// Source tier: T1
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub key_30char: Option<String>,
+    /// Source tier: T4
+    /// Infer from:  Synthesis: participant_role + receipt's attendee_name; T1 fallback when no
+    /// Infer from: conference docs
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
+    pub who: Wrapped<String>,
+    /// Source tier: T4
+    /// Infer from:  Synthesis: composed sentence about what the trip is for; T1 fallback when
+    /// Infer from: no conference docs
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
+    pub what: Wrapped<String>,
+    /// Source tier: T2
+    /// Infer from:  Reduction: min/max of supporting_conference_doc.scheduled_dates; T1
+    /// Infer from: fallback when no supporting docs
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
+    pub when: Wrapped<String>,
+    /// Source tier: T2
+    /// Infer from:  Reduction: union of supporting_conference_doc.venues_mentioned; T1 fallback
+    /// Infer from: when no supporting docs
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
+    pub r#where: Wrapped<String>,
+    /// Source tier: T4
+    /// Infer from:  Synthesis: composed sentence — presenting / collaboration / etc.; T1
+    /// Infer from: fallback when no conference docs
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
+    pub why: Wrapped<String>,
+    ///  30-character lookup key. Reduction derives from event_name + earliest scheduled date
+    /// (e.g. 'ASPLOS-2026'); T1 fallback when neither is available.
+    /// Source tier: T2
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
+    pub key_30char: Wrapped<String>,
 
 }
 
@@ -713,14 +768,17 @@ pub struct ExpenseReportGeneralInformation {
     /// Source tier: T2
     #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub payment_method: Wrapped<String>,
-    ///  Structured purpose statement entered by the FA. First 30 chars of the combined text
-    /// serve as a lookup key.
+    ///  Structured purpose statement. Phase 5 conference flow re-tiers most sub-fields away
+    /// from T1 — primary producer is now the conference synthesis (T4) or supporting-doc
+    /// aggregation (T2) when conference data is uploaded; T1 fallback when not. See
+    /// docs/phase-5-design.md.
     /// Source tier: T1
     #[serde(default)]
     pub business_purpose: ExpenseReportGeneralInformationBusinessPurpose,
-    ///  Format: <lab_name> + <Foreign Expenses | Domestic Expenses>
-    /// Source tier: T3
-    /// Infer from:  Lab affiliation + category
+    ///  Conference / event name. Phase 5: synthesized from canonical_event_name across
+    /// conference receipts + supporting docs. T1 fallback when no conference docs uploaded.
+    /// Source tier: T4
+    /// Infer from:  Synthesis: canonical_event_name from synthesis_conference_bundle
     #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub event_name: Wrapped<String>,
     ///  At least one reason must be selected. Determines required approvals.
@@ -958,30 +1016,30 @@ pub struct ExpenseReportTransactionLinesItemGroundTransportDetails {
 
 }
 
-/// Source tier: T3
+/// Source tier: T1
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemConferenceRegistrationDetailsMealsIncludedScheduleItem {
-    /// Source tier: T3
-    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
-    pub date: Wrapped<IsoDate>,
-    /// Source tier: T3
-    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
-    pub breakfast: Wrapped<bool>,
-    /// Source tier: T3
-    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
-    pub lunch: Wrapped<bool>,
-    /// Source tier: T3
-    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
-    pub dinner: Wrapped<bool>,
+    /// Source tier: T1
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub date: Option<IsoDate>,
+    /// Source tier: T1
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub breakfast: Option<bool>,
+    /// Source tier: T1
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lunch: Option<bool>,
+    /// Source tier: T1
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dinner: Option<bool>,
 
 }
 
-///  Which meals the conference provides, by day. Feeds into per diem deductions.
-/// Source tier: T3
-/// Infer from:  Conference program/schedule (e.g., 'lunch provided to all attendees')
+///  Which meals the conference provides, by day. Feeds into per diem deductions. Phase 5 v1: FA
+/// fills this manually; could become T2 from supporting_conference_doc extraction later.
+/// Source tier: T1
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemConferenceRegistrationDetailsMealsIncluded {
-    /// Source tier: T3
+    /// Source tier: T1
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub schedule: Option<Vec<ExpenseReportTransactionLinesItemConferenceRegistrationDetailsMealsIncludedScheduleItem>>,
 
@@ -991,24 +1049,41 @@ pub struct ExpenseReportTransactionLinesItemConferenceRegistrationDetailsMealsIn
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemConferenceRegistrationDetails {
     /// Source tier: T3
-    /// Infer from:  Registration receipt
+    /// Infer from:  Registration receipt header / ticket text
     #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub conference_name: Wrapped<String>,
     /// Source tier: T3
-    /// Infer from:  Registration receipt
+    /// Infer from:  Registration receipt — order confirmation / registration ID
     #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub order_number: Wrapped<String>,
     /// Source tier: T3
-    /// Infer from:  Conference program or registration confirmation
+    /// Infer from:  Registration receipt — what was purchased (e.g. 'Main Conference Only',
+    /// Infer from: 'Workshops/Tutorials', 'Full Pass + Banquet')
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
+    pub ticket_type: Wrapped<String>,
+    /// Source tier: T3
+    /// Infer from:  Registration receipt — attendee/registrant field
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
+    pub attendee_name: Wrapped<String>,
+    /// Source tier: T3
+    /// Infer from:  Registration receipt format/branding (Whova logo, ACM portal style, etc.);
+    /// Infer from: default 'other' if unrecognized
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
+    pub registration_system: Wrapped<ExpenseReportTransactionLinesItemConferenceRegistrationDetailsRegistrationSystemEnum>,
+    /// Source tier: T2
+    /// Infer from:  Reduction: min of supporting_conference_doc.scheduled_dates; T1 fallback
+    /// Infer from: when no supporting docs
     #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub conference_start_date: Wrapped<IsoDate>,
-    /// Source tier: T3
-    /// Infer from:  Conference program or registration confirmation
+    /// Source tier: T2
+    /// Infer from:  Reduction: max of supporting_conference_doc.scheduled_dates; T1 fallback
+    /// Infer from: when no supporting docs
     #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub conference_end_date: Wrapped<IsoDate>,
-    ///  Which meals the conference provides, by day. Feeds into per diem deductions.
-    /// Source tier: T3
-    /// Infer from:  Conference program/schedule (e.g., 'lunch provided to all attendees')
+    ///  Which meals the conference provides, by day. Feeds into per diem deductions. Phase 5
+    /// v1: FA fills this manually; could become T2 from supporting_conference_doc extraction
+    /// later.
+    /// Source tier: T1
     #[serde(default)]
     pub meals_included: ExpenseReportTransactionLinesItemConferenceRegistrationDetailsMealsIncluded,
 

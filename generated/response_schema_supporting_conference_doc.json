@@ -1,0 +1,218 @@
+{
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "conference_name_as_printed": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string"
+          },
+          "_meta": {
+            "type": "object",
+            "properties": {
+              "confidence": {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              "confidence_reason": {
+                "type": "string"
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "document_span",
+                        "document",
+                        "system_generated",
+                        "user_input"
+                      ]
+                    },
+                    "filename": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "page": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "quote": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "origin": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                }
+              },
+              "needs_review": {
+                "type": "boolean"
+              },
+              "flags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "confidence",
+              "evidence",
+              "needs_review",
+              "flags"
+            ]
+          }
+        },
+        "required": [
+          "value",
+          "_meta"
+        ]
+      },
+      "doc_kind": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "enum": [
+              "program",
+              "schedule",
+              "papers",
+              "other"
+            ]
+          },
+          "_meta": {
+            "type": "object",
+            "properties": {
+              "confidence": {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              "confidence_reason": {
+                "type": "string"
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "document_span",
+                        "document",
+                        "system_generated",
+                        "user_input"
+                      ]
+                    },
+                    "filename": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "page": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "quote": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "origin": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                }
+              },
+              "needs_review": {
+                "type": "boolean"
+              },
+              "flags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "confidence",
+              "evidence",
+              "needs_review",
+              "flags"
+            ]
+          }
+        },
+        "required": [
+          "value",
+          "_meta"
+        ]
+      },
+      "scheduled_dates": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "description": "ISO 8601 date (YYYY-MM-DD)"
+        }
+      },
+      "venues_mentioned": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "papers_listed": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "authors_string": {
+              "type": "string",
+              "description": "Raw author list as printed (synthesis canonicalizes per-author later)."
+            }
+          },
+          "required": [
+            "title",
+            "authors_string"
+          ]
+        }
+      },
+      "workshops_listed": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "conference_name_as_printed",
+      "doc_kind",
+      "scheduled_dates",
+      "venues_mentioned",
+      "papers_listed",
+      "workshops_listed"
+    ]
+  }
+}

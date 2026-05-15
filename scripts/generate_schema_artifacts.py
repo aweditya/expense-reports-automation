@@ -316,11 +316,14 @@ def rust_field_type(node: SchemaNode) -> str:
         #   counts) — provenance comes from the reduction step that
         #   computed them. Same `Wrapped<T>` shape, with system_generated
         #   evidence and a confidence floor inherited from inputs.
+        # - T4 leaves are LLM-synthesized across multiple per-doc JSONs
+        #   (Phase 5) — provenance is the synthesis call, citing source
+        #   document filenames. Same `Wrapped<T>` shape.
         # - T1 leaves are FA-input — provenance is "the FA typed it" and
         #   doesn't need a structured _meta block. → `Option<T>`.
         # - Leaves with no source tier (root-level / structural) fall back
         #   to the required-ness rule.
-        if node.effective_source in ("T2", "T3"):
+        if node.effective_source in ("T2", "T3", "T4"):
             return f"Wrapped<{base_type}>"
         if node.effective_source == "T1":
             return f"Option<{base_type}>"
@@ -519,6 +522,11 @@ def entry_mode(node: SchemaNode) -> str:
         return "computed_readonly"
     if node.effective_source == "T3":
         return "model_prefill_review"
+    if node.effective_source == "T4":
+        # T4 fields (Phase 5: synthesis-derived from cross-document
+        # reasoning) share the FA-review pattern of T3 — model produces,
+        # FA confirms — even though the producer is a different LLM call.
+        return "model_prefill_review"
     return "structural"
 
 
@@ -691,6 +699,10 @@ def generate_rust_validation_rules(validation_rules: dict[str, Any], schema_vers
         "    T1,",
         "    T2,",
         "    T3,",
+        "    /// Phase 5: LLM-synthesized across multiple per-doc JSONs",
+        "    /// (cross-document fuzzy reasoning that no rule could do).",
+        "    /// See docs/phase-5-design.md for the framework.",
+        "    T4,",
         "}",
         "",
         "#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]",

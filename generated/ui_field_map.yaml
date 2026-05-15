@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-generated_at_utc: '2026-05-14T06:14:49+00:00'
+generated_at_utc: '2026-05-15T17:10:33+00:00'
 sections:
 - key: general_information
   label: General Information
@@ -67,8 +67,8 @@ sections:
   - path: expense_report.general_information.business_purpose.who
     label: Who
     control: textarea
-    source: T1
-    entry_mode: user_confirmed_input
+    source: T4
+    entry_mode: model_prefill_review
     required: true
     required_expression: null
     review_priority: medium
@@ -76,8 +76,8 @@ sections:
   - path: expense_report.general_information.business_purpose.what
     label: What
     control: textarea
-    source: T1
-    entry_mode: user_confirmed_input
+    source: T4
+    entry_mode: model_prefill_review
     required: true
     required_expression: null
     review_priority: medium
@@ -85,8 +85,8 @@ sections:
   - path: expense_report.general_information.business_purpose.when
     label: When
     control: textarea
-    source: T1
-    entry_mode: user_confirmed_input
+    source: T2
+    entry_mode: computed_readonly
     required: true
     required_expression: null
     review_priority: medium
@@ -94,8 +94,8 @@ sections:
   - path: expense_report.general_information.business_purpose.where
     label: Where
     control: textarea
-    source: T1
-    entry_mode: user_confirmed_input
+    source: T2
+    entry_mode: computed_readonly
     required: true
     required_expression: null
     review_priority: medium
@@ -103,8 +103,8 @@ sections:
   - path: expense_report.general_information.business_purpose.why
     label: Why
     control: textarea
-    source: T1
-    entry_mode: user_confirmed_input
+    source: T4
+    entry_mode: model_prefill_review
     required: true
     required_expression: null
     review_priority: medium
@@ -112,8 +112,8 @@ sections:
   - path: expense_report.general_information.business_purpose.key_30char
     label: Key 30char
     control: textarea
-    source: T1
-    entry_mode: user_confirmed_input
+    source: T2
+    entry_mode: computed_readonly
     required: true
     required_expression: null
     review_priority: medium
@@ -121,7 +121,7 @@ sections:
   - path: expense_report.general_information.event_name
     label: Event Name
     control: text
-    source: T3
+    source: T4
     entry_mode: model_prefill_review
     required: true
     required_expression: null
@@ -613,11 +613,44 @@ sections:
     required_expression: null
     review_priority: medium
     allowed_values: []
+  - path: expense_report.transaction_lines[].conference_registration_details.ticket_type
+    label: Ticket Type
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].conference_registration_details.attendee_name
+    label: Attendee Name
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].conference_registration_details.registration_system
+    label: Registration System
+    control: select
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values:
+    - whova
+    - cvent
+    - acm_regonline
+    - eventbrite
+    - usenix
+    - other
   - path: expense_report.transaction_lines[].conference_registration_details.conference_start_date
     label: Conference Start Date
     control: date
-    source: T3
-    entry_mode: model_prefill_review
+    source: T2
+    entry_mode: computed_readonly
     required: true
     required_expression: null
     review_priority: high
@@ -625,8 +658,8 @@ sections:
   - path: expense_report.transaction_lines[].conference_registration_details.conference_end_date
     label: Conference End Date
     control: date
-    source: T3
-    entry_mode: model_prefill_review
+    source: T2
+    entry_mode: computed_readonly
     required: true
     required_expression: null
     review_priority: high
@@ -634,8 +667,8 @@ sections:
   - path: expense_report.transaction_lines[].conference_registration_details.meals_included.schedule[].date
     label: Date
     control: date
-    source: T3
-    entry_mode: model_prefill_review
+    source: T1
+    entry_mode: user_confirmed_input
     required: false
     required_expression: null
     review_priority: low
@@ -643,8 +676,8 @@ sections:
   - path: expense_report.transaction_lines[].conference_registration_details.meals_included.schedule[].breakfast
     label: Breakfast
     control: checkbox
-    source: T3
-    entry_mode: model_prefill_review
+    source: T1
+    entry_mode: user_confirmed_input
     required: false
     required_expression: null
     review_priority: low
@@ -652,8 +685,8 @@ sections:
   - path: expense_report.transaction_lines[].conference_registration_details.meals_included.schedule[].lunch
     label: Lunch
     control: checkbox
-    source: T3
-    entry_mode: model_prefill_review
+    source: T1
+    entry_mode: user_confirmed_input
     required: false
     required_expression: null
     review_priority: low
@@ -661,8 +694,8 @@ sections:
   - path: expense_report.transaction_lines[].conference_registration_details.meals_included.schedule[].dinner
     label: Dinner
     control: checkbox
-    source: T3
-    entry_mode: model_prefill_review
+    source: T1
+    entry_mode: user_confirmed_input
     required: false
     required_expression: null
     review_priority: low

@@ -56,6 +56,10 @@ KIND_EXPENSE_TYPES: dict[str, list[str]] = {
     "transport": ["ground_transportation_domestic", "ground_transportation_foreign"],
     "lodging": ["lodging_domestic", "lodging_foreign"],
     "airfare": ["airfare_domestic", "airfare_foreign"],
+    # Conference registration has no domestic/foreign distinction in the
+    # master enum — same enum value for both. The trip's foreignness is
+    # signaled by the receipt's currency / the trip's airfare line.
+    "conference_registration": ["conference_registration"],
 }
 
 
@@ -348,6 +352,178 @@ AIRFARE_BOOKING_FIELDS = [
 ]
 
 
+def conference_registration_details_block_schema() -> dict:
+    """Per-receipt conference-registration detail block.
+
+    5 T3 leaves (only the model-extracted ones; conference_start_date /
+    conference_end_date are T2-derived in reduction from supporting_doc
+    aggregation, and meals_included is T1 — all absent from this
+    response_schema). At the proven 5-leaf single-call ceiling.
+
+    See docs/phase-5-design.md.
+    """
+    return {
+        "type": "object",
+        "properties": {
+            "conference_name": leaf({"type": "string"}),
+            "order_number": leaf({"type": "string"}),
+            "ticket_type": leaf({"type": "string"}),
+            "attendee_name": leaf({"type": "string"}),
+            "registration_system": leaf(
+                {
+                    "type": "string",
+                    "enum": [
+                        "whova",
+                        "cvent",
+                        "acm_regonline",
+                        "eventbrite",
+                        "usenix",
+                        "other",
+                    ],
+                }
+            ),
+        },
+        "required": [
+            "conference_name",
+            "order_number",
+            "ticket_type",
+            "attendee_name",
+            "registration_system",
+        ],
+    }
+
+
+def supporting_conference_doc_response_schema() -> dict:
+    """Response schema for supporting conference docs (program, schedule,
+    papers, etc.).
+
+    NEW per-doc shape with NO `common` block — supporting docs are not
+    expenses. Just structured context. Two _meta-wrapped leaves
+    (conference_name_as_printed, doc_kind) plus four bare arrays for
+    collections (scheduled_dates, venues_mentioned, papers_listed,
+    workshops_listed). Same bare-array rationale as nightly_rates /
+    segments — no per-entry _meta to keep the output budget compact.
+
+    Each field is independently optional in practice — a paper-only PDF
+    fills papers_listed, leaves the others empty. Reduction collects
+    whatever's populated across all supporting docs in the upload.
+
+    See docs/phase-5-design.md.
+    """
+    return {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {
+                "conference_name_as_printed": leaf({"type": "string"}),
+                "doc_kind": leaf(
+                    {
+                        "type": "string",
+                        "enum": ["program", "schedule", "papers", "other"],
+                    }
+                ),
+                "scheduled_dates": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "description": "ISO 8601 date (YYYY-MM-DD)",
+                    },
+                },
+                "venues_mentioned": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
+                "papers_listed": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "title": {"type": "string"},
+                            "authors_string": {
+                                "type": "string",
+                                "description": "Raw author list as printed (synthesis canonicalizes per-author later).",
+                            },
+                        },
+                        "required": ["title", "authors_string"],
+                    },
+                },
+                "workshops_listed": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
+            },
+            "required": [
+                "conference_name_as_printed",
+                "doc_kind",
+                "scheduled_dates",
+                "venues_mentioned",
+                "papers_listed",
+                "workshops_listed",
+            ],
+        },
+    }
+
+
+def synthesis_conference_bundle_response_schema() -> dict:
+    """Response schema for the conference-bundle synthesis call (T4).
+
+    The narrowest schema in the codebase. Four _meta-wrapped fuzzy
+    leaves only — anything that could be derived from per-doc JSONs by
+    a rule (date range, venue list, total cost) is structurally absent
+    so the LLM is incapable of emitting it. Plus two provenance items
+    (source_filenames, synthesis_confidence).
+
+    See docs/phase-5-design.md.
+    """
+    return {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {
+                "canonical_event_name": leaf({"type": "string"}),
+                "participant_role": leaf(
+                    {
+                        "type": "string",
+                        "enum": ["attendee", "presenter", "organizer", "other"],
+                    }
+                ),
+                "business_purpose_what": leaf(
+                    {
+                        "type": "string",
+                        "description": "≤120 chars; one short phrase about what the trip is for.",
+                    }
+                ),
+                "business_purpose_why": leaf(
+                    {
+                        "type": "string",
+                        "description": "≤200 chars; one short sentence about the FA-relevant reason.",
+                    }
+                ),
+                "source_filenames": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Per-doc JSON filenames the synthesis read; for FA audit / workbench citation.",
+                },
+                "synthesis_confidence": leaf(
+                    {
+                        "type": "string",
+                        "enum": ["high", "medium", "low"],
+                        "description": "Synthesis self-rating; drives needs_review on lifted general_information fields.",
+                    }
+                ),
+            },
+            "required": [
+                "canonical_event_name",
+                "participant_role",
+                "business_purpose_what",
+                "business_purpose_why",
+                "source_filenames",
+                "synthesis_confidence",
+            ],
+        },
+    }
+
+
 def segments_schema() -> dict:
     """Per-flight-segment breakdown — only emitted by the airfare extractor.
 
@@ -605,6 +781,19 @@ SCHEMAS_TO_GENERATE: list[tuple[str, dict]] = [
             include_segments=True,
         ),
     ),
+    # Conference registration: 5 T3 detail leaves at the single-call
+    # ceiling. The receipt extractor produces a transaction line in the
+    # standard pattern. Supporting docs and the synthesis-bundle output
+    # use their own (non-transaction-line) schemas — written separately
+    # in main() below since they don't fit transaction_line_schema.
+    (
+        "response_schema_conference_registration.json",
+        dict(
+            expense_type_values=KIND_EXPENSE_TYPES["conference_registration"],
+            detail_block_name="conference_registration_details",
+            detail_block=conference_registration_details_block_schema(),
+        ),
+    ),
 ]
 
 
@@ -628,12 +817,34 @@ def main() -> int:
     validate_kind_expense_types(schema_yaml)
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Standard transaction-line schemas (meal, transport, lodging,
+    # airfare, conference_registration).
     for filename, kwargs in SCHEMAS_TO_GENERATE:
         line_schema = transaction_line_schema(**kwargs)
         response_schema = {"type": "array", "items": line_schema}
         out_path = OUTPUT_DIR / filename
         out_path.write_text(json.dumps(response_schema, indent=2) + "\n")
         print(f"wrote {out_path.relative_to(REPO_ROOT)}")
+
+    # Non-transaction-line schemas (Phase 5): supporting conference docs
+    # (no `common` block — they're context, not expenses) and the
+    # cross-document synthesis output.
+    for filename, factory in (
+        (
+            "response_schema_supporting_conference_doc.json",
+            supporting_conference_doc_response_schema,
+        ),
+        (
+            "response_schema_synthesis_conference_bundle.json",
+            synthesis_conference_bundle_response_schema,
+        ),
+    ):
+        response_schema = factory()
+        out_path = OUTPUT_DIR / filename
+        out_path.write_text(json.dumps(response_schema, indent=2) + "\n")
+        print(f"wrote {out_path.relative_to(REPO_ROOT)}")
+
     return 0
 
 

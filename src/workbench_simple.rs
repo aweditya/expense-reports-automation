@@ -576,16 +576,20 @@ fn render_general_information(html: &mut String, gi: &ExpenseReportGeneralInform
     field_card_optional_enum(html, "Rush Processing", &gi.rush_processing, "expense_report.general_information.rush_processing", |r: &crate::expense_report_model::ExpenseReportGeneralInformationRushProcessingEnum| r.as_str().to_owned());
     field_card_text(html, "Payment Method", &gi.payment_method, "expense_report.general_information.payment_method", |s: &String| s.clone());
 
-    // business_purpose is its own nested struct of T1 fields — render as a sub-block.
+    // business_purpose: Phase 5 re-tier moved sub-fields from T1
+    // (Option<String>) to T2/T4 (Wrapped<String>). Render via
+    // field_card_text so synthesis-derived values surface their
+    // confidence + provenance (e.g. "synthesize.conference.event_name"
+    // origin → human-readable phrase via the existing rail).
     html.push_str("</div>\n");
     html.push_str("<h3 class=\"subsection-title\">Business Purpose</h3>\n");
     html.push_str("<div class=\"field-grid\">\n");
-    field_card_optional_string(html, "Who", gi.business_purpose.who.as_deref(), "expense_report.general_information.business_purpose.who");
-    field_card_optional_string(html, "What", gi.business_purpose.what.as_deref(), "expense_report.general_information.business_purpose.what");
-    field_card_optional_string(html, "When", gi.business_purpose.when.as_deref(), "expense_report.general_information.business_purpose.when");
-    field_card_optional_string(html, "Where", gi.business_purpose.r#where.as_deref(), "expense_report.general_information.business_purpose.where");
-    field_card_optional_string(html, "Why", gi.business_purpose.why.as_deref(), "expense_report.general_information.business_purpose.why");
-    field_card_optional_string(html, "Key (30 chars)", gi.business_purpose.key_30char.as_deref(), "expense_report.general_information.business_purpose.key_30char");
+    field_card_text(html, "Who", &gi.business_purpose.who, "expense_report.general_information.business_purpose.who", |s: &String| s.clone());
+    field_card_text(html, "What", &gi.business_purpose.what, "expense_report.general_information.business_purpose.what", |s: &String| s.clone());
+    field_card_text(html, "When", &gi.business_purpose.when, "expense_report.general_information.business_purpose.when", |s: &String| s.clone());
+    field_card_text(html, "Where", &gi.business_purpose.r#where, "expense_report.general_information.business_purpose.where", |s: &String| s.clone());
+    field_card_text(html, "Why", &gi.business_purpose.why, "expense_report.general_information.business_purpose.why", |s: &String| s.clone());
+    field_card_text(html, "Key (30 chars)", &gi.business_purpose.key_30char, "expense_report.general_information.business_purpose.key_30char", |s: &String| s.clone());
     html.push_str("</div>\n");
 
     html.push_str("</section>\n");

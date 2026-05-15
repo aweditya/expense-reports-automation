@@ -83,12 +83,17 @@ fn walk_business_purpose(
     base: &str,
     issues: &mut Vec<ValidationIssue>,
 ) {
-    check_optional(&join(base, "who"), &bp.who, issues);
-    check_optional(&join(base, "what"), &bp.what, issues);
-    check_optional(&join(base, "when"), &bp.when, issues);
-    check_optional(&join(base, "where"), &bp.r#where, issues);
-    check_optional(&join(base, "why"), &bp.why, issues);
-    check_optional(&join(base, "key_30char"), &bp.key_30char, issues);
+    // Phase 5 re-tier: business_purpose sub-fields moved from T1
+    // (Option<String>) to T2/T4 (Wrapped<String>). Walk via check_wrapped
+    // so the per-field meta (synthesis confidence, derivation origin)
+    // gets surfaced. T1 fallback when no conference docs is just
+    // value=None on the Wrapped — same missing-required behavior.
+    check_wrapped(&join(base, "who"), &bp.who, issues);
+    check_wrapped(&join(base, "what"), &bp.what, issues);
+    check_wrapped(&join(base, "when"), &bp.when, issues);
+    check_wrapped(&join(base, "where"), &bp.r#where, issues);
+    check_wrapped(&join(base, "why"), &bp.why, issues);
+    check_wrapped(&join(base, "key_30char"), &bp.key_30char, issues);
 }
 
 fn walk_student_certification(
