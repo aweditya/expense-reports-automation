@@ -1,0 +1,136 @@
+/* Spotcheck side panel (Phase 6 Stage A).
+   Slides in from the right when the FA clicks a "view source" button
+   on an extracted field card. Coexists with the existing two-column
+   layout (rail + main); the panel overlays at higher z-index. */
+
+#spotcheck-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 50%;
+  min-width: 600px;
+  max-width: 900px;
+  height: 100vh;
+  background: white;
+  border-left: 1px solid #d1d5db;
+  box-shadow: -4px 0 12px rgba(0, 0, 0, 0.08);
+  transform: translateX(0);
+  transition: transform 0.25s ease-out;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#spotcheck-panel.hidden {
+  transform: translateX(100%);
+  pointer-events: none;
+}
+
+#spotcheck-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+  flex-shrink: 0;
+}
+
+#spotcheck-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0;
+  font-family: ui-monospace, monospace;
+}
+
+#spotcheck-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 0 0.5rem;
+}
+
+#spotcheck-close:hover {
+  color: #111827;
+}
+
+#spotcheck-content {
+  flex: 1;
+  overflow: auto;
+  padding: 1rem;
+  background: #f3f4f6;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+#spotcheck-canvas,
+.spotcheck-image {
+  max-width: 100%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: white;
+}
+
+.spotcheck-loading,
+.spotcheck-error {
+  color: #6b7280;
+  font-style: italic;
+  font-size: 0.875rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+.spotcheck-error {
+  color: #b91c1c;
+  font-style: normal;
+}
+
+/* Spotcheck trigger: a small ↗ icon at the top-right of any field
+   card whose evidence is a document_span with filename + page + quote.
+   Subtle by default (low-contrast gray, no border), color-up on hover.
+   The card needs position: relative for absolute positioning to
+   anchor correctly; field-card already has it (or we ensure it). */
+.field-card {
+  position: relative;
+}
+
+.spotcheck-icon {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  padding: 0.125rem 0.25rem;
+  color: #9ca3af;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 3px;
+  /* Hidden by default; revealed when the card is hovered or the icon
+     itself is keyboard-focused. Keeps the card visually clean until
+     the FA shows intent. The opacity transition makes it feel
+     deliberate rather than poppy. */
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.1s ease, background-color 0.1s ease;
+}
+
+.field-card:hover .spotcheck-icon,
+.spotcheck-icon:focus-visible {
+  opacity: 1;
+}
+
+.spotcheck-icon:hover {
+  color: #2563eb;
+  background-color: #eff6ff;
+}
+
+.spotcheck-icon:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+  color: #2563eb;
+}

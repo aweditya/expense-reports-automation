@@ -17,10 +17,18 @@ use crate::expense_report_model::{
     ExpenseReportTransactionLinesItemMealDetails, ExpenseReportTransactionSummary,
 };
 use crate::extracted_receipt::ExtractedReceipt;
-use crate::meta::{ConfidenceLevel, FieldMetadata, Wrapped};
+use crate::meta::{ConfidenceLevel, EvidenceKind, FieldMetadata, Wrapped};
 use crate::validator::{ValidationIssue, ValidationIssueKind, ValidationReport, ValidationSeverity};
 
 const CSS: &str = include_str!("workbench_simple.css");
+const SPOTCHECK_CSS: &str = include_str!("workbench_spotcheck.css");
+const SPOTCHECK_JS: &str = include_str!("workbench_spotcheck.js");
+
+/// CDN-hosted PDF.js (loaded async by the browser; spotcheck JS
+/// guards on its presence). Pinned version so the workbench's behavior
+/// doesn't drift unexpectedly when the CDN updates. Bumping requires
+/// re-eyeballing the spot-check panel on a representative document.
+const PDFJS_CDN_SCRIPT: &str = r#"<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>"#;
 
 /// Render the full HTML page. `receipts` is the per-receipt extraction
 /// list (used for the source-documents panel); `report` is the reduced
@@ -35,6 +43,7 @@ pub fn render_workbench_html(
     report: &ExpenseReport,
     receipts: &[ExtractedReceipt],
     validation: &ValidationReport,
+    source_docs_url_prefix: &str,
 ) -> String {
     let mut html = String::with_capacity(8192);
     html.push_str("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n");
@@ -42,7 +51,12 @@ pub fn render_workbench_html(
     html.push_str("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
     html.push_str("<title>Stanford Expense Report</title>\n<style>\n");
     html.push_str(CSS);
-    html.push_str("\n</style>\n</head>\n<body>\n<div class=\"shell\">\n");
+    html.push_str(SPOTCHECK_CSS);
+    html.push_str("\n</style>\n");
+    // PDF.js for the spotcheck panel. Loaded synchronously in <head> so
+    // it's ready before our spotcheck JS at the end of <body> runs.
+    html.push_str(PDFJS_CDN_SCRIPT);
+    html.push_str("\n</head>\n<body>\n<div class=\"shell\">\n");
 
     render_hero(&mut html, report, validation);
     render_summary_cards(&mut html, report);
@@ -73,9 +87,36 @@ pub fn render_workbench_html(
     // Toast for click-to-copy feedback. Hidden by default; the JS
     // handler toggles `.visible` on copy and clears it after 1.5s.
     html.push_str("<div id=\"copy-toast\" class=\"copy-toast\" role=\"status\" aria-live=\"polite\"></div>\n");
+
+    // Spotcheck side panel (Phase 6 Stage A). Hidden by default; the
+    // spotcheck JS toggles `.hidden` and populates the content area
+    // when the FA clicks a "view source" button on a field card.
+    html.push_str(
+        "<div id=\"spotcheck-panel\" class=\"hidden\" role=\"complementary\" aria-label=\"Source document spot-check\">\n\
+           <header id=\"spotcheck-header\">\n\
+             <h3 id=\"spotcheck-title\">Source</h3>\n\
+             <button id=\"spotcheck-close\" type=\"button\" aria-label=\"Close source viewer\">×</button>\n\
+           </header>\n\
+           <div id=\"spotcheck-content\"></div>\n\
+         </div>\n",
+    );
+
     // Tiny in-view-aware jump handler + click-to-copy handler — see
     // JUMP_SCRIPT below for the in-script comments.
     html.push_str(JUMP_SCRIPT);
+
+    // Spotcheck JS — runs AFTER PDF.js has loaded (which it does
+    // synchronously from <head>). The URL prefix is emitted as a
+    // global so per-card buttons only need to carry filename + page +
+    // quote, not full URLs (deployment-context-dependent).
+    html.push_str(&format!(
+        "<script>window.SOURCE_DOCS_URL_PREFIX = \"{}\";</script>\n",
+        escape(source_docs_url_prefix),
+    ));
+    html.push_str("<script>\n");
+    html.push_str(SPOTCHECK_JS);
+    html.push_str("\n</script>\n");
+
     html.push_str("</body>\n</html>\n");
     html
 }
@@ -1117,6 +1158,27 @@ fn field_card_inner(html: &mut String, label: &str, path: &str, value: &str, met
         _ => String::new(),
     };
 
+    // Spotcheck (Phase 6 Stage A): if the card has document_span
+    // evidence with filename + page + quote, render a small ↗ icon at
+    // the card's top-right that opens the source-document panel.
+    // System-generated and quote-less evidence don't qualify — nothing
+    // to spot-check.
+    let spotcheck_evidence = meta.evidence.iter().find(|e| {
+        matches!(e.kind, EvidenceKind::DocumentSpan)
+            && e.filename.is_some()
+            && e.page.is_some()
+            && e.quote.as_deref().map_or(false, |q| !q.is_empty())
+    });
+    let spotcheck_icon = match spotcheck_evidence {
+        Some(e) => format!(
+            "<button type=\"button\" class=\"spotcheck-icon\" data-filename=\"{}\" data-page=\"{}\" data-quote=\"{}\" title=\"View in source document\" aria-label=\"View in source document\">↗</button>",
+            escape(e.filename.as_deref().unwrap_or("")),
+            e.page.unwrap_or(1),
+            escape(e.quote.as_deref().unwrap_or("")),
+        ),
+        None => String::new(),
+    };
+
     // Confidence reason: shown for ALL confidence levels when present.
     // This is both FA-facing context AND a debugging/audit signal — the
     // FA (or anyone reviewing extractions) can read the model's
@@ -1140,6 +1202,7 @@ fn field_card_inner(html: &mut String, label: &str, path: &str, value: &str, met
     let copy_attrs = copy_attrs_for(value);
     html.push_str(&format!(
         "<div class=\"field-card{copy_class}\" id=\"{}\"{copy_attrs}>\
+           {}\
            <p class=\"field-label\">{}</p>\
            <p class=\"field-value\">{} <span class=\"conf-dot {}\"></span></p>\
            {}\
@@ -1147,6 +1210,7 @@ fn field_card_inner(html: &mut String, label: &str, path: &str, value: &str, met
            {}\
          </div>\n",
         field_anchor(path),
+        spotcheck_icon,
         escape(label),
         escape(value),
         conf_class,
@@ -1259,7 +1323,7 @@ mod tests {
             sample_receipt("mjsushi.jpeg", "2026-05-02", 79.59, "MJ Sushi"),
         ];
         let report = reduce_to_expense_report(&receipts);
-        let html = render_workbench_html(&report, &receipts, &ValidationReport { issues: vec![] });
+        let html = render_workbench_html(&report, &receipts, &ValidationReport { issues: vec![] }, "files/");
 
         // Smoke checks.
         assert!(html.contains("<!DOCTYPE html>"));
@@ -1276,7 +1340,7 @@ mod tests {
         let receipts = vec![sample_receipt("a.jpeg", "2026-04-19", 1.0, "X")];
         let report = reduce_to_expense_report(&receipts);
 
-        let no_issues = render_workbench_html(&report, &receipts, &ValidationReport { issues: vec![] });
+        let no_issues = render_workbench_html(&report, &receipts, &ValidationReport { issues: vec![] }, "files/");
         // No-issues path: layout is "solo" (no rail), and no <aside> is rendered.
         // Check for the actual rendered link element (class="issue-jump") rather
         // than a substring like "Jump to field" which can spuriously match in
@@ -1297,6 +1361,7 @@ mod tests {
                     message: "Required field is missing".to_owned(),
                 }],
             },
+            "files/",
         );
         // Has-issues path: layout is "split", rail is rendered, jump link present.
         assert!(with_issues.contains("layout split"));

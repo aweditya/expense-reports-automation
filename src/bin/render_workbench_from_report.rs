@@ -2,16 +2,22 @@
 //! per-receipt extraction outputs.
 //!
 //! Args (all optional, sensible defaults for local CLI use):
-//!   --report <path>         JSON for the reduced ExpenseReport.
-//!                           Default: .scratch/reduced/report.json
-//!   --receipts-dir <path>   Directory of per-receipt extraction JSONs
-//!                           (one [ExtractedReceipt] array per file).
-//!                           Default: .scratch/spike
-//!   --out <path>            Where to write the rendered HTML.
-//!                           Default: .scratch/spike/workbench.html
-//!                           (alongside the extractions, so relative
-//!                           "Download JSON" links resolve when opened
-//!                           via file://)
+//!   --report <path>             JSON for the reduced ExpenseReport.
+//!                               Default: .scratch/reduced/report.json
+//!   --receipts-dir <path>       Directory of per-receipt extraction
+//!                               JSONs (one [ExtractedReceipt] array
+//!                               per file). Default: .scratch/spike
+//!   --out <path>                Where to write the rendered HTML.
+//!                               Default: .scratch/spike/workbench.html
+//!   --source-docs-url-prefix    URL prefix the workbench uses for
+//!     <prefix>                  spot-check links. Default: "files/"
+//!                               (matches Flask's /uploads/<id>/files/
+//!                               route). For local CLI rendering the
+//!                               source documents typically live in
+//!                               receipts/ at the repo root; pass
+//!                               "../../receipts/" when rendering to
+//!                               .scratch/spike/ so spot-check links
+//!                               resolve.
 //!
 //! Validation runs via validate_typed against the reduced report.
 
@@ -24,10 +30,11 @@ use expense_report_schema::extracted_receipt::ExtractedReceipt;
 use expense_report_schema::validator_typed::validate_typed;
 use expense_report_schema::workbench_simple::render_workbench_html;
 
-fn parse_args() -> (PathBuf, PathBuf, PathBuf) {
+fn parse_args() -> (PathBuf, PathBuf, PathBuf, String) {
     let mut report = PathBuf::from(".scratch/reduced/report.json");
     let mut receipts_dir = PathBuf::from(".scratch/spike");
     let mut out = PathBuf::from(".scratch/spike/workbench.html");
+    let mut source_docs_url_prefix = String::from("files/");
 
     let args: Vec<String> = std::env::args().skip(1).collect();
     let mut iter = args.iter();
@@ -38,13 +45,19 @@ fn parse_args() -> (PathBuf, PathBuf, PathBuf) {
                 receipts_dir = PathBuf::from(iter.next().expect("--receipts-dir needs path"))
             }
             "--out" => out = PathBuf::from(iter.next().expect("--out needs path")),
+            "--source-docs-url-prefix" => {
+                source_docs_url_prefix = iter
+                    .next()
+                    .expect("--source-docs-url-prefix needs a value")
+                    .clone();
+            }
             other => {
                 eprintln!("unknown argument: {other}");
                 std::process::exit(2);
             }
         }
     }
-    (report, receipts_dir, out)
+    (report, receipts_dir, out, source_docs_url_prefix)
 }
 
 fn read_receipts(dir: &Path) -> Result<Vec<ExtractedReceipt>, String> {
@@ -72,7 +85,7 @@ fn read_receipts(dir: &Path) -> Result<Vec<ExtractedReceipt>, String> {
 }
 
 fn main() -> ExitCode {
-    let (report_path, receipts_dir, out_path) = parse_args();
+    let (report_path, receipts_dir, out_path, source_docs_url_prefix) = parse_args();
 
     let receipts = match read_receipts(&receipts_dir) {
         Ok(r) => r,
@@ -104,7 +117,7 @@ fn main() -> ExitCode {
     // walking the tree and looking up FIELD_RULES + CONDITIONAL_RULES per path.
     let validation = validate_typed(&report);
 
-    let html = render_workbench_html(&report, &receipts, &validation);
+    let html = render_workbench_html(&report, &receipts, &validation, &source_docs_url_prefix);
 
     if let Some(parent) = out_path.parent() {
         if let Err(err) = fs::create_dir_all(parent) {
