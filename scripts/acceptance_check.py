@@ -53,33 +53,9 @@ DETAIL_BLOCK_BY_KIND = {
 # or a callable taking the actual value and returning True/False.
 RECEIPTS = [
     # ─── Meals ────────────────────────────────────────────────────────────
-    # NOTE: file names here reference the older corpus (mels1.jpeg etc.);
-    # the actual receipts/ directory now has mels.jpeg + mjsushi1.jpeg +
-    # mjsushi2.jpeg. Without `--run`, this still works against the cached
-    # .scratch/spike/*.json files. With `--run`, these entries will fail
-    # on missing files until the corpus references are refreshed (separate
-    # cleanup; out of scope for the Phase 2 Stage 1b commit that added
-    # the transport entries below).
     {
-        "image": "receipts/mels1.jpeg",
-        "output": ".scratch/spike/mels1.json",
-        "extractor": "meal",
-        "expect": {
-            "common.date.value": "2026-04-19",
-            "common.line_amount_usd.value": 163.54,
-            "common.original_currency.value": None,
-            "common.original_amount.value": None,
-            "common.expense_type.value": "business_meal",
-            "meal_details.venue_name.value": lambda v: v
-            and "MJ Sushi" in v,
-            "meal_details.has_alcohol_on_receipt.value": True,
-            "extras.printed_currency.value": "USD",
-            "extras.merchant_address.value": lambda v: v and "Palo Alto" in v,
-        },
-    },
-    {
-        "image": "receipts/mels2.jpeg",
-        "output": ".scratch/spike/mels2.json",
+        "image": "receipts/meal_2026-04-04_original-mels-san-leandro.jpeg",
+        "output": ".scratch/spike/meal-original-mels-san-leandro.json",
         "extractor": "meal",
         "expect": {
             "common.date.value": "2026-04-04",
@@ -95,25 +71,23 @@ RECEIPTS = [
         },
     },
     {
-        "image": "receipts/tamarine.png",
-        "output": ".scratch/spike/tamarine.json",
+        "image": "receipts/meal_2026-04-19_mj-sushi-palo-alto.jpeg",
+        "output": ".scratch/spike/meal-mj-sushi-2026-04-19.json",
         "extractor": "meal",
         "expect": {
-            "common.date.value": "2026-03-05",
-            "common.line_amount_usd.value": 387.12,
+            "common.date.value": "2026-04-19",
+            "common.line_amount_usd.value": 163.54,
             "common.original_currency.value": None,
             "common.original_amount.value": None,
             "common.expense_type.value": "business_meal",
-            "meal_details.venue_name.value": lambda v: v
-            and "Tamarine" in v,
+            "meal_details.venue_name.value": lambda v: v and "MJ Sushi" in v,
             "meal_details.has_alcohol_on_receipt.value": True,
             "extras.printed_currency.value": "USD",
-            "extras.merchant_address.value": lambda v: v and "Palo Alto" in v,
         },
     },
     {
-        "image": "receipts/mjsushi.jpeg",
-        "output": ".scratch/spike/mjsushi.json",
+        "image": "receipts/meal_2026-05-02_mj-sushi-palo-alto.jpeg",
+        "output": ".scratch/spike/meal-mj-sushi-2026-05-02.json",
         "extractor": "meal",
         "expect": {
             "common.date.value": "2026-05-02",
@@ -127,6 +101,39 @@ RECEIPTS = [
             "extras.merchant_address.value": lambda v: v and "Palo Alto" in v,
         },
     },
+    {
+        "image": "receipts/meal_2026-03-05_tamarine-palo-alto.png",
+        "output": ".scratch/spike/meal-tamarine-palo-alto.json",
+        "extractor": "meal",
+        "expect": {
+            "common.date.value": "2026-03-05",
+            "common.line_amount_usd.value": 387.12,
+            "common.original_currency.value": None,
+            "common.original_amount.value": None,
+            "common.expense_type.value": "business_meal",
+            "meal_details.venue_name.value": lambda v: v and "Tamarine" in v,
+            "meal_details.has_alcohol_on_receipt.value": True,
+            "extras.printed_currency.value": "USD",
+            "extras.merchant_address.value": lambda v: v and "Palo Alto" in v,
+        },
+    },
+    {
+        "image": "receipts/meal_2026-05-10_palo-alto-creamery.jpg",
+        "output": ".scratch/spike/meal-palo-alto-creamery.json",
+        "extractor": "meal",
+        "expect": {
+            "common.date.value": "2026-05-10",
+            "common.line_amount_usd.value": 163.50,
+            "common.original_currency.value": None,
+            "common.original_amount.value": None,
+            "common.expense_type.value": "business_meal",
+            "meal_details.venue_name.value": lambda v: v
+            and "Palo Alto Creamery" in v,
+            "meal_details.has_alcohol_on_receipt.value": False,
+            "extras.printed_currency.value": "USD",
+            "extras.merchant_address.value": lambda v: v and "Palo Alto" in v,
+        },
+    },
 
     # ─── Ground transport (Phase 2 Stage 1b) ──────────────────────────────
     # Three Lyft "Ride Report" PDFs and three Uber receipt PDFs. All
@@ -136,8 +143,8 @@ RECEIPTS = [
     # Ave" vs "101 California Ave, Palo Alto"); literals are used
     # where the receipt prints an unambiguous value.
     {
-        "image": "receipts/lyft1.pdf",
-        "output": ".scratch/spike/lyft1.json",
+        "image": "receipts/transport_2026-04-12_lyft-oxford-to-bowdoin.pdf",
+        "output": ".scratch/spike/transport-lyft-oxford-to-bowdoin.json",
         "extractor": "transport",
         "expect": {
             "common.date.value": "2026-04-12",
@@ -153,8 +160,8 @@ RECEIPTS = [
         },
     },
     {
-        "image": "receipts/lyft2.pdf",
-        "output": ".scratch/spike/lyft2.json",
+        "image": "receipts/transport_2026-04-23_lyft-campus-to-california.pdf",
+        "output": ".scratch/spike/transport-lyft-campus-to-california.json",
         "extractor": "transport",
         "expect": {
             "common.date.value": "2026-04-23",
@@ -170,8 +177,8 @@ RECEIPTS = [
         },
     },
     {
-        "image": "receipts/lyft3.pdf",
-        "output": ".scratch/spike/lyft3.json",
+        "image": "receipts/transport_2026-03-29_lyft-sfo-to-stanford.pdf",
+        "output": ".scratch/spike/transport-lyft-sfo-to-stanford.json",
         "extractor": "transport",
         "expect": {
             "common.date.value": "2026-03-29",
@@ -187,8 +194,8 @@ RECEIPTS = [
         },
     },
     {
-        "image": "receipts/uber1.pdf",
-        "output": ".scratch/spike/uber1.json",
+        "image": "receipts/transport_2026-04-20_uber-jane-stanford-to-campus.pdf",
+        "output": ".scratch/spike/transport-uber-jane-stanford-to-campus.json",
         "extractor": "transport",
         "expect": {
             "common.date.value": "2026-04-20",
@@ -204,8 +211,8 @@ RECEIPTS = [
         },
     },
     {
-        "image": "receipts/uber2.pdf",
-        "output": ".scratch/spike/uber2.json",
+        "image": "receipts/transport_2026-05-01_uber-stanford-to-sf-tennessee.pdf",
+        "output": ".scratch/spike/transport-uber-stanford-to-sf-tennessee.json",
         "extractor": "transport",
         "expect": {
             "common.date.value": "2026-05-01",
@@ -221,8 +228,8 @@ RECEIPTS = [
         },
     },
     {
-        "image": "receipts/uber3.pdf",
-        "output": ".scratch/spike/uber3.json",
+        "image": "receipts/transport_2026-03-29_uber-getty-to-broadway.pdf",
+        "output": ".scratch/spike/transport-uber-getty-to-broadway.json",
         "extractor": "transport",
         "expect": {
             "common.date.value": "2026-03-29",
@@ -245,8 +252,8 @@ RECEIPTS = [
     # for hotel name + location since the model has formatting freedom;
     # literals for dates and totals (verified by direct PDF read).
     {
-        "image": "receipts/Hyatt-Jan13-14.pdf",
-        "output": ".scratch/spike/hyatt-jan13-14.json",
+        "image": "receipts/lodging_2024-01-13_hyatt-place-las-vegas-jan-13-14.pdf",
+        "output": ".scratch/spike/lodging-hyatt-las-vegas-jan-13-14.json",
         "extractor": "lodging",
         "expect": {
             "common.line_amount_usd.value": 200.68,
@@ -267,8 +274,8 @@ RECEIPTS = [
         },
     },
     {
-        "image": "receipts/Sheraton-Novi-14-21.pdf",
-        "output": ".scratch/spike/sheraton-novi-14-21.json",
+        "image": "receipts/lodging_2024-01-14_sheraton-novi-folio.pdf",
+        "output": ".scratch/spike/lodging-sheraton-novi-folio.json",
         "extractor": "lodging",
         "expect": {
             "common.line_amount_usd.value": 912.58,
@@ -289,8 +296,8 @@ RECEIPTS = [
         },
     },
     {
-        "image": "receipts/Hilton-3185261353-SFO3-5-Jan.pdf",
-        "output": ".scratch/spike/hilton-sfo-3-5-jan.json",
+        "image": "receipts/lodging_2025-01-03_hilton-garden-inn-palo-alto-confirmation.pdf",
+        "output": ".scratch/spike/lodging-hilton-garden-inn-palo-alto-confirmation.json",
         "extractor": "lodging",
         "expect": {
             "common.expense_type.value": "lodging_domestic",
@@ -303,8 +310,8 @@ RECEIPTS = [
         },
     },
     {
-        "image": "receipts/Homewood-Suites-19-22-Sep.pdf",
-        "output": ".scratch/spike/homewood-19-22-sep.json",
+        "image": "receipts/lodging_2025-09-19_homewood-suites-palo-alto-confirmation.pdf",
+        "output": ".scratch/spike/lodging-homewood-suites-palo-alto-confirmation.json",
         "extractor": "lodging",
         "expect": {
             "common.expense_type.value": "lodging_domestic",
