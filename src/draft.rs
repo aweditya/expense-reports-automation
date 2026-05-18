@@ -24,7 +24,10 @@ pub enum EvidenceKind {
     UserInput,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// Eq is intentionally not derived from here down: `bboxes` carries `f64`,
+// which only implements `PartialEq`. Nothing in the pipeline uses these
+// as `HashMap`/`BTreeMap` keys, so PartialEq alone is sufficient.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EvidenceReference {
     pub kind: EvidenceKind,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -37,9 +40,18 @@ pub struct EvidenceReference {
     pub quote: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub origin: Option<String>,
+    /// Bounding boxes of the quote in the source document, populated
+    /// post-extraction by the OCR grounding pass (Document AI). Each
+    /// rect is `[x0, y0, x1, y1]` normalized to 0..1 with top-left
+    /// origin. May contain multiple rects when the quote appears more
+    /// than once on the page (e.g. a total printed in both summary
+    /// and line item). Absent for non-`DocumentSpan` evidence and for
+    /// cached extractions produced before the OCR pass landed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bboxes: Option<Vec<[f64; 4]>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FieldMetadata {
     pub confidence: ConfidenceLevel,
     pub evidence: Vec<EvidenceReference>,
@@ -54,7 +66,7 @@ pub struct FieldMetadata {
     pub confidence_reason: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DraftReport {
     pub report: ReportValue,
     pub metadata: BTreeMap<String, FieldMetadata>,
@@ -314,6 +326,7 @@ fn legacy_evidence_reference(
             page: None,
             quote: None,
             origin: Some(source_document),
+            bboxes: None,
         },
         EvidenceKind::UserInput => EvidenceReference {
             kind,
@@ -322,6 +335,7 @@ fn legacy_evidence_reference(
             page: None,
             quote: None,
             origin: Some(source_document),
+            bboxes: None,
         },
         EvidenceKind::Document => EvidenceReference {
             kind,
@@ -330,6 +344,7 @@ fn legacy_evidence_reference(
             page: None,
             quote: None,
             origin: None,
+            bboxes: None,
         },
         EvidenceKind::DocumentSpan => unreachable!(),
     })
@@ -374,6 +389,13 @@ fn parse_evidence_reference(
             page,
             quote,
             origin,
+            // The legacy `ReportValue`-tree parser does not currently
+            // parse bboxes. The production flow deserializes via serde
+            // (ExtractedReceipt -> EvidenceReference) and bboxes go
+            // through that path. If this parser ever gets wired up to
+            // bboxes-bearing JSON, the unhandled-key check above will
+            // fail loudly — fix here when that happens.
+            bboxes: None,
         },
         path,
     )

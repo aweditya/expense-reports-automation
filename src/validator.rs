@@ -813,6 +813,7 @@ mod tests {
             page: None,
             quote: None,
             origin: None,
+            bboxes: None,
         }
     }
 
@@ -824,6 +825,7 @@ mod tests {
             page: None,
             quote: None,
             origin: Some(origin.to_owned()),
+            bboxes: None,
         }
     }
 
@@ -835,6 +837,7 @@ mod tests {
             page: None,
             quote: None,
             origin: Some(origin.to_owned()),
+            bboxes: None,
         }
     }
 

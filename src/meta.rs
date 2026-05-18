@@ -25,7 +25,10 @@ pub use crate::draft::{ConfidenceLevel, EvidenceKind, EvidenceReference, FieldMe
 /// fixtures, hand-edited values) still deserializes — defaults yield a
 /// `FieldMetadata` with `Low` confidence, no evidence, `needs_review: false`,
 /// no flags.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// Eq dropped (transitively, via FieldMetadata -> EvidenceReference) because
+// `EvidenceReference::bboxes` carries `f64`. PartialEq is sufficient — see
+// note on `EvidenceReference` in src/draft.rs.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Wrapped<T> {
     pub value: Option<T>,
     #[serde(default, rename = "_meta")]
@@ -106,6 +109,7 @@ mod tests {
                     page: Some(1),
                     quote: Some("05/02/26".to_owned()),
                     origin: None,
+                    bboxes: None,
                 }],
                 needs_review: false,
                 flags: Vec::new(),

@@ -821,15 +821,22 @@ _meta_convention:
         page:
           type: number
           required: false
-        bbox:
-          type: object
+        bboxes:
+          type: array
           required: false
-          description: "Optional bounding box when the OCR engine reports geometry."
-          fields:
-            left:   { type: number }
-            top:    { type: number }
-            width:  { type: number }
-            height: { type: number }
+          description: |
+            Bounding boxes of the quote in the source document, populated
+            post-extraction by the OCR grounding pass (Document AI). Each
+            item is `[x0, y0, x1, y1]` normalized to 0..1 with top-left
+            origin. Multiple items when the quote appears more than once
+            on the page (e.g. a total printed in both summary and line
+            item). Only meaningful when `kind == document_span` and the
+            document was OCR'd. The Gemini extractor never produces this
+            field; it is added by `scripts/evidence_bbox.py` after the
+            Gemini call returns.
+          items:
+            type: array
+            description: "[x0, y0, x1, y1] — normalized 0..1, top-left origin"
         quote:
           type: string
           required: false
