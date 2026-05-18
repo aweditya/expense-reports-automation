@@ -712,13 +712,13 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
     html.push_str("<div class=\"field-grid\">\n");
     let path_prefix = format!("expense_report.transaction_lines[{idx}].common");
     field_card_text(html, "Date", &line.common.date, &format!("{path_prefix}.date"), |d| d.0.clone());
-    field_card_optional_money(html, "Amount (USD)", line.common.line_amount_usd.value, &format!("{path_prefix}.line_amount_usd"));
+    field_card_optional_money(html, "Amount (USD)", &line.common.line_amount_usd, &format!("{path_prefix}.line_amount_usd"));
     field_card_text_opt(html, "Original Currency", &line.common.original_currency, &format!("{path_prefix}.original_currency"), |s: &String| s.clone());
     field_card_original_amount(
         html,
-        line.common.original_amount.value,
+        &line.common.original_amount,
         line.common.original_currency.value.as_deref(),
-        line.common.line_amount_usd.value,
+        &line.common.line_amount_usd,
         &format!("{path_prefix}.original_amount"),
     );
     // Exchange rate is USD per unit of foreign currency (e.g. 0.012 for
@@ -793,8 +793,8 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
 
 fn render_meal_details(html: &mut String, meal: &ExpenseReportTransactionLinesItemMealDetails, path: &str) {
     field_card_text(html, "Venue", &meal.venue_name, &format!("{path}.venue_name"), |s: &String| s.clone());
-    field_card_optional_money(html, "Tip", meal.tip_amount.value, &format!("{path}.tip_amount"));
-    field_card_optional_money(html, "Alcohol", meal.alcohol_amount.value, &format!("{path}.alcohol_amount"));
+    field_card_optional_money(html, "Tip", &meal.tip_amount, &format!("{path}.tip_amount"));
+    field_card_optional_money(html, "Alcohol", &meal.alcohol_amount, &format!("{path}.alcohol_amount"));
     field_card_text(html, "Has Alcohol", &meal.has_alcohol_on_receipt, &format!("{path}.has_alcohol_on_receipt"), |b| if *b { "yes".into() } else { "no".into() });
 }
 
@@ -1056,9 +1056,14 @@ fn field_card_optional_string(html: &mut String, label: &str, value: Option<&str
     field_card_bare(html, label, path, value.unwrap_or("—"));
 }
 
-fn field_card_optional_money(html: &mut String, label: &str, value: Option<f64>, path: &str) {
-    let v = value.map(|t| format!("${:.2}", t));
-    field_card_bare(html, label, path, v.as_deref().unwrap_or("—"));
+/// Money field with `$X.XX` formatting that ALSO renders its evidence
+/// (confidence dot, evidence quote, reason, spotcheck icon) — same
+/// treatment every other `field_card_text` field gets. Previously used
+/// `field_card_bare` which dropped metadata, leaving Amount/Tip/Alcohol
+/// cards as label+value only (Phase 6 robustness audit, B-r2).
+fn field_card_optional_money(html: &mut String, label: &str, wrapped: &Wrapped<f64>, path: &str) {
+    let v = wrapped.value.map(|t| format!("${:.2}", t));
+    field_card_inner(html, label, path, v.as_deref().unwrap_or("—"), &wrapped.meta);
 }
 
 /// Format an amount with the right currency symbol (₹ for INR, € for EUR,
@@ -1089,23 +1094,31 @@ fn format_money_with_currency(amount: f64, currency: Option<&str>) -> String {
 /// without the fallback the card looks like an unfilled FA-required field).
 fn field_card_original_amount(
     html: &mut String,
-    original_amount: Option<f64>,
+    original_amount: &Wrapped<f64>,
     original_currency: Option<&str>,
-    line_amount_usd: Option<f64>,
+    line_amount_usd: &Wrapped<f64>,
     path: &str,
 ) {
     // Prefer the model's original_amount when set (foreign receipts);
     // fall back to line_amount_usd (domestic USD where original is
     // semantically "the printed USD total"). Currency follows: explicit
     // original_currency on foreign, implicit USD on the fallback.
-    let (value, currency): (Option<f64>, Option<&str>) = match original_amount {
-        Some(a) => (Some(a), original_currency),
-        None => (line_amount_usd, Some("USD")),
-    };
+    //
+    // Metadata follows the SAME branch as the value — so the spotcheck
+    // icon points at the field whose value we're actually displaying.
+    // Foreign receipts: cite the printed foreign-currency total.
+    // Domestic receipts: cite the printed USD total (line_amount_usd's
+    // evidence). Phase 6 robustness audit (B-r2) — previously bare,
+    // dropped metadata entirely.
+    let (value, currency, meta): (Option<f64>, Option<&str>, &FieldMetadata) =
+        match original_amount.value {
+            Some(a) => (Some(a), original_currency, &original_amount.meta),
+            None => (line_amount_usd.value, Some("USD"), &line_amount_usd.meta),
+        };
     let display = value
         .map(|a| format_money_with_currency(a, currency))
         .unwrap_or_else(|| "—".to_owned());
-    field_card_bare(html, "Original Amount", path, &display);
+    field_card_inner(html, "Original Amount", path, &display, meta);
 }
 
 /// Map a derivation origin code (set by reduce.rs when it builds derived
