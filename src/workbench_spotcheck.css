@@ -76,6 +76,30 @@
   background: white;
 }
 
+/* Container wrapping the canvas (PDF) or image. position: relative so
+   absolutely-positioned bbox overlays anchor against it. inline-block
+   so the container sizes to the displayed canvas/image — overlays use
+   percentage positioning, so this is what makes them track when
+   max-width shrinks the canvas/image to fit the panel. */
+.spotcheck-page-container {
+  position: relative;
+  display: inline-block;
+}
+
+/* Phase 6 Stage B: bbox halo. One div per rect in the field's
+   document_span evidence — bboxes are normalized 0..1 (top-left),
+   populated by Document AI OCR + local quote matching at extract
+   time. Amber translucent fill plus a dark amber halo so the marker
+   reads at small box sizes (a single OCR'd word) too. pointer-events
+   off so the FA can still interact with the page underneath. */
+.spotcheck-bbox-overlay {
+  position: absolute;
+  background-color: rgba(250, 204, 21, 0.35);
+  box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.85);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
 .spotcheck-loading,
 .spotcheck-error {
   color: #6b7280;

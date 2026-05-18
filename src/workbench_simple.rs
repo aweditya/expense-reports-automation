@@ -1170,12 +1170,37 @@ fn field_card_inner(html: &mut String, label: &str, path: &str, value: &str, met
             && e.quote.as_deref().map_or(false, |q| !q.is_empty())
     });
     let spotcheck_icon = match spotcheck_evidence {
-        Some(e) => format!(
-            "<button type=\"button\" class=\"spotcheck-icon\" data-filename=\"{}\" data-page=\"{}\" data-quote=\"{}\" title=\"View in source document\" aria-label=\"View in source document\">↗</button>",
-            escape(e.filename.as_deref().unwrap_or("")),
-            e.page.unwrap_or(1),
-            escape(e.quote.as_deref().unwrap_or("")),
-        ),
+        Some(e) => {
+            // Phase 6 Stage B: if Document AI grounding produced bboxes
+            // for this evidence quote, emit them as a JSON-encoded
+            // data-bboxes attribute. The JS reads it and draws an amber
+            // halo at the right spot. Absent attribute => no halo (cached
+            // extractions pre-Stage-B, or quotes Document AI couldn't
+            // match against the OCR tokens — falls back to "open the
+            // source, no halo" gracefully).
+            let bboxes_attr = match e.bboxes.as_ref().filter(|b| !b.is_empty()) {
+                Some(bboxes) => {
+                    let parts: Vec<String> = bboxes
+                        .iter()
+                        .map(|b| {
+                            format!(
+                                "[{:.6},{:.6},{:.6},{:.6}]",
+                                b[0], b[1], b[2], b[3]
+                            )
+                        })
+                        .collect();
+                    format!(" data-bboxes=\"[{}]\"", parts.join(","))
+                }
+                None => String::new(),
+            };
+            format!(
+                "<button type=\"button\" class=\"spotcheck-icon\" data-filename=\"{}\" data-page=\"{}\" data-quote=\"{}\"{} title=\"View in source document\" aria-label=\"View in source document\">↗</button>",
+                escape(e.filename.as_deref().unwrap_or("")),
+                e.page.unwrap_or(1),
+                escape(e.quote.as_deref().unwrap_or("")),
+                bboxes_attr,
+            )
+        }
         None => String::new(),
     };
 
