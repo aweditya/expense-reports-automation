@@ -268,7 +268,7 @@ graph LR
     PyExt --> Scratch
     RustBin --> Scratch
     PyExt -->|ADC + grpc| Vertex
-    PyExt -->|ADC + grpc<br/>(via evidence_bbox.py)| DocAI3
+    PyExt -->|ADC + grpc<br/>via evidence_bbox.py| DocAI3
 
     GH -->|git push main| Trigger
     Trigger --> BuildSteps
