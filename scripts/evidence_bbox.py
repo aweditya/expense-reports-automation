@@ -18,6 +18,7 @@ input file. Use scripts/retrofit_bboxes.py for in-place batch updates.
 
 import json
 import pathlib
+import re
 import sys
 
 from google.cloud import documentai
@@ -82,7 +83,31 @@ def _layout_bbox(layout):
     return [min(xs), min(ys), max(xs), max(ys)]
 
 
+# Currency symbols and ISO codes that Gemini's quote and DocAI's tokens
+# disagree about all the time. Stripping them on BOTH sides means
+# "$163.54" (one DocAI token) and "$ 163.54" (two DocAI tokens) and the
+# quote "$163.54" all collapse to the same searchable "163.54".
+_CURRENCY = re.compile(
+    r"[\$₹€£¥]"  # common currency symbols
+    r"|\b(?:USD|EUR|GBP|JPY|CNY|INR|SGD|AUD|CAD|HKD|CHF|NZD|SEK|NOK|DKK|MXN|ZAR|KRW|THB|MYR|IDR|PHP|VND|BRL|ARS|TWD|AED|SAR)\b"
+)
+# Punctuation that Gemini's quotes paraphrase but DocAI tokens split on
+# (or vice versa). Preserve `.` (decimals like 163.54 — stripping would
+# turn it into 163 54) and `@` (emails). Strip hyphens (dates like
+# "20-JAN-24" vs "20 JAN 24"; hyphenated codes like "PIT-Pittsburgh"),
+# slashes (dates like "03/05/2026"; names like "SRIRAM/ADITYA"), and
+# percent (tip percentages like "20.00%" that DocAI sometimes splits
+# off as its own token). Whitespace collapse handled separately.
+_PUNCT = re.compile(r"[:;,()\[\]{}<>'\"!?\\|*+=&^~`\-/%]")
+
+
 def _norm(s: str) -> str:
+    """Whitespace-collapse + lowercase + strip currency markers + strip
+    common punctuation. Applied identically on both sides (the quote
+    being searched AND the token text being searched against) so any
+    tokenization disagreement between Gemini and DocAI cancels out."""
+    s = _CURRENCY.sub("", s)
+    s = _PUNCT.sub(" ", s)  # replace with space, not empty — preserve word boundaries
     return " ".join(s.split()).lower()
 
 
