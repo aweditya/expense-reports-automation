@@ -20,6 +20,29 @@ Keep entries short. The point is recall, not narrative.
 
 ## Entries
 
+### 2026-05-18 — local corpus filenames were lying about the content they referenced
+
+**What happened:** During the corpus rename task (driven by the Phase 6 Stage B spot-check halo work needing files to actually exist where the cached JSONs pointed), a background agent inspecting each receipt for date/vendor/amount discovered that several files had names that didn't match their content:
+- `mels1.jpeg` was actually MJ Sushi, not Mel's
+- `Hotel-McNamara_2023_01_14.pdf` was an Uber ride, not a hotel folio
+- `Hotel-Northville_2023_01_11.pdf` was also an Uber ride
+- 7 more "Hotel-Warren / ride_report_* / Uber-*" files in the same wrong-category situation
+- `invoice_..._d2b7ef23.pdf` was a Kiwi.com Spirit Airlines ticket, not a generic invoice
+
+The wrong filenames had propagated into `scripts/acceptance_check.py` expectations — the test harness was asserting "lodging" facts against files that were transport. The local corpus had been lying about itself for some time, undetected.
+
+**Why it was wrong:** This is the same shape of lesson as the 2026-05-14 "rules/prompts are pre-FA-validation guesses" entry, but extended one level out: **filenames are pre-FA-validation guesses too**. When a file gets dropped into the corpus with a hasty name, the name accretes into test harnesses, comments, and expectations — and nothing in the pipeline catches the mismatch because the pipeline only knows what the filename says, not what the content is.
+
+**Rule going forward:** When auditing or onboarding new receipts, treat the filename as a hypothesis to verify, not a fact. The cheap verification is to open the file (or run the extractor) and confirm category + date + vendor match the name before wiring the file into test expectations.
+
+### 2026-05-18 — "use git mv" rule didn't account for gitignored directories
+
+**What happened:** Instructed the background agent to use `git mv` for every rename. `receipts/` is in `.gitignore` (line 12) because the actual receipt files are private FA data not committed to the repo. `git mv` failed with "fatal: not under version control" because there was nothing for git to track. Agent correctly fell back to plain `mv` after running `git ls-files receipts/` to confirm zero tracked paths, but it was a constraint the rule didn't anticipate.
+
+**Why it was wrong:** Not a real mistake, more a rule-precision gap. The intent of "git mv" is to preserve history when renaming tracked files. When the files are gitignored, there is no history to preserve — `mv` is correct and `git mv` is structurally impossible. Worth being explicit so future agents don't waste cycles trying to make `git mv` work in this directory.
+
+**Rule going forward:** "Use `git mv` for renames" implicitly means "for tracked files." For gitignored paths, plain `mv` is the right tool; verify nothing is tracked with `git ls-files <path>` before reaching for `mv`.
+
 ### 2026-05-16 — used a Python heredoc for the Document AI smoke test instead of a real script
 
 **What happened:** Verified Document AI auth + API shape by piping a multi-line `python3 <<'PY' ... PY` heredoc into Bash. The smoke worked (got tokens + bboxes back from an Air India PDF) but the test isn't reproducible without retyping the heredoc, and it inherently violates rule #4 ("if it's a script, it lives in `scripts/`").
