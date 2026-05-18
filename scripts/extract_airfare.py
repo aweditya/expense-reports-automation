@@ -52,6 +52,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from evidence_bbox import populate_bboxes
 from extractor_lib import (
     GeminiCallFailed,
     detect_mime_type,
@@ -409,11 +410,13 @@ def main() -> int:
             return 1
 
     merged = merge_airfare_lines(result_main, result_aux, result_extras)
-    # Inject source_filename on the merged line — same as run_extraction
-    # does for single-call kinds.
+    # Inject source_filename + populate bbox grounding via Document AI
+    # — same pattern as run_extraction does for single-call kinds.
+    # bbox failure is non-fatal (helper logs and leaves record unchanged).
     for entry in merged:
         if isinstance(entry, dict):
             entry["source_filename"] = args.image.name
+            populate_bboxes(entry, args.image)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(merged, indent=2, ensure_ascii=False))

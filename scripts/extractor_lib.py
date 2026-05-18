@@ -39,6 +39,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from evidence_bbox import populate_bboxes
+
 
 DEFAULT_MODEL = "gemini-3-flash-preview"
 DEFAULT_LOCATION = "global"
@@ -251,12 +253,19 @@ def run_extraction(
     # Inject source_filename — system context, not extracted by Gemini.
     # Reduction reads this to populate ExpenseReport.transaction_lines[]
     # .common.source_document.filename.
+    #
+    # Also populate _meta.evidence[].bboxes via Document AI OCR + local
+    # quote matching. Failure is non-fatal: the helper logs to stderr
+    # and leaves the record unchanged, so the workbench falls back to
+    # "no halo" (same as pre-Stage-B behavior).
     if isinstance(parsed, list):
         for entry in parsed:
             if isinstance(entry, dict):
                 entry["source_filename"] = args.image.name
+                populate_bboxes(entry, args.image)
     elif isinstance(parsed, dict):
         parsed["source_filename"] = args.image.name
+        populate_bboxes(parsed, args.image)
 
     args.output.write_text(json.dumps(parsed, indent=2, ensure_ascii=False))
     print(f"wrote {args.output}")
