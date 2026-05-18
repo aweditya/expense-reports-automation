@@ -20,6 +20,14 @@ Keep entries short. The point is recall, not narrative.
 
 ## Entries
 
+### 2026-05-18 — added a runtime dep to local .venv but forgot deploy/requirements.txt
+
+**What happened:** During Phase 6 Stage B.0 I installed `google-cloud-documentai` into `.venv` with a single `pip install` so I could call Document AI from the helper scripts. The helper and the extractors imported it cleanly locally, cargo tests passed, the local workbench eyeballed correctly, and I pushed to main with high confidence. Cloud Build's deploy succeeded — its Python test stage doesn't actually import the extractors (it only checks `cloudbuild.yaml` shape). On the first real upload to the deployed app, the extractor crashed with `ModuleNotFoundError: No module named 'google.cloud'` because `deploy/requirements.txt` never gained the line.
+
+**Why it was wrong:** This is **the exact pattern `docs/deploy-cheatsheet.md` already warns about** ("The local `.venv/` accumulates packages that the Cloud Build container doesn't have. A green local Python suite isn't proof Cloud Build will pass; the deploy gate is the proof."). I read that warning while writing the cheatsheet myself and still walked straight into it. The deploy gate proves Docker BUILDS, not that the container RUNS — runtime imports are only validated when something exercises them, and our test suite doesn't.
+
+**Rule going forward:** Any time `pip install X` is run for the project (not for a one-off spike), the immediate next action is `grep X deploy/requirements.txt || echo "ADD ME"`. Treat the requirements file as a co-edit with `.venv`, not a separate concern. Bonus hardening for later: add an import-smoke test to the Python suite that imports every `scripts/extract_*.py` and `scripts/extractor_lib.py` — would have caught this at the Cloud Build stage instead of at runtime.
+
 ### 2026-05-18 — local corpus filenames were lying about the content they referenced
 
 **What happened:** During the corpus rename task (driven by the Phase 6 Stage B spot-check halo work needing files to actually exist where the cached JSONs pointed), a background agent inspecting each receipt for date/vendor/amount discovered that several files had names that didn't match their content:

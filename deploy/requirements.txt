@@ -1,4 +1,5 @@
 flask
 gunicorn
 google-genai
+google-cloud-documentai
 pyyaml
