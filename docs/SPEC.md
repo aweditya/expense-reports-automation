@@ -22,7 +22,7 @@ If a piece of code touches two layers' worth of concern, it is wrong.
 
 | # | Layer | Implemented in | Owns |
 |---|---|---|---|
-| 1 | **Extraction** | `scripts/extract_<kind>.py` (one per expense kind) | One Gemini call per uploaded document — receipt image → typed JSON — for most kinds (meal, transport). Kinds whose detail block exceeds Vertex's schema property-count ceiling (lodging today; > ~5 `_meta`-wrapped T2/T3 leaves) make **two parallel calls** with their schema split across them; the per-kind script merges the outputs back into the same per-doc JSON shape. The dispatcher in `local_app_simple.py` picks the script based on the FA's per-file kind choice in the upload form. See §7 for when to use the multi-call pattern. |
+| 1 | **Extraction** | `scripts/extract_<kind>.py` (one per expense kind) | One Gemini call per uploaded document — receipt image → typed JSON — for most kinds (meal, transport). Kinds whose detail block exceeds Vertex's schema property-count ceiling (lodging today; > ~5 `_meta`-wrapped T2/T3 leaves) make **two parallel calls** with their schema split across them; the per-kind script merges the outputs back into the same per-doc JSON shape. The dispatcher in `local_app_simple.py` picks the script based on the FA's per-file kind choice in the upload form. See §7 for when to use the multi-call pattern. **Each extractor also makes one Document AI OCR call per document via `scripts/evidence_bbox.py::populate_bboxes`** — this matches each `document_span` evidence quote against OCR'd tokens and writes the union bbox into `_meta.evidence[].bboxes`. The bboxes are pure metadata the workbench reads at render time to draw a spot-check halo on the source receipt; OCR failure is non-fatal (record returned unchanged → workbench falls back to "no halo"). |
 | 2 | **Derivation** | (inside extraction) | Fields a single document can yield from its own contents. No cross-document signal. |
 | 3 | **Reduction** | `src/reduce.rs` | Combines per-document JSONs into one `ExpenseReport`. Aggregations like `total_usd`, `transaction_date`, derived `category` + confidence. |
 | 4 | **Validation** | `src/validator_typed.rs` (+ `src/validator.rs`) | Checks the assembled `ExpenseReport` against business rules. Produces `ValidationReport` (issues only — never mutates the report). |
@@ -54,6 +54,7 @@ graph TB
             ExtMeal["scripts/extract_meal.py"]
             ExtTransport["scripts/extract_transport.py"]
             ExtLib["scripts/extractor_lib.py<br/>(shared: CLI, ADC, Gemini call)"]
+            EvBbox["scripts/evidence_bbox.py<br/>(OCR grounding:<br/>quote → token bboxes)"]
         end
         subgraph Rust["Rust binaries"]
             Reduce["reduce_extractions<br/>(uses src/reduce.rs)"]
@@ -71,6 +72,7 @@ graph TB
     end
 
     Vertex["Vertex AI / Gemini API"]
+    DocAI["Document AI<br/>(OCR_PROCESSOR)"]
     Schema["schema.yaml<br/>(source of truth)"]
     Codegen["scripts/generate_schema_artifacts.py<br/>scripts/generate_response_schema.py"]
     RsMeal["generated/response_schema_meal.json"]
@@ -81,12 +83,15 @@ graph TB
     Flask -->|kind=transport| ExtTransport
     ExtMeal --- ExtLib
     ExtTransport --- ExtLib
+    ExtLib --- EvBbox
     ExtMeal -->|HTTPS| Vertex
     ExtTransport -->|HTTPS| Vertex
-    Vertex -->|JSON| ExtMeal
-    Vertex -->|JSON| ExtTransport
-    ExtMeal -->|extractions/*.json| Flask
-    ExtTransport -->|extractions/*.json| Flask
+    Vertex -->|JSON: values + quotes| ExtMeal
+    Vertex -->|JSON: values + quotes| ExtTransport
+    EvBbox -->|HTTPS| DocAI
+    DocAI -->|tokens + bboxes| EvBbox
+    ExtMeal -->|extractions/*.json<br/>incl. bboxes in _meta| Flask
+    ExtTransport -->|extractions/*.json<br/>incl. bboxes in _meta| Flask
     Flask -->|spawns| Reduce
     Reduce -->|reduced/report.json| Flask
     Flask -->|spawns| Render
@@ -129,6 +134,7 @@ sequenceDiagram
     participant Flask as Flask (gunicorn + dispatcher)
     participant Extract as extract_(kind).py
     participant Gemini as Gemini API
+    participant DocAI as Document AI
     participant Reduce as reduce_extractions (Rust)
     participant Render as render_workbench_from_report (Rust)
     participant Disk as .scratch/uploads/{id}/
@@ -142,7 +148,10 @@ sequenceDiagram
         Note over Flask: dispatcher picks extract_meal.py or<br/>extract_transport.py from FA's kind choice
         Flask->>Extract: subprocess: --image f --output extractions/f.json
         Extract->>Gemini: generate_content(prompt, image, response_schema)
-        Gemini-->>Extract: structured JSON
+        Gemini-->>Extract: structured JSON (field values + evidence quotes)
+        Extract->>DocAI: process_document(image)
+        DocAI-->>Extract: tokens + per-token bboxes
+        Note over Extract: populate_bboxes:<br/>match each quote → token range<br/>→ union bbox into _meta.evidence
         Extract->>Disk: write extractions/{name}.json
         Extract-->>Flask: exit 0
     end
@@ -236,6 +245,7 @@ graph LR
         end
 
         Vertex["Vertex AI<br/>Gemini 3 Flash"]
+        DocAI3["Document AI<br/>OCR_PROCESSOR<br/>(us multi-region)"]
         Registry["Artifact Registry<br/>gcr.io/soe-agile-agents/expense-reports"]
 
         subgraph CB["Cloud Build (us-west1)"]
@@ -258,6 +268,7 @@ graph LR
     PyExt --> Scratch
     RustBin --> Scratch
     PyExt -->|ADC + grpc| Vertex
+    PyExt -->|ADC + grpc<br/>(via evidence_bbox.py)| DocAI3
 
     GH -->|git push main| Trigger
     Trigger --> BuildSteps
@@ -389,6 +400,8 @@ A cheat-sheet for "which file does X belong in?"
 | Round-trip contract check | `src/bin/roundtrip_check.rs` |
 | Per-kind Python extractors (Gemini call) | `scripts/extract_meal.py`, `scripts/extract_transport.py`, `scripts/extract_lodging.py` (orchestrates 2 parallel calls via `ThreadPoolExecutor` and merges), `scripts/extract_airfare.py` (orchestrates 3 parallel calls — main/aux/extras — and 1-deep-merges `airfare_details` from main+aux) |
 | Shared extractor infrastructure | `scripts/extractor_lib.py` (CLI parsing, ADC client, `single_call` primitive, `run_extraction` for single-call kinds) |
+| OCR grounding (per-doc Document AI call + quote→bbox match) | `scripts/evidence_bbox.py` (`populate_bboxes` is called by every extractor after the Gemini response, before JSON write; ~$0.0015/doc, ~1–3s latency) |
+| Retrofit cached per-doc JSONs with bboxes | `scripts/retrofit_bboxes.py` (one-shot batch over `.scratch/spike/*.json`, lets workbench be validated without re-running Gemini) |
 | Schema-acceptance pre-deploy probe | `scripts/probe_response_schemas.py` (sends a 1×1 PNG generate_content per generated schema; catches Vertex-rejected schemas before push) |
 | Flask + gunicorn entry point | `scripts/local_app_simple.py` |
 | Acceptance harness | `scripts/acceptance_check.py` |
