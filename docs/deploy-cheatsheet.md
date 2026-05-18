@@ -31,6 +31,29 @@ update this file.
 | Logs | `gcloud builds log <build-id> --project=soe-agile-agents --region=us-west1` for trigger-fired builds; drop `--region` for manual submits. |
 | Substitutions | Trigger sets `COMMIT_SHA`, `SHORT_SHA`, `BRANCH_NAME`, etc. automatically. Manual submits via `scripts/deploy.sh` pass only `COMMIT_SHA`. |
 
+## Document AI (workbench spot-check grounding)
+
+| Thing | Value |
+| --- | --- |
+| Processor | `projects/603261681824/locations/us/processors/4d07d363581d419d` |
+| Display name | `expense-receipts-ocr` |
+| Type | `OCR_PROCESSOR` (pure OCR + bboxes; not field extraction) |
+| Region | `us` (Document AI multi-region) |
+| API endpoint | `us-documentai.googleapis.com` |
+| Created | 2026-05-16 |
+
+Called once per receipt at extract time to produce word-level bboxes
+that the workbench uses for the spot-check halo. PDFs and images both
+go through the same processor. Consumer is `scripts/evidence_bbox.py`
+(Phase 6 Stage B.2 onward); result populates `_meta.evidence[].bboxes`
+in the typed JSON.
+
+Return format: normalized polygon vertices (0-1 range, top-left
+origin). For axis-aligned overlay take min/max of x and y per token.
+
+The Cloud Run compute SA already has Document AI access via its
+existing `roles/editor` binding — no extra IAM grant needed.
+
 ## Deploy gesture
 
 ```bash

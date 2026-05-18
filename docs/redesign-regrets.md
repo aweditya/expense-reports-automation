@@ -20,6 +20,14 @@ Keep entries short. The point is recall, not narrative.
 
 ## Entries
 
+### 2026-05-16 — used a Python heredoc for the Document AI smoke test instead of a real script
+
+**What happened:** Verified Document AI auth + API shape by piping a multi-line `python3 <<'PY' ... PY` heredoc into Bash. The smoke worked (got tokens + bboxes back from an Air India PDF) but the test isn't reproducible without retyping the heredoc, and it inherently violates rule #4 ("if it's a script, it lives in `scripts/`").
+
+**Why it was wrong:** The heredoc was a script in everything but its filesystem location. The "is this a script?" test isn't line count — it's "does it have non-trivial logic that someone might want to re-run or audit later?" Multi-step API verification absolutely qualifies. Inline scripts are exactly the artifacts that disappear and force re-typing.
+
+**Rule going forward:** Anything more complex than `python -c "import x; print(x.version)"` lives in `scripts/`, flagged before creation. For verification-only scripts that won't ship, prefix the name with `spike_` so the convention is obvious (e.g. `scripts/spike_pymupdf_search.py`, which followed the rule). The DocAI smoke should have been `scripts/spike_docai_smoke.py`.
+
 ### 2026-05-14 — production eyeball caught a validator edge case the local corpus didn't exercise; broader: rules/prompts are pre-FA-validation guesses
 
 **What happened:** Phase 4 Stage 6 deployed cleanly (build SUCCESS in 155s, revision live, image SHA matched). I declared Stage 7 ready for the user's verdict. User uploaded the smallest realistic FA workflow — 2 receipts: Air India BOM→SFO (foreign by currency) + Southwest SFO→PHX (USD-domestic). The Category card came back with a green high-confidence dot but a red border. Cause: `check_category_country_consistency` in `validator_typed.rs` warned "report category is foreign but every line's country_of_activity is United States or null"; JS added `has-issue` class; CSS painted red. My local cargo tests + 19-receipt acceptance suite + workbench eyeball did not surface this. The 19-receipt corpus had multiple lines with various country values and the 2-line shape (with US-destination foreign-currency airfare) wasn't exercised.
