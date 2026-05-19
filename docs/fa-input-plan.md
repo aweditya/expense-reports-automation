@@ -223,6 +223,49 @@ After S.5 deploys:
 
 ---
 
+## 10a. Post-S.5 addendum (2026-05-19): polish + date cross-check
+
+Three follow-ons after the initial S.5 deploy, batched as E.x stages
+so they ship in one re-deploy alongside S.6 close-out:
+
+- **E.1** — `VERTEX_PROJECT_ID` auto-fill from `gcloud config` at local
+  startup. Cloud Run sets it via `--set-env-vars`; locals don't get it
+  and the extractor error is opaque. Trivial.
+- **E.2** — Validator pass: every transaction line's `common.date`
+  must fall within the FA-entered `business_purpose.when` window.
+  Out-of-window dates emit `ValidationIssueKind::ManualReviewRequired`
+  with severity `Warning` — surfaces under "Needs review" in the
+  workbench rail. **Why warning, not error**: airfare extractors today
+  inconsistently return purchase/booking dates (vs. flight dates), so
+  legitimately-pre-purchased airfare would false-positive. FA reviews,
+  confirms, files. Future work (separate): tighten airfare prompts to
+  always return travel date.
+
+  Implementation: `parse_when_window(s)` in `src/fa_input.rs`
+  round-trips the canonical format we produce in
+  `write_fa_input` (`"YYYY-MM-DD"` or `"YYYY-MM-DD to YYYY-MM-DD"`).
+  `check_dates_within_trip_window(report, &mut issues)` in
+  `src/validator_typed.rs` does string comparison (YYYY-MM-DD sorts
+  lexicographically — no `chrono` dep needed). Skips check entirely
+  when `business_purpose.when` is unparseable or missing.
+
+  **No schema change**: `common.date` and `business_purpose.when` are
+  both already declared; the schema description literally says
+  `validation: "Must fall within trip date window"`. We're
+  operationalizing intent.
+- **E.3** — Google Places autocomplete on the FA form's "Where" field.
+  Stanford project already has Vertex enabled; enabling Places API on
+  the same project is cheap. Single API key, debounced JS call,
+  populates a `<datalist>`. Event name stays free-form text.
+- **E.4** (deferred, post-deploy) — "Mark as reviewed" per issue card.
+  FA clicks a button on the issue → issue disappears from the rail.
+  State is per-upload (lives in the URL or browser storage; we don't
+  modify the typed `ValidationReport`). Why deferred: needs design
+  thought on persistence model (sessionStorage? a sidecar JSON in the
+  upload dir? clear on refresh?) and the existing rail-hide-on-empty
+  logic needs to react to dismissed-count rather than total-count.
+  Capture-only until after the date-validator deploy proves itself.
+
 ## 11. Decision pre-conditions
 
 Before starting S.1:

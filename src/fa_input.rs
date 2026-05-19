@@ -215,6 +215,41 @@ fn normalize(s: &str) -> String {
     s.trim().to_lowercase().replace(' ', "_")
 }
 
+/// Round-trips the canonical `business_purpose.when` string produced by
+/// `scripts/local_app_simple.py::write_fa_input` into `(start, end)`.
+/// Accepts `"YYYY-MM-DD"` (single day → `(d, d)`) or
+/// `"YYYY-MM-DD to YYYY-MM-DD"` (range). Returns `None` for any other
+/// shape, including pre-calendar freeform strings the FA might have
+/// typed before the date-picker landed — validator skips the
+/// date-window check in that case rather than guessing.
+pub fn parse_when_window(s: &str) -> Option<(String, String)> {
+    let trimmed = s.trim();
+    if let Some((from, to)) = trimmed.split_once(" to ") {
+        let f = from.trim();
+        let t = to.trim();
+        if is_iso_date(f) && is_iso_date(t) {
+            return Some((f.to_owned(), t.to_owned()));
+        }
+        return None;
+    }
+    if is_iso_date(trimmed) {
+        return Some((trimmed.to_owned(), trimmed.to_owned()));
+    }
+    None
+}
+
+fn is_iso_date(s: &str) -> bool {
+    // Cheap shape check — 10 chars, YYYY-MM-DD. Doesn't validate Feb 30
+    // etc.; the lexicographic compare in the validator stays correct
+    // either way (Feb-30 just sorts as a date that doesn't exist).
+    s.len() == 10
+        && s.as_bytes()[4] == b'-'
+        && s.as_bytes()[7] == b'-'
+        && s[..4].chars().all(|c| c.is_ascii_digit())
+        && s[5..7].chars().all(|c| c.is_ascii_digit())
+        && s[8..10].chars().all(|c| c.is_ascii_digit())
+}
+
 /// True when this transaction line's expense_type identifies it as a
 /// foreign-categorized expense. Uses the enum's snake_case
 /// representation ending in `_foreign` to be future-proof against new
@@ -392,5 +427,34 @@ mod tests {
         assert_eq!(fa.payee_name.as_deref(), Some("Solo Name"));
         assert_eq!(fa.event_name, None);
         assert_eq!(fa.foreign_activity_type, None);
+    }
+
+    #[test]
+    fn parse_when_window_handles_range() {
+        let got = parse_when_window("2026-03-15 to 2026-03-19");
+        assert_eq!(got, Some(("2026-03-15".to_owned(), "2026-03-19".to_owned())));
+    }
+
+    #[test]
+    fn parse_when_window_collapses_single_day_to_same_endpoints() {
+        let got = parse_when_window("2026-03-15");
+        assert_eq!(got, Some(("2026-03-15".to_owned(), "2026-03-15".to_owned())));
+    }
+
+    #[test]
+    fn parse_when_window_rejects_freeform_text() {
+        // Pre-calendar FA input. Validator must skip the date check
+        // rather than fabricate a window from a guess.
+        assert_eq!(parse_when_window("March 14-19 2026"), None);
+        assert_eq!(parse_when_window("June 2024"), None);
+        assert_eq!(parse_when_window("2026/03/15"), None);
+        assert_eq!(parse_when_window(""), None);
+    }
+
+    #[test]
+    fn parse_when_window_rejects_partial_iso_dates() {
+        assert_eq!(parse_when_window("2026-3-15"), None);
+        assert_eq!(parse_when_window("2026-03-1"), None);
+        assert_eq!(parse_when_window("2026-03-15 to 2026/03/19"), None);
     }
 }

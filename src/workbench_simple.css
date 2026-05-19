@@ -271,22 +271,34 @@ body {
   background: #f9fafb;
   padding: 8px 10px;
   border-radius: 4px;
-  /* Card content is now a single label + jump arrow. Lay out as two
-     columns: label flexes, arrow sits on the right. */
+  /* Card content: label + (optional) message stacked vertically on the
+     left, jump arrow anchored to the right. */
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
 }
 .issue-error { border-left-color: #ef4444; }
 .issue-warning { border-left-color: #f59e0b; }
 .issue-info { border-left-color: #3b82f6; }
+.issue-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
 .issue-label {
   margin: 0;
   font-size: 13px;
+  font-weight: 500;
   color: #111827;
-  flex: 1;
-  min-width: 0;
+}
+.issue-message {
+  margin: 0;
+  font-size: 12px;
+  color: #4b5563;
+  line-height: 1.4;
 }
 /* Compact arrow link instead of "Jump to field →" text. The renderer
    emits the link with just an arrow glyph; styled here as a circular

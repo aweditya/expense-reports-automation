@@ -484,9 +484,20 @@ fn render_issues_panel(html: &mut String, validation: &ValidationReport) {
                 ValidationSeverity::Warning => "issue-warning",
             };
             let anchor = field_anchor(&issue.path);
+            let message_html = if issue.message.is_empty() {
+                String::new()
+            } else {
+                format!(
+                    "<p class=\"issue-message\">{}</p>",
+                    escape(&issue.message),
+                )
+            };
             html.push_str(&format!(
                 "<li class=\"issue-card {severity_class}\">\
+                 <div class=\"issue-text\">\
                  <p class=\"issue-label\">{}</p>\
+                 {message_html}\
+                 </div>\
                  <a class=\"issue-jump\" href=\"#{}\" aria-label=\"Jump to field\">→</a>\
                  </li>\n",
                 escape(&friendly_field_label(&issue.path)),

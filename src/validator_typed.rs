@@ -10,7 +10,9 @@
 //!   <path> == <value>
 //!   <path> in [<v1>, <v2>, ...]
 //! One rule (`Must fall within trip date window`) is a free-text validation
-//! description, not a mechanical expression — it's noted as a TODO.
+//! description rather than a mechanical expression; it's implemented as a
+//! hand-written pass (`check_dates_within_trip_window`) that compares each
+//! transaction line's date against the FA-entered `business_purpose.when`.
 
 use crate::expense_report_model::{
     ExpenseReport, ExpenseReportGeneralInformation, ExpenseReportGeneralInformationBusinessPurpose,
@@ -45,7 +47,61 @@ pub fn validate_typed(report: &ExpenseReport) -> ValidationReport {
     walk_transaction_lines(report, &mut issues);
     check_conditional_rules(report, &mut issues);
     check_category_country_consistency(report, &mut issues);
+    check_dates_within_trip_window(report, &mut issues);
     ValidationReport { issues }
+}
+
+/// Cross-check: every transaction line's date must fall within the
+/// FA-entered trip window (`business_purpose.when`). Skipped when the
+/// FA didn't fill `when` or when the string isn't in our canonical
+/// calendar format (pre-calendar freeform input). Out-of-window lines
+/// emit Warning-severity `ManualReviewRequired` issues so the FA sees
+/// them in the workbench "Needs review" rail but can still file.
+///
+/// Why warning, not error: airfare extractors today inconsistently
+/// return purchase/booking dates (vs. flight dates), so legitimately-
+/// pre-purchased airfare would false-positive. FA reviews + confirms.
+fn check_dates_within_trip_window(report: &ExpenseReport, issues: &mut Vec<ValidationIssue>) {
+    let Some(when) = report.general_information.business_purpose.when.value.as_deref() else {
+        return;
+    };
+    let Some((from, to)) = crate::fa_input::parse_when_window(when) else {
+        return;
+    };
+    let Some(lines) = report.transaction_lines.as_ref() else {
+        return;
+    };
+    for (idx, line) in lines.iter().enumerate() {
+        let Some(date) = line.common.date.value.as_ref() else {
+            continue;
+        };
+        let d = &date.0;
+        // YYYY-MM-DD sorts lexicographically. Skip lines with malformed
+        // dates rather than flag them — those have their own missing/
+        // mismatch issues from check_wrapped.
+        if d.len() != 10 || !d.contains('-') {
+            continue;
+        }
+        let position = if d.as_str() < from.as_str() {
+            Some(format!("before trip start {from}"))
+        } else if d.as_str() > to.as_str() {
+            Some(format!("after trip end {to}"))
+        } else {
+            None
+        };
+        if let Some(rel) = position {
+            issues.push(ValidationIssue {
+                severity: ValidationSeverity::Warning,
+                kind: ValidationIssueKind::ManualReviewRequired,
+                path: format!("expense_report.transaction_lines[{idx}].common.date"),
+                schema_path: "expense_report.transaction_lines[*].common.date".to_owned(),
+                message: format!(
+                    "Transaction date {d} is {rel}. Was this purchased \
+                     ahead of the trip, or is the wrong receipt attached?"
+                ),
+            });
+        }
+    }
 }
 
 // ─── Per-section walks ─────────────────────────────────────────────────────
@@ -981,5 +1037,101 @@ mod tests {
             !paths.iter().any(|p| p.contains("original_currency")),
             "domestic line should not flag original_currency even in a foreign report; saw: {paths:?}"
         );
+    }
+
+    fn report_with_when_and_dates(when: &str, dates: &[&str]) -> ExpenseReport {
+        let receipts: Vec<_> = dates
+            .iter()
+            .enumerate()
+            .map(|(i, d)| sample_meal_receipt(&format!("r{i}.jpeg"), d, 50.0))
+            .collect();
+        let mut report = reduce_to_expense_report(&receipts);
+        report.general_information.business_purpose.when = Wrapped {
+            value: Some(when.to_owned()),
+            meta: FieldMetadata::default(),
+        };
+        report
+    }
+
+    fn date_window_issues(report: &ExpenseReport) -> Vec<ValidationIssue> {
+        validate_typed(report)
+            .issues
+            .into_iter()
+            .filter(|i| i.message.contains("Transaction date"))
+            .collect()
+    }
+
+    #[test]
+    fn dates_within_window_yield_no_issues() {
+        let report = report_with_when_and_dates(
+            "2026-03-15 to 2026-03-19",
+            &["2026-03-15", "2026-03-17", "2026-03-19"],
+        );
+        assert!(date_window_issues(&report).is_empty());
+    }
+
+    #[test]
+    fn date_before_window_flags_with_before_message() {
+        let report = report_with_when_and_dates(
+            "2026-03-15 to 2026-03-19",
+            &["2026-02-03"],
+        );
+        let issues = date_window_issues(&report);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].severity, ValidationSeverity::Warning);
+        assert_eq!(issues[0].kind, ValidationIssueKind::ManualReviewRequired);
+        assert!(
+            issues[0].message.contains("before trip start 2026-03-15"),
+            "message: {}", issues[0].message
+        );
+    }
+
+    #[test]
+    fn date_after_window_flags_with_after_message() {
+        let report = report_with_when_and_dates(
+            "2026-03-15 to 2026-03-19",
+            &["2026-04-02"],
+        );
+        let issues = date_window_issues(&report);
+        assert_eq!(issues.len(), 1);
+        assert!(
+            issues[0].message.contains("after trip end 2026-03-19"),
+            "message: {}", issues[0].message
+        );
+    }
+
+    #[test]
+    fn single_day_trip_window_still_works() {
+        // Single date for `when` → start == end → only that exact date
+        // is inside the window.
+        let report = report_with_when_and_dates(
+            "2026-03-15",
+            &["2026-03-15", "2026-03-16"],
+        );
+        let issues = date_window_issues(&report);
+        assert_eq!(issues.len(), 1, "exactly one line should be outside");
+        assert!(issues[0].path.contains("transaction_lines[1]"));
+    }
+
+    #[test]
+    fn unparseable_when_skips_check_entirely() {
+        // FA's freeform pre-calendar text → don't fabricate a window.
+        let report = report_with_when_and_dates(
+            "March 14-19 2026",
+            &["2024-01-01"],  // wildly outside any plausible window
+        );
+        assert!(
+            date_window_issues(&report).is_empty(),
+            "freeform `when` means no parseable window → skip check"
+        );
+    }
+
+    #[test]
+    fn missing_when_skips_check_entirely() {
+        // No FA input at all — same skip path as unparseable.
+        let report = report_with_when_and_dates("", &["2024-01-01"]);
+        let mut empty_when = report;
+        empty_when.general_information.business_purpose.when = Wrapped::default();
+        assert!(date_window_issues(&empty_when).is_empty());
     }
 }
