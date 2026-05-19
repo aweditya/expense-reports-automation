@@ -659,3 +659,52 @@ some-stuff-I-judged-related, or X-but-bigger.
   "~70 LOC" is a guess; "~50 JS + ~30 CSS + ~10 HTML = ~90, plus
   edge-case handling so call it 130" is an estimate. Quote the second
   shape, not the first.
+
+### 2026-05-19 — SPEC.md S.6 shipped with a Mermaid parse error (third time)
+
+**What happened:** S.6 commit explicitly said "diagrams unrendered
+locally — please verify GitHub preview" (option (b) per the
+2026-05-05 regret's rule). User opened the live SPEC.md and the
+sequence diagram showed "Unable to render rich display / Parse
+error on line 27." Spent three bisects to isolate: the `;<br/>` in
+an EXISTING `Note over Extract` line (which I hadn't touched) was
+the trap — Mermaid's sequence parser rejects `;` followed by `<br/>`
+in note text. The diagram had been broken since the leapfrog L.3-L.5
+SPEC update; nobody noticed until I claimed "S.6 closes the round."
+
+**Why "third time" is the right frame:** 2026-05-05 captured TWO
+back-to-back broken Mermaid pushes (`&lt;...&gt;` in `as` labels,
+then `{` in flowchart edge labels). The rule was "either (a) render
+via mmdc or (b) flag explicitly that you didn't and accept the
+fix-cycle." I picked (b) this time. The user accepted, but the
+fix-cycle still happened — option (b) is a *cost*, not a free pass.
+Option (a) avoids the cycle. The cost of `npx -y @mermaid-js/
+mermaid-cli` is one ~50MB transient install + ~30s per diagram. The
+cost of (b) is one user round-trip per broken diagram, which is
+much worse for both of us.
+
+**Rule going forward:** Option (a) is the default. The harness has
+`npx`; pulling mermaid-cli once per SPEC.md change is cheap. The
+extract pattern that worked:
+
+```
+# .scratch/extract_mmd.awk
+BEGIN { f=0; n=0 }
+/^```mermaid$/ { f=1; n++; out=".scratch/diag_" n ".mmd"; next }
+/^```$/ { if (f) close(out); f=0; next }
+f { print > out }
+```
+
+Then `for f in .scratch/diag_*.mmd; do npx -y @mermaid-js/mermaid-cli
+-i "$f" -o "${f%.mmd}.svg"; done`. Any "Parse error" in stderr means
+that diagram is broken — including ones that have always been broken
+and just haven't been caught yet. Option (b) is reserved for cases
+where mmdc itself is broken (Puppeteer/Chromium install failure on
+the harness), and even then the commit message has to say "(b)
+because mmdc failed: <reason>" so the user knows the risk.
+
+**Bonus syntax trap discovered along the way:** `;<br/>` in
+sequence-diagram note text breaks the parser. `->` in note text
+also breaks it (parser thinks it's a new arrow). Use plain
+punctuation + Unicode arrows (→) in notes; avoid `;` and ASCII `->`
+entirely.

@@ -86,7 +86,7 @@ graph TB
     UI -->|GET /places/autocomplete?q=...<br/>on Where keystrokes| Flask
     Flask -->|HTTPS POST| Places
     Places -->|city/state/country suggestions| Flask
-    UI -->|POST /upload<br/>file_N + kind_N + fa_* form fields| Flask
+    UI -->|POST /upload<br/>file_N + kind_N + FA fieldset values| Flask
     Flask -->|writes per FA fieldset| FaInput
     Flask -->|kind=meal| ExtMeal
     Flask -->|kind=transport| ExtTransport
@@ -153,7 +153,7 @@ sequenceDiagram
     participant Disk as .scratch/uploads/{id}/
 
     FA->>Browser: fill fieldset (payee, business_purpose, dates, etc.)<br/>pick files + kind per file, click Process Receipts
-    Browser->>IAP: POST /upload (multipart with file_N + kind_N pairs + fa_* fields)
+    Browser->>IAP: POST /upload (multipart with file_N, kind_N pairs, and FA fieldset values)
     IAP->>Flask: forwarded request (auth verified)
     Flask->>Disk: save raw files to files/
     Flask->>Disk: write fa_input.json (FA fieldset values)
@@ -166,7 +166,7 @@ sequenceDiagram
         Note over Extract: format_tokens_for_prompt:<br/>append numbered token list to prompt
         Extract->>Gemini: generate_content(prompt+tokens, image, response_schema)
         Gemini-->>Extract: structured JSON (values + quote + token_ids)
-        Note over Extract: populate_bboxes (dual path):<br/>token_ids -> dict lookup + verifier;<br/>fallback to text-match the quote
+        Note over Extract: populate_bboxes (dual path):<br/>token_ids → dict lookup + verifier<br/>then fallback to text-match the quote
         Extract->>Disk: write extractions/{name}.json
         Extract-->>Flask: exit 0
     end
