@@ -52,6 +52,13 @@
                     "origin": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "token_ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "integer"
+                      },
+                      "nullable": true
                     }
                   },
                   "required": [
@@ -136,6 +143,13 @@
                     },
                     "origin": {
                       "type": "string",
+                      "nullable": true
+                    },
+                    "token_ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "integer"
+                      },
                       "nullable": true
                     }
                   },

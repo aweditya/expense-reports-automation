@@ -94,6 +94,19 @@ def meta_block_schema() -> dict:
                         "page": {"type": "integer", "nullable": True},
                         "quote": {"type": "string", "nullable": True},
                         "origin": {"type": "string", "nullable": True},
+                        # Leapfrog L.1 (docs/leapfrog-plan.md §7): when
+                        # the extractor's prompt includes a numbered
+                        # Document AI token list, the model returns the
+                        # integer IDs of the tokens it grounded against.
+                        # Extractor then resolves IDs -> bboxes via
+                        # evidence_bbox.populate_bboxes. Omitting this
+                        # field is fine; it just falls back to the
+                        # text-matching path. Optional everywhere.
+                        "token_ids": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "nullable": True,
+                        },
                     },
                     "required": ["kind"],
                 },
