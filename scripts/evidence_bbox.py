@@ -52,15 +52,27 @@ def _client():
     return _CLIENT
 
 
-def _ocr(doc_path: pathlib.Path):
+def ocr_document(doc_path: pathlib.Path):
     """Single Document AI call. Returns documentai.Document, or None for
-    unsupported mime types."""
+    unsupported mime types.
+
+    Public since Leapfrog L.2 — extractors call this directly so they
+    can both inline the token list into Gemini's prompt AND pass the
+    same Document into populate_bboxes for token_id resolution. Use
+    instead of calling populate_bboxes' internal OCR (which does the
+    same call but doesn't share state with the caller)."""
     mime = MIME_BY_EXT.get(doc_path.suffix.lower())
     if mime is None:
         return None
     raw = documentai.RawDocument(content=doc_path.read_bytes(), mime_type=mime)
     req = documentai.ProcessRequest(name=PROCESSOR, raw_document=raw)
     return _client().process_document(request=req).document
+
+
+# Back-compat alias — `_ocr` was called from spike_leapfrog.py and the
+# old in-file populate_bboxes. Keep the underscore name working while
+# new code uses the public ocr_document.
+_ocr = ocr_document
 
 
 def _layout_text(doc, layout) -> str:
@@ -81,6 +93,41 @@ def _layout_bbox(layout):
     xs = [v.x for v in verts]
     ys = [v.y for v in verts]
     return [min(xs), min(ys), max(xs), max(ys)]
+
+
+def format_tokens_for_prompt(doc) -> tuple[str, dict[int, list[float]], dict[int, str]]:
+    """Return (numbered-text-list, {id -> bbox}, {id -> text}) for the
+    whole document.
+
+    Format: `[t1] AIR\n[t2] INDIA\n[t3] PASSENGER\n...`
+
+    Global IDs across the entire document — page boundaries are
+    invisible in the prompt. Matches spike_leapfrog.py's format
+    (which validated 100% verifier pass across 417 fields)."""
+    lines = []
+    bbox_by_id: dict[int, list[float]] = {}
+    text_by_id: dict[int, str] = {}
+    global_idx = 0
+    for page in doc.pages:
+        for tok in page.tokens:
+            text = _layout_text(doc, tok.layout).strip()
+            bbox = _layout_bbox(tok.layout)
+            if not text or bbox is None:
+                continue
+            global_idx += 1
+            lines.append(f"[t{global_idx}] {text}")
+            bbox_by_id[global_idx] = bbox
+            text_by_id[global_idx] = text
+    return "\n".join(lines), bbox_by_id, text_by_id
+
+
+def _verifier_score(quote: str, claimed_text: str) -> float:
+    """Levenshtein-equivalent via stdlib difflib. 1.0 = perfect, 0.0 =
+    no overlap. Threshold of 0.7 mirrors the spike + plan §5."""
+    from difflib import SequenceMatcher
+    if not quote or not claimed_text:
+        return 0.0
+    return SequenceMatcher(None, _norm(quote), _norm(claimed_text)).ratio()
 
 
 # Currency symbols and ISO codes that Gemini's quote and DocAI's tokens
@@ -200,29 +247,75 @@ def _find_quote_bboxes(doc, page_index: int, quote: str):
     return []
 
 
-def populate_bboxes(record: dict, doc_path: pathlib.Path) -> dict:
+def populate_bboxes(record: dict, doc_path: pathlib.Path, doc=None) -> dict:
     """Walk record's `_meta.evidence[]` entries and populate `bboxes`
-    for each `document_span` entry with a non-empty `quote`. Mutates
-    record in place AND returns it (convenient for chaining).
+    for each `document_span` entry. Mutates record in place AND
+    returns it (convenient for chaining).
 
-    Idempotent: re-running clears stale `bboxes` when the new lookup
-    finds nothing, and overwrites with fresh values when it does.
+    Two grounding paths (Leapfrog L.2, docs/leapfrog-plan.md §7):
+      1. `token_ids` present on the evidence entry (from a leapfrog-
+         aware extractor): resolve via dict lookup against DocAI's
+         tokens. Verifier compares the concatenated token text to
+         the evidence `quote`; if it fails (Gemini hallucinated the
+         ids), fall back to text matching for THAT entry.
+      2. No `token_ids` (cached pre-leapfrog extractions; or any
+         extractor still on the text-matching path): existing
+         behavior — text-match the quote against DocAI tokens via
+         _find_quote_bboxes.
+
+    Both paths terminate with `bboxes` either set to a list or
+    cleared. Idempotent: re-running stabilizes.
+
+    `doc` parameter: callers that already ran DocAI (leapfrog
+    extractors that need the token list for the Gemini prompt) can
+    pass the Document in to avoid a second API call. Defaults to
+    None, in which case we OCR fresh.
 
     Document AI errors are caught and logged; record is returned
-    unchanged. The workbench falls back to "no halo" in that case
-    (same as pre-Stage-B behavior).
+    unchanged. Workbench falls back to "no halo" — same as
+    pre-Stage-B behavior.
     """
-    try:
-        doc = _ocr(doc_path)
-    except Exception as err:
-        print(
-            f"warning: Document AI OCR failed for {doc_path}: {err}",
-            file=sys.stderr,
-        )
-        return record
-
     if doc is None:
-        return record
+        try:
+            doc = ocr_document(doc_path)
+        except Exception as err:
+            print(
+                f"warning: Document AI OCR failed for {doc_path}: {err}",
+                file=sys.stderr,
+            )
+            return record
+        if doc is None:
+            return record
+
+    # Pre-compute token text-by-id and bbox-by-id once. Same global-
+    # ID scheme as format_tokens_for_prompt; required for token_id
+    # resolution path.
+    _, bbox_by_id, text_by_id = format_tokens_for_prompt(doc)
+
+    def resolve_by_token_ids(token_ids: list[int], quote: str):
+        """Return list-of-one [bbox] if the ids resolve AND the
+        verifier passes; None otherwise (caller falls back to text
+        matching)."""
+        if not token_ids:
+            return None
+        rects = []
+        claimed_texts = []
+        for tid in token_ids:
+            if tid in bbox_by_id:
+                rects.append(bbox_by_id[tid])
+                claimed_texts.append(text_by_id[tid])
+        if not rects:
+            return None
+        score = _verifier_score(quote, " ".join(claimed_texts))
+        if score < 0.7:  # plan §5 threshold
+            return None
+        # Union of all valid token bboxes — one rect per field.
+        return [[
+            min(r[0] for r in rects),
+            min(r[1] for r in rects),
+            max(r[2] for r in rects),
+            max(r[3] for r in rects),
+        ]]
 
     def walk(obj):
         if isinstance(obj, dict):
@@ -236,12 +329,17 @@ def populate_bboxes(record: dict, doc_path: pathlib.Path) -> dict:
                     quote = ev.get("quote")
                     if not quote:
                         continue
-                    page = ev.get("page", 1)
-                    rects = _find_quote_bboxes(doc, page, quote)
+                    # Path 1: token_ids if present + verifier passes
+                    token_ids = ev.get("token_ids") or []
+                    rects = resolve_by_token_ids(token_ids, quote)
+                    # Path 2: fall back to text matching
+                    if rects is None:
+                        page = ev.get("page", 1)
+                        rects = _find_quote_bboxes(doc, page, quote) or None
                     if rects:
                         ev["bboxes"] = rects
                     elif "bboxes" in ev:
-                        # Re-run found nothing -> clear stale.
+                        # Both paths failed -> clear stale bboxes.
                         del ev["bboxes"]
             for v in obj.values():
                 walk(v)
