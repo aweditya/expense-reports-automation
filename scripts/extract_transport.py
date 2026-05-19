@@ -105,12 +105,24 @@ is enforced by the response schema — fill the values from the receipt.
   Keep it ONE line per leaf. The output budget is shared across thinking
   and tokens; verbose reasons crowd everything else out.
 - `evidence` for present values: `kind: document_span` with `filename`,
-  `page`, and an exact `quote` from the receipt.
+  `page`, an exact `quote` from the receipt, AND `token_ids: [N, N, ...]`
+  (Leapfrog L.4). `token_ids` are integer indices from the numbered
+  Document AI token list appended at the bottom of this prompt — pick
+  the IDs of the tokens whose printed text covers your `quote`. The
+  concatenated text of those tokens should match (or closely paraphrase)
+  the quote string. Use a continuous global ID range across all pages
+  (page boundaries are invisible in the token list). When the quote
+  spans multiple non-adjacent regions (e.g. pickup + drop-off addresses
+  joined in one quote), include the IDs of ALL the relevant tokens —
+  they get unioned into one bounding box. If you genuinely can't
+  identify which tokens cover the quote, omit `token_ids` and the
+  post-pass will fall back to text matching; do NOT invent IDs.
 - `evidence` for null values: `kind: system_generated` with one of
   `origin: not_present_in_receipt`, `not_applicable_for_domestic`,
   `not_applicable_for_foreign`, or `not_applicable_for_transport`.
   Do NOT cite an unrelated quote with `document_span` to evidence
-  a null value.
+  a null value. `token_ids` MUST be omitted (or empty) for
+  non-`document_span` evidence.
 - `needs_review` is true for any value you guessed, and any field where
   you used `medium` or `low` confidence.
 - `flags` stays empty unless you observe something irregular.
