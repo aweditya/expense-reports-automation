@@ -17,7 +17,15 @@ steps:
     args:
       - '-c'
       - |
+        set -e
         pip install --no-cache-dir -r deploy/requirements.txt 2>/dev/null
+        # Import-smoke: every production module must load cleanly with the
+        # deployed requirements. Catches missing runtime deps at build time
+        # instead of at Cloud Run startup. (pillow-heif incident, May 2026.)
+        python3 -c "import sys; sys.path.insert(0, 'scripts'); \
+            import evidence_bbox, extractor_lib, extract_airfare, \
+                   extract_lodging, extract_meal, extract_transport, \
+                   local_app_simple"
         python3 -m unittest discover -s tests -p "test_*.py" -v
     id: 'python-tests'
 
