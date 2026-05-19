@@ -162,6 +162,90 @@ def handle_pipeline_error(err: PipelineError):
     return page, 500
 
 
+_places_session = None
+
+
+def _places_session_or_none():
+    """Lazy-init an OAuth-bearing session against Google Places API
+    (New), reusing the same ADC the extractors use for Vertex. None
+    return signals the autocomplete endpoint should return empty so
+    the JS gracefully falls back to free-form typing — Places being
+    down is not worth taking the form down for."""
+    global _places_session
+    if _places_session is not None:
+        return _places_session
+    try:
+        from google.auth import default as auth_default
+        from google.auth.transport.requests import AuthorizedSession
+        credentials, _ = auth_default(
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
+        _places_session = AuthorizedSession(credentials)
+    except Exception as err:
+        app.logger.warning("places: ADC init failed: %s", err)
+        return None
+    return _places_session
+
+
+@app.get("/places/autocomplete")
+def places_autocomplete():
+    """Proxy for Places API (New) Autocomplete. Called by the JS in
+    the upload form as the FA types the 'Where' field. Hits the API
+    via the gunicorn service account (Cloud Run) or the dev's ADC
+    (local) — no API key to provision/rotate."""
+    q = request.args.get("q", "").strip()
+    if len(q) < 2 or len(q) > 100:
+        return ({"suggestions": []}, 200)
+    session = _places_session_or_none()
+    if session is None:
+        return ({"suggestions": []}, 200)
+    project = os.environ.get("VERTEX_PROJECT_ID", "")
+    headers = {
+        "Content-Type": "application/json",
+        # Field mask is required by Places API (New) — without it the
+        # request errors with FIELD_MASK_REQUIRED. We only need the
+        # display text + placeId.
+        "X-Goog-FieldMask": "suggestions.placePrediction.text,suggestions.placePrediction.placeId",
+    }
+    if project:
+        # ADC-based requests need an explicit billing project when the
+        # creds aren't already attached to one (local dev case).
+        headers["X-Goog-User-Project"] = project
+    try:
+        resp = session.post(
+            "https://places.googleapis.com/v1/places:autocomplete",
+            json={
+                "input": q,
+                # Cities, states/provinces, countries — what a FA
+                # typing "Where" cares about. Excludes restaurants /
+                # addresses / business POIs.
+                "includedPrimaryTypes": [
+                    "locality",
+                    "administrative_area_level_1",
+                    "country",
+                ],
+                "languageCode": "en",
+            },
+            headers=headers,
+            timeout=5,
+        )
+    except Exception as err:
+        app.logger.warning("places: request failed: %s", err)
+        return ({"suggestions": []}, 200)
+    if not resp.ok:
+        app.logger.warning("places: API %s: %s", resp.status_code, resp.text[:300])
+        return ({"suggestions": []}, 200)
+    raw = resp.json().get("suggestions", [])
+    suggestions = []
+    for s in raw:
+        pred = s.get("placePrediction") or {}
+        text = (pred.get("text") or {}).get("text") or ""
+        place_id = pred.get("placeId") or ""
+        if text:
+            suggestions.append({"description": text, "place_id": place_id})
+    return ({"suggestions": suggestions}, 200)
+
+
 @app.get("/uploads/<upload_id>/<path:filename>")
 def serve_upload_file(upload_id: str, filename: str):
     """Static-file route for everything under a per-upload directory:
@@ -456,6 +540,18 @@ UPLOAD_FORM_HTML = """\
                                             border-radius:4px; font-size:13px;
                                             background:#fff; color:#1a1d1f; font-family:inherit; }
   .field .hint { font-size:11px; color:#9ca3af; }
+  /* Custom combobox dropdown for the "Where" field. Replaces <datalist>
+     so the menu inherits our light theme rather than the browser's
+     system theme (Safari renders datalist dark in dark mode). */
+  .combobox-wrapper { position:relative; }
+  .combobox-listbox { position:absolute; top:100%; left:0; right:0; z-index:20;
+                      margin:2px 0 0; padding:0; max-height:240px; overflow-y:auto;
+                      list-style:none; background:#fff; border:1px solid #d1d5db;
+                      border-radius:4px; box-shadow:0 4px 12px rgba(0,0,0,0.08);
+                      font-size:13px; color:#1a1d1f; }
+  .combobox-option { padding:6px 10px; cursor:pointer; line-height:1.4; }
+  .combobox-option:hover,
+  .combobox-option.active { background:#e0f2fe; color:#075985; }
   .file-row { display:flex; gap:10px; align-items:center; margin:0 0 12px; }
   .file-row input[type=file] { flex:1; min-width:0; font-size:13px; }
   .file-row select { padding:6px 8px; border:1px solid #d1d5db; border-radius:4px;
@@ -553,8 +649,13 @@ UPLOAD_FORM_HTML = """\
         </div>
         <div class="field">
           <label for="fa_bp_where">Where <span class="req">*</span></label>
-          <input type="text" id="fa_bp_where" name="fa_bp_where" required
-                 placeholder="e.g. Pittsburgh, PA">
+          <div class="combobox-wrapper">
+            <input type="text" id="fa_bp_where" name="fa_bp_where" required
+                   role="combobox" aria-autocomplete="list"
+                   aria-expanded="false" aria-controls="where-listbox"
+                   autocomplete="off" placeholder="e.g. Pittsburgh, PA">
+            <ul id="where-listbox" class="combobox-listbox" role="listbox" hidden></ul>
+          </div>
         </div>
         <div class="field full">
           <label for="fa_bp_why">Why <span class="req">*</span></label>
@@ -609,6 +710,120 @@ UPLOAD_FORM_HTML = """\
     document.getElementById('file-rows').appendChild(row);
     rowCount++;
   }
+
+  // Custom combobox for 'Where' autocomplete. Implements the WAI-ARIA
+  // combobox 1.2 pattern (role=combobox + role=listbox + role=option
+  // + aria-activedescendant). Why custom and not <datalist>: the
+  // browser owns datalist rendering and ignores our CSS, so Safari in
+  // dark mode shows a dark menu on our light form. This dropdown
+  // inherits our theme and behaves consistently across browsers.
+  (function setupWhereCombobox() {
+    const input = document.getElementById('fa_bp_where');
+    const listbox = document.getElementById('where-listbox');
+    if (!input || !listbox) return;
+    let timer = null;
+    let inflight = null;
+    let suggestions = [];
+    let activeIdx = -1;
+
+    function closeListbox() {
+      listbox.hidden = true;
+      input.setAttribute('aria-expanded', 'false');
+      input.removeAttribute('aria-activedescendant');
+      activeIdx = -1;
+    }
+    function openListbox() {
+      if (suggestions.length === 0) { closeListbox(); return; }
+      listbox.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
+    }
+    function renderListbox() {
+      listbox.innerHTML = suggestions.map(function(s, i) {
+        const safe = (s.description || '')
+          .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+          .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return '<li id="where-opt-' + i + '" role="option" ' +
+               'class="combobox-option" data-idx="' + i + '">' + safe + '</li>';
+      }).join('');
+    }
+    function setActive(idx) {
+      const items = listbox.querySelectorAll('.combobox-option');
+      items.forEach(function(el) { el.classList.remove('active'); });
+      activeIdx = Math.max(-1, Math.min(idx, suggestions.length - 1));
+      if (activeIdx >= 0) {
+        const item = listbox.querySelector('#where-opt-' + activeIdx);
+        if (item) {
+          item.classList.add('active');
+          input.setAttribute('aria-activedescendant', item.id);
+          item.scrollIntoView({block: 'nearest'});
+        }
+      }
+    }
+    function commit(idx) {
+      if (idx < 0 || idx >= suggestions.length) return;
+      input.value = suggestions[idx].description;
+      closeListbox();
+    }
+
+    input.addEventListener('input', function() {
+      clearTimeout(timer);
+      const q = input.value.trim();
+      if (q.length < 2) {
+        suggestions = [];
+        closeListbox();
+        return;
+      }
+      timer = setTimeout(async function() {
+        if (inflight) inflight.abort();
+        const ctrl = new AbortController();
+        inflight = ctrl;
+        try {
+          const r = await fetch('/places/autocomplete?q=' + encodeURIComponent(q),
+                                {signal: ctrl.signal});
+          if (!r.ok) return;
+          const data = await r.json();
+          suggestions = data.suggestions || [];
+          renderListbox();
+          openListbox();
+        } catch (e) { /* abort or net error — silent fallback */ }
+      }, 300);
+    });
+
+    input.addEventListener('keydown', function(e) {
+      if (listbox.hidden && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+        if (suggestions.length > 0) { openListbox(); e.preventDefault(); }
+        return;
+      }
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActive(activeIdx + 1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(activeIdx - 1); }
+      else if (e.key === 'Enter') {
+        if (!listbox.hidden && activeIdx >= 0) { e.preventDefault(); commit(activeIdx); }
+      }
+      else if (e.key === 'Escape') {
+        if (!listbox.hidden) { e.preventDefault(); closeListbox(); }
+      }
+      else if (e.key === 'Tab') {
+        // Don't trap focus — just close so the dropdown doesn't linger
+        // over whatever field the FA tabs into next.
+        closeListbox();
+      }
+    });
+
+    // mousedown (not click): click fires after blur, which would close
+    // the listbox first and eat the selection. mousedown beats blur.
+    listbox.addEventListener('mousedown', function(e) {
+      const li = e.target.closest('[data-idx]');
+      if (!li) return;
+      e.preventDefault();
+      commit(parseInt(li.dataset.idx, 10));
+    });
+
+    document.addEventListener('click', function(e) {
+      if (!input.contains(e.target) && !listbox.contains(e.target)) {
+        closeListbox();
+      }
+    });
+  })();
 </script>
 </body>
 </html>

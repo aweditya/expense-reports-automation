@@ -257,6 +257,19 @@ so they ship in one re-deploy alongside S.6 close-out:
   Stanford project already has Vertex enabled; enabling Places API on
   the same project is cheap. Single API key, debounced JS call,
   populates a `<datalist>`. Event name stays free-form text.
+- **E.5** — Custom combobox to replace `<datalist>` for the "Where"
+  field. The native `<datalist>` rendering is browser-controlled and
+  ignores our light-theme CSS — Safari in dark mode shows a dark
+  dropdown over a light form, which reads as inconsistent. Custom
+  combobox keeps the same `/places/autocomplete` backend (E.3
+  unchanged) but renders our own absolutely-positioned `<ul>` below
+  the input. Implements the ARIA combobox 1.2 pattern: `role`
+  attributes, `aria-activedescendant`, keyboard nav (↓/↑ to navigate,
+  Enter to select, Escape to close, Tab advances focus and closes),
+  click-outside dismissal, `mousedown` (not `click`) for selection so
+  the focus-blur race doesn't eat the selection. ~120 LOC across
+  HTML/JS/CSS in `scripts/local_app_simple.py`.
+
 - **E.4** (deferred, post-deploy) — "Mark as reviewed" per issue card.
   FA clicks a button on the issue → issue disappears from the rail.
   State is per-upload (lives in the URL or browser storage; we don't
