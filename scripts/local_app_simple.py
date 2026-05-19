@@ -660,8 +660,39 @@ ERROR_PAGE_HTML = """\
 
 # ─── Entry point ───────────────────────────────────────────────────────────
 
+def ensure_vertex_project_env() -> None:
+    """On Cloud Run, VERTEX_PROJECT_ID is injected via --set-env-vars in
+    deploy/cloudbuild.yaml. Locally, FAs running the dev server have to
+    set it themselves — easy to forget, and the extractor's 'project
+    required' error doesn't say where to set it. Auto-fill from the
+    active gcloud config (the same project the auth checklist points
+    at) so local runs Just Work.
+    """
+    if os.environ.get("VERTEX_PROJECT_ID"):
+        return
+    try:
+        result = subprocess.run(
+            ["gcloud", "config", "get-value", "project"],
+            capture_output=True, text=True, timeout=5,
+        )
+        project = (result.stdout or "").strip()
+    except (subprocess.SubprocessError, FileNotFoundError):
+        project = ""
+    if project and project != "(unset)":
+        os.environ["VERTEX_PROJECT_ID"] = project
+        print(f"  VERTEX_PROJECT_ID:   {project} (from gcloud config)", flush=True)
+    else:
+        print(
+            "  WARNING: VERTEX_PROJECT_ID is unset and no active gcloud project. "
+            "Run `gcloud config set project soe-agile-agents` or "
+            "`export VERTEX_PROJECT_ID=soe-agile-agents` before uploading.",
+            flush=True,
+        )
+
+
 if __name__ == "__main__":
     UPLOADS_ROOT.mkdir(parents=True, exist_ok=True)
     print(f"local_app_simple listening on http://{HOST}:{PORT}", flush=True)
     print(f"  uploads dir:         {UPLOADS_ROOT}", flush=True)
+    ensure_vertex_project_env()
     app.run(host=HOST, port=PORT, debug=False)
