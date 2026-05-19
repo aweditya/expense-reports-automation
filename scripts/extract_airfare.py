@@ -52,7 +52,11 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from evidence_bbox import populate_bboxes
+from evidence_bbox import (
+    format_tokens_for_prompt,
+    ocr_document,
+    populate_bboxes,
+)
 from extractor_lib import (
     GeminiCallFailed,
     detect_mime_type,
@@ -87,13 +91,26 @@ META_CONVENTION = """# _meta convention
     "Total clearly printed.", "USD literal on ticket."
   - For `medium` and `low`: ≤15 words. Explain the ambiguity.
 - `evidence` for present values: `kind: document_span` with `filename`,
-  `page`, and an exact `quote` from the ticket.
+  `page`, an exact `quote` from the ticket, AND `token_ids: [N, N, ...]`
+  (Leapfrog L.5). `token_ids` are integer indices from the numbered
+  Document AI token list appended at the bottom of this prompt — pick
+  the IDs of the tokens whose printed text covers your `quote`. The
+  concatenated text of those tokens should match (or closely paraphrase)
+  the quote string. Use a continuous global ID range across all pages
+  (page boundaries are invisible in the token list). When the quote
+  spans multiple non-adjacent regions (e.g. "MUMBAI ... SAN FRANCISCO"
+  joining the origin + destination), include the IDs of ALL the
+  relevant tokens — they get unioned into one bounding box. If you
+  genuinely can't identify which tokens cover the quote, omit
+  `token_ids` and the post-pass will fall back to text matching; do
+  NOT invent IDs.
 - `evidence` for null values: `kind: system_generated` with one of
   `origin: not_present_in_receipt`, `not_applicable_for_domestic`,
   `not_applicable_for_foreign`, `not_applicable_for_transport`,
   `not_applicable_for_airfare`, or `needs_fx_conversion`.
   Do NOT cite an unrelated quote with `document_span` to evidence
-  a null value.
+  a null value. `token_ids` MUST be omitted (or empty) for
+  non-`document_span` evidence.
 - `needs_review` is true for any value you guessed, and any field
   where you used `medium` or `low` confidence.
 - `flags` stays empty unless you observe something irregular
@@ -366,6 +383,35 @@ def main() -> int:
     image_bytes = args.image.read_bytes()
     mime = detect_mime_type(args.image)
 
+    # Leapfrog L.5: Document AI runs ONCE per receipt, BEFORE the
+    # parallel Gemini calls. Its tokens get appended to ALL THREE
+    # prompts so every parallel call cites the same global token-id
+    # range. Failure here is non-fatal — extraction proceeds without
+    # token-id grounding; populate_bboxes falls back to text matching
+    # at write time.
+    doc = None
+    try:
+        doc = ocr_document(args.image)
+    except Exception as err:
+        print(
+            f"warning: Document AI OCR failed for {args.image}: {err}; "
+            "airfare extraction will proceed without token-id grounding.",
+            file=sys.stderr,
+        )
+
+    prompt_main = PROMPT_MAIN
+    prompt_aux = PROMPT_AUX
+    prompt_extras = PROMPT_EXTRAS
+    if doc is not None:
+        token_list_text, _, _ = format_tokens_for_prompt(doc)
+        suffix = (
+            "\n\n# Numbered Document AI tokens (for `token_ids` grounding)\n\n"
+            + token_list_text
+        )
+        prompt_main = PROMPT_MAIN + suffix
+        prompt_aux = PROMPT_AUX + suffix
+        prompt_extras = PROMPT_EXTRAS + suffix
+
     shared_call_kwargs = dict(
         client=client,
         model=args.model,
@@ -382,21 +428,21 @@ def main() -> int:
     with ThreadPoolExecutor(max_workers=3) as executor:
         future_main = executor.submit(
             single_call,
-            prompt=PROMPT_MAIN,
+            prompt=prompt_main,
             response_schema_path=SCHEMA_PATH_MAIN,
             diag_label="main",
             **shared_call_kwargs,
         )
         future_aux = executor.submit(
             single_call,
-            prompt=PROMPT_AUX,
+            prompt=prompt_aux,
             response_schema_path=SCHEMA_PATH_AUX,
             diag_label="aux",
             **shared_call_kwargs,
         )
         future_extras = executor.submit(
             single_call,
-            prompt=PROMPT_EXTRAS,
+            prompt=prompt_extras,
             response_schema_path=SCHEMA_PATH_EXTRAS,
             diag_label="extras",
             **shared_call_kwargs,
@@ -410,13 +456,13 @@ def main() -> int:
             return 1
 
     merged = merge_airfare_lines(result_main, result_aux, result_extras)
-    # Inject source_filename + populate bbox grounding via Document AI
-    # — same pattern as run_extraction does for single-call kinds.
-    # bbox failure is non-fatal (helper logs and leaves record unchanged).
+    # Inject source_filename + populate bbox grounding. Pass the
+    # already-OCR'd doc so populate_bboxes (dual-path) doesn't call
+    # Document AI a second time.
     for entry in merged:
         if isinstance(entry, dict):
             entry["source_filename"] = args.image.name
-            populate_bboxes(entry, args.image)
+            populate_bboxes(entry, args.image, doc=doc)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(merged, indent=2, ensure_ascii=False))
