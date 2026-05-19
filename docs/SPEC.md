@@ -24,8 +24,8 @@ If a piece of code touches two layers' worth of concern, it is wrong.
 |---|---|---|---|
 | 1 | **Extraction** | `scripts/extract_<kind>.py` (one per expense kind) | One Gemini call per uploaded document — receipt image → typed JSON — for most kinds (meal, transport). Kinds whose detail block exceeds Vertex's schema property-count ceiling (lodging today; > ~5 `_meta`-wrapped T2/T3 leaves) make **two parallel calls** with their schema split across them; the per-kind script merges the outputs back into the same per-doc JSON shape. The dispatcher in `local_app_simple.py` picks the script based on the FA's per-file kind choice in the upload form. See §7 for when to use the multi-call pattern. **Each extractor also makes ONE Document AI OCR call per document BEFORE Gemini** (Leapfrog L.3–L.5; docs/leapfrog-plan.md): DocAI's numbered token list gets appended to Gemini's prompt; Gemini returns the value + a verbatim `quote` + `token_ids` (integer indices into the token list) per `document_span` evidence entry. After Gemini returns, `scripts/evidence_bbox.py::populate_bboxes` resolves `token_ids` to bboxes via dict lookup. A Levenshtein verifier (threshold 0.7) catches Gemini-hallucinated IDs; on rejection (or absent token_ids) the code falls back to the legacy text-matching path against the same DocAI tokens. Either way bboxes land in `_meta.evidence[].bboxes` — pure metadata the workbench reads at render time to draw a spot-check halo. OCR failure is non-fatal: extraction proceeds, bboxes are absent, workbench falls back to "no halo." |
 | 2 | **Derivation** | (inside extraction) | Fields a single document can yield from its own contents. No cross-document signal. |
-| 3 | **Reduction** | `src/reduce.rs` | Combines per-document JSONs into one `ExpenseReport`. Aggregations like `total_usd`, `transaction_date`, derived `category` + confidence. |
-| 4 | **Validation** | `src/validator_typed.rs` (+ `src/validator.rs`) | Checks the assembled `ExpenseReport` against business rules. Produces `ValidationReport` (issues only — never mutates the report). |
+| 3 | **Reduction** | `src/reduce.rs` (+ `src/fa_input.rs::apply_to_report`) | Combines per-document JSONs into one `ExpenseReport`. Aggregations like `total_usd`, `transaction_date`, derived `category` + confidence. **FA-entered general_information fields** (payee, business_purpose, authorized_by, payment_method, foreign_activity_type) overlay the reduced report via `apply_to_report` when the `reduce_extractions` binary gets `--fa-input <path>`; FA values are wrapped with `kind: user_input, origin: fa_upload_form` evidence. |
+| 4 | **Validation** | `src/validator_typed.rs` (+ `src/validator.rs`) | Checks the assembled `ExpenseReport` against business rules. Produces `ValidationReport` (issues only — never mutates the report). Includes hand-written passes alongside the rule-engine ones — e.g. `check_dates_within_trip_window` warns when a transaction line's date falls outside the FA-entered `business_purpose.when` window. |
 | 5 | **Display** | `src/workbench_simple.rs` (+ `src/workbench_simple.css`) | Renders typed report + validation issues into the FA-facing workbench HTML. Pure formatting; no business decisions. |
 | 6 | **Submission** | (not implemented) | Future: translate the internal model into Stanford's portal API payload. Today the FA reads the workbench and submits manually. |
 
@@ -35,6 +35,8 @@ The key invariants:
 - **Validation takes `&ExpenseReport`** (immutable borrow). The type system literally forbids it from changing values; it can only emit issues.
 - **Display takes everything and produces a `String`.** No side effects.
 - **The orchestrating binary calls the layers in order**: reduce → validate → render. Never out of order, never reverse.
+
+**FA input as a side channel**: The FA fills a fieldset on the upload form before picking files (payee, business_purpose, authorized_by, payment_method, foreign_activity_type, trip date window). Flask serializes those fields to `fa_input.json` in the upload directory; `reduce_extractions --fa-input <path>` reads the file after the per-receipt reduction and overlays the values into `general_information.*` with `kind: user_input` evidence. The file is optional — omitting it leaves the document-driven flow unchanged. The FA's "Where" field also uses Google Places API autocomplete (via Flask's `/places/autocomplete` proxy) for live city/state/country suggestions; the underlying input remains free-form text.
 
 ---
 
@@ -73,12 +75,19 @@ graph TB
 
     Vertex["Vertex AI / Gemini API"]
     DocAI["Document AI<br/>(OCR_PROCESSOR)"]
+    Places["Google Places API<br/>(New)"]
     Schema["schema.yaml<br/>(source of truth)"]
     Codegen["scripts/generate_schema_artifacts.py<br/>scripts/generate_response_schema.py"]
     RsMeal["generated/response_schema_meal.json"]
     RsTransport["generated/response_schema_transport.json"]
+    FaInput["fa_input.json<br/>FA fieldset values"]
+    FaInputRs[fa_input]
 
-    UI -->|POST /upload<br/>file_N + kind_N| Flask
+    UI -->|GET /places/autocomplete?q=...<br/>on Where keystrokes| Flask
+    Flask -->|HTTPS POST| Places
+    Places -->|city/state/country suggestions| Flask
+    UI -->|POST /upload<br/>file_N + kind_N + fa_* form fields| Flask
+    Flask -->|writes per FA fieldset| FaInput
     Flask -->|kind=meal| ExtMeal
     Flask -->|kind=transport| ExtTransport
     ExtMeal --- ExtLib
@@ -92,7 +101,8 @@ graph TB
     Vertex -->|JSON: values + quote + token_ids| ExtTransport
     ExtMeal -->|extractions/*.json<br/>incl. bboxes in _meta| Flask
     ExtTransport -->|extractions/*.json<br/>incl. bboxes in _meta| Flask
-    Flask -->|spawns| Reduce
+    Flask -->|spawns: --in --out --fa-input| Reduce
+    FaInput -.read by.-> Reduce
     Reduce -->|reduced/report.json| Flask
     Flask -->|spawns| Render
     Render -->|workbench.html| Flask
@@ -108,13 +118,16 @@ graph TB
     RsTransport -.read by.-> ExtTransport
 
     Reduce --- Reducer
+    Reduce --- FaInputRs
     Render --- Vald
     Render --- Wb
     Reducer -.uses.-> ERcpt
     Reducer -.uses.-> ER
     Reducer -.uses.-> Meta
+    FaInputRs -.uses.-> ER
     Vald -.uses.-> ER
     Vald -.uses.-> VR
+    Vald -.uses.-> FaInputRs
     Wb -.uses.-> ER
     Wb -.uses.-> ERcpt
 ```
@@ -139,10 +152,11 @@ sequenceDiagram
     participant Render as render_workbench_from_report (Rust)
     participant Disk as .scratch/uploads/{id}/
 
-    FA->>Browser: pick files + kind per file, click Process Receipts
-    Browser->>IAP: POST /upload (multipart with file_N + kind_N pairs)
+    FA->>Browser: fill fieldset (payee, business_purpose, dates, etc.)<br/>pick files + kind per file, click Process Receipts
+    Browser->>IAP: POST /upload (multipart with file_N + kind_N pairs + fa_* fields)
     IAP->>Flask: forwarded request (auth verified)
     Flask->>Disk: save raw files to files/
+    Flask->>Disk: write fa_input.json (FA fieldset values)
 
     loop for each (uploaded file, kind) pair
         Note over Flask: dispatcher picks extract_meal.py or<br/>extract_transport.py from FA's kind choice
@@ -157,14 +171,16 @@ sequenceDiagram
         Extract-->>Flask: exit 0
     end
 
-    Flask->>Reduce: subprocess: --in extractions/ --out reduced/report.json
+    Flask->>Reduce: subprocess: --in extractions/ --out reduced/report.json --fa-input fa_input.json
     Reduce->>Disk: read all extractions/*.json
+    Reduce->>Disk: read fa_input.json (if present)
+    Note over Reduce: reduce_to_expense_report(receipts)<br/>then fa_input::apply_to_report(report, fa)
     Reduce->>Disk: write reduced/report.json
     Reduce-->>Flask: exit 0
 
     Flask->>Render: subprocess: --report reduced/... --receipts-dir extractions/ --out workbench.html
     Render->>Disk: read report.json + extractions
-    Note over Render: validate_typed(&report)<br/>render_workbench_html(report, receipts, validation)
+    Note over Render: validate_typed(&report) — incl. check_dates_within_trip_window<br/>render_workbench_html(report, receipts, validation)
     Render->>Disk: write workbench.html
     Render-->>Flask: exit 0
 
@@ -393,8 +409,10 @@ A cheat-sheet for "which file does X belong in?"
 | Per-document I/O type | `src/extracted_receipt.rs` (incl. `Extras`, `NightlyRate`, `Segment` bare-array entries) |
 | Provenance wrapper + metadata | `src/meta.rs`, `src/draft.rs` |
 | Reduction | `src/reduce.rs` |
-| Traversal-driven validation | `src/validator_typed.rs` |
+| Traversal-driven validation | `src/validator_typed.rs` (incl. `check_dates_within_trip_window` hand-written pass) |
 | Validator types | `src/validator.rs` |
+| FA-input overlay (type + parser + `apply_to_report` + `parse_when_window`) | `src/fa_input.rs` (consumed by `reduce_extractions --fa-input` and by the validator's date-window check) |
+| FA-input per-upload file contract | `.scratch/uploads/<id>/fa_input.json` (JSON keys mirror `FaInput` struct field names; Flask writes it from POST form, Rust parses it via serde) |
 | Workbench HTML renderer | `src/workbench_simple.rs` (+ `src/workbench_simple.css`) |
 | Reduction binary | `src/bin/reduce_extractions.rs` |
 | Render binary | `src/bin/render_workbench_from_report.rs` |
@@ -407,7 +425,7 @@ A cheat-sheet for "which file does X belong in?"
 | Leapfrog architecture spike (kept as historical artifact) | `scripts/spike_leapfrog.py` (5-receipt + corpus-scale spike that validated token-id grounding at 100/100 verifier pass; informed L.1–L.5), `scripts/spike_leapfrog_retrofit.py` (one-shot UI overlay tool used during L.0 visual sanity-check; superseded by L.3–L.5 production wiring) |
 | Leapfrog design doc | `docs/leapfrog-plan.md` |
 | Schema-acceptance pre-deploy probe | `scripts/probe_response_schemas.py` (sends a 1×1 PNG generate_content per generated schema; catches Vertex-rejected schemas before push) |
-| Flask + gunicorn entry point | `scripts/local_app_simple.py` |
+| Flask + gunicorn entry point | `scripts/local_app_simple.py` (incl. `/places/autocomplete` proxy backed by Google Places API via ADC, and the custom combobox JS that drives the "Where" autocomplete UI) |
 | Acceptance harness | `scripts/acceptance_check.py` |
 | Manual deploy escape hatch | `scripts/deploy.sh` |
 | Cloud Build pipeline | `deploy/cloudbuild.yaml` |
