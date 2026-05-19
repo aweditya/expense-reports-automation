@@ -20,6 +20,14 @@ Keep entries short. The point is recall, not narrative.
 
 ## Entries
 
+### 2026-05-19 — algorithmically derived output filename collided; second extraction silently overwrote the first
+
+**What happened:** Re-extracting the 4 remaining meal receipts via Leapfrog L.3, I used a shell loop that derived the cached-JSON filename by stripping the `meal_<DATE>_` prefix from the receipt's filename (`meal_2026-04-19_mj-sushi-palo-alto.jpeg` → `meal-mj-sushi-palo-alto.json`). Both MJ Sushi receipts (different dates, different content) stripped to the same stem; the 2026-05-02 extraction silently overwrote the 2026-04-19 one. The original cached files (`meal-mj-sushi-2026-04-19.json`, `meal-mj-sushi-2026-05-02.json`, both date-included) stayed untouched, so the reducer ended up assembling 21 transaction lines from 3 MJ Sushi entries instead of 2.
+
+**Why it was wrong:** `scripts/acceptance_check.py` uses date-suffixed output names specifically to disambiguate the two MJ Sushi receipts. My one-off shell loop didn't honor that convention — it derived names with a pattern that only worked when the receipt content (not just date) was unique. The reducer's "20 vs 21 transaction lines" discrepancy was the first symptom; without spotting it I would have shown the user a workbench with phantom-duplicate MJ Sushi cards.
+
+**Rule going forward:** When generating output paths from input paths algorithmically, either (a) check for collisions by collecting candidate names first and asserting they're unique, or (b) reuse the canonical names already established elsewhere in the project (`acceptance_check.py`'s RECEIPTS list in this case). For one-off scripts where collisions are unlikely, at minimum print the input→output mapping before running so a glance catches duplicate destinations.
+
 ### 2026-05-18 — trusted the file extension; tamarine was HEIC bytes with a .png name
 
 **What happened:** The Stage B robustness audit revealed that 11 of 13 residual matching-misses were all on `tamarine.png` — Document AI returned a 400 "Invalid image content" on that one image. Spent several rounds proposing increasingly clever matching-algorithm tiers (neighborhood search, etc.) trying to lift the audit numbers. None of it helped because **DocAI returned zero tokens, so there was nothing to match against in the first place**. Eventually ran `file` against the image: it's HEIC/HEIF (iPhone format) with a `.png` extension. Gemini happened to content-sniff and accepted it; DocAI was strict about declared MIME vs actual bytes. Scanned the rest of the corpus — only this one file had the mismatch.
