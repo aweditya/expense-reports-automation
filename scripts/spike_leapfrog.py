@@ -68,18 +68,19 @@ MODEL = "gemini-3-flash-preview"  # matches DEFAULT_MODEL in extractor_lib.py
 PROMPT_TEMPLATE = """You are extracting key fields from a receipt.
 
 For each of these fields, return:
-  - `name`: one of {date, total_amount, currency, vendor_name, address, expense_type}
+  - `name`: one of {{date, total_amount, currency, vendor_name, address, expense_type}}
   - `value`: the extracted value (a string; format dates as YYYY-MM-DD)
   - `quote`: a verbatim text snippet from the receipt that contains the value
   - `token_ids`: the integer ids of the tokens (from the numbered list below)
     that cover the quote text.
 
 The token_ids MUST come from the provided numbered token list below.
-Each token id is formatted as `p<PAGE>.t<INDEX>` where PAGE is the 1-based
-page number and INDEX is the 1-based token position on that page. Return
-them as integer indices for the page you're citing (e.g. for `p2.t14`,
-return `14` and note in `value` which page if relevant). For this spike
-you may assume page 1 unless the receipt is clearly multi-page.
+Each token id is formatted as `t<N>` where N is a 1-based integer that
+identifies the token uniquely across the WHOLE receipt (no page
+distinction — page boundaries are invisible to you). Return token_ids
+as integers (e.g. for `[t142]`, return `142`). Multi-page receipts use
+one continuous ID range; just cite the tokens whose text covers your
+quote.
 
 If a field is not present on the receipt, omit that entry rather than
 guessing.
@@ -121,23 +122,30 @@ def _norm(s: str) -> str:
     return " ".join(s.split()).lower()
 
 
-def format_token_list(doc) -> tuple[str, dict[tuple[int, int], list[float]]]:
-    """Return (numbered-text-list, {(page, idx) -> bbox}).
+def format_token_list(doc) -> tuple[str, dict[int, list[float]], dict[int, str]]:
+    """Return (numbered-text-list, {id -> bbox}, {id -> text}).
 
-    Format: `[p1.t1] AIR\n[p1.t2] INDIA\n...\n[p2.t1] Fee\n...`
+    Format: `[t1] AIR\n[t2] INDIA\n[t3] PASSENGER\n...`
+
+    Global IDs across the whole document — page boundaries are
+    invisible in the prompt. This is the design we'd want in
+    production anyway: one ID space per receipt, no page-
+    disambiguation needed in the response_schema.
     """
     lines = []
-    bbox_by_id: dict[tuple[int, int], list[float]] = {}
-    text_by_id: dict[tuple[int, int], str] = {}
-    for p_idx, page in enumerate(doc.pages, start=1):
-        for t_idx, tok in enumerate(page.tokens, start=1):
+    bbox_by_id: dict[int, list[float]] = {}
+    text_by_id: dict[int, str] = {}
+    global_idx = 0
+    for page in doc.pages:
+        for tok in page.tokens:
             text = _layout_text(doc, tok.layout).strip()
             bbox = _layout_bbox(tok.layout)
             if not text or bbox is None:
                 continue
-            lines.append(f"[p{p_idx}.t{t_idx}] {text}")
-            bbox_by_id[(p_idx, t_idx)] = bbox
-            text_by_id[(p_idx, t_idx)] = text
+            global_idx += 1
+            lines.append(f"[t{global_idx}] {text}")
+            bbox_by_id[global_idx] = bbox
+            text_by_id[global_idx] = text
     return "\n".join(lines), bbox_by_id, text_by_id
 
 
@@ -206,15 +214,13 @@ def run_one(label: str, receipt_path: pathlib.Path, client) -> dict:
         quote = f.get("quote", "")
         token_ids = f.get("token_ids", []) or []
 
-        # Spike heuristic: assume page 1 (matches PROMPT instruction).
-        # In production we'd require explicit page from Gemini.
-        page = 1
+        # Global token ID resolution — see format_token_list comment.
         claimed_text_parts = []
         valid_ids = []
         invalid_ids = []
         for tid in token_ids:
-            if (page, tid) in text_by_id:
-                claimed_text_parts.append(text_by_id[(page, tid)])
+            if tid in text_by_id:
+                claimed_text_parts.append(text_by_id[tid])
                 valid_ids.append(tid)
             else:
                 invalid_ids.append(tid)
