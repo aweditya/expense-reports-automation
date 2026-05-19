@@ -134,8 +134,6 @@ def upload():
     extractions_dir.mkdir(parents=True, exist_ok=True)
     reduced_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # FA-input: collect form fields, write fa_input.json. Pure side-effect
-    # at this stage; reducer doesn't consume it yet — wires up in S.3.
     write_fa_input(request.form, fa_input_path)
 
     saved = save_uploaded_files(pairs, files_dir)
