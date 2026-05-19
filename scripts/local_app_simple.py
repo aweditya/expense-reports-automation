@@ -21,6 +21,7 @@ Run locally:
 from __future__ import annotations
 
 import io
+import json
 import os
 import re
 import subprocess
@@ -127,10 +128,15 @@ def upload():
     extractions_dir = upload_dir / "extractions"
     reduced_path = upload_dir / "reduced" / "report.json"
     workbench_path = upload_dir / "workbench.html"
+    fa_input_path = upload_dir / "fa_input.json"
 
     files_dir.mkdir(parents=True, exist_ok=True)
     extractions_dir.mkdir(parents=True, exist_ok=True)
     reduced_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # FA-input: collect form fields, write fa_input.json. Pure side-effect
+    # at this stage; reducer doesn't consume it yet — wires up in S.3.
+    write_fa_input(request.form, fa_input_path)
 
     saved = save_uploaded_files(pairs, files_dir)
     extract_all(saved, extractions_dir)
@@ -171,6 +177,47 @@ def serve_upload_file(upload_id: str, filename: str):
 
 
 # ─── Pipeline orchestration ────────────────────────────────────────────────
+
+def write_fa_input(form, out_path: Path) -> None:
+    """Collect FA-input fields from the upload form and write them as
+    `fa_input.json`. Field names match the HTML `name=` attributes
+    (`fa_<key>`); the JSON keys match `FaInput`'s field names in
+    `src/fa_input.rs` so the Rust side parses them with serde.
+
+    All fields are optional in the JSON. Blank inputs become `None`
+    rather than empty strings — keeps the FA's intent ("I didn't fill
+    this") distinct from "I typed an empty string." If NO `fa_*` fields
+    appear in the form (e.g. a programmatic POST that bypasses the
+    fieldset), no file is written and the reducer falls back to the
+    no-FA-input flow (S.3 makes --fa-input optional).
+    """
+    mapping = {
+        "fa_payee_name": "payee_name",
+        "fa_payee_affiliation": "payee_affiliation",
+        "fa_event_name": "event_name",
+        "fa_bp_who": "business_purpose_who",
+        "fa_bp_what": "business_purpose_what",
+        "fa_bp_when": "business_purpose_when",
+        "fa_bp_where": "business_purpose_where",
+        "fa_bp_why": "business_purpose_why",
+        "fa_bp_key": "business_purpose_key_30char",
+        "fa_authorized_by": "authorized_by",
+        "fa_rush_processing": "rush_processing",
+        "fa_payment_method": "payment_method",
+        "fa_foreign_activity_type": "foreign_activity_type",
+    }
+    data: dict[str, str] = {}
+    for form_key, json_key in mapping.items():
+        if form_key not in form:
+            continue
+        value = form.get(form_key, "").strip()
+        if value:
+            data[json_key] = value
+    if not data:
+        return  # nothing to persist
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+
 
 def save_uploaded_files(pairs, dest_dir: Path) -> list[tuple[Path, str]]:
     """Save each uploaded file to dest_dir under a deduped, sanitized name.
@@ -380,12 +427,27 @@ UPLOAD_FORM_HTML = """\
 <style>
   body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
          background:#f6f7f9; color:#1a1d1f; }
-  .shell { max-width:600px; margin:80px auto; padding:32px 28px; background:#fff;
+  .shell { max-width:820px; margin:80px auto; padding:32px 28px; background:#fff;
            border:1px solid #e5e7eb; border-radius:8px; }
   .eyebrow { margin:0 0 4px; font-size:11px; font-weight:600; text-transform:uppercase;
              letter-spacing:.08em; color:#6b7280; }
   h1 { margin:0 0 16px; font-size:24px; font-weight:600; }
+  h2 { margin:24px 0 12px; font-size:14px; font-weight:600; color:#374151;
+       text-transform:uppercase; letter-spacing:.04em; }
   p  { margin:0 0 16px; color:#4b5563; font-size:14px; line-height:1.5; }
+  fieldset { border:1px solid #e5e7eb; border-radius:6px; padding:16px 18px 6px;
+             margin:0 0 20px; }
+  fieldset legend { padding:0 8px; font-size:12px; font-weight:600;
+                    text-transform:uppercase; letter-spacing:.06em; color:#6b7280; }
+  .field-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 14px; }
+  .field { display:flex; flex-direction:column; gap:3px; margin:0 0 10px; }
+  .field.full { grid-column:1 / -1; }
+  .field label { font-size:12px; font-weight:500; color:#374151; }
+  .field label .opt { font-weight:400; color:#9ca3af; }
+  .field input[type=text], .field select { padding:6px 8px; border:1px solid #d1d5db;
+                                            border-radius:4px; font-size:13px;
+                                            background:#fff; color:#1a1d1f; font-family:inherit; }
+  .field .hint { font-size:11px; color:#9ca3af; }
   .file-row { display:flex; gap:10px; align-items:center; margin:0 0 12px; }
   .file-row input[type=file] { flex:1; min-width:0; font-size:13px; }
   .file-row select { padding:6px 8px; border:1px solid #d1d5db; border-radius:4px;
@@ -403,10 +465,100 @@ UPLOAD_FORM_HTML = """\
 <div class="shell">
   <p class="eyebrow">Stanford Expense Report</p>
   <h1>Upload Receipts</h1>
-  <p>Pick each receipt (PDF, JPEG, PNG) and tell the system what kind of
-     document it is. We'll extract the fields, reduce them into a single
-     report, and show you what's filled and what still needs your input.</p>
+  <p>Fill in the report details below, then attach each receipt (PDF, JPEG,
+     PNG) and tell the system what kind of document it is. We'll extract
+     fields from the receipts, combine them with what you entered, and show
+     you what's filled and what still needs your input.</p>
   <form method="post" action="/upload" enctype="multipart/form-data">
+
+    <fieldset>
+      <legend>Report details</legend>
+      <div class="field-grid">
+        <div class="field">
+          <label for="fa_payee_name">Payee name</label>
+          <input type="text" id="fa_payee_name" name="fa_payee_name" required>
+        </div>
+        <div class="field">
+          <label for="fa_payee_affiliation">Payee affiliation</label>
+          <select id="fa_payee_affiliation" name="fa_payee_affiliation" required>
+            <option value="" disabled selected>Pick one…</option>
+            <option value="stanford_faculty">Stanford faculty</option>
+            <option value="stanford_staff">Stanford staff</option>
+            <option value="stanford_student">Stanford student</option>
+            <option value="stanford_postdoc">Stanford postdoc</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="field full">
+          <label for="fa_event_name">Event name <span class="opt">(optional)</span></label>
+          <input type="text" id="fa_event_name" name="fa_event_name">
+          <span class="hint">Conference / event name. Skip for non-event reports.</span>
+        </div>
+        <div class="field">
+          <label for="fa_authorized_by">Authorized by</label>
+          <input type="text" id="fa_authorized_by" name="fa_authorized_by" required>
+          <span class="hint">Approver name / SUNet ID.</span>
+        </div>
+        <div class="field">
+          <label for="fa_rush_processing">Rush processing</label>
+          <select id="fa_rush_processing" name="fa_rush_processing" required>
+            <option value="no" selected>No</option>
+            <option value="yes">Yes</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="fa_payment_method">Payment method</label>
+          <input type="text" id="fa_payment_method" name="fa_payment_method" required
+                 placeholder="e.g. PCard / Personal">
+        </div>
+        <div class="field">
+          <label for="fa_foreign_activity_type">Foreign activity type <span class="opt">(if applicable)</span></label>
+          <select id="fa_foreign_activity_type" name="fa_foreign_activity_type">
+            <option value="" selected>Skip if domestic-only</option>
+            <option value="conference">Conference</option>
+            <option value="research_collaboration">Research collaboration</option>
+            <option value="fieldwork">Fieldwork</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+      </div>
+
+      <h2>Business purpose</h2>
+      <div class="field-grid">
+        <div class="field full">
+          <label for="fa_bp_who">Who</label>
+          <input type="text" id="fa_bp_who" name="fa_bp_who" required
+                 placeholder="e.g. Payee + 2 collaborators">
+        </div>
+        <div class="field full">
+          <label for="fa_bp_what">What</label>
+          <input type="text" id="fa_bp_what" name="fa_bp_what" required
+                 placeholder="e.g. Presented research at ASPLOS 2026">
+        </div>
+        <div class="field">
+          <label for="fa_bp_when">When</label>
+          <input type="text" id="fa_bp_when" name="fa_bp_when" required
+                 placeholder="e.g. March 14-19 2026">
+        </div>
+        <div class="field">
+          <label for="fa_bp_where">Where</label>
+          <input type="text" id="fa_bp_where" name="fa_bp_where" required
+                 placeholder="e.g. Pittsburgh, PA">
+        </div>
+        <div class="field full">
+          <label for="fa_bp_why">Why</label>
+          <input type="text" id="fa_bp_why" name="fa_bp_why" required
+                 placeholder="e.g. Advance Stanford research collaboration">
+        </div>
+        <div class="field full">
+          <label for="fa_bp_key">Short label <span class="opt">(max 30 chars)</span></label>
+          <input type="text" id="fa_bp_key" name="fa_bp_key" required maxlength="30"
+                 placeholder="e.g. ASPLOS-2026-Pittsburgh">
+        </div>
+      </div>
+    </fieldset>
+
+    <h2>Receipts</h2>
     <div id="file-rows">
       <div class="file-row">
         <input type="file" name="file_0" required
