@@ -2,6 +2,7 @@ pub mod draft;
 pub mod extracted_receipt;
 #[path = "../generated/expense_report_model.rs"]
 pub mod expense_report_model;
+pub mod fa_input;
 pub mod meta;
 pub mod parse;
 pub mod reduce;
