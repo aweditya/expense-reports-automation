@@ -20,6 +20,7 @@ Run locally:
 
 from __future__ import annotations
 
+import io
 import os
 import re
 import subprocess
@@ -30,6 +31,13 @@ from html import escape as html_escape
 from pathlib import Path
 
 from flask import Flask, abort, redirect, request, send_from_directory
+from PIL import Image
+from pillow_heif import register_heif_opener
+
+# Register the HEIF opener once at module load. After this, Pillow's
+# Image.open() transparently handles HEIC/HEIF input like any other format.
+# Idempotent — safe to call multiple times.
+register_heif_opener()
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -167,15 +175,89 @@ def serve_upload_file(upload_id: str, filename: str):
 def save_uploaded_files(pairs, dest_dir: Path) -> list[tuple[Path, str]]:
     """Save each uploaded file to dest_dir under a deduped, sanitized name.
     Threads each file's kind through unchanged — the dispatcher (extract_all)
-    needs it to pick the right extractor."""
+    needs it to pick the right extractor.
+
+    Pre-flight: content-sniff every upload's bytes. If they're HEIC/HEIF
+    (iPhone format, often mis-extensioned as .png/.jpg by iOS export), transcode
+    to JPEG before writing. Document AI strictly enforces declared MIME vs
+    actual bytes and 400s on the mismatch; this normalizes the input so the
+    downstream extractors see a real JPEG. See docs/redesign-regrets.md
+    2026-05-18 'trusted the file extension; tamarine was HEIC bytes'.
+    """
     seen: set[str] = set()
     out: list[tuple[Path, str]] = []
     for f, kind in pairs:
-        name = dedupe(sanitize_filename(f.filename), seen)
+        data = f.read()
+        name = sanitize_filename(f.filename)
+        converted = convert_heic_to_jpeg_if_needed(data, name)
+        if converted is not None:
+            data, name = converted
+        name = dedupe(name, seen)
         path = dest_dir / name
-        f.save(str(path))
+        path.write_bytes(data)
         out.append((path, kind))
     return out
+
+
+# HEIF/HEIC brands that may appear at offset 8 inside the ISO-BMFF `ftyp` box.
+# Apple iOS writes `heic` (single image) or `heix` (newer); `mif1`/`msf1` are
+# the HEIF still-image and sequence brands; `hevc`/`hevx`/`hevm`/`hevs` are
+# HEVC-encoded variants; `heim`/`heis` are image-sequence variants. Sniffing
+# at the byte level beats trusting the file extension — iOS export commonly
+# preserves the source extension while changing the underlying bytes.
+_HEIF_BRANDS = (
+    b"heic", b"heix", b"hevc", b"hevx", b"heim", b"heis",
+    b"hevm", b"hevs", b"mif1", b"msf1",
+)
+
+
+def is_heic_bytes(data: bytes) -> bool:
+    """True if the buffer's magic number identifies it as HEIC/HEIF.
+
+    ISO-BMFF layout: bytes 0-3 = box size, bytes 4-7 = 'ftyp', bytes 8-11 =
+    major brand. We only need brand-matching; a wider compatibility-brand
+    scan would help on edge cases but the common iOS cases hit on major brand.
+    """
+    if len(data) < 12:
+        return False
+    if data[4:8] != b"ftyp":
+        return False
+    return data[8:12] in _HEIF_BRANDS
+
+
+def convert_heic_to_jpeg_if_needed(
+    data: bytes, filename: str
+) -> tuple[bytes, str] | None:
+    """If `data` is HEIC/HEIF, transcode to JPEG and return (jpeg_bytes,
+    new_name_with_jpg_ext). Otherwise return None (caller keeps the original).
+
+    Failure-tolerant: if the transcode itself raises, log a warning and return
+    None so the caller falls back to the original bytes. The downstream
+    extractors will fail more gracefully than blocking the upload entirely.
+    """
+    if not is_heic_bytes(data):
+        return None
+    try:
+        with Image.open(io.BytesIO(data)) as img:
+            rgb = img.convert("RGB")
+            buf = io.BytesIO()
+            rgb.save(buf, format="JPEG", quality=95)
+            jpeg_bytes = buf.getvalue()
+    except Exception as exc:  # noqa: BLE001
+        print(
+            f"  ! HEIC transcode failed for {filename!r}: {exc}; "
+            f"saving original bytes unchanged",
+            file=sys.stderr,
+            flush=True,
+        )
+        return None
+    new_name = re.sub(r"\.[^.]+$", "", filename) + ".jpg"
+    print(
+        f"  ▸ transcoded HEIC upload {filename!r} → {new_name!r} "
+        f"({len(data)} → {len(jpeg_bytes)} bytes)",
+        flush=True,
+    )
+    return jpeg_bytes, new_name
 
 
 def extract_all(
