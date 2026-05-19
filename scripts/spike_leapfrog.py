@@ -48,17 +48,18 @@ from google import genai  # noqa: E402
 from google.genai import types  # noqa: E402
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
-OUT = REPO / ".scratch" / "audit" / "leapfrog_spike.txt"
+OUT_TXT = REPO / ".scratch" / "audit" / "leapfrog_spike.txt"
+OUT_JSON = REPO / ".scratch" / "audit" / "leapfrog_spike.json"
+RECEIPTS_DIR = REPO / "receipts"
 
-# 5 receipts chosen per plan §6 to span PDF/image + airfare/hotel/
-# transport/meal + simple/complex layouts.
-RECEIPTS = [
-    ("airfare_PDF", "airfare_2024-09-02_air-india-bom-sfo-oneway.pdf"),
-    ("hotel_PDF", "lodging_2024-01-06_hyatt-place-las-vegas-folio.pdf"),
-    ("hotel_multiline_PDF", "lodging_2024-01-14_sheraton-novi-folio.pdf"),
-    ("transport_PDF", "transport_2023-01-05_lyft-las-vegas-strip-to-paradise.pdf"),
-    ("meal_image", "meal_2026-03-05_tamarine-palo-alto.jpg"),  # just-converted JPEG
-]
+# Initial L.0 spike ran on 5 hardcoded receipts (see plan §6). The
+# extended run globs all `receipts/*.{pdf,jpg,jpeg,png}` so we can
+# measure how the architecture behaves at corpus scale before
+# committing to L.1+. The flat spike schema still only asks for 6
+# kind-agnostic fields per receipt (date, total_amount, currency,
+# vendor_name, address, expense_type) — production wiring lands in
+# L.3 with real kind-specific prompts.
+SUPPORTED_EXTS = {".pdf", ".png", ".jpg", ".jpeg"}
 
 # Project for Vertex/Gemini — same as the production extractors use.
 PROJECT = "soe-agile-agents"
@@ -185,12 +186,24 @@ def detect_mime(path: pathlib.Path) -> str:
     }.get(ext, "application/octet-stream")
 
 
+def _union_bbox(rects: list[list[float]]) -> list[float]:
+    return [
+        min(r[0] for r in rects),
+        min(r[1] for r in rects),
+        max(r[2] for r in rects),
+        max(r[3] for r in rects),
+    ]
+
+
 def run_one(label: str, receipt_path: pathlib.Path, client) -> dict:
-    """Process one receipt; return per-receipt stats + raw fields."""
+    """Process one receipt; return per-receipt stats + raw fields +
+    resolved bboxes (so the retrofit script can write them into the
+    cached per-doc JSONs)."""
     print(f"  [{label}] {receipt_path.name}", flush=True)
     doc = _ocr(receipt_path)
     if doc is None:
-        return {"label": label, "skipped": "unsupported mime"}
+        return {"label": label, "source_filename": receipt_path.name,
+                "skipped": "unsupported mime"}
     token_list_text, bbox_by_id, text_by_id = format_token_list(doc)
     prompt = PROMPT_TEMPLATE.format(token_list=token_list_text)
 
@@ -202,7 +215,8 @@ def run_one(label: str, receipt_path: pathlib.Path, client) -> dict:
             prompt,
         )
     except Exception as err:
-        return {"label": label, "error": str(err)}
+        return {"label": label, "source_filename": receipt_path.name,
+                "error": str(err)}
 
     fields = gemini_out.get("fields", []) or []
     per_field = []
@@ -218,10 +232,12 @@ def run_one(label: str, receipt_path: pathlib.Path, client) -> dict:
         claimed_text_parts = []
         valid_ids = []
         invalid_ids = []
+        bboxes = []
         for tid in token_ids:
             if tid in text_by_id:
                 claimed_text_parts.append(text_by_id[tid])
                 valid_ids.append(tid)
+                bboxes.append(bbox_by_id[tid])
             else:
                 invalid_ids.append(tid)
         claimed_text = " ".join(claimed_text_parts)
@@ -234,6 +250,12 @@ def run_one(label: str, receipt_path: pathlib.Path, client) -> dict:
         if passed:
             n_pass_verifier += 1
 
+        # Union of all valid token bboxes — one rect per field. Multi-
+        # rect support (when a quote appears in multiple places) would
+        # require Gemini to return multiple token_ids groups; spike
+        # asks for one group, gets one union.
+        resolved_bbox = _union_bbox(bboxes) if bboxes else None
+
         per_field.append({
             "name": name,
             "value": value,
@@ -243,10 +265,12 @@ def run_one(label: str, receipt_path: pathlib.Path, client) -> dict:
             "score": score,
             "verifier_passed": passed,
             "invalid_ids": invalid_ids,
+            "bbox": resolved_bbox,
         })
 
     return {
         "label": label,
+        "source_filename": receipt_path.name,
         "n_fields": len(fields),
         "n_returned_ids": n_returned_ids,
         "n_pass_verifier": n_pass_verifier,
@@ -257,7 +281,7 @@ def run_one(label: str, receipt_path: pathlib.Path, client) -> dict:
 
 
 def write_report(results: list[dict]) -> None:
-    OUT.parent.mkdir(parents=True, exist_ok=True)
+    OUT_TXT.parent.mkdir(parents=True, exist_ok=True)
     out: list[str] = []
     out.append("=" * 78)
     out.append("Leapfrog L.0 spike — token-id-grounded extraction")
@@ -312,24 +336,38 @@ def write_report(results: list[dict]) -> None:
     out.append("regression. The spike does not auto-compare against the production")
     out.append("extractor's output (kinds differ).")
 
-    OUT.write_text("\n".join(out) + "\n")
-    print(f"\nwrote {OUT}")
+    OUT_TXT.write_text("\n".join(out) + "\n")
+    print(f"wrote {OUT_TXT}")
+    # Structured JSON for spike_leapfrog_retrofit.py to consume.
+    OUT_JSON.write_text(json.dumps(results, indent=2) + "\n")
+    print(f"wrote {OUT_JSON}")
 
 
 def main() -> int:
     client = genai.Client(vertexai=True, project=PROJECT, location=LOCATION)
+    # Glob the entire receipts/ directory — the L.0 extended run tests
+    # at corpus scale rather than the original 5-receipt sample.
+    receipts = sorted(
+        p for p in RECEIPTS_DIR.iterdir()
+        if p.suffix.lower() in SUPPORTED_EXTS
+    )
+    if not receipts:
+        print(f"no receipts in {RECEIPTS_DIR}", file=sys.stderr)
+        return 1
+    print(f"running leapfrog spike against {len(receipts)} receipts...\n",
+          flush=True)
     results = []
-    for label, name in RECEIPTS:
-        path = REPO / "receipts" / name
-        if not path.exists():
-            print(f"  [{label}] SKIP: {path} not found", flush=True)
-            results.append({"label": label, "skipped": "file not found"})
-            continue
+    for path in receipts:
+        # Label = stem (filename without extension); makes it easy to
+        # cross-reference with cached .scratch/spike/*.json in the
+        # retrofit step.
+        label = path.stem
         try:
             results.append(run_one(label, path, client))
         except Exception as err:
             print(f"  [{label}] ERROR: {err}", flush=True)
-            results.append({"label": label, "error": str(err)})
+            results.append({"label": label, "source_filename": path.name,
+                            "error": str(err)})
     write_report(results)
     return 0
 
