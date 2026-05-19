@@ -137,6 +137,7 @@ fn derived_meta(confidence: ConfidenceLevel, origin: &str) -> FieldMetadata {
             quote: None,
             origin: Some(origin.to_owned()),
             bboxes: None,
+            token_ids: None,
         }],
         needs_review: false,
         flags: Vec::new(),

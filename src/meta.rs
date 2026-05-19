@@ -110,6 +110,7 @@ mod tests {
                     quote: Some("05/02/26".to_owned()),
                     origin: None,
                     bboxes: None,
+                    token_ids: None,
                 }],
                 needs_review: false,
                 flags: Vec::new(),

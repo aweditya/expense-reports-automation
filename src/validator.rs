@@ -814,6 +814,7 @@ mod tests {
             quote: None,
             origin: None,
             bboxes: None,
+            token_ids: None,
         }
     }
 
@@ -826,6 +827,7 @@ mod tests {
             quote: None,
             origin: Some(origin.to_owned()),
             bboxes: None,
+            token_ids: None,
         }
     }
 
@@ -838,6 +840,7 @@ mod tests {
             quote: None,
             origin: Some(origin.to_owned()),
             bboxes: None,
+            token_ids: None,
         }
     }
 

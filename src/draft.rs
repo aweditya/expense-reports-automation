@@ -49,6 +49,16 @@ pub struct EvidenceReference {
     /// cached extractions produced before the OCR pass landed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bboxes: Option<Vec<[f64; 4]>>,
+    /// Document AI token indices Gemini returned to ground this
+    /// evidence (Leapfrog L.1). Resolved to bboxes via dict lookup in
+    /// `scripts/evidence_bbox.py::populate_bboxes`. The bboxes (above)
+    /// are the artifact the workbench uses; token_ids are the
+    /// grounding-source receipt — preserved on round-trip so the
+    /// dual-path verifier and any future debugging tool can trace
+    /// which token each bbox came from. Optional; absent on
+    /// non-DocumentSpan evidence and on pre-L.1 cached extractions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_ids: Option<Vec<u32>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -327,6 +337,7 @@ fn legacy_evidence_reference(
             quote: None,
             origin: Some(source_document),
             bboxes: None,
+            token_ids: None,
         },
         EvidenceKind::UserInput => EvidenceReference {
             kind,
@@ -336,6 +347,7 @@ fn legacy_evidence_reference(
             quote: None,
             origin: Some(source_document),
             bboxes: None,
+            token_ids: None,
         },
         EvidenceKind::Document => EvidenceReference {
             kind,
@@ -345,6 +357,7 @@ fn legacy_evidence_reference(
             quote: None,
             origin: None,
             bboxes: None,
+            token_ids: None,
         },
         EvidenceKind::DocumentSpan => unreachable!(),
     })
@@ -390,12 +403,13 @@ fn parse_evidence_reference(
             quote,
             origin,
             // The legacy `ReportValue`-tree parser does not currently
-            // parse bboxes. The production flow deserializes via serde
-            // (ExtractedReceipt -> EvidenceReference) and bboxes go
-            // through that path. If this parser ever gets wired up to
-            // bboxes-bearing JSON, the unhandled-key check above will
-            // fail loudly — fix here when that happens.
+            // parse bboxes or token_ids. The production flow deserializes
+            // via serde (ExtractedReceipt -> EvidenceReference) and both
+            // ride through that path. If this parser ever gets wired up
+            // to such JSON, the unhandled-key check above will fail
+            // loudly — fix here when that happens.
             bboxes: None,
+            token_ids: None,
         },
         path,
     )

@@ -165,6 +165,7 @@ fn fa_wrapped<T>(value: T) -> Wrapped<T> {
                 quote: None,
                 origin: Some(FA_ORIGIN.to_owned()),
                 bboxes: None,
+                token_ids: None,
             }],
             needs_review: false,
             flags: Vec::new(),
