@@ -22,7 +22,7 @@ If a piece of code touches two layers' worth of concern, it is wrong.
 
 | # | Layer | Implemented in | Owns |
 |---|---|---|---|
-| 1 | **Extraction** | `scripts/extract_<kind>.py` (one per expense kind) | One Gemini call per uploaded document — receipt image → typed JSON — for most kinds (meal, transport). Kinds whose detail block exceeds Vertex's schema property-count ceiling (lodging today; > ~5 `_meta`-wrapped T2/T3 leaves) make **two parallel calls** with their schema split across them; the per-kind script merges the outputs back into the same per-doc JSON shape. The dispatcher in `local_app_simple.py` picks the script based on the FA's per-file kind choice in the upload form. See §7 for when to use the multi-call pattern. **Each extractor also makes one Document AI OCR call per document via `scripts/evidence_bbox.py::populate_bboxes`** — this matches each `document_span` evidence quote against OCR'd tokens and writes the union bbox into `_meta.evidence[].bboxes`. The bboxes are pure metadata the workbench reads at render time to draw a spot-check halo on the source receipt; OCR failure is non-fatal (record returned unchanged → workbench falls back to "no halo"). |
+| 1 | **Extraction** | `scripts/extract_<kind>.py` (one per expense kind) | One Gemini call per uploaded document — receipt image → typed JSON — for most kinds (meal, transport). Kinds whose detail block exceeds Vertex's schema property-count ceiling (lodging today; > ~5 `_meta`-wrapped T2/T3 leaves) make **two parallel calls** with their schema split across them; the per-kind script merges the outputs back into the same per-doc JSON shape. The dispatcher in `local_app_simple.py` picks the script based on the FA's per-file kind choice in the upload form. See §7 for when to use the multi-call pattern. **Each extractor also makes ONE Document AI OCR call per document BEFORE Gemini** (Leapfrog L.3–L.5; docs/leapfrog-plan.md): DocAI's numbered token list gets appended to Gemini's prompt; Gemini returns the value + a verbatim `quote` + `token_ids` (integer indices into the token list) per `document_span` evidence entry. After Gemini returns, `scripts/evidence_bbox.py::populate_bboxes` resolves `token_ids` to bboxes via dict lookup. A Levenshtein verifier (threshold 0.7) catches Gemini-hallucinated IDs; on rejection (or absent token_ids) the code falls back to the legacy text-matching path against the same DocAI tokens. Either way bboxes land in `_meta.evidence[].bboxes` — pure metadata the workbench reads at render time to draw a spot-check halo. OCR failure is non-fatal: extraction proceeds, bboxes are absent, workbench falls back to "no halo." |
 | 2 | **Derivation** | (inside extraction) | Fields a single document can yield from its own contents. No cross-document signal. |
 | 3 | **Reduction** | `src/reduce.rs` | Combines per-document JSONs into one `ExpenseReport`. Aggregations like `total_usd`, `transaction_date`, derived `category` + confidence. |
 | 4 | **Validation** | `src/validator_typed.rs` (+ `src/validator.rs`) | Checks the assembled `ExpenseReport` against business rules. Produces `ValidationReport` (issues only — never mutates the report). |
@@ -84,12 +84,12 @@ graph TB
     ExtMeal --- ExtLib
     ExtTransport --- ExtLib
     ExtLib --- EvBbox
-    ExtMeal -->|HTTPS| Vertex
-    ExtTransport -->|HTTPS| Vertex
-    Vertex -->|JSON: values + quotes| ExtMeal
-    Vertex -->|JSON: values + quotes| ExtTransport
     EvBbox -->|HTTPS| DocAI
-    DocAI -->|tokens + bboxes| EvBbox
+    DocAI -->|tokens with ids + bboxes| EvBbox
+    ExtMeal -->|HTTPS prompt + image + token list| Vertex
+    ExtTransport -->|HTTPS prompt + image + token list| Vertex
+    Vertex -->|JSON: values + quote + token_ids| ExtMeal
+    Vertex -->|JSON: values + quote + token_ids| ExtTransport
     ExtMeal -->|extractions/*.json<br/>incl. bboxes in _meta| Flask
     ExtTransport -->|extractions/*.json<br/>incl. bboxes in _meta| Flask
     Flask -->|spawns| Reduce
@@ -147,11 +147,12 @@ sequenceDiagram
     loop for each (uploaded file, kind) pair
         Note over Flask: dispatcher picks extract_meal.py or<br/>extract_transport.py from FA's kind choice
         Flask->>Extract: subprocess: --image f --output extractions/f.json
-        Extract->>Gemini: generate_content(prompt, image, response_schema)
-        Gemini-->>Extract: structured JSON (field values + evidence quotes)
         Extract->>DocAI: process_document(image)
-        DocAI-->>Extract: tokens + per-token bboxes
-        Note over Extract: populate_bboxes:<br/>match each quote → token range<br/>→ union bbox into _meta.evidence
+        DocAI-->>Extract: tokens (id, text, bbox)
+        Note over Extract: format_tokens_for_prompt:<br/>append numbered token list to prompt
+        Extract->>Gemini: generate_content(prompt+tokens, image, response_schema)
+        Gemini-->>Extract: structured JSON (values + quote + token_ids)
+        Note over Extract: populate_bboxes (dual path):<br/>token_ids -> dict lookup + verifier;<br/>fallback to text-match the quote
         Extract->>Disk: write extractions/{name}.json
         Extract-->>Flask: exit 0
     end
@@ -400,8 +401,11 @@ A cheat-sheet for "which file does X belong in?"
 | Round-trip contract check | `src/bin/roundtrip_check.rs` |
 | Per-kind Python extractors (Gemini call) | `scripts/extract_meal.py`, `scripts/extract_transport.py`, `scripts/extract_lodging.py` (orchestrates 2 parallel calls via `ThreadPoolExecutor` and merges), `scripts/extract_airfare.py` (orchestrates 3 parallel calls — main/aux/extras — and 1-deep-merges `airfare_details` from main+aux) |
 | Shared extractor infrastructure | `scripts/extractor_lib.py` (CLI parsing, ADC client, `single_call` primitive, `run_extraction` for single-call kinds) |
-| OCR grounding (per-doc Document AI call + quote→bbox match) | `scripts/evidence_bbox.py` (`populate_bboxes` is called by every extractor after the Gemini response, before JSON write; ~$0.0015/doc, ~1–3s latency) |
+| OCR grounding (per-doc Document AI call + dual-path bbox resolution) | `scripts/evidence_bbox.py` (`ocr_document` runs BEFORE Gemini so the token list can be inlined into Gemini's prompt; `populate_bboxes` resolves `token_ids` via dict lookup + Levenshtein verifier, falls back to text-matching for entries without token_ids or whose verifier failed; ~$0.0015/doc, ~1–3s latency) |
 | Retrofit cached per-doc JSONs with bboxes | `scripts/retrofit_bboxes.py` (one-shot batch over `.scratch/spike/*.json`, lets workbench be validated without re-running Gemini) |
+| Evidence + bbox coverage audit | `scripts/spike_evidence_audit.py` (walks `.scratch/spike/*.json` and emits `.scratch/audit/evidence_coverage.txt` with per-receipt and per-field-path coverage stats + miss list) |
+| Leapfrog architecture spike (kept as historical artifact) | `scripts/spike_leapfrog.py` (5-receipt + corpus-scale spike that validated token-id grounding at 100/100 verifier pass; informed L.1–L.5), `scripts/spike_leapfrog_retrofit.py` (one-shot UI overlay tool used during L.0 visual sanity-check; superseded by L.3–L.5 production wiring) |
+| Leapfrog design doc | `docs/leapfrog-plan.md` |
 | Schema-acceptance pre-deploy probe | `scripts/probe_response_schemas.py` (sends a 1×1 PNG generate_content per generated schema; catches Vertex-rejected schemas before push) |
 | Flask + gunicorn entry point | `scripts/local_app_simple.py` |
 | Acceptance harness | `scripts/acceptance_check.py` |
