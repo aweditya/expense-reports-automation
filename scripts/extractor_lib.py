@@ -39,7 +39,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from evidence_bbox import populate_bboxes
+from evidence_bbox import (
+    format_tokens_for_prompt,
+    ocr_document,
+    populate_bboxes,
+)
 
 
 DEFAULT_MODEL = "gemini-3-flash-preview"
@@ -233,11 +237,36 @@ def run_extraction(
     image_bytes = args.image.read_bytes()
     mime = detect_mime_type(args.image)
 
+    # Leapfrog L.3: call Document AI BEFORE Gemini so we can inline the
+    # numbered token list into the prompt. Gemini cites token_ids; we
+    # resolve those (instead of doing post-hoc text matching) for
+    # geometrically-exact bbox grounding. Failure here is non-fatal —
+    # `doc is None` just means we feed Gemini the same prompt it always
+    # got, and bbox population falls back to the text-matching path.
+    doc = None
+    try:
+        doc = ocr_document(args.image)
+    except Exception as err:
+        print(
+            f"warning: Document AI OCR failed for {args.image}: {err}; "
+            "extraction will proceed without token-id grounding.",
+            file=sys.stderr,
+        )
+
+    prompt_for_gemini = prompt
+    if doc is not None:
+        token_list_text, _, _ = format_tokens_for_prompt(doc)
+        prompt_for_gemini = (
+            prompt
+            + "\n\n# Numbered Document AI tokens (for `token_ids` grounding)\n\n"
+            + token_list_text
+        )
+
     try:
         parsed = single_call(
             client=client,
             model=args.model,
-            prompt=prompt,
+            prompt=prompt_for_gemini,
             response_schema_path=response_schema_path,
             image_filename=args.image.name,
             image_bytes=image_bytes,
@@ -250,22 +279,19 @@ def run_extraction(
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
-    # Inject source_filename — system context, not extracted by Gemini.
-    # Reduction reads this to populate ExpenseReport.transaction_lines[]
-    # .common.source_document.filename.
-    #
-    # Also populate _meta.evidence[].bboxes via Document AI OCR + local
-    # quote matching. Failure is non-fatal: the helper logs to stderr
-    # and leaves the record unchanged, so the workbench falls back to
-    # "no halo" (same as pre-Stage-B behavior).
+    # Inject source_filename + populate bboxes. populate_bboxes is
+    # dual-path (Leapfrog L.2): token_id resolution when the evidence
+    # entry carries token_ids (set by Gemini per the augmented prompt),
+    # text-matching fallback otherwise. We pass the already-OCR'd `doc`
+    # so we don't pay for a second DocAI call per receipt.
     if isinstance(parsed, list):
         for entry in parsed:
             if isinstance(entry, dict):
                 entry["source_filename"] = args.image.name
-                populate_bboxes(entry, args.image)
+                populate_bboxes(entry, args.image, doc=doc)
     elif isinstance(parsed, dict):
         parsed["source_filename"] = args.image.name
-        populate_bboxes(parsed, args.image)
+        populate_bboxes(parsed, args.image, doc=doc)
 
     args.output.write_text(json.dumps(parsed, indent=2, ensure_ascii=False))
     print(f"wrote {args.output}")
