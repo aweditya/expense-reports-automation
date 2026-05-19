@@ -102,7 +102,7 @@ RECEIPTS = [
         },
     },
     {
-        "image": "receipts/meal_2026-03-05_tamarine-palo-alto.png",
+        "image": "receipts/meal_2026-03-05_tamarine-palo-alto.jpg",
         "output": ".scratch/spike/meal-tamarine-palo-alto.json",
         "extractor": "meal",
         "expect": {

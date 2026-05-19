@@ -20,6 +20,14 @@ Keep entries short. The point is recall, not narrative.
 
 ## Entries
 
+### 2026-05-18 — trusted the file extension; tamarine was HEIC bytes with a .png name
+
+**What happened:** The Stage B robustness audit revealed that 11 of 13 residual matching-misses were all on `tamarine.png` — Document AI returned a 400 "Invalid image content" on that one image. Spent several rounds proposing increasingly clever matching-algorithm tiers (neighborhood search, etc.) trying to lift the audit numbers. None of it helped because **DocAI returned zero tokens, so there was nothing to match against in the first place**. Eventually ran `file` against the image: it's HEIC/HEIF (iPhone format) with a `.png` extension. Gemini happened to content-sniff and accepted it; DocAI was strict about declared MIME vs actual bytes. Scanned the rest of the corpus — only this one file had the mismatch.
+
+**Why it was wrong:** Two layered mistakes. **First**, I never validated the actual bytes of receipt images before trusting their extensions — the whole pipeline (DocAI MIME map, audit, matching algorithm) silently assumed `*.png` means PNG bytes. **Second**, when the audit data clearly clustered the residual misses around one specific receipt, I kept proposing matcher tweaks instead of asking "is this one file actually broken?" The data was screaming for a per-receipt look-at-the-actual-file and I treated it as an algorithm problem instead.
+
+**Rule going forward:** When audit data clusters tightly around a single receipt or single failure mode, **investigate the receipt before fixing the algorithm**. Cheap diagnostic first (`file`, `pillow.Image.open()`, compare to known-good neighbors) — algorithm changes second. For the pipeline itself: trust content-sniffing, not extensions. iOS sets the extension; the bytes can be anything.
+
 ### 2026-05-18 — added a runtime dep to local .venv but forgot deploy/requirements.txt
 
 **What happened:** During Phase 6 Stage B.0 I installed `google-cloud-documentai` into `.venv` with a single `pip install` so I could call Document AI from the helper scripts. The helper and the extractors imported it cleanly locally, cargo tests passed, the local workbench eyeballed correctly, and I pushed to main with high confidence. Cloud Build's deploy succeeded — its Python test stage doesn't actually import the extractors (it only checks `cloudbuild.yaml` shape). On the first real upload to the deployed app, the extractor crashed with `ModuleNotFoundError: No module named 'google.cloud'` because `deploy/requirements.txt` never gained the line.
