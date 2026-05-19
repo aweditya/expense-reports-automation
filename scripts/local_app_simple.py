@@ -195,7 +195,6 @@ def write_fa_input(form, out_path: Path) -> None:
         "fa_event_name": "event_name",
         "fa_bp_who": "business_purpose_who",
         "fa_bp_what": "business_purpose_what",
-        "fa_bp_when": "business_purpose_when",
         "fa_bp_where": "business_purpose_where",
         "fa_bp_why": "business_purpose_why",
         "fa_bp_key": "business_purpose_key_30char",
@@ -211,6 +210,12 @@ def write_fa_input(form, out_path: Path) -> None:
         value = form.get(form_key, "").strip()
         if value:
             data[json_key] = value
+    when_from = form.get("fa_bp_when_from", "").strip()
+    when_to = form.get("fa_bp_when_to", "").strip()
+    if when_from and when_to and when_from != when_to:
+        data["business_purpose_when"] = f"{when_from} to {when_to}"
+    elif when_from:
+        data["business_purpose_when"] = when_from
     if not data:
         return  # nothing to persist
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -446,6 +451,7 @@ UPLOAD_FORM_HTML = """\
   .field.full { grid-column:1 / -1; }
   .field label { font-size:12px; font-weight:500; color:#374151; }
   .field label .opt { font-weight:400; color:#9ca3af; }
+  .field label .req { color:#dc2626; margin-left:2px; font-weight:700; }
   .field input[type=text], .field select { padding:6px 8px; border:1px solid #d1d5db;
                                             border-radius:4px; font-size:13px;
                                             background:#fff; color:#1a1d1f; font-family:inherit; }
@@ -477,11 +483,11 @@ UPLOAD_FORM_HTML = """\
       <legend>Report details</legend>
       <div class="field-grid">
         <div class="field">
-          <label for="fa_payee_name">Payee name</label>
+          <label for="fa_payee_name">Payee name <span class="req">*</span></label>
           <input type="text" id="fa_payee_name" name="fa_payee_name" required>
         </div>
         <div class="field">
-          <label for="fa_payee_affiliation">Payee affiliation</label>
+          <label for="fa_payee_affiliation">Payee affiliation <span class="req">*</span></label>
           <select id="fa_payee_affiliation" name="fa_payee_affiliation" required>
             <option value="" disabled selected>Pick one…</option>
             <option value="stanford_faculty">Stanford faculty</option>
@@ -497,19 +503,19 @@ UPLOAD_FORM_HTML = """\
           <span class="hint">Conference / event name. Skip for non-event reports.</span>
         </div>
         <div class="field">
-          <label for="fa_authorized_by">Authorized by</label>
+          <label for="fa_authorized_by">Authorized by <span class="req">*</span></label>
           <input type="text" id="fa_authorized_by" name="fa_authorized_by" required>
           <span class="hint">Approver name / SUNet ID.</span>
         </div>
         <div class="field">
-          <label for="fa_rush_processing">Rush processing</label>
+          <label for="fa_rush_processing">Rush processing <span class="req">*</span></label>
           <select id="fa_rush_processing" name="fa_rush_processing" required>
             <option value="no" selected>No</option>
             <option value="yes">Yes</option>
           </select>
         </div>
         <div class="field">
-          <label for="fa_payment_method">Payment method</label>
+          <label for="fa_payment_method">Payment method <span class="req">*</span></label>
           <input type="text" id="fa_payment_method" name="fa_payment_method" required
                  placeholder="e.g. PCard / Personal">
         </div>
@@ -528,32 +534,35 @@ UPLOAD_FORM_HTML = """\
       <h2>Business purpose</h2>
       <div class="field-grid">
         <div class="field full">
-          <label for="fa_bp_who">Who</label>
+          <label for="fa_bp_who">Who <span class="req">*</span></label>
           <input type="text" id="fa_bp_who" name="fa_bp_who" required
                  placeholder="e.g. Payee + 2 collaborators">
         </div>
         <div class="field full">
-          <label for="fa_bp_what">What</label>
+          <label for="fa_bp_what">What <span class="req">*</span></label>
           <input type="text" id="fa_bp_what" name="fa_bp_what" required
                  placeholder="e.g. Presented research at ASPLOS 2026">
         </div>
         <div class="field">
-          <label for="fa_bp_when">When</label>
-          <input type="text" id="fa_bp_when" name="fa_bp_when" required
-                 placeholder="e.g. March 14-19 2026">
+          <label for="fa_bp_when_from">When — from <span class="req">*</span></label>
+          <input type="date" id="fa_bp_when_from" name="fa_bp_when_from" required>
         </div>
         <div class="field">
-          <label for="fa_bp_where">Where</label>
+          <label for="fa_bp_when_to">When — to <span class="opt">(single day? leave blank)</span></label>
+          <input type="date" id="fa_bp_when_to" name="fa_bp_when_to">
+        </div>
+        <div class="field">
+          <label for="fa_bp_where">Where <span class="req">*</span></label>
           <input type="text" id="fa_bp_where" name="fa_bp_where" required
                  placeholder="e.g. Pittsburgh, PA">
         </div>
         <div class="field full">
-          <label for="fa_bp_why">Why</label>
+          <label for="fa_bp_why">Why <span class="req">*</span></label>
           <input type="text" id="fa_bp_why" name="fa_bp_why" required
                  placeholder="e.g. Advance Stanford research collaboration">
         </div>
         <div class="field full">
-          <label for="fa_bp_key">Short label <span class="opt">(max 30 chars)</span></label>
+          <label for="fa_bp_key">Short label <span class="req">*</span> <span class="opt">(max 30 chars)</span></label>
           <input type="text" id="fa_bp_key" name="fa_bp_key" required maxlength="30"
                  placeholder="e.g. ASPLOS-2026-Pittsburgh">
         </div>

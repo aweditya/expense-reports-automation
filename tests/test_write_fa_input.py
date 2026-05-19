@@ -37,7 +37,8 @@ class TestWriteFaInput(unittest.TestCase):
             "fa_event_name": "ASPLOS 2026",
             "fa_bp_who": "Jane Doe + 2 collaborators",
             "fa_bp_what": "Presented research",
-            "fa_bp_when": "2026-03-15 to 2026-03-19",
+            "fa_bp_when_from": "2026-03-15",
+            "fa_bp_when_to": "2026-03-19",
             "fa_bp_where": "San Diego, USA",
             "fa_bp_why": "Disseminating Stanford research",
             "fa_bp_key": "ASPLOS 2026 trip",
@@ -53,11 +54,31 @@ class TestWriteFaInput(unittest.TestCase):
         self.assertEqual(data["payee_affiliation"], "faculty")
         self.assertEqual(data["event_name"], "ASPLOS 2026")
         self.assertEqual(data["business_purpose_who"], "Jane Doe + 2 collaborators")
+        self.assertEqual(data["business_purpose_when"], "2026-03-15 to 2026-03-19")
         self.assertEqual(data["business_purpose_key_30char"], "ASPLOS 2026 trip")
         self.assertEqual(data["authorized_by"], "advisor@stanford.edu")
         self.assertEqual(data["rush_processing"], "no")
         self.assertEqual(data["payment_method"], "Personal")
         self.assertEqual(data["foreign_activity_type"], "conference")
+
+    def test_single_day_when_collapses_to_one_date(self) -> None:
+        # FA leaves "to" blank → just the start date, no " to " suffix.
+        form = {"fa_payee_name": "Jane Doe", "fa_bp_when_from": "2026-03-15"}
+        write_fa_input(form, self.out)
+        data = json.loads(self.out.read_text())
+        self.assertEqual(data["business_purpose_when"], "2026-03-15")
+
+    def test_same_from_and_to_collapses_to_one_date(self) -> None:
+        # FA picks the same date for both → render as one date, not
+        # "2026-03-15 to 2026-03-15" which reads as a typo.
+        form = {
+            "fa_payee_name": "Jane Doe",
+            "fa_bp_when_from": "2026-03-15",
+            "fa_bp_when_to": "2026-03-15",
+        }
+        write_fa_input(form, self.out)
+        data = json.loads(self.out.read_text())
+        self.assertEqual(data["business_purpose_when"], "2026-03-15")
 
     def test_blank_string_values_are_dropped(self) -> None:
         # Optional fields can come through as empty strings when the FA
