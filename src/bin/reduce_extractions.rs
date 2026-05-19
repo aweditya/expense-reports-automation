@@ -15,11 +15,19 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use expense_report_schema::extracted_receipt::ExtractedReceipt;
+use expense_report_schema::fa_input;
 use expense_report_schema::reduce::reduce_to_expense_report;
 
-fn parse_args() -> (PathBuf, PathBuf) {
+struct Args {
+    input: PathBuf,
+    output: PathBuf,
+    fa_input: Option<PathBuf>,
+}
+
+fn parse_args() -> Args {
     let mut input = PathBuf::from(".scratch/spike");
     let mut output = PathBuf::from(".scratch/reduced/report.json");
+    let mut fa_input: Option<PathBuf> = None;
 
     let args: Vec<String> = std::env::args().skip(1).collect();
     let mut iter = args.iter();
@@ -31,13 +39,18 @@ fn parse_args() -> (PathBuf, PathBuf) {
             "--out" => {
                 output = PathBuf::from(iter.next().expect("--out requires a path"));
             }
+            "--fa-input" => {
+                fa_input = Some(PathBuf::from(
+                    iter.next().expect("--fa-input requires a path"),
+                ));
+            }
             other => {
                 eprintln!("unknown argument: {other}");
                 std::process::exit(2);
             }
         }
     }
-    (input, output)
+    Args { input, output, fa_input }
 }
 
 fn read_receipts(dir: &Path) -> Result<Vec<ExtractedReceipt>, String> {
@@ -67,9 +80,9 @@ fn read_receipts(dir: &Path) -> Result<Vec<ExtractedReceipt>, String> {
 }
 
 fn main() -> ExitCode {
-    let (input_dir, output_path) = parse_args();
+    let args = parse_args();
 
-    let receipts = match read_receipts(&input_dir) {
+    let receipts = match read_receipts(&args.input) {
         Ok(r) => r,
         Err(err) => {
             eprintln!("error: {err}");
@@ -77,11 +90,23 @@ fn main() -> ExitCode {
         }
     };
     if receipts.is_empty() {
-        eprintln!("error: no JSON files found under {}", input_dir.display());
+        eprintln!("error: no JSON files found under {}", args.input.display());
         return ExitCode::from(1);
     }
 
-    let report = reduce_to_expense_report(&receipts);
+    let mut report = reduce_to_expense_report(&receipts);
+
+    if let Some(path) = &args.fa_input {
+        let fa = match fa_input::parse_path(path) {
+            Ok(fa) => fa,
+            Err(err) => {
+                eprintln!("error: parse --fa-input {}: {err}", path.display());
+                return ExitCode::from(1);
+            }
+        };
+        fa_input::apply_to_report(&mut report, &fa);
+    }
+    let output_path = args.output;
 
     if let Some(parent) = output_path.parent() {
         if let Err(err) = fs::create_dir_all(parent) {

@@ -140,7 +140,7 @@ def upload():
 
     saved = save_uploaded_files(pairs, files_dir)
     extract_all(saved, extractions_dir)
-    reduce(extractions_dir, reduced_path)
+    reduce(extractions_dir, reduced_path, fa_input_path=fa_input_path)
     render_workbench(reduced_path, extractions_dir, workbench_path)
 
     # POST/Redirect/GET: send the browser to a bookmarkable URL for the
@@ -343,14 +343,18 @@ def extract_all(
     return out
 
 
-def reduce(extractions_dir: Path, reduced_path: Path) -> None:
-    run_subprocess(
-        rust_bin("reduce_extractions") + [
-            "--in", str(extractions_dir),
-            "--out", str(reduced_path),
-        ],
-        label="reduce",
-    )
+def reduce(
+    extractions_dir: Path,
+    reduced_path: Path,
+    fa_input_path: Path | None = None,
+) -> None:
+    cmd = rust_bin("reduce_extractions") + [
+        "--in", str(extractions_dir),
+        "--out", str(reduced_path),
+    ]
+    if fa_input_path is not None and fa_input_path.exists():
+        cmd += ["--fa-input", str(fa_input_path)]
+    run_subprocess(cmd, label="reduce")
 
 
 def render_workbench(
