@@ -81,9 +81,16 @@ fn main() -> ExitCode {
             }
         };
 
-        let mismatches = diff_paths("", &original, &reserialized);
+        let all_mismatches = diff_paths("", &original, &reserialized);
+        let (benign, mismatches): (Vec<_>, Vec<_>) = all_mismatches
+            .into_iter()
+            .partition(|m| is_benign_mismatch(m));
         if mismatches.is_empty() {
-            println!("PASS  {name}");
+            if benign.is_empty() {
+                println!("PASS  {name}");
+            } else {
+                println!("PASS  {name} ({} benign filtered)", benign.len());
+            }
         } else {
             println!("FAIL  {name} ({} mismatches):", mismatches.len());
             for m in mismatches.iter().take(20) {
@@ -113,6 +120,44 @@ fn diff_paths(prefix: &str, lhs: &Value, rhs: &Value) -> Vec<String> {
     let mut out = Vec::new();
     diff_at(prefix, lhs, rhs, &mut out);
     out
+}
+
+/// Same-value Number comparison that doesn't trip on integer↔float
+/// representation drift. Python emits `80896` (Number::Integer) when
+/// the model returns a whole-dollar value; Rust types `ticket_amount`
+/// as `f64` so re-serialize emits `80896.0` (Number::Float). Both
+/// values mean the same thing.
+///
+/// Tiered: try integer-equality first (no float arithmetic, no
+/// precision concern at any magnitude); fall back to f64 only when
+/// at least one side is genuinely a float. For expense dollar amounts
+/// (nowhere near f64's 2^53 exact-integer range), the f64 path is
+/// also exact in practice — but the integer-first tier means we don't
+/// rely on that.
+fn numbers_equal(a: &serde_json::Number, b: &serde_json::Number) -> bool {
+    if let (Some(ai), Some(bi)) = (a.as_i64(), b.as_i64()) {
+        return ai == bi;
+    }
+    if let (Some(au), Some(bu)) = (a.as_u64(), b.as_u64()) {
+        return au == bu;
+    }
+    match (a.as_f64(), b.as_f64()) {
+        (Some(af), Some(bf)) => af == bf,
+        _ => false,
+    }
+}
+
+/// Mismatches the codegen documents as expected. Per the
+/// `scripts/generate_schema_artifacts.py` comment on bare-struct fields:
+/// reduction populates `common.source_document` before serializing the
+/// report, so the field is always present on the way out — except in
+/// this round-trip check, which operates at the **per-receipt** layer
+/// (before reduction runs). The empty-default emit at that layer is
+/// correct, not contract drift. Filtering keeps real round-trip
+/// failures (token_ids drop, value mismatches, type swaps) visible
+/// without the source_document noise drowning them out.
+fn is_benign_mismatch(line: &str) -> bool {
+    line.contains(".common.source_document ADDED")
 }
 
 fn diff_at(path: &str, lhs: &Value, rhs: &Value, out: &mut Vec<String>) {
@@ -145,7 +190,7 @@ fn diff_at(path: &str, lhs: &Value, rhs: &Value, out: &mut Vec<String>) {
         }
         (Value::Null, Value::Null) => {}
         (Value::Bool(a), Value::Bool(b)) if a == b => {}
-        (Value::Number(a), Value::Number(b)) if a == b => {}
+        (Value::Number(a), Value::Number(b)) if numbers_equal(a, b) => {}
         (Value::String(a), Value::String(b)) if a == b => {}
         (a, b) if a.is_null() != b.is_null() => {
             out.push(format!("{} NULL MISMATCH (Python {:?}, Rust {:?})", path, a, b));
@@ -169,5 +214,57 @@ fn kind_name(v: &Value) -> &'static str {
         Value::String(_) => "string",
         Value::Array(_) => "array",
         Value::Object(_) => "object",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn benign_matcher_catches_per_receipt_source_document_added() {
+        assert!(is_benign_mismatch(
+            "[0].common.source_document ADDED (Rust default-filled a field Python omitted)"
+        ));
+        assert!(is_benign_mismatch(
+            "[2].common.source_document ADDED (Rust default-filled a field Python omitted)"
+        ));
+    }
+
+    #[test]
+    fn numbers_equal_handles_integer_float_drift() {
+        use serde_json::Number;
+        let int_80896 = Number::from(80896i64);
+        let float_80896 = Number::from_f64(80896.0).unwrap();
+        assert!(numbers_equal(&int_80896, &float_80896));
+        assert!(numbers_equal(&float_80896, &int_80896));
+    }
+
+    #[test]
+    fn numbers_equal_rejects_actually_different_values() {
+        use serde_json::Number;
+        assert!(!numbers_equal(&Number::from(80896i64), &Number::from(80897i64)));
+        assert!(!numbers_equal(
+            &Number::from_f64(80896.5).unwrap(),
+            &Number::from(80896i64),
+        ));
+    }
+
+    #[test]
+    fn benign_matcher_does_not_swallow_real_mismatches() {
+        assert!(!is_benign_mismatch(
+            "[0].common.date._meta.evidence[0].token_ids DROPPED (Rust lost a field Python wrote)"
+        ));
+        assert!(!is_benign_mismatch(
+            "[0].common.line_amount_usd VALUE (Python 79.59, Rust 80.0)"
+        ));
+        // ADDED on a different field path is NOT benign.
+        assert!(!is_benign_mismatch(
+            "[0].common.remarks ADDED (Rust default-filled a field Python omitted)"
+        ));
+        // DROPPED source_document is the dangerous direction — real drift.
+        assert!(!is_benign_mismatch(
+            "[0].common.source_document DROPPED (Rust lost a field Python wrote)"
+        ));
     }
 }
