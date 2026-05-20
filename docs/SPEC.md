@@ -26,7 +26,7 @@ If a piece of code touches two layers' worth of concern, it is wrong.
 | 2 | **Derivation** | (inside extraction) | Fields a single document can yield from its own contents. No cross-document signal. |
 | 3 | **Reduction** | `src/reduce.rs` (+ `src/fa_input.rs::apply_to_report`) | Combines per-document JSONs into one `ExpenseReport`. Aggregations like `total_usd`, `transaction_date`, derived `category` + confidence. **FA-entered general_information fields** (payee, business_purpose, authorized_by, payment_method, foreign_activity_type) overlay the reduced report via `apply_to_report` when the `reduce_extractions` binary gets `--fa-input <path>`; FA values are wrapped with `kind: user_input, origin: fa_upload_form` evidence. |
 | 4 | **Validation** | `src/validator_typed.rs` (+ `src/validator.rs`) | Checks the assembled `ExpenseReport` against business rules. Produces `ValidationReport` (issues only — never mutates the report). Includes hand-written passes alongside the rule-engine ones — e.g. `check_dates_within_trip_window` warns when a transaction line's date falls outside the FA-entered `business_purpose.when` window. |
-| 5 | **Display** | `src/workbench_simple.rs` (+ `src/workbench_simple.css`) | Renders typed report + validation issues into the FA-facing workbench HTML. Pure formatting; no business decisions. |
+| 5 | **Display** | `src/workbench_simple.rs` (+ `src/workbench_simple.css`) + `src/csv_export.rs` | Renders typed report + validation issues into the FA-facing workbench HTML. Pure formatting; no business decisions. Also emits FA-downloadable export artifacts alongside the workbench: `lines.csv` in the Stanford ERS Template column shape (`Date | Amount | Expense Type | Remarks`, RFC 4180 quoted, internal-enum→Stanford-taxonomy expense type mapping in `csv_export::map_expense_type`) and `business_purpose.txt` with the 6 business_purpose sub-fields concatenated for the FA to paste into Stanford's report-level Business Purpose text box. Both are static-served via the existing `/uploads/<id>/<filename>` route. |
 | 6 | **Submission** | (not implemented) | Future: translate the internal model into Stanford's portal API payload. Today the FA reads the workbench and submits manually. |
 
 The key invariants:
@@ -104,8 +104,8 @@ graph TB
     Flask -->|spawns: --in --out --fa-input| Reduce
     FaInput -.read by.-> Reduce
     Reduce -->|reduced/report.json| Flask
-    Flask -->|spawns| Render
-    Render -->|workbench.html| Flask
+    Flask -->|spawns: --csv-out --bp-out| Render
+    Render -->|workbench.html + lines.csv + business_purpose.txt| Flask
     Flask -->|303 redirect| UI
     UI -->|GET workbench.html| Flask
 
@@ -178,10 +178,10 @@ sequenceDiagram
     Reduce->>Disk: write reduced/report.json
     Reduce-->>Flask: exit 0
 
-    Flask->>Render: subprocess: --report reduced/... --receipts-dir extractions/ --out workbench.html
+    Flask->>Render: subprocess: --report reduced/... --receipts-dir extractions/ --out workbench.html --csv-out lines.csv --bp-out business_purpose.txt
     Render->>Disk: read report.json + extractions
-    Note over Render: validate_typed(&report) — incl. check_dates_within_trip_window<br/>render_workbench_html(report, receipts, validation)
-    Render->>Disk: write workbench.html
+    Note over Render: validate_typed(&report) — incl. check_dates_within_trip_window<br/>render_workbench_html(report, receipts, validation)<br/>report_to_lines_csv(report) + report_to_business_purpose_text(report)
+    Render->>Disk: write workbench.html + lines.csv + business_purpose.txt
     Render-->>Flask: exit 0
 
     Flask-->>IAP: 303 See Other → /uploads/{id}/workbench.html
@@ -413,9 +413,12 @@ A cheat-sheet for "which file does X belong in?"
 | Validator types | `src/validator.rs` |
 | FA-input overlay (type + parser + `apply_to_report` + `parse_when_window`) | `src/fa_input.rs` (consumed by `reduce_extractions --fa-input` and by the validator's date-window check) |
 | FA-input per-upload file contract | `.scratch/uploads/<id>/fa_input.json` (JSON keys mirror `FaInput` struct field names; Flask writes it from POST form, Rust parses it via serde) |
+| FA-downloadable export file contracts | `.scratch/uploads/<id>/lines.csv` (Stanford ERS Template shape — `Date | Amount | Expense Type | Remarks`) + `.scratch/uploads/<id>/business_purpose.txt` (labeled multi-line text). Workbench `<a download>` links target both. |
+| FA-supplied Stanford ERS Template (reference for CSV column shape + Expense Type taxonomy) | `reference/ers-template.xlsm` |
 | Workbench HTML renderer | `src/workbench_simple.rs` (+ `src/workbench_simple.css`) |
+| FA-downloadable export generators (CSV + business-purpose text) | `src/csv_export.rs` (consumed by the render binary; emits artifacts alongside `workbench.html`) |
 | Reduction binary | `src/bin/reduce_extractions.rs` |
-| Render binary | `src/bin/render_workbench_from_report.rs` |
+| Render binary | `src/bin/render_workbench_from_report.rs` (writes `workbench.html`; with `--csv-out` and `--bp-out` also writes `lines.csv` + `business_purpose.txt`) |
 | Round-trip contract check | `src/bin/roundtrip_check.rs` |
 | Per-kind Python extractors (Gemini call) | `scripts/extract_meal.py`, `scripts/extract_transport.py`, `scripts/extract_lodging.py` (orchestrates 2 parallel calls via `ThreadPoolExecutor` and merges), `scripts/extract_airfare.py` (orchestrates 3 parallel calls — main/aux/extras — and 1-deep-merges `airfare_details` from main+aux) |
 | Shared extractor infrastructure | `scripts/extractor_lib.py` (CLI parsing, ADC client, `single_call` primitive, `run_extraction` for single-call kinds) |

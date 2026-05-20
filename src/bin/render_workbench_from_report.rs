@@ -25,31 +25,51 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+use expense_report_schema::csv_export::{report_to_business_purpose_text, report_to_lines_csv};
 use expense_report_schema::expense_report_model::ExpenseReport;
 use expense_report_schema::extracted_receipt::ExtractedReceipt;
 use expense_report_schema::validator_typed::validate_typed;
 use expense_report_schema::workbench_simple::render_workbench_html;
 
-fn parse_args() -> (PathBuf, PathBuf, PathBuf, String) {
-    let mut report = PathBuf::from(".scratch/reduced/report.json");
-    let mut receipts_dir = PathBuf::from(".scratch/spike");
-    let mut out = PathBuf::from(".scratch/spike/workbench.html");
-    let mut source_docs_url_prefix = String::from("files/");
+struct Args {
+    report: PathBuf,
+    receipts_dir: PathBuf,
+    out: PathBuf,
+    source_docs_url_prefix: String,
+    csv_out: Option<PathBuf>,
+    bp_out: Option<PathBuf>,
+}
 
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    let mut iter = args.iter();
+fn parse_args() -> Args {
+    let mut args = Args {
+        report: PathBuf::from(".scratch/reduced/report.json"),
+        receipts_dir: PathBuf::from(".scratch/spike"),
+        out: PathBuf::from(".scratch/spike/workbench.html"),
+        source_docs_url_prefix: String::from("files/"),
+        csv_out: None,
+        bp_out: None,
+    };
+
+    let argv: Vec<String> = std::env::args().skip(1).collect();
+    let mut iter = argv.iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
-            "--report" => report = PathBuf::from(iter.next().expect("--report needs path")),
+            "--report" => args.report = PathBuf::from(iter.next().expect("--report needs path")),
             "--receipts-dir" => {
-                receipts_dir = PathBuf::from(iter.next().expect("--receipts-dir needs path"))
+                args.receipts_dir = PathBuf::from(iter.next().expect("--receipts-dir needs path"))
             }
-            "--out" => out = PathBuf::from(iter.next().expect("--out needs path")),
+            "--out" => args.out = PathBuf::from(iter.next().expect("--out needs path")),
             "--source-docs-url-prefix" => {
-                source_docs_url_prefix = iter
+                args.source_docs_url_prefix = iter
                     .next()
                     .expect("--source-docs-url-prefix needs a value")
                     .clone();
+            }
+            "--csv-out" => {
+                args.csv_out = Some(PathBuf::from(iter.next().expect("--csv-out needs path")))
+            }
+            "--bp-out" => {
+                args.bp_out = Some(PathBuf::from(iter.next().expect("--bp-out needs path")))
             }
             other => {
                 eprintln!("unknown argument: {other}");
@@ -57,7 +77,7 @@ fn parse_args() -> (PathBuf, PathBuf, PathBuf, String) {
             }
         }
     }
-    (report, receipts_dir, out, source_docs_url_prefix)
+    args
 }
 
 fn read_receipts(dir: &Path) -> Result<Vec<ExtractedReceipt>, String> {
@@ -84,10 +104,24 @@ fn read_receipts(dir: &Path) -> Result<Vec<ExtractedReceipt>, String> {
     Ok(receipts)
 }
 
-fn main() -> ExitCode {
-    let (report_path, receipts_dir, out_path, source_docs_url_prefix) = parse_args();
+fn write_aux(path: &Path, contents: &str, label: &str) -> Result<(), ExitCode> {
+    if let Some(parent) = path.parent() {
+        if let Err(err) = fs::create_dir_all(parent) {
+            eprintln!("error: {label} create_dir_all {}: {err}", parent.display());
+            return Err(ExitCode::from(2));
+        }
+    }
+    if let Err(err) = fs::write(path, contents) {
+        eprintln!("error: {label} write {}: {err}", path.display());
+        return Err(ExitCode::from(2));
+    }
+    Ok(())
+}
 
-    let receipts = match read_receipts(&receipts_dir) {
+fn main() -> ExitCode {
+    let args = parse_args();
+
+    let receipts = match read_receipts(&args.receipts_dir) {
         Ok(r) => r,
         Err(err) => {
             eprintln!("error: {err}");
@@ -95,12 +129,12 @@ fn main() -> ExitCode {
         }
     };
 
-    let report_json = match fs::read_to_string(&report_path) {
+    let report_json = match fs::read_to_string(&args.report) {
         Ok(s) => s,
         Err(err) => {
             eprintln!(
                 "error: read {}: {err} — run reduce_extractions first",
-                report_path.display()
+                args.report.display()
             );
             return ExitCode::from(1);
         }
@@ -108,7 +142,7 @@ fn main() -> ExitCode {
     let report: ExpenseReport = match serde_json::from_str(&report_json) {
         Ok(r) => r,
         Err(err) => {
-            eprintln!("error: parse {}: {err}", report_path.display());
+            eprintln!("error: parse {}: {err}", args.report.display());
             return ExitCode::from(1);
         }
     };
@@ -117,21 +151,30 @@ fn main() -> ExitCode {
     // walking the tree and looking up FIELD_RULES + CONDITIONAL_RULES per path.
     let validation = validate_typed(&report);
 
-    let html = render_workbench_html(&report, &receipts, &validation, &source_docs_url_prefix);
+    let html = render_workbench_html(&report, &receipts, &validation, &args.source_docs_url_prefix);
 
-    if let Some(parent) = out_path.parent() {
-        if let Err(err) = fs::create_dir_all(parent) {
-            eprintln!("error: create_dir_all {}: {err}", parent.display());
-            return ExitCode::from(2);
+    if let Err(code) = write_aux(&args.out, &html, "workbench") {
+        return code;
+    }
+
+    // E.7 exports: alongside workbench.html, emit the line-items CSV
+    // and business-purpose text the FA pastes into Stanford's portal.
+    if let Some(path) = &args.csv_out {
+        let csv = report_to_lines_csv(&report);
+        if let Err(code) = write_aux(path, &csv, "csv") {
+            return code;
         }
     }
-    if let Err(err) = fs::write(&out_path, html) {
-        eprintln!("error: write {}: {err}", out_path.display());
-        return ExitCode::from(2);
+    if let Some(path) = &args.bp_out {
+        let text = report_to_business_purpose_text(&report);
+        if let Err(code) = write_aux(path, &text, "business-purpose") {
+            return code;
+        }
     }
+
     println!(
         "wrote {} ({} receipts, {} transaction lines)",
-        out_path.display(),
+        args.out.display(),
         receipts.len(),
         report
             .transaction_lines

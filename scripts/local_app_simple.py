@@ -449,11 +449,15 @@ def render_workbench(
     extractions_dir: Path,
     workbench_path: Path,
 ) -> None:
+    csv_path = workbench_path.parent / "lines.csv"
+    bp_path = workbench_path.parent / "business_purpose.txt"
     run_subprocess(
         rust_bin("render_workbench_from_report") + [
             "--report", str(reduced_path),
             "--receipts-dir", str(extractions_dir),
             "--out", str(workbench_path),
+            "--csv-out", str(csv_path),
+            "--bp-out", str(bp_path),
         ],
         label="render",
     )

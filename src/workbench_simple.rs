@@ -305,6 +305,21 @@ fn render_hero(html: &mut String, report: &ExpenseReport, validation: &Validatio
         escape(payee),
         escape(event)
     ));
+    // E.7 downloads. Both files are written by render_workbench_from_report
+    // alongside workbench.html (--csv-out / --bp-out); the static-file
+    // route under /uploads/<id>/ serves them. `download` attribute hints
+    // the browser to save rather than render. The links render
+    // regardless of file presence — if the file is missing, the FA gets
+    // a 404 and we'll know to wire the args. (Browsers don't probe for
+    // existence before showing a link.)
+    html.push_str(
+        "<p class=\"hero-downloads\">\
+         <a class=\"download-link\" href=\"lines.csv\" download>\
+         ⬇ Download CSV (Expense Lines)</a>\
+         <a class=\"download-link\" href=\"business_purpose.txt\" download>\
+         ⬇ Download Business Purpose text</a>\
+         </p>\n",
+    );
     html.push_str("</header>\n");
 }
 

@@ -283,15 +283,56 @@ so they ship in one re-deploy alongside S.6 close-out:
   (validator/render contract unchanged; this is pure client-side
   state).
 
-- **E.6** — PDF download of the workbench. "Print" button triggers
-  `window.print()`; `@media print` CSS hides the rail / dismiss
-  buttons / jump arrows / sticky chrome so the printed page shows the
-  form cards + transaction lines cleanly. Browser handles the actual
-  PDF generation via its "Save as PDF" dialog. Zero new deps,
-  ~30 LOC. If a Stanford-portal-template-matching PDF is ever needed,
-  that's a separate feature (server-side weasyprint or similar);
-  E.6's scope is "give the FA a clean printable version of what
-  they're already looking at."
+- **E.6** (deferred) — PDF download. Originally planned, deprioritized
+  when FA feedback surfaced E.7 as the real workflow need. PDF is
+  still trivial to add later (print-to-PDF + `@media print` CSS,
+  ~30 LOC).
+
+- **E.7** — CSV + business-purpose text downloads matching the FA's
+  workflow: copy CSV into Stanford's "Expense Lines Upload" feature,
+  paste the concatenated business-purpose blob into Stanford's
+  report-level Business Purpose text box. **Why two artifacts**: the
+  FA-supplied template (`Copy of ERS Template.xlsm`) is *line-items
+  only* — `Date | Amount | Expense Type | Remarks`. Report-level
+  fields (payee, business_purpose, etc.) live elsewhere in the
+  Stanford portal UI. The FA's quote ("Will the CSV file concatenate
+  the business purpose fields into a single text box?") clarifies the
+  ask: collapse our 6 business_purpose sub-fields (who/what/when/
+  where/why/key_30char) into one labeled-text-blob the FA pastes
+  into Stanford's Business Purpose box.
+
+  Implementation: new `src/csv_export.rs` with two pure functions
+  (`report_to_lines_csv`, `report_to_business_purpose_text`).
+  `render_workbench_from_report` gains `--csv-out` and `--bp-out`
+  args; writes the files alongside `workbench.html`. Flask's render
+  invocation passes the new paths. Workbench HTML gets "Download
+  CSV" + "Download Business Purpose text" links in the hero area.
+  Static-file route already serves both files (existing
+  `/uploads/<id>/<filename>` covers them). No new Python deps; CSV
+  is hand-rolled per RFC 4180.
+
+  Expense Type mapping: best-effort from our `expense_type` enum to
+  Stanford's taxonomy. Pairs:
+  - `business_meal` → "Business Meal" (or "Business Meal with
+    Alcohol" if `meal_details.has_alcohol_on_receipt == true`)
+  - `business_meal_foreign` → same logic
+  - `lodging` / `lodging_foreign` → "Lodging"
+  - `airfare_domestic` / `airfare_foreign` → "Airfare"
+  - `ground_transport` / `ground_transport_foreign` → "Ground
+    Transportation"
+  - `conference_registration` → "Conference Registration"
+  - anything else → "Miscellaneous" (with the original enum name in
+    Remarks so the FA can rename in Excel)
+
+  Mapping lives as a single Rust function so future FA-policy
+  changes are one edit. Per-line review still happens in the
+  workbench; wrong mappings catch the FA's eye there.
+
+  ~100 LOC across `src/csv_export.rs` + render-binary changes +
+  workbench HTML link injection. Pure additive — existing flows
+  unchanged. Tests cover the mapping table + RFC 4180 quoting of
+  remarks containing commas/quotes/newlines + missing-value
+  handling.
 
 ## 11. Decision pre-conditions
 

@@ -1,3 +1,4 @@
+pub mod csv_export;
 pub mod draft;
 pub mod extracted_receipt;
 #[path = "../generated/expense_report_model.rs"]

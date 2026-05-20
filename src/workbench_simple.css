@@ -67,6 +67,26 @@ body {
   color: #6b7280;
   font-size: 13px;
 }
+.hero-downloads {
+  margin: 10px 0 0;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.download-link {
+  font-size: 12px;
+  color: #1e40af;
+  text-decoration: none;
+  padding: 4px 10px;
+  border: 1px solid #bfdbfe;
+  border-radius: 4px;
+  background: #eff6ff;
+}
+.download-link:hover {
+  background: #dbeafe;
+  border-color: #60a5fa;
+  text-decoration: none;
+}
 .pill {
   display: inline-block;
   padding: 3px 10px;
