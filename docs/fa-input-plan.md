@@ -270,14 +270,28 @@ so they ship in one re-deploy alongside S.6 close-out:
   the focus-blur race doesn't eat the selection. ~120 LOC across
   HTML/JS/CSS in `scripts/local_app_simple.py`.
 
-- **E.4** (deferred, post-deploy) — "Mark as reviewed" per issue card.
-  FA clicks a button on the issue → issue disappears from the rail.
-  State is per-upload (lives in the URL or browser storage; we don't
-  modify the typed `ValidationReport`). Why deferred: needs design
-  thought on persistence model (sessionStorage? a sidecar JSON in the
-  upload dir? clear on refresh?) and the existing rail-hide-on-empty
-  logic needs to react to dismissed-count rather than total-count.
-  Capture-only until after the date-validator deploy proves itself.
+- **E.4** — "Mark as reviewed" per issue card. FA clicks a dismiss
+  button on the issue → card hides, section count decrements, section
+  hides if 0 active, rail hides if 0 active total. Field card loses
+  its `.has-issue` highlight in sync. **No persistence**: workbench is
+  a single-session artifact (FA opens, reviews, downloads, abandons);
+  refresh wipes dismissals, which is fine because they're acknowl-
+  edgements, not data. Single "Show N dismissed" toggle at top of
+  rail lets the FA un-hide cards (with per-card "Restore" buttons) if
+  they accidentally dismissed something. ~100 LOC across
+  `src/workbench_simple.{rs,css}` + the inline JS. No SPEC change
+  (validator/render contract unchanged; this is pure client-side
+  state).
+
+- **E.6** — PDF download of the workbench. "Print" button triggers
+  `window.print()`; `@media print` CSS hides the rail / dismiss
+  buttons / jump arrows / sticky chrome so the printed page shows the
+  form cards + transaction lines cleanly. Browser handles the actual
+  PDF generation via its "Save as PDF" dialog. Zero new deps,
+  ~30 LOC. If a Stanford-portal-template-matching PDF is ever needed,
+  that's a separate feature (server-side weasyprint or similar);
+  E.6's scope is "give the FA a clean printable version of what
+  they're already looking at."
 
 ## 11. Decision pre-conditions
 

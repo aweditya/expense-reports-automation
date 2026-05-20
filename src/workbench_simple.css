@@ -300,6 +300,62 @@ body {
   color: #4b5563;
   line-height: 1.4;
 }
+/* E.4 mark-as-reviewed: dismiss + restore buttons live next to the
+   jump arrow. CSS controls which is visible per card based on the
+   `.dismissed` class, so JS only flips one class. */
+.issue-dismiss, .issue-restore {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #fff;
+  color: #6b7280;
+  font-size: 14px;
+  line-height: 1;
+  border: 1px solid #d1d5db;
+  cursor: pointer;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+.issue-dismiss:hover { background: #ecfdf5; border-color: #10b981; color: #047857; }
+.issue-restore:hover { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
+.issue-card .issue-restore { display: none; }
+.issue-card.dismissed .issue-dismiss { display: none; }
+.issue-card.dismissed .issue-restore { display: inline-flex; }
+/* Hidden by default; revealed (faded) only when the rail's
+   show-dismissed toggle is on. */
+.issue-card.dismissed { display: none; }
+.issues-panel.show-dismissed .issue-card.dismissed {
+  display: flex;
+  opacity: 0.6;
+}
+.issues-toggle {
+  display: block;
+  margin: 6px 0 10px;
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #4b5563;
+  cursor: pointer;
+  font-family: inherit;
+}
+.issues-toggle:hover { background: #f3f4f6; color: #1a1d1f; }
+.issues-toggle[hidden] { display: none; }
+.all-reviewed {
+  margin: 10px 0;
+  padding: 10px 12px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 4px;
+  color: #166534;
+  font-size: 13px;
+  font-weight: 500;
+}
+.all-reviewed[hidden] { display: none; }
 /* Compact arrow link instead of "Jump to field →" text. The renderer
    emits the link with just an arrow glyph; styled here as a circular
    button so the click target is visible and obvious. */

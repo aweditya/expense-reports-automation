@@ -121,7 +121,7 @@ pub fn render_workbench_html(
     html
 }
 
-const JUMP_SCRIPT: &str = r#"<script>
+const JUMP_SCRIPT: &str = r##"<script>
 // On page load: walk the issues panel and tag the corresponding field
 // cards with `.has-issue`. Lets CSS pale-red those cards without the
 // renderer needing to thread issue paths through every field-card
@@ -157,6 +157,91 @@ document.addEventListener('click', function(e) {
   }
 });
 
+// E.4 mark-as-reviewed: dismiss removes the card from the active rail
+// and unhighlights the corresponding field. Restore re-adds it. No
+// persistence — refresh wipes all dismissals (workbench is a single-
+// session artifact; dismissals are acknowledgements, not data).
+(function setupReviewedDismiss() {
+  const panel = document.querySelector('.issues-panel');
+  if (!panel) return;
+  const toggle = document.getElementById('issues-toggle-dismissed');
+  const allReviewed = document.getElementById('issues-all-reviewed');
+  if (!toggle || !allReviewed) return;
+
+  function refresh() {
+    const allCards = panel.querySelectorAll('.issue-card');
+    const dismissedCount = panel.querySelectorAll('.issue-card.dismissed').length;
+    const activeCount = allCards.length - dismissedCount;
+    const showingDismissed = panel.classList.contains('show-dismissed');
+
+    panel.querySelectorAll('.issue-section').forEach(function(section) {
+      const sectionActive = section.querySelectorAll(
+        '.issue-card:not(.dismissed)'
+      ).length;
+      const countEl = section.querySelector('.issue-count');
+      if (countEl) countEl.textContent = '(' + sectionActive + ')';
+      // Section hides when it has no active cards AND the "show
+      // dismissed" toggle is off; otherwise stays visible so the
+      // FA can see + restore.
+      section.hidden = sectionActive === 0 && !showingDismissed;
+    });
+
+    if (dismissedCount > 0) {
+      toggle.hidden = false;
+      toggle.textContent = (showingDismissed ? 'Hide ' : 'Show ') +
+        dismissedCount + ' dismissed';
+    } else {
+      toggle.hidden = true;
+      // Force off when nothing to show, so the next dismissal starts
+      // in the default 'hidden' state.
+      panel.classList.remove('show-dismissed');
+    }
+
+    allReviewed.hidden = !(
+      activeCount === 0 && allCards.length > 0 && !showingDismissed
+    );
+  }
+
+  document.addEventListener('click', function(e) {
+    if (e.target.closest('.issue-dismiss')) {
+      const card = e.target.closest('.issue-card');
+      if (!card || card.classList.contains('dismissed')) return;
+      card.classList.add('dismissed');
+      // Remove .has-issue from the corresponding field card, but only
+      // if no other active issue still references the same anchor —
+      // multiple issues can flag the same field (e.g. missing + date-
+      // window on the same date), and the field stays flagged while
+      // any of them is still active.
+      const jump = card.querySelector('a.issue-jump');
+      if (jump) {
+        const anchorId = jump.getAttribute('href').slice(1);
+        const stillFlagged = panel.querySelectorAll(
+          '.issue-card:not(.dismissed) a.issue-jump[href="#' + anchorId + '"]'
+        ).length;
+        if (stillFlagged === 0) {
+          const field = document.getElementById(anchorId);
+          if (field) field.classList.remove('has-issue');
+        }
+      }
+      refresh();
+    } else if (e.target.closest('.issue-restore')) {
+      const card = e.target.closest('.issue-card');
+      if (!card || !card.classList.contains('dismissed')) return;
+      card.classList.remove('dismissed');
+      const jump = card.querySelector('a.issue-jump');
+      if (jump) {
+        const anchorId = jump.getAttribute('href').slice(1);
+        const field = document.getElementById(anchorId);
+        if (field) field.classList.add('has-issue');
+      }
+      refresh();
+    } else if (e.target === toggle) {
+      panel.classList.toggle('show-dismissed');
+      refresh();
+    }
+  });
+})();
+
 // Click a card with [data-copy-value] → copy that value to clipboard
 // and show a brief toast. Skips if the click was on the issue-jump
 // arrow inside the card (so jump and copy don't conflict).
@@ -187,7 +272,7 @@ document.addEventListener('click', function(e) {
   }
 });
 </script>
-"#;
+"##;
 
 // ─── Hero ──────────────────────────────────────────────────────────────────
 
@@ -458,6 +543,15 @@ fn issue_category(kind: ValidationIssueKind) -> IssueCategory {
 fn render_issues_panel(html: &mut String, validation: &ValidationReport) {
     html.push_str("<section class=\"panel issues-panel\">\n");
     html.push_str("<p class=\"eyebrow\">Queue</p>\n<h2>Issues</h2>\n");
+    // E.4 mark-as-reviewed UI. Both elements are JS-managed: hidden
+    // until dismissals exist (toggle) or until all issues are
+    // dismissed (placeholder).
+    html.push_str(
+        "<button id=\"issues-toggle-dismissed\" class=\"issues-toggle\" \
+         type=\"button\" hidden>Show 0 dismissed</button>\n\
+         <p id=\"issues-all-reviewed\" class=\"all-reviewed\" hidden>\
+         All issues reviewed ✓</p>\n",
+    );
 
     // Group by FA-facing category, preserving original order within each
     // bucket. Empty categories are hidden — a clean report shows nothing.
@@ -498,6 +592,10 @@ fn render_issues_panel(html: &mut String, validation: &ValidationReport) {
                  <p class=\"issue-label\">{}</p>\
                  {message_html}\
                  </div>\
+                 <button class=\"issue-dismiss\" type=\"button\" \
+                 aria-label=\"Mark reviewed\" title=\"Mark reviewed\">✓</button>\
+                 <button class=\"issue-restore\" type=\"button\" \
+                 aria-label=\"Restore\" title=\"Restore\">↶</button>\
                  <a class=\"issue-jump\" href=\"#{}\" aria-label=\"Jump to field\">→</a>\
                  </li>\n",
                 escape(&friendly_field_label(&issue.path)),
