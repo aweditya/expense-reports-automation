@@ -708,3 +708,54 @@ sequence-diagram note text breaks the parser. `->` in note text
 also breaks it (parser thinks it's a new arrow). Use plain
 punctuation + Unicode arrows (→) in notes; avoid `;` and ASCII `->`
 entirely.
+
+### 2026-05-21 — restarted Flask with stdout going to /tmp (non-negotiable #5)
+
+**What happened:** during Stage 8a+8b eyeball, killed the running
+Flask (which had the pre-edit code, was rejecting `--csv-out`
+because my new render binary uses `--csv-domestic-out`/`--csv-foreign-out`)
+and restarted it with `>/tmp/flask.log 2>&1 &`. Caught it myself
+on the next response and re-restarted with the log going to
+`.scratch/server/flask.log` instead. The /tmp slip stood for ~5
+seconds before correction.
+
+**Why it happened:** muscle memory. `/tmp/X.log` is the default
+shell-script log target for me; I forgot non-negotiable #5 ("Never
+write to /tmp") applies even to side outputs like a server's stdout.
+
+**Rule going forward:** any `>` redirect, `tee`, `mktemp`, or
+similar transient-file write must land under `.scratch/` — full
+stop. Server logs go to `.scratch/server/<name>.log`. Curl bodies
+to `.scratch/curl/<name>.json`. Test outputs to `.scratch/<task>/`.
+Treat `/tmp` and `/var/folders/...` (macOS mktemp) as literally
+read-only from this project.
+
+### 2026-05-21 — didn't restart Flask after editing render binary, audit reported 270 false failures
+
+**What happened:** ran `scripts/audit_edit_paths.py csv8a` against
+a Flask process that was started before my CSV split edits. The
+running Flask still had the old `render_workbench` Python helper
+that passes `--csv-out` (singular), which my updated render binary
+rejects with `unknown argument`. Result: all 307 audit POSTs failed
+with `render failed: unknown argument: --csv-out` — looked terrifying
+for a moment before I realized the failure mode (uniform error
+string across all paths is the smoking gun for "server's stale,
+not code's broken").
+
+**Why it happened:** Flask in `--reload`-less mode caches the
+imported module forever. The previous audit pattern was "run audit
+after stage_eyeball.sh", and stage_eyeball.sh DOES start Flask if
+none is running — but if one's already up (which is the common case
+during iterative work) it leaves the stale one alone with a `Flask
+already up on :${PORT}` log line.
+
+**Rule going forward:** any time I touch `scripts/local_app_simple.py`
+in the same session as an end-to-end audit, kill+restart Flask
+**before** running the audit. Add a `--restart-flask` flag to
+`stage_eyeball.sh` later if this becomes a pattern; for now, an
+explicit `pkill -f local_app_simple.py && PORT=8765 ./.venv/bin/python
+scripts/local_app_simple.py >.scratch/server/flask.log 2>&1 &` step.
+
+**Heuristic:** uniform error string across all audit results means
+"server-side state issue, not per-path code issue." Per-path coercion
+or walker bugs would show different errors per path.

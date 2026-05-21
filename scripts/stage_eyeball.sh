@@ -14,10 +14,11 @@
 #                                            harness's Write tool
 #
 # Produces:
-#   .scratch/<stage_name>/report.json      reduced ExpenseReport
-#   .scratch/<stage_name>/workbench.html   rendered workbench
-#   .scratch/<stage_name>/lines.csv        CSV in Stanford portal format
-#   .scratch/uploads/<stage_name>/         staged for Flask static-serve
+#   .scratch/<stage_name>/report.json           reduced ExpenseReport
+#   .scratch/<stage_name>/workbench.html        rendered workbench
+#   .scratch/<stage_name>/lines-domestic.csv    7-col CSV for Stanford's domestic portal page
+#   .scratch/<stage_name>/lines-foreign.csv     20-col CSV for Stanford's foreign portal page
+#   .scratch/uploads/<stage_name>/              staged for Flask static-serve
 #
 # Then: starts Flask on port 8765 (no-op if already running on it),
 # waits for /healthy 200, opens the workbench in the default browser.
@@ -38,7 +39,8 @@ UPLOAD_DIR=".scratch/uploads/${STAGE}"
 FA_INPUT="${CHECK_DIR}/fa_input.json"
 REPORT="${CHECK_DIR}/report.json"
 WORKBENCH="${CHECK_DIR}/workbench.html"
-CSV="${CHECK_DIR}/lines.csv"
+CSV_DOMESTIC="${CHECK_DIR}/lines-domestic.csv"
+CSV_FOREIGN="${CHECK_DIR}/lines-foreign.csv"
 PORT="${PORT:-8765}"
 
 if [[ ! -f "${FA_INPUT}" ]]; then
@@ -63,12 +65,13 @@ echo "    render → ${WORKBENCH}"
   --report "${REPORT}" \
   --receipts-dir .scratch/spike \
   --out "${WORKBENCH}" \
-  --csv-out "${CSV}" \
+  --csv-domestic-out "${CSV_DOMESTIC}" \
+  --csv-foreign-out "${CSV_FOREIGN}" \
   >/dev/null
 
 echo "    stage → ${UPLOAD_DIR}"
 mkdir -p "${UPLOAD_DIR}/files" "${UPLOAD_DIR}/reduced" "${UPLOAD_DIR}/extractions"
-cp "${WORKBENCH}" "${CSV}" "${UPLOAD_DIR}/"
+cp "${WORKBENCH}" "${CSV_DOMESTIC}" "${CSV_FOREIGN}" "${UPLOAD_DIR}/"
 # friday Stage 7 needs reduced/report.json + extractions/* so the
 # /uploads/<id>/edit endpoint can read the report and re-render the
 # workbench after an edit. Without these the edit POST returns 404.

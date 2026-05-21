@@ -346,11 +346,63 @@ working end-to-end). FX research captured in this doc; not
 implemented (Stage 8 was always post-Friday).
 
 Open queue:
-- Stage 8a (domestic-vs-foreign taxonomy — **high severity**, prod
-  regression)
-- Stage 8b (foreign template wide-form CSV)
+- ~~Stage 8a~~ + ~~Stage 8b~~ — done together as Stage 10 below.
 - Stage 8c (spot-check halo visual attention)
 - FX rates (real OANDA/Frankfurter lookup — see earlier addendum)
 - E.4 polish (per-card edit indicator, undo-on-edit)
 - Mark-as-reviewed-chime debug (Web Audio autoplay)
 - #54 retire text-matching fallback (stability window)
+
+---
+
+## 10. Stage 8a + 8b — landed 2026-05-21 (bundled)
+
+Bundled because both reshape the CSV layer and 8a alone leaves the
+foreign CSV with the wrong column count. Shipping the strings without
+the columns would just trade one Stanford-portal rejection for another.
+
+**What landed**:
+
+- `src/csv_export.rs` split into `report_to_domestic_csv` (7-col,
+  plain expense-type strings) + `report_to_foreign_csv` (20-col,
+  suffixed strings). Per-line routing: explicit `*_foreign` variants
+  → foreign CSV; explicit `*_domestic` → domestic CSV; neutral types
+  (`business_meal`, `car_rental`, …) tie-break on
+  `general_information.category`. Both files always written.
+- Foreign CSV uses xlsx-derived exact strings — including typos
+  (`Travel Meal-SingleMealwAlcohl`, no-space-around-dash
+  `Ground Transportation-Foreign`) and dropdown-collapsed mappers
+  for affiliation (3 values), airfare booking method (5), class of
+  ticket (3), foreign activity type (4).
+- 75-currency table from xlsx Sheet "Expense_Currency" replaces the
+  hand-curated 38-entry table — single SSOT for both CSVs.
+- Render binary: `--csv-out` → `--csv-domestic-out` +
+  `--csv-foreign-out`. Flask passes both. `audit_edit_paths.py` and
+  `scripts/stage_eyeball.sh` updated to back up / produce both files.
+- Workbench hero: dual download links with line counts; hides the
+  link for whichever CSV has zero lines.
+- 28 csv_export tests (was 13). Includes routing tests, mapper
+  exhaustiveness tests for both domestic + foreign expense-type
+  functions, and full-row tests for airfare-in-foreign +
+  lodging-in-foreign scenarios.
+
+**Eyeballed**: staged a real 20-line foreign-category report; domestic
+CSV emitted 14 lines (all explicit domestic-typed + auto-typed
+transport) with plain `Airfare`/`Lodging`/`Ground Transportation`;
+foreign CSV emitted 6 lines (1 explicit foreign airfare + 5 neutral
+business meals routed via category) with the suffixed/typo'd strings,
+20 cols populated correctly (airfare details on the airfare row,
+blank elsewhere). Hero shows both counts. Audit regression: 307/307.
+
+**Schema gaps surfaced** (not fixed — out of scope, captured for the
+next schema-evolution pass):
+- No `traveler_sunet` field on `general_information.payee` — emitted
+  blank in col J; FA fills in Excel.
+- Foreign-only Stanford expense types our schema doesn't model
+  (`STAP - Foreign`, `Subscriptions - Foreign`,
+  `Membership Dues - Foreign`, `Parking Fees - Foreign`,
+  `Other Transportation`, multiple `Travel Meal - …` variants) —
+  fall through to `Miscellaneous - Foreign` for now.
+- Our `affiliation` enum (`stanford_*`/`other`) doesn't carry a
+  DAPER signal, so DAPER travelers map to `Stanford Traveler` and
+  the FA fixes in Excel.

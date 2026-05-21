@@ -687,9 +687,9 @@ def edit_field(upload_id: str):
 
     report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False))
 
-    # Re-render workbench.html (+ lines.csv) so the next GET reflects
-    # the edit. Re-uses the same render() helper the upload pipeline
-    # uses on first processing.
+    # Re-render workbench.html (+ both portal CSVs) so the next GET
+    # reflects the edit. Re-uses the same render() helper the upload
+    # pipeline uses on first processing.
     workbench_path = upload_dir / "workbench.html"
     extractions_dir = upload_dir / "extractions"
     try:
@@ -923,13 +923,19 @@ def render_workbench(
     extractions_dir: Path,
     workbench_path: Path,
 ) -> None:
-    csv_path = workbench_path.parent / "lines.csv"
+    # Stanford has two portal pages (domestic + foreign) with different
+    # column layouts and Expense Type vocabularies. Emit one CSV per
+    # page every time; either may be header-only when no lines route
+    # there. The workbench hero hides empty downloads.
+    csv_domestic = workbench_path.parent / "lines-domestic.csv"
+    csv_foreign = workbench_path.parent / "lines-foreign.csv"
     run_subprocess(
         rust_bin("render_workbench_from_report") + [
             "--report", str(reduced_path),
             "--receipts-dir", str(extractions_dir),
             "--out", str(workbench_path),
-            "--csv-out", str(csv_path),
+            "--csv-domestic-out", str(csv_domestic),
+            "--csv-foreign-out", str(csv_foreign),
         ],
         label="render",
     )

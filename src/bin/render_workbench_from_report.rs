@@ -18,6 +18,13 @@
 //!                               "../../receipts/" when rendering to
 //!                               .scratch/spike/ so spot-check links
 //!                               resolve.
+//!   --csv-domestic-out <path>   Where to write the domestic-portal CSV
+//!                               (7 columns, plain expense-type names).
+//!   --csv-foreign-out <path>    Where to write the foreign-portal CSV
+//!                               (20 columns, suffixed expense-type names).
+//!                               Both CSVs are optional; either file may
+//!                               be header-only when the report has no
+//!                               lines routed to that portal page.
 //!
 //! Validation runs via validate_typed against the reduced report.
 
@@ -25,7 +32,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use expense_report_schema::csv_export::report_to_lines_csv;
+use expense_report_schema::csv_export::{report_to_domestic_csv, report_to_foreign_csv};
 use expense_report_schema::expense_report_model::ExpenseReport;
 use expense_report_schema::extracted_receipt::ExtractedReceipt;
 use expense_report_schema::validator_typed::validate_typed;
@@ -36,7 +43,8 @@ struct Args {
     receipts_dir: PathBuf,
     out: PathBuf,
     source_docs_url_prefix: String,
-    csv_out: Option<PathBuf>,
+    csv_domestic_out: Option<PathBuf>,
+    csv_foreign_out: Option<PathBuf>,
 }
 
 fn parse_args() -> Args {
@@ -45,7 +53,8 @@ fn parse_args() -> Args {
         receipts_dir: PathBuf::from(".scratch/spike"),
         out: PathBuf::from(".scratch/spike/workbench.html"),
         source_docs_url_prefix: String::from("files/"),
-        csv_out: None,
+        csv_domestic_out: None,
+        csv_foreign_out: None,
     };
 
     let argv: Vec<String> = std::env::args().skip(1).collect();
@@ -63,8 +72,13 @@ fn parse_args() -> Args {
                     .expect("--source-docs-url-prefix needs a value")
                     .clone();
             }
-            "--csv-out" => {
-                args.csv_out = Some(PathBuf::from(iter.next().expect("--csv-out needs path")))
+            "--csv-domestic-out" => {
+                args.csv_domestic_out =
+                    Some(PathBuf::from(iter.next().expect("--csv-domestic-out needs path")))
+            }
+            "--csv-foreign-out" => {
+                args.csv_foreign_out =
+                    Some(PathBuf::from(iter.next().expect("--csv-foreign-out needs path")))
             }
             other => {
                 eprintln!("unknown argument: {other}");
@@ -152,13 +166,20 @@ fn main() -> ExitCode {
         return code;
     }
 
-    // E.7 export: alongside workbench.html, emit the line-items CSV
-    // the FA uploads to Stanford's portal. (The business-purpose text
-    // used to be a sidecar .txt file with a download link in the hero;
-    // friday Stage 3 replaced that with an in-page click-to-copy card.)
-    if let Some(path) = &args.csv_out {
-        let csv = report_to_lines_csv(&report);
-        if let Err(code) = write_aux(path, &csv, "csv") {
+    // Alongside workbench.html, emit one CSV per Stanford portal page
+    // (domestic vs foreign). Per-line routing inside csv_export decides
+    // which file each transaction line lands in. Either file may be
+    // header-only (typical: a purely-domestic report → empty foreign
+    // CSV); the workbench hero hides downloads with zero data rows.
+    if let Some(path) = &args.csv_domestic_out {
+        let csv = report_to_domestic_csv(&report);
+        if let Err(code) = write_aux(path, &csv, "csv-domestic") {
+            return code;
+        }
+    }
+    if let Some(path) = &args.csv_foreign_out {
+        let csv = report_to_foreign_csv(&report);
+        if let Err(code) = write_aux(path, &csv, "csv-foreign") {
             return code;
         }
     }

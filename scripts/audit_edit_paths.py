@@ -208,7 +208,8 @@ def main() -> int:
 
     workbench = upload_dir / "workbench.html"
     report = upload_dir / "reduced" / "report.json"
-    csv = upload_dir / "lines.csv"
+    csv_domestic = upload_dir / "lines-domestic.csv"
+    csv_foreign = upload_dir / "lines-foreign.csv"
     if not workbench.exists() or not report.exists():
         print(f"error: workbench.html or report.json missing under {upload_dir}", file=sys.stderr)
         return 2
@@ -219,13 +220,14 @@ def main() -> int:
     report_data = json.loads(report.read_text())
 
     # Backup files we're about to mutate (each POST re-writes
-    # report.json + workbench.html + lines.csv). Restore in finally.
+    # report.json + workbench.html + both portal CSVs). Restore in finally.
     backup_dir = upload_dir / "_audit_backup"
     backup_dir.mkdir(exist_ok=True)
     backups = {
         "report.json": (report, backup_dir / "report.json"),
         "workbench.html": (workbench, backup_dir / "workbench.html"),
-        "lines.csv": (csv, backup_dir / "lines.csv"),
+        "lines-domestic.csv": (csv_domestic, backup_dir / "lines-domestic.csv"),
+        "lines-foreign.csv": (csv_foreign, backup_dir / "lines-foreign.csv"),
     }
     for src, dst in backups.values():
         if src.exists():

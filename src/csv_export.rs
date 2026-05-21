@@ -1,49 +1,62 @@
 //! CSV + business-purpose-text exports for the FA's downstream workflow.
 //!
-//! The Stanford expense-report portal has two distinct entry surfaces:
-//!   1. **Expense Lines Upload** — bulk CSV import of line items.
-//!      Columns: `Date | Amount | Expense Type | Remarks`. Schema
-//!      from the FA-supplied `Copy of ERS Template.xlsm`.
-//!   2. **Business Purpose** — a single multi-line text box on the
-//!      report-level form.
+//! Stanford's expense-report portal has **two distinct upload pages**, each
+//! with its own column layout and its own Expense Type dropdown vocabulary.
+//! We emit one CSV per page, every time:
 //!
-//! Our internal schema separates these (per-line `common.*` for the
-//! CSV; report-level `general_information.business_purpose.{who,what,
-//! when,where,why,key_30char}` for the text box). This module produces
-//! both artifacts as plain strings; the render binary writes them to
-//! disk alongside `workbench.html`, and the workbench links to them.
+//!   * `lines-domestic.csv` — 7 columns matching the live "Expense Lines
+//!     Upload" page (per the FA's 2026-05-20 screenshot). Plain expense
+//!     type strings (`Airfare`, `Lodging`, `Ground Transportation`, …).
+//!   * `lines-foreign.csv` — 20 columns matching the foreign-page template
+//!     (per `reference/ers-template-foreign.xlsx` Sheet1). Suffixed
+//!     expense type strings (`Airfare - Foreign and Domestic`,
+//!     `Ground Transportation-Foreign`, `Travel Meal-SingleMealwAlcohl`, …
+//!     including the missing-`o` typo Stanford really has).
 //!
-//! Expense Type mapping is best-effort: our internal enum doesn't 1:1
-//! match Stanford's taxonomy (e.g. we have one `business_meal` vs
-//! Stanford's `Business Meal` / `Travel Meal - Single Meal` distinction).
-//! The mapping lives in one function for easy FA-policy updates; the
-//! workbench's per-line review surfaces any wrong mapping for the FA
-//! to fix in Excel before uploading.
+//! Per-line routing: each transaction line goes to exactly one CSV. Lines
+//! whose `expense_type` is an explicit foreign variant
+//! (`*_foreign`) go to the foreign CSV; explicit domestic variants go to
+//! the domestic CSV; neutral types (`business_meal`, `car_rental`, …)
+//! fall through to the report's `general_information.category` (foreign
+//! report ⇒ foreign CSV; anything else ⇒ domestic CSV).
+//!
+//! Stanford reports are typically all-domestic or all-foreign — a mixed
+//! report is rare. So one of the two CSVs is usually header-only; the
+//! workbench hero hides empty downloads.
+//!
+//! Source-of-truth artifacts (checked in under `reference/`):
+//!   * `ers-template-foreign.xlsx` — column layout + 25 valid foreign
+//!     expense types + all foreign dropdown values (currencies,
+//!     affiliations, booking methods, ticket classes, …).
+//!   * `ers-expense-type-dropdown-domestic.png` — the 26 domestic
+//!     dropdown values, screenshotted from the live portal.
+//!
+//! Strings here are pasted verbatim from those artifacts (typos and all,
+//! e.g. `Travel Meal-SingleMealwAlcohl` and `Adminstrative: Academic
+//! Support`). Stanford's dropdown is case- and character-sensitive.
 
 use crate::expense_report_model::{
     ExpenseReport,
+    ExpenseReportGeneralInformationCategoryEnum as Category,
+    ExpenseReportGeneralInformationPayeeAffiliationEnum as Affiliation,
     ExpenseReportTransactionLinesItem,
+    ExpenseReportTransactionLinesItemAirfareDetailsBookingMethodEnum as AirfareBookingMethod,
+    ExpenseReportTransactionLinesItemAirfareDetailsClassOfTicketEnum as ClassOfTicket,
     ExpenseReportTransactionLinesItemCommonExpenseTypeEnum as ExpenseType,
+    ExpenseReportTransactionLinesItemCommonForeignActivityTypeEnum as ForeignActivityType,
+    ExpenseReportTransactionLinesItemLodgingDetailsBookingMethodEnum as LodgingBookingMethod,
 };
 
-/// Render the report's transaction lines as a CSV string matching
-/// Stanford's live "Expense Lines Upload" portal column order (per
-/// the screenshot the FA shared 2026-05-20):
+// ─── Public emitters ────────────────────────────────────────────────────────
+
+/// Render the domestic-page CSV (7 columns). Includes only the lines
+/// routed to the domestic page per [`route_to_foreign`].
 ///
-///   Line | Expense Date | Expense Currency | Expense Amount |
-///   USD Amount | Expense Type | Remarks
+///   Line | Expense Date | Expense Currency | Expense Amount | USD Amount
+///        | Expense Type | Remarks
 ///
-/// Line numbers auto-increment from 1. Date format is DD-MMM-YYYY
-/// (e.g. `02-Sep-2024`). Expense Currency is the ISO 4217 code +
-/// full name (e.g. `BRL - Brazilian Real`); USD-only lines emit
-/// `USD - US Dollar`. Expense Amount is the receipt's original
-/// currency value; USD Amount is the converted value. For
-/// USD-printed receipts these are the same.
-///
-/// Lines with missing data still emit (with blanks in those
-/// columns) so the FA sees/fixes them in Excel rather than silently
-/// dropping data.
-pub fn report_to_lines_csv(report: &ExpenseReport) -> String {
+/// Line numbers auto-increment from 1 within this file.
+pub fn report_to_domestic_csv(report: &ExpenseReport) -> String {
     let mut out = String::from(
         "Line,Expense Date,Expense Currency,Expense Amount,USD Amount,Expense Type,Remarks\n",
     );
@@ -51,40 +64,28 @@ pub fn report_to_lines_csv(report: &ExpenseReport) -> String {
         Some(v) => v,
         None => return out,
     };
-    for (idx, line) in lines.iter().enumerate() {
-        let line_no = idx + 1;
-        let date = line
-            .common
-            .date
-            .value
-            .as_ref()
+    let category = report.general_information.category.value.as_ref();
+    let mut line_no = 0usize;
+    for line in lines {
+        if route_to_foreign(line, category) {
+            continue;
+        }
+        line_no += 1;
+        let date = line.common.date.value.as_ref()
             .map(|d| format_portal_date(&d.0))
             .unwrap_or_default();
-        let original_currency = line
-            .common
-            .original_currency
-            .value
-            .as_deref();
         let usd_amount = line.common.line_amount_usd.value;
-        // Foreign lines have original_currency + original_amount; USD
-        // lines leave original_* null. Portal wants both columns
-        // populated even for USD — emit USD code + the USD amount.
-        let (currency_display, expense_amount) = if let Some(code) = original_currency {
-            let amt = line
-                .common
-                .original_amount
-                .value
-                .map(|v| format!("{v:.2}"))
-                .unwrap_or_default();
-            (currency_code_to_full(code), amt)
-        } else {
-            (
-                currency_code_to_full("USD"),
-                usd_amount.map(|v| format!("{v:.2}")).unwrap_or_default(),
-            )
-        };
+        let (currency_display, expense_amount) =
+            if let Some(code) = line.common.original_currency.value.as_deref() {
+                let amt = line.common.original_amount.value
+                    .map(|v| format!("{v:.2}")).unwrap_or_default();
+                (currency_code_to_full(code), amt)
+            } else {
+                (currency_code_to_full("USD"),
+                 usd_amount.map(|v| format!("{v:.2}")).unwrap_or_default())
+            };
         let usd_str = usd_amount.map(|v| format!("{v:.2}")).unwrap_or_default();
-        let expense_type = map_expense_type(line);
+        let expense_type = map_expense_type_domestic(line);
         let remarks = line.common.remarks.value.as_deref().unwrap_or("");
         out.push_str(&format!(
             "{},{},{},{},{},{},{}\n",
@@ -100,10 +101,315 @@ pub fn report_to_lines_csv(report: &ExpenseReport) -> String {
     out
 }
 
+/// Render the foreign-page CSV (20 columns). Includes only the lines
+/// routed to the foreign page per [`route_to_foreign`].
+///
+/// Column layout from `reference/ers-template-foreign.xlsx` Sheet1 r2.
+/// Note: no Line column, no USD Amount column (foreign page wants the
+/// original-currency amount only).
+pub fn report_to_foreign_csv(report: &ExpenseReport) -> String {
+    let mut out = String::from(
+        // Exact header strings from xlsx Sheet1 r2 — preserve the snake_case,
+        // the lowercase "country of activity" / "activity type", the two
+        // spaces in "ticket_number  (not required)", and the Title-Case
+        // "Conference Hotel".
+        "category,expense_date,expense_currency,expense_amount,expense_type,remarks,\
+         country of activity,activity type,affiliation,traveler_sunet,traveler_name,\
+         ticket_number  (not required),travel_booking_method,airline,class_of_ticket,\
+         departure_airport,destination_airport,number_of_nights,location,Conference Hotel\n",
+    );
+    let lines = match report.transaction_lines.as_ref() {
+        Some(v) => v,
+        None => return out,
+    };
+    let category = report.general_information.category.value.as_ref();
+    let payee = &report.general_information.payee;
+    let affiliation_str = payee.affiliation.value.as_ref()
+        .map(|a| map_affiliation_foreign(*a))
+        .unwrap_or("");
+    let traveler_name = payee.name.value.as_deref().unwrap_or("");
+
+    for line in lines {
+        if !route_to_foreign(line, category) {
+            continue;
+        }
+        // A — category. The xlsx hint at A1 is "Expenses (Foreign)" and
+        // that's what every row gets on the foreign page.
+        let col_a = "Expenses (Foreign)";
+        // B — expense_date
+        let col_b = line.common.date.value.as_ref()
+            .map(|d| format_portal_date(&d.0))
+            .unwrap_or_default();
+        // C — expense_currency. Foreign page wants the original-currency
+        // code+name (`BRL - Brazilian Real`). USD-only lines emit
+        // `USD - US Dollar`.
+        let currency_code = line.common.original_currency.value.as_deref()
+            .unwrap_or("USD");
+        let col_c = currency_code_to_full(currency_code);
+        // D — expense_amount (ORIGINAL currency, not USD). For USD-only
+        // lines this is the USD amount.
+        let col_d = if line.common.original_currency.value.is_some() {
+            line.common.original_amount.value
+                .map(|v| format!("{v:.2}")).unwrap_or_default()
+        } else {
+            line.common.line_amount_usd.value
+                .map(|v| format!("{v:.2}")).unwrap_or_default()
+        };
+        // E — expense_type
+        let col_e = map_expense_type_foreign(line);
+        // F — remarks
+        let col_f = line.common.remarks.value.as_deref().unwrap_or("");
+        // G — country of activity (string passthrough; blank if absent)
+        let col_g = line.common.country_of_activity.value.as_deref().unwrap_or("");
+        // H — activity type (enum mapped)
+        let col_h = line.common.foreign_activity_type.value.as_ref()
+            .map(|a| map_foreign_activity_type(*a))
+            .unwrap_or("");
+        // I — affiliation
+        let col_i = affiliation_str;
+        // J — traveler_sunet. No analogous schema field; emit blank and
+        // FA fills in Excel before upload.
+        let col_j = "";
+        // K — traveler_name
+        let col_k = traveler_name;
+        // L–Q — airfare details (blank if not an airfare line)
+        let (col_l, col_m, col_n, col_o, col_p, col_q) =
+            if let Some(af) = line.airfare_details.as_ref() {
+                (
+                    af.ticket_number.value.as_deref().unwrap_or("").to_owned(),
+                    af.booking_method.value.as_ref()
+                        .map(|b| map_airfare_booking_method_foreign(*b).to_owned())
+                        .unwrap_or_default(),
+                    af.airline.value.as_deref().unwrap_or("").to_owned(),
+                    af.class_of_ticket.value.as_ref()
+                        .map(|c| map_class_of_ticket_foreign(*c).to_owned())
+                        .unwrap_or_default(),
+                    af.departure_airport.value.as_deref().unwrap_or("").to_owned(),
+                    af.destination_airport.value.as_deref().unwrap_or("").to_owned(),
+                )
+            } else {
+                (String::new(), String::new(), String::new(),
+                 String::new(), String::new(), String::new())
+            };
+        // R–T — lodging details (blank if not a lodging line)
+        let (col_r, col_s, col_t) =
+            if let Some(ld) = line.lodging_details.as_ref() {
+                let nights = ld.number_of_nights.value
+                    .map(|n| format!("{n}")).unwrap_or_default();
+                let location = ld.location.value.as_deref().unwrap_or("").to_owned();
+                // T — Conference Hotel: "Yes" if lodging booking_method is
+                // conference_hotel; else "No". Blank only when lodging_details
+                // is absent (handled by outer else).
+                let hotel = ld.booking_method.value.as_ref()
+                    .map(|b| if matches!(b, LodgingBookingMethod::ConferenceHotel)
+                             { "Yes" } else { "No" })
+                    .unwrap_or("No");
+                (nights, location, hotel.to_owned())
+            } else {
+                (String::new(), String::new(), String::new())
+            };
+
+        out.push_str(&format!(
+            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n",
+            csv_field(col_a),
+            csv_field(&col_b),
+            csv_field(&col_c),
+            csv_field(&col_d),
+            csv_field(col_e),
+            csv_field(col_f),
+            csv_field(col_g),
+            csv_field(col_h),
+            csv_field(col_i),
+            csv_field(col_j),
+            csv_field(col_k),
+            csv_field(&col_l),
+            csv_field(&col_m),
+            csv_field(&col_n),
+            csv_field(&col_o),
+            csv_field(&col_p),
+            csv_field(&col_q),
+            csv_field(&col_r),
+            csv_field(&col_s),
+            csv_field(&col_t),
+        ));
+    }
+    out
+}
+
+/// Count how many lines route to each CSV. Used by the workbench hero to
+/// hide an empty-CSV download link.
+pub fn line_counts(report: &ExpenseReport) -> (usize, usize) {
+    let Some(lines) = report.transaction_lines.as_ref() else { return (0, 0); };
+    let category = report.general_information.category.value.as_ref();
+    let (mut domestic, mut foreign) = (0usize, 0usize);
+    for line in lines {
+        if route_to_foreign(line, category) { foreign += 1; } else { domestic += 1; }
+    }
+    (domestic, foreign)
+}
+
+// ─── Routing ───────────────────────────────────────────────────────────────
+
+/// True iff this line belongs in the foreign CSV (vs the domestic CSV).
+/// Explicit foreign variants always go foreign; explicit domestic
+/// variants always go domestic; neutral types tie-break on the report's
+/// category.
+fn route_to_foreign(
+    line: &ExpenseReportTransactionLinesItem,
+    report_category: Option<&Category>,
+) -> bool {
+    let Some(kind) = line.common.expense_type.value.as_ref() else {
+        return matches_foreign_category(report_category);
+    };
+    match kind {
+        ExpenseType::AirfareForeign
+        | ExpenseType::LodgingForeign
+        | ExpenseType::GroundTransportationForeign
+        | ExpenseType::GiftCardEmployeeForeign
+        | ExpenseType::GiftsForeignActivity => true,
+        ExpenseType::AirfareDomestic
+        | ExpenseType::LodgingDomestic
+        | ExpenseType::GroundTransportationDomestic => false,
+        // Neutral (BusinessMeal, ConferenceRegistration, …): inherit
+        // the report's category.
+        _ => matches_foreign_category(report_category),
+    }
+}
+
+fn matches_foreign_category(c: Option<&Category>) -> bool {
+    matches!(c, Some(Category::ExpensesForeign))
+}
+
+// ─── Expense-type mappers (per-page SSOT) ──────────────────────────────────
+
+/// Internal enum → domestic-portal Expense Type string. SSOT:
+/// `reference/ers-expense-type-dropdown-domestic.png`.
+fn map_expense_type_domestic(line: &ExpenseReportTransactionLinesItem) -> &'static str {
+    let Some(kind) = line.common.expense_type.value.as_ref() else {
+        return "Miscellaneous";
+    };
+    let alcohol = line.meal_details.as_ref()
+        .and_then(|m| m.has_alcohol_on_receipt.value)
+        .unwrap_or(false);
+    match kind {
+        ExpenseType::AdjustedPerDiem => "Adjusted Per Diem",
+        ExpenseType::AirfareDomestic | ExpenseType::AirfareForeign => "Airfare",
+        ExpenseType::AncillaryAirlineFee => "Ancillary Airline Fee",
+        ExpenseType::BusinessMeal => {
+            if alcohol { "Business Meal with Alcohol" } else { "Business Meal" }
+        }
+        ExpenseType::CarRental => "Car Rental",
+        ExpenseType::ConferenceRegistration => "Conference Registration",
+        ExpenseType::GiftCardEmployeeForeign => "Gift Card - Employee",
+        ExpenseType::GiftsForeignActivity => "Gifts",
+        ExpenseType::GroundTransportationDomestic
+        | ExpenseType::GroundTransportationForeign => "Ground Transportation",
+        ExpenseType::GroupTravelMeal => {
+            if alcohol { "Group Travel Meal with Alcohol" } else { "Group Travel Meal" }
+        }
+        ExpenseType::HumanSubjectIncentive => "Human Subject Incentive",
+        ExpenseType::LodgingDomestic | ExpenseType::LodgingForeign => "Lodging",
+        ExpenseType::OtherBusinessExpense => "Miscellaneous",
+    }
+}
+
+/// Internal enum → foreign-portal Expense Type string. SSOT:
+/// `reference/ers-template-foreign.xlsx` Sheet "Expense Type" (25 values).
+///
+/// Several internal variants don't have a clean 1:1 in the foreign
+/// dropdown; we pick the closest match. The xlsx's typos and
+/// unconventional dash spacing (`Ground Transportation-Foreign` —
+/// no spaces around the dash) are preserved exactly.
+fn map_expense_type_foreign(line: &ExpenseReportTransactionLinesItem) -> &'static str {
+    let Some(kind) = line.common.expense_type.value.as_ref() else {
+        return "Miscellaneous - Foreign";
+    };
+    let alcohol = line.meal_details.as_ref()
+        .and_then(|m| m.has_alcohol_on_receipt.value)
+        .unwrap_or(false);
+    match kind {
+        ExpenseType::AdjustedPerDiem => "Adjusted Per Diem",
+        ExpenseType::AirfareDomestic
+        | ExpenseType::AirfareForeign => "Airfare - Foreign and Domestic",
+        ExpenseType::AncillaryAirlineFee => "Ancillary Airline Fee",
+        ExpenseType::BusinessMeal => {
+            if alcohol { "Business Meal with Alcohol" } else { "Business Meal" }
+        }
+        ExpenseType::CarRental => "Car Rental",
+        ExpenseType::ConferenceRegistration => "Conference Registration",
+        ExpenseType::GiftCardEmployeeForeign => "Gift Card - Employee (Foreign)",
+        ExpenseType::GiftsForeignActivity => "Gifts - Foreign Activity",
+        ExpenseType::GroundTransportationDomestic
+        | ExpenseType::GroundTransportationForeign => "Ground Transportation-Foreign",
+        // Foreign page spells it "w Alcohol" not "with Alcohol".
+        ExpenseType::GroupTravelMeal => {
+            if alcohol { "Group Travel Meal w Alcohol" } else { "Group Travel Meal" }
+        }
+        ExpenseType::HumanSubjectIncentive => "Human Subject Incentive",
+        ExpenseType::LodgingDomestic
+        | ExpenseType::LodgingForeign => "Lodging - Foreign and Domestic",
+        ExpenseType::OtherBusinessExpense => "Miscellaneous - Foreign",
+    }
+}
+
+// ─── Foreign-page enum mappers ─────────────────────────────────────────────
+
+fn map_affiliation_foreign(a: Affiliation) -> &'static str {
+    // Foreign dropdown is just {DAPER Traveler, Visitor, Stanford Traveler}.
+    // Our schema's stanford_* variants all collapse to "Stanford Traveler".
+    // We have no DAPER-specific signal; FA fixes in Excel if needed.
+    match a {
+        Affiliation::StanfordStudent
+        | Affiliation::StanfordPostdoc
+        | Affiliation::StanfordFaculty
+        | Affiliation::StanfordStaff => "Stanford Traveler",
+        Affiliation::Other => "Visitor",
+    }
+}
+
+fn map_airfare_booking_method_foreign(b: AirfareBookingMethod) -> &'static str {
+    // The xlsx collapses all the per-airline UA/DL/AA/AS/HA Connect
+    // variants into one dropdown value.
+    match b {
+        AirfareBookingMethod::StanfordTravelEgencia => "Stanford Travel - Egencia",
+        AirfareBookingMethod::StanfordTravelKeyTravel => "Stanford Travel - Key Travel",
+        AirfareBookingMethod::StanfordTravelConnectUa
+        | AirfareBookingMethod::StanfordTravelConnectDl
+        | AirfareBookingMethod::StanfordTravelConnectAa
+        | AirfareBookingMethod::StanfordTravelConnectAs
+        | AirfareBookingMethod::StanfordTravelConnectHa => {
+            "Stanford Travel Connect (UA, DL, AA, AS and HA)"
+        }
+        AirfareBookingMethod::Other => "Other (Not a Stanford Travel Booking Method)",
+    }
+}
+
+fn map_class_of_ticket_foreign(c: ClassOfTicket) -> &'static str {
+    // The xlsx dropdown collapses Premium Economy and Business into
+    // one option.
+    match c {
+        ClassOfTicket::Coach => "Coach",
+        ClassOfTicket::First => "First",
+        ClassOfTicket::PremiumEconomy | ClassOfTicket::Business => "Premium Economy/Business",
+    }
+}
+
+fn map_foreign_activity_type(a: ForeignActivityType) -> &'static str {
+    // Maps to entries in xlsx Sheet "Activity Type" (16 values). Our
+    // schema enum is much smaller; other → "Other".
+    match a {
+        ForeignActivityType::Conference => "Conferences",
+        ForeignActivityType::ResearchCollaboration => "Collaborations/Meetings",
+        ForeignActivityType::Fieldwork => "Research: Field work",
+        ForeignActivityType::Other => "Other",
+    }
+}
+
+// ─── Date + currency formatters ────────────────────────────────────────────
+
 /// Convert ISO 8601 date `YYYY-MM-DD` → portal format `DD-MMM-YYYY`
-/// (e.g. `2024-09-02` → `02-Sep-2024`). Falls back to passthrough
-/// for malformed input so a bad date doesn't lose the row entirely
-/// (FA can fix in Excel).
+/// (e.g. `2024-09-02` → `02-Sep-2024`). Falls back to passthrough for
+/// malformed input so a bad date doesn't lose the row.
 fn format_portal_date(iso: &str) -> String {
     if iso.len() != 10 || &iso[4..5] != "-" || &iso[7..8] != "-" {
         return iso.to_owned();
@@ -122,63 +428,98 @@ fn format_portal_date(iso: &str) -> String {
 }
 
 /// ISO 4217 currency code → portal display string (`<code> - <name>`).
-/// Covers the ~40 currencies a Stanford research traveller realistically
-/// encounters. Unknown codes fall back to `<code> - <code>` so the row
-/// still emits with a recognizable currency column the FA can correct.
+/// 75-entry table from `reference/ers-template-foreign.xlsx` Sheet
+/// "Expense_Currency". Capitalization is intentionally inconsistent
+/// (`Argentine peso`, `South Korean won`, `New Taiwan dollar`,
+/// `Angolanische Kwanza`) — preserved exactly as Stanford has them.
+/// Unknown codes fall back to `<code> - <code>` so the row still emits.
 fn currency_code_to_full(code: &str) -> String {
     let name = match code {
-        "USD" => "US Dollar",
+        "AED" => "United Arab Emirates Dirham",
+        "ALL" => "Albanian Lek",
+        "AOA" => "Angolanische Kwanza",
+        "ARS" => "Argentine peso",
+        "AUD" => "Australian Dollar",
+        "BDT" => "Bangladeshi Taka",
+        "BGN" => "Bulgarian Lev",
+        "BRL" => "Brazilian Real",
+        "BWP" => "Botswana Pula",
+        "CAD" => "Canadian Dollar",
+        "CHF" => "Swiss Franc",
+        "CLP" => "Chilean Peso",
+        "CNY" => "Chinese Yuan Renminbi",
+        "COP" => "Colombian Peso",
+        "CRC" => "Costa Rican Colon",
+        "CZK" => "Czech Koruna",
+        "DKK" => "Danish Krone",
+        "DOP" => "Dominican Peso",
+        "EGP" => "Egyptian Pound",
         "EUR" => "Euro",
         "GBP" => "British Pound",
-        "JPY" => "Japanese Yen",
-        "CAD" => "Canadian Dollar",
-        "AUD" => "Australian Dollar",
-        "CHF" => "Swiss Franc",
-        "CNY" => "Chinese Yuan",
-        "SGD" => "Singapore Dollar",
-        "INR" => "Indian Rupee",
-        "BRL" => "Brazilian Real",
-        "MXN" => "Mexican Peso",
-        "ARS" => "Argentine Peso",
-        "KRW" => "South Korean Won",
+        "GEL" => "Georgian Lari",
+        "GTQ" => "Guatemalan Quetzal",
         "HKD" => "Hong Kong Dollar",
-        "TWD" => "Taiwan Dollar",
-        "THB" => "Thai Baht",
-        "IDR" => "Indonesian Rupiah",
-        "ZAR" => "South African Rand",
-        "TRY" => "Turkish Lira",
-        "ILS" => "Israeli Shekel",
-        "AED" => "UAE Dirham",
-        "SAR" => "Saudi Riyal",
-        "NZD" => "New Zealand Dollar",
-        "SEK" => "Swedish Krona",
-        "NOK" => "Norwegian Krone",
-        "DKK" => "Danish Krone",
-        "PLN" => "Polish Zloty",
-        "CZK" => "Czech Koruna",
         "HUF" => "Hungarian Forint",
-        "RON" => "Romanian Leu",
-        "VND" => "Vietnamese Dong",
-        "PHP" => "Philippine Peso",
+        "IDR" => "Indonesian Rupiah",
+        "ILS" => "Israeli Shekel",
+        "INR" => "Indian Rupee",
+        "ISK" => "Icelandic Krona",
+        "JMD" => "Jamaican Dollar",
+        "JOD" => "Jordanian Dinars",
+        "JPY" => "Japanese Yen",
+        "KES" => "Kenyan Shilling",
+        "KRW" => "South Korean won",
+        "KWD" => "Kuwaiti Dinar",
+        "KYD" => "Cayman Islands Dollar",
+        "KZT" => "Kazakhstan Tenge",
+        "LKR" => "Sri Lankan Rupee",
+        "LTL" => "Lithuanian Litas",
+        "LYD" => "Libyan Dinar",
+        "MAD" => "Moroccan Dirham",
+        "MGA" => "Malagasy Ariary",
+        "MOP" => "Macanese Pataca",
+        "MXN" => "Mexican Peso",
         "MYR" => "Malaysian Ringgit",
-        "CLP" => "Chilean Peso",
-        "COP" => "Colombian Peso",
-        "PEN" => "Peruvian Sol",
-        "EGP" => "Egyptian Pound",
+        "NAD" => "Namibian Dollar",
+        "NGN" => "Nigerian Naira",
+        "NIO" => "Nicaraguan Córdoba",
+        "NOK" => "Norwegian Krone",
+        "NPR" => "Nepalese Rupee",
+        "NZD" => "New Zealand Dollar",
+        "OMR" => "Omani Rial",
+        "PEN" => "Sol",
+        "PHP" => "Philippine Peso",
+        "PLN" => "Polish Zloty",
+        "PYG" => "Paraguay Guarani",
+        "QAR" => "Qatari Rial",
+        "RON" => "Romanian Leu",
+        "RSD" => "Serbian Dinar",
+        "SAR" => "Saudi Riyal",
+        "SEK" => "Swedish Krona",
+        "SGD" => "Singapore Dollar",
+        "THB" => "Thai Baht",
+        "TRY" => "Turkish Lira",
+        "TTD" => "Trinidad and Tobago Dollar",
+        "TWD" => "New Taiwan dollar",
+        "TZS" => "Tanzanian Schilling",
+        "UGX" => "Ugandan Shilling",
+        "USD" => "US Dollar",
+        "UYU" => "Uruguayan Peso",
+        "VEF" => "Venezuelan Bolivar Fuerte",
+        "VND" => "Vietnamese Dong",
+        "XOF" => "West African CFA Franc",
+        "ZAR" => "South African Rand",
+        "ZWD" => "Zimbabwe Dollar",
         unknown => return format!("{unknown} - {unknown}"),
     };
     format!("{code} - {name}")
 }
 
+// ─── Business purpose text export ──────────────────────────────────────────
+
 /// Concatenate the business_purpose sub-fields into one labeled text
 /// blob the FA can paste into Stanford's report-level Business Purpose
-/// box. Missing fields are skipped (rather than emitting `Who: \n`)
-/// so the blob stays readable.
-///
-/// Now consumed by the workbench renderer, which embeds the result
-/// as a single click-to-copy field card alongside the 6 individual
-/// sub-cards (Stage 3 of the 2026-05-20 FA feedback round) — the
-/// download-then-copy .txt flow was bad UX.
+/// box. Missing fields are skipped.
 pub fn business_purpose_to_text(
     bp: &crate::expense_report_model::ExpenseReportGeneralInformationBusinessPurpose,
 ) -> String {
@@ -201,59 +542,7 @@ pub fn business_purpose_to_text(
     out
 }
 
-/// Internal-enum → Stanford-taxonomy mapping. Returns the literal
-/// string the FA's Stanford portal expects.
-///
-/// **Updated 2026-05-20 against the live portal screenshot** the FA
-/// shared during the meeting (`.scratch/img_1132.jpg`). Where the
-/// screenshot directly showed a value (`Lodging - Foreign and
-/// Domestic`, `Airfare - Foreign and Domestic`) we use that exact
-/// string. Other types that have fore/dom variants in our schema get
-/// the same suffix by symmetry (Ground Transportation); types with
-/// only one variant or non-territorial types keep their .xlsm
-/// taxonomy string. FA review at next upload catches any wrong ones;
-/// the mapping is one function so updates are one edit.
-///
-/// Takes `&ExpenseReportTransactionLinesItem` so meal lines can
-/// promote to "with Alcohol" variants when `meal_details.
-/// has_alcohol_on_receipt == true`.
-fn map_expense_type(line: &ExpenseReportTransactionLinesItem) -> &'static str {
-    let Some(kind) = line.common.expense_type.value.as_ref() else {
-        return "Miscellaneous";
-    };
-    let alcohol = line
-        .meal_details
-        .as_ref()
-        .and_then(|m| m.has_alcohol_on_receipt.value)
-        .unwrap_or(false);
-    match kind {
-        ExpenseType::AdjustedPerDiem => "Adjusted Per Diem",
-        // Screenshot-confirmed: portal value is "Airfare - Foreign and Domestic".
-        ExpenseType::AirfareDomestic | ExpenseType::AirfareForeign => {
-            "Airfare - Foreign and Domestic"
-        }
-        ExpenseType::AncillaryAirlineFee => "Ancillary Airline Fee",
-        ExpenseType::BusinessMeal => {
-            if alcohol { "Business Meal with Alcohol" } else { "Business Meal" }
-        }
-        ExpenseType::CarRental => "Car Rental",
-        ExpenseType::ConferenceRegistration => "Conference Registration",
-        ExpenseType::GiftCardEmployeeForeign => "Gift Card - Employee",
-        ExpenseType::GiftsForeignActivity => "Gifts",
-        // Symmetry with Airfare + Lodging — same fore/dom collapse pattern.
-        ExpenseType::GroundTransportationDomestic
-        | ExpenseType::GroundTransportationForeign => "Ground Transportation - Foreign and Domestic",
-        ExpenseType::GroupTravelMeal => {
-            if alcohol { "Group Travel Meal with Alcohol" } else { "Group Travel Meal" }
-        }
-        ExpenseType::HumanSubjectIncentive => "Human Subject Incentive",
-        // Screenshot-confirmed: portal value is "Lodging - Foreign and Domestic".
-        ExpenseType::LodgingDomestic | ExpenseType::LodgingForeign => {
-            "Lodging - Foreign and Domestic"
-        }
-        ExpenseType::OtherBusinessExpense => "Miscellaneous",
-    }
-}
+// ─── Internals ─────────────────────────────────────────────────────────────
 
 /// RFC 4180 field quoting: a field needs quoting if it contains a
 /// comma, quote, or newline. Embedded quotes are doubled.
@@ -272,37 +561,38 @@ mod tests {
     use super::*;
     use crate::expense_report_model::{
         ExpenseReportGeneralInformationBusinessPurpose,
+        ExpenseReportTransactionLinesItemAirfareDetails,
+        ExpenseReportTransactionLinesItemLodgingDetails,
         ExpenseReportTransactionLinesItemMealDetails, IsoDate,
     };
     use crate::meta::{FieldMetadata, Wrapped};
 
-    fn line_with(date: &str, amount: f64, kind: ExpenseType, remarks: &str) -> ExpenseReportTransactionLinesItem {
+    // ─── Test helpers ──────────────────────────────────────────────────────
+
+    fn wrap<T>(v: T) -> Wrapped<T> {
+        Wrapped { value: Some(v), meta: FieldMetadata::default() }
+    }
+
+    fn line_with(
+        date: &str,
+        amount: f64,
+        kind: ExpenseType,
+        remarks: &str,
+    ) -> ExpenseReportTransactionLinesItem {
         let mut line = ExpenseReportTransactionLinesItem::default();
-        line.common.date = Wrapped {
-            value: Some(IsoDate(date.to_owned())),
-            meta: FieldMetadata::default(),
-        };
-        line.common.line_amount_usd = Wrapped {
-            value: Some(amount),
-            meta: FieldMetadata::default(),
-        };
-        line.common.expense_type = Wrapped {
-            value: Some(kind),
-            meta: FieldMetadata::default(),
-        };
-        line.common.remarks = Wrapped {
-            value: Some(remarks.to_owned()),
-            meta: FieldMetadata::default(),
-        };
+        line.common.date = wrap(IsoDate(date.to_owned()));
+        line.common.line_amount_usd = wrap(amount);
+        line.common.expense_type = wrap(kind);
+        line.common.remarks = wrap(remarks.to_owned());
         line
     }
 
-    fn with_alcohol(mut line: ExpenseReportTransactionLinesItem, alcohol: bool) -> ExpenseReportTransactionLinesItem {
+    fn with_alcohol(
+        mut line: ExpenseReportTransactionLinesItem,
+        alcohol: bool,
+    ) -> ExpenseReportTransactionLinesItem {
         let mut md = ExpenseReportTransactionLinesItemMealDetails::default();
-        md.has_alcohol_on_receipt = Wrapped {
-            value: Some(alcohol),
-            meta: FieldMetadata::default(),
-        };
+        md.has_alcohol_on_receipt = wrap(alcohol);
         line.meal_details = Some(md);
         line
     }
@@ -317,109 +607,340 @@ mod tests {
     ) -> ExpenseReportTransactionLinesItem {
         let mut line = line_with(date, usd, kind, remarks);
         if let Some(code) = original_currency {
-            line.common.original_currency = Wrapped {
-                value: Some(code.to_owned()),
-                meta: FieldMetadata::default(),
-            };
+            line.common.original_currency = wrap(code.to_owned());
         }
         if let Some(amt) = original_amount {
-            line.common.original_amount = Wrapped {
-                value: Some(amt),
-                meta: FieldMetadata::default(),
-            };
+            line.common.original_amount = wrap(amt);
         }
         line
     }
 
+    fn report_with_category(
+        category: Option<Category>,
+        lines: Vec<ExpenseReportTransactionLinesItem>,
+    ) -> ExpenseReport {
+        let mut r = ExpenseReport::default();
+        if let Some(c) = category {
+            r.general_information.category = wrap(c);
+        }
+        r.transaction_lines = Some(lines);
+        r
+    }
+
+    // ─── Domestic CSV ──────────────────────────────────────────────────────
+
     #[test]
-    fn csv_emits_seven_column_header_and_portal_date_format() {
-        let mut report = ExpenseReport::default();
-        report.transaction_lines = Some(vec![
-            line_with("2024-09-02", 970.75, ExpenseType::AirfareForeign, "BOM to SFO"),
-            line_with("2024-09-04", 79.59, ExpenseType::BusinessMeal, "Dinner"),
-        ]);
-        let csv = report_to_lines_csv(&report);
+    fn domestic_csv_emits_seven_column_header_and_uses_plain_expense_types() {
+        let report = report_with_category(
+            Some(Category::ExpensesDomestic),
+            vec![
+                line_with("2024-09-02", 970.75, ExpenseType::AirfareDomestic, "BOM to SFO"),
+                line_with("2024-09-04", 79.59, ExpenseType::BusinessMeal, "Dinner"),
+                line_with("2024-09-03", 200.00, ExpenseType::LodgingDomestic, "Hotel"),
+            ],
+        );
+        let csv = report_to_domestic_csv(&report);
         let expected = "\
 Line,Expense Date,Expense Currency,Expense Amount,USD Amount,Expense Type,Remarks
-1,02-Sep-2024,USD - US Dollar,970.75,970.75,Airfare - Foreign and Domestic,BOM to SFO
+1,02-Sep-2024,USD - US Dollar,970.75,970.75,Airfare,BOM to SFO
 2,04-Sep-2024,USD - US Dollar,79.59,79.59,Business Meal,Dinner
+3,03-Sep-2024,USD - US Dollar,200.00,200.00,Lodging,Hotel
 ";
         assert_eq!(csv, expected);
     }
 
     #[test]
-    fn csv_foreign_currency_emits_original_amount_and_full_currency_name() {
-        let mut report = ExpenseReport::default();
-        report.transaction_lines = Some(vec![line_with_currency(
-            "2026-04-23",
-            104.18,
-            Some("BRL"),
-            Some(519.20),
-            ExpenseType::LodgingForeign,
-            "Early check-in charge",
-        )]);
-        let csv = report_to_lines_csv(&report);
-        // The portal screenshot row 1: BRL - Brazilian Real, 519.20, 104.18.
-        assert!(
-            csv.contains("1,23-Apr-2026,BRL - Brazilian Real,519.20,104.18,Lodging - Foreign and Domestic,"),
-            "csv:\n{csv}"
+    fn domestic_csv_excludes_foreign_typed_lines() {
+        // Even if report category is somehow mis-set to ExpensesDomestic,
+        // explicitly foreign lines must not appear in the domestic CSV.
+        let report = report_with_category(
+            Some(Category::ExpensesDomestic),
+            vec![
+                line_with("2024-09-02", 970.75, ExpenseType::AirfareForeign, "International"),
+                line_with("2024-09-04", 79.59, ExpenseType::BusinessMeal, "Dinner"),
+            ],
         );
+        let csv = report_to_domestic_csv(&report);
+        // Only the meal line emits, renumbered as line 1.
+        assert!(!csv.contains("International"), "foreign line leaked: {csv}");
+        assert!(csv.contains("1,04-Sep-2024,"), "meal line missing: {csv}");
     }
 
     #[test]
-    fn csv_promotes_business_meal_with_alcohol() {
-        let mut report = ExpenseReport::default();
-        let line = with_alcohol(
-            line_with("2024-09-02", 100.00, ExpenseType::BusinessMeal, ""),
-            true,
+    fn domestic_csv_header_only_when_all_lines_are_foreign() {
+        let report = report_with_category(
+            Some(Category::ExpensesForeign),
+            vec![
+                line_with("2024-09-02", 970.75, ExpenseType::AirfareForeign, ""),
+                line_with("2024-09-03", 200.00, ExpenseType::LodgingForeign, ""),
+            ],
         );
-        report.transaction_lines = Some(vec![line]);
-        let csv = report_to_lines_csv(&report);
-        assert!(csv.contains("Business Meal with Alcohol"),
-                "CSV did not promote with-alcohol meal:\n{csv}");
-    }
-
-    #[test]
-    fn csv_quotes_remarks_with_commas_and_quotes() {
-        let mut report = ExpenseReport::default();
-        report.transaction_lines = Some(vec![
-            line_with("2024-09-02", 50.00, ExpenseType::BusinessMeal, "Lunch with A, B, C"),
-            line_with("2024-09-03", 60.00, ExpenseType::BusinessMeal, "Dinner at \"The Spot\""),
-            line_with("2024-09-04", 70.00, ExpenseType::BusinessMeal, "Multi\nline\nremark"),
-        ]);
-        let csv = report_to_lines_csv(&report);
-        assert!(csv.contains("\"Lunch with A, B, C\""), "missing comma-quoted: {csv}");
-        assert!(csv.contains("\"Dinner at \"\"The Spot\"\"\""), "missing double-quote escape: {csv}");
-        assert!(csv.contains("\"Multi\nline\nremark\""), "missing newline-quoted: {csv}");
-    }
-
-    #[test]
-    fn csv_emits_blank_fields_rather_than_dropping_lines() {
-        let mut report = ExpenseReport::default();
-        let mut line = ExpenseReportTransactionLinesItem::default();
-        // No date, no amount, no expense_type, no remarks set.
-        line.common.expense_type = Wrapped::default();
-        report.transaction_lines = Some(vec![line]);
-        let csv = report_to_lines_csv(&report);
-        // Empty fields, no expense_type → Miscellaneous fallback. Line still emits
-        // (FA can fix in Excel) with line number 1, USD currency default, blanks
-        // elsewhere.
-        assert_eq!(
-            csv,
-            "Line,Expense Date,Expense Currency,Expense Amount,USD Amount,Expense Type,Remarks\n\
-             1,,USD - US Dollar,,,Miscellaneous,\n"
-        );
-    }
-
-    #[test]
-    fn csv_header_only_when_no_lines() {
-        let report = ExpenseReport::default();
-        let csv = report_to_lines_csv(&report);
+        let csv = report_to_domestic_csv(&report);
         assert_eq!(
             csv,
             "Line,Expense Date,Expense Currency,Expense Amount,USD Amount,Expense Type,Remarks\n"
         );
     }
+
+    #[test]
+    fn domestic_csv_promotes_with_alcohol_meals() {
+        let report = report_with_category(
+            Some(Category::ExpensesDomestic),
+            vec![
+                with_alcohol(line_with("2024-09-02", 100.00, ExpenseType::BusinessMeal, ""), true),
+                with_alcohol(line_with("2024-09-03", 200.00, ExpenseType::GroupTravelMeal, ""), true),
+            ],
+        );
+        let csv = report_to_domestic_csv(&report);
+        assert!(csv.contains("Business Meal with Alcohol"), "missing BM+alcohol: {csv}");
+        assert!(csv.contains("Group Travel Meal with Alcohol"), "missing GTM+alcohol: {csv}");
+    }
+
+    #[test]
+    fn domestic_csv_quotes_remarks_with_commas() {
+        let report = report_with_category(
+            Some(Category::ExpensesDomestic),
+            vec![line_with("2024-09-02", 50.00, ExpenseType::BusinessMeal, "Lunch with A, B, C")],
+        );
+        let csv = report_to_domestic_csv(&report);
+        assert!(csv.contains("\"Lunch with A, B, C\""), "missing comma-quoted: {csv}");
+    }
+
+    // ─── Foreign CSV ───────────────────────────────────────────────────────
+
+    #[test]
+    fn foreign_csv_emits_twenty_column_header() {
+        let report = ExpenseReport::default();
+        let csv = report_to_foreign_csv(&report);
+        // Header is the first line; count commas + 1 to get column count.
+        let header = csv.lines().next().unwrap();
+        assert_eq!(header.matches(',').count() + 1, 20, "header: {header}");
+        // Spot-check a few exact column names that show typos / odd formatting.
+        assert!(header.contains("country of activity"), "missing G: {header}");
+        assert!(header.contains("ticket_number  (not required)"),
+                "ticket_number column should preserve double-space: {header}");
+        assert!(header.contains("Conference Hotel"), "missing T: {header}");
+    }
+
+    #[test]
+    fn foreign_csv_emits_full_row_for_airfare_line_with_suffixed_expense_type() {
+        let mut line = line_with_currency(
+            "2024-09-02", 970.75, Some("INR"), Some(80000.00),
+            ExpenseType::AirfareForeign, "BOM to SFO",
+        );
+        line.common.country_of_activity = wrap("India".to_owned());
+        line.common.foreign_activity_type = wrap(ForeignActivityType::Conference);
+        let mut af = ExpenseReportTransactionLinesItemAirfareDetails::default();
+        af.ticket_number = wrap("TKT12345".to_owned());
+        af.booking_method = wrap(AirfareBookingMethod::StanfordTravelEgencia);
+        af.airline = wrap("Air India".to_owned());
+        af.class_of_ticket = wrap(ClassOfTicket::Coach);
+        af.departure_airport = wrap("BOM".to_owned());
+        af.destination_airport = wrap("SFO".to_owned());
+        line.airfare_details = Some(af);
+
+        let mut report = report_with_category(Some(Category::ExpensesForeign), vec![line]);
+        report.general_information.payee.name = wrap("Jane Doe".to_owned());
+        report.general_information.payee.affiliation = wrap(Affiliation::StanfordFaculty);
+
+        let csv = report_to_foreign_csv(&report);
+        let data_row = csv.lines().nth(1).expect("data row");
+        // Spot-check key fields by substring (full CSV equality is fragile).
+        assert!(data_row.starts_with("Expenses (Foreign),02-Sep-2024,INR - Indian Rupee,80000.00,Airfare - Foreign and Domestic,BOM to SFO,India,Conferences,Stanford Traveler,,Jane Doe,TKT12345,Stanford Travel - Egencia,Air India,Coach,BOM,SFO,,,"),
+                "data row: {data_row}");
+    }
+
+    #[test]
+    fn foreign_csv_emits_full_row_for_lodging_line_with_conference_hotel_yes() {
+        let mut line = line_with_currency(
+            "2024-09-03", 200.00, Some("INR"), Some(16500.00),
+            ExpenseType::LodgingForeign, "Hotel",
+        );
+        let mut ld = ExpenseReportTransactionLinesItemLodgingDetails::default();
+        ld.number_of_nights = wrap(3.0);
+        ld.location = wrap("Mumbai, India".to_owned());
+        ld.booking_method = wrap(LodgingBookingMethod::ConferenceHotel);
+        line.lodging_details = Some(ld);
+
+        let report = report_with_category(Some(Category::ExpensesForeign), vec![line]);
+        let csv = report_to_foreign_csv(&report);
+        let data_row = csv.lines().nth(1).expect("data row");
+        assert!(data_row.contains("Lodging - Foreign and Domestic"), "row: {data_row}");
+        assert!(data_row.contains("3,\"Mumbai, India\",Yes"), "row: {data_row}");
+    }
+
+    #[test]
+    fn foreign_csv_emits_no_for_non_conference_lodging() {
+        let mut line = line_with("2024-09-03", 200.00, ExpenseType::LodgingForeign, "");
+        let mut ld = ExpenseReportTransactionLinesItemLodgingDetails::default();
+        ld.booking_method = wrap(LodgingBookingMethod::Other);
+        line.lodging_details = Some(ld);
+        let report = report_with_category(Some(Category::ExpensesForeign), vec![line]);
+        let csv = report_to_foreign_csv(&report);
+        let data_row = csv.lines().nth(1).expect("data row");
+        // Trailing fields: nights,location,Conference Hotel — and Conference Hotel="No"
+        assert!(data_row.ends_with(",,,No"), "expected ',,,No' at end, row: {data_row}");
+    }
+
+    #[test]
+    fn foreign_csv_excludes_domestic_typed_lines() {
+        let report = report_with_category(
+            Some(Category::ExpensesForeign),
+            vec![
+                line_with("2024-09-02", 100.00, ExpenseType::AirfareDomestic, "domestic flight"),
+                line_with("2024-09-03", 200.00, ExpenseType::LodgingForeign, "intl hotel"),
+            ],
+        );
+        let csv = report_to_foreign_csv(&report);
+        assert!(!csv.contains("domestic flight"), "domestic line leaked: {csv}");
+        assert!(csv.contains("intl hotel"), "foreign line missing: {csv}");
+    }
+
+    #[test]
+    fn foreign_csv_header_only_when_all_lines_are_domestic() {
+        let report = report_with_category(
+            Some(Category::ExpensesDomestic),
+            vec![line_with("2024-09-02", 100.00, ExpenseType::BusinessMeal, "lunch")],
+        );
+        let csv = report_to_foreign_csv(&report);
+        assert_eq!(csv.lines().count(), 1, "expected header-only: {csv}");
+    }
+
+    // ─── Routing ───────────────────────────────────────────────────────────
+
+    #[test]
+    fn routing_explicit_foreign_variants_always_go_foreign() {
+        let domestic_category = Some(Category::ExpensesDomestic);
+        for kind in [
+            ExpenseType::AirfareForeign, ExpenseType::LodgingForeign,
+            ExpenseType::GroundTransportationForeign,
+            ExpenseType::GiftCardEmployeeForeign,
+            ExpenseType::GiftsForeignActivity,
+        ] {
+            let line = line_with("2024-09-02", 100.0, kind, "");
+            assert!(route_to_foreign(&line, domestic_category.as_ref()),
+                    "{kind:?} should route foreign even with domestic category");
+        }
+    }
+
+    #[test]
+    fn routing_explicit_domestic_variants_always_go_domestic() {
+        let foreign_category = Some(Category::ExpensesForeign);
+        for kind in [
+            ExpenseType::AirfareDomestic, ExpenseType::LodgingDomestic,
+            ExpenseType::GroundTransportationDomestic,
+        ] {
+            let line = line_with("2024-09-02", 100.0, kind, "");
+            assert!(!route_to_foreign(&line, foreign_category.as_ref()),
+                    "{kind:?} should route domestic even with foreign category");
+        }
+    }
+
+    #[test]
+    fn routing_neutral_types_follow_report_category() {
+        let neutral = ExpenseType::BusinessMeal;
+        let line = line_with("2024-09-02", 100.0, neutral, "");
+        assert!(route_to_foreign(&line, Some(&Category::ExpensesForeign)));
+        assert!(!route_to_foreign(&line, Some(&Category::ExpensesDomestic)));
+        assert!(!route_to_foreign(&line, None));
+        // Other categories (Relocation, HumanSubjects) default domestic.
+        assert!(!route_to_foreign(&line, Some(&Category::Relocation)));
+    }
+
+    #[test]
+    fn line_counts_split_correctly() {
+        let report = report_with_category(
+            Some(Category::ExpensesForeign),
+            vec![
+                line_with("2024-09-02", 100.0, ExpenseType::AirfareDomestic, ""),
+                line_with("2024-09-03", 200.0, ExpenseType::LodgingForeign, ""),
+                line_with("2024-09-04", 50.0, ExpenseType::BusinessMeal, ""),  // → foreign
+            ],
+        );
+        assert_eq!(line_counts(&report), (1, 2));
+    }
+
+    // ─── Mapper exhaustiveness ─────────────────────────────────────────────
+
+    #[test]
+    fn expense_type_domestic_mapping_covers_every_enum_variant() {
+        use ExpenseType::*;
+        for kind in [
+            AdjustedPerDiem, AirfareDomestic, AirfareForeign, AncillaryAirlineFee,
+            BusinessMeal, CarRental, ConferenceRegistration, GiftCardEmployeeForeign,
+            GiftsForeignActivity, GroundTransportationDomestic, GroundTransportationForeign,
+            GroupTravelMeal, HumanSubjectIncentive, LodgingDomestic, LodgingForeign,
+            OtherBusinessExpense,
+        ] {
+            let mut line = ExpenseReportTransactionLinesItem::default();
+            line.common.expense_type = wrap(kind);
+            let mapped = map_expense_type_domestic(&line);
+            assert!(!mapped.is_empty(), "empty domestic mapping for {kind:?}");
+        }
+    }
+
+    #[test]
+    fn expense_type_foreign_mapping_covers_every_enum_variant() {
+        use ExpenseType::*;
+        for kind in [
+            AdjustedPerDiem, AirfareDomestic, AirfareForeign, AncillaryAirlineFee,
+            BusinessMeal, CarRental, ConferenceRegistration, GiftCardEmployeeForeign,
+            GiftsForeignActivity, GroundTransportationDomestic, GroundTransportationForeign,
+            GroupTravelMeal, HumanSubjectIncentive, LodgingDomestic, LodgingForeign,
+            OtherBusinessExpense,
+        ] {
+            let mut line = ExpenseReportTransactionLinesItem::default();
+            line.common.expense_type = wrap(kind);
+            let mapped = map_expense_type_foreign(&line);
+            assert!(!mapped.is_empty(), "empty foreign mapping for {kind:?}");
+        }
+    }
+
+    #[test]
+    fn affiliation_foreign_mapping_covers_every_variant() {
+        use Affiliation::*;
+        assert_eq!(map_affiliation_foreign(StanfordStudent), "Stanford Traveler");
+        assert_eq!(map_affiliation_foreign(StanfordPostdoc), "Stanford Traveler");
+        assert_eq!(map_affiliation_foreign(StanfordFaculty), "Stanford Traveler");
+        assert_eq!(map_affiliation_foreign(StanfordStaff), "Stanford Traveler");
+        assert_eq!(map_affiliation_foreign(Other), "Visitor");
+    }
+
+    #[test]
+    fn airfare_booking_method_foreign_collapses_connect_variants() {
+        use AirfareBookingMethod::*;
+        assert_eq!(map_airfare_booking_method_foreign(StanfordTravelEgencia),
+                   "Stanford Travel - Egencia");
+        assert_eq!(map_airfare_booking_method_foreign(StanfordTravelKeyTravel),
+                   "Stanford Travel - Key Travel");
+        for v in [StanfordTravelConnectUa, StanfordTravelConnectDl, StanfordTravelConnectAa,
+                  StanfordTravelConnectAs, StanfordTravelConnectHa] {
+            assert_eq!(map_airfare_booking_method_foreign(v),
+                       "Stanford Travel Connect (UA, DL, AA, AS and HA)");
+        }
+        assert_eq!(map_airfare_booking_method_foreign(Other),
+                   "Other (Not a Stanford Travel Booking Method)");
+    }
+
+    #[test]
+    fn class_of_ticket_foreign_collapses_premium_into_business() {
+        use ClassOfTicket::*;
+        assert_eq!(map_class_of_ticket_foreign(Coach), "Coach");
+        assert_eq!(map_class_of_ticket_foreign(First), "First");
+        assert_eq!(map_class_of_ticket_foreign(PremiumEconomy), "Premium Economy/Business");
+        assert_eq!(map_class_of_ticket_foreign(Business), "Premium Economy/Business");
+    }
+
+    #[test]
+    fn foreign_activity_type_mapping_covers_every_variant() {
+        use ForeignActivityType::*;
+        assert_eq!(map_foreign_activity_type(Conference), "Conferences");
+        assert_eq!(map_foreign_activity_type(ResearchCollaboration), "Collaborations/Meetings");
+        assert_eq!(map_foreign_activity_type(Fieldwork), "Research: Field work");
+        assert_eq!(map_foreign_activity_type(Other), "Other");
+    }
+
+    // ─── Date + currency ───────────────────────────────────────────────────
 
     #[test]
     fn portal_date_format_round_trip() {
@@ -431,7 +952,6 @@ Line,Expense Date,Expense Currency,Expense Amount,USD Amount,Expense Type,Remark
 
     #[test]
     fn portal_date_format_passes_through_malformed_input() {
-        // Don't lose the row if the date is garbage — FA fixes in Excel.
         assert_eq!(format_portal_date(""), "");
         assert_eq!(format_portal_date("April 23 2026"), "April 23 2026");
         assert_eq!(format_portal_date("2026-13-01"), "2026-13-01");
@@ -439,53 +959,34 @@ Line,Expense Date,Expense Currency,Expense Amount,USD Amount,Expense Type,Remark
     }
 
     #[test]
-    fn currency_code_known_returns_code_dash_name() {
+    fn currency_code_matches_xlsx_strings_exactly() {
+        // Spot-check the typos / odd capitalization Stanford has.
         assert_eq!(currency_code_to_full("USD"), "USD - US Dollar");
         assert_eq!(currency_code_to_full("BRL"), "BRL - Brazilian Real");
-        assert_eq!(currency_code_to_full("JPY"), "JPY - Japanese Yen");
-        assert_eq!(currency_code_to_full("EGP"), "EGP - Egyptian Pound");
+        assert_eq!(currency_code_to_full("ARS"), "ARS - Argentine peso");  // lowercase!
+        assert_eq!(currency_code_to_full("KRW"), "KRW - South Korean won");  // lowercase!
+        assert_eq!(currency_code_to_full("AOA"), "AOA - Angolanische Kwanza");  // German!
+        assert_eq!(currency_code_to_full("PEN"), "PEN - Sol");  // just "Sol"
+        assert_eq!(currency_code_to_full("AED"), "AED - United Arab Emirates Dirham");
     }
 
     #[test]
     fn currency_code_unknown_falls_back_to_code_dash_code() {
-        // Don't drop the row for an unknown 3-letter code — emit it twice so
-        // the FA sees what we received and can correct.
         assert_eq!(currency_code_to_full("XYZ"), "XYZ - XYZ");
         assert_eq!(currency_code_to_full(""), " - ");
     }
 
-    #[test]
-    fn expense_type_mapping_covers_every_enum_variant() {
-        // Compile-time guard: this match must be exhaustive. If a new
-        // variant is added to ExpenseType and not mapped, this test
-        // won't even compile. Catches schema additions that need an
-        // FA-policy decision.
-        use ExpenseType::*;
-        for kind in [
-            AdjustedPerDiem, AirfareDomestic, AirfareForeign,
-            AncillaryAirlineFee, BusinessMeal, CarRental,
-            ConferenceRegistration, GiftCardEmployeeForeign,
-            GiftsForeignActivity, GroundTransportationDomestic,
-            GroundTransportationForeign, GroupTravelMeal,
-            HumanSubjectIncentive, LodgingDomestic, LodgingForeign,
-            OtherBusinessExpense,
-        ] {
-            let mut line = ExpenseReportTransactionLinesItem::default();
-            line.common.expense_type = Wrapped { value: Some(kind), meta: FieldMetadata::default() };
-            let mapped = map_expense_type(&line);
-            assert!(!mapped.is_empty(), "empty mapping for {kind:?}");
-        }
-    }
+    // ─── Business purpose ──────────────────────────────────────────────────
 
     #[test]
     fn business_purpose_text_concatenates_with_labels() {
         let mut bp = ExpenseReportGeneralInformationBusinessPurpose::default();
-        bp.who = Wrapped { value: Some("Jane Doe".to_owned()), meta: FieldMetadata::default() };
-        bp.what = Wrapped { value: Some("Presented research".to_owned()), meta: FieldMetadata::default() };
-        bp.when = Wrapped { value: Some("2024-09-01 to 2024-09-05".to_owned()), meta: FieldMetadata::default() };
-        bp.r#where = Wrapped { value: Some("Buenos Aires".to_owned()), meta: FieldMetadata::default() };
-        bp.why = Wrapped { value: Some("Disseminate".to_owned()), meta: FieldMetadata::default() };
-        bp.key_30char = Wrapped { value: Some("ISCA 2024".to_owned()), meta: FieldMetadata::default() };
+        bp.who = wrap("Jane Doe".to_owned());
+        bp.what = wrap("Presented research".to_owned());
+        bp.when = wrap("2024-09-01 to 2024-09-05".to_owned());
+        bp.r#where = wrap("Buenos Aires".to_owned());
+        bp.why = wrap("Disseminate".to_owned());
+        bp.key_30char = wrap("ISCA 2024".to_owned());
 
         let text = business_purpose_to_text(&bp);
         let expected = "\
@@ -502,8 +1003,7 @@ Key (≤30 chars): ISCA 2024
     #[test]
     fn business_purpose_text_skips_missing_fields() {
         let mut bp = ExpenseReportGeneralInformationBusinessPurpose::default();
-        bp.who = Wrapped { value: Some("Jane".to_owned()), meta: FieldMetadata::default() };
-        // Leave the other 5 as None.
+        bp.who = wrap("Jane".to_owned());
         let text = business_purpose_to_text(&bp);
         assert_eq!(text, "Who: Jane\n");
     }

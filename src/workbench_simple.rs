@@ -16,6 +16,7 @@ use crate::expense_report_model::{
     ExpenseReportTransactionLinesItemLodgingDetails,
     ExpenseReportTransactionLinesItemMealDetails,
 };
+use crate::csv_export::line_counts;
 use crate::extracted_receipt::ExtractedReceipt;
 use crate::meta::{ConfidenceLevel, EvidenceKind, FieldMetadata, Wrapped};
 use crate::validator::{ValidationIssue, ValidationIssueKind, ValidationReport, ValidationSeverity};
@@ -497,21 +498,30 @@ fn render_hero(html: &mut String, report: &ExpenseReport, validation: &Validatio
         escape(payee),
         escape(event)
     ));
-    // E.7 downloads. Both files are written by render_workbench_from_report
-    // alongside workbench.html (--csv-out / --bp-out); the static-file
-    // route under /uploads/<id>/ serves them. `download` attribute hints
-    // the browser to save rather than render. The links render
-    // regardless of file presence — if the file is missing, the FA gets
-    // a 404 and we'll know to wire the args. (Browsers don't probe for
-    // existence before showing a link.) The business-purpose .txt
-    // download was dropped in friday Stage 3; its content is now the
-    // "Combined (for Stanford portal)" click-to-copy card under
-    // General Information.
+    // Stanford has two upload pages (domestic + foreign) with different
+    // column layouts. render_workbench_from_report writes both CSVs
+    // alongside workbench.html (--csv-domestic-out / --csv-foreign-out);
+    // the static-file route under /uploads/<id>/ serves them. We hide
+    // the link for whichever CSV has zero data rows so a purely-domestic
+    // report only shows the domestic download (and vice versa).
+    let (domestic_lines, foreign_lines) = line_counts(report);
+    html.push_str("<p class=\"hero-downloads\">");
+    if domestic_lines > 0 {
+        html.push_str(&format!(
+            "<a class=\"download-link\" href=\"lines-domestic.csv\" download \
+             title=\"Upload at Stanford's Expense Lines (Domestic) page\">\
+             ⬇ Download CSV — Domestic ({domestic_lines})</a>"
+        ));
+    }
+    if foreign_lines > 0 {
+        html.push_str(&format!(
+            "<a class=\"download-link\" href=\"lines-foreign.csv\" download \
+             title=\"Upload at Stanford's Expense Lines (Foreign) page\">\
+             ⬇ Download CSV — Foreign ({foreign_lines})</a>"
+        ));
+    }
     html.push_str(
-        "<p class=\"hero-downloads\">\
-         <a class=\"download-link\" href=\"lines.csv\" download>\
-         ⬇ Download CSV (Expense Lines)</a>\
-         <label class=\"evidence-toggle\" title=\"Show the verbatim text the extractor used to ground each value\">\
+        "<label class=\"evidence-toggle\" title=\"Show the verbatim text the extractor used to ground each value\">\
          <input type=\"checkbox\" id=\"evidence-toggle\"> Show extraction provenance\
          </label>\
          </p>\n",
