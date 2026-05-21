@@ -265,7 +265,7 @@ fn csv_field(s: &str) -> String {
 mod tests {
     use super::*;
     use crate::expense_report_model::{
-        ExpenseReportGeneralInformationBusinessPurpose, ExpenseReportTransactionLinesItemCommon,
+        ExpenseReportGeneralInformationBusinessPurpose,
         ExpenseReportTransactionLinesItemMealDetails, IsoDate,
     };
     use crate::meta::{FieldMetadata, Wrapped};

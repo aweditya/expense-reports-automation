@@ -445,16 +445,23 @@ body {
   outline-offset: 0;
 }
 .field-label {
+  /* Per FA feedback (2026-05-20): the data should lead, the label
+     should recede. Was 11px-600-#6b7280 — strong enough to grab the
+     eye over the value below. Now 11px-500-lighter-grey so the value
+     is the visual lead. */
   margin: 0 0 4px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #6b7280;
+  color: #9ca3af;
 }
 .field-value {
+  /* Bumped from 13px-normal to 16px-500 so the data is the prominent
+     thing in each card (FA feedback 2026-05-20). */
   margin: 0;
-  font-size: 13px;
+  font-size: 16px;
+  font-weight: 500;
   color: #111827;
   display: flex;
   align-items: center;
@@ -562,11 +569,10 @@ body {
   color: #92400e;
   line-height: 1.4;
 }
-.field-reason::first-letter {
-  /* "Medium:" / "Low:" / "High:" reads better with the prefix in semibold. */
-  font-weight: 600;
-}
 .field-reason--high {
+  /* High-confidence reasons render in calm grey; the colored .conf-dot
+     next to the value carries the confidence-level signal. Medium/low
+     keep the default amber to draw the FA's eye. */
   color: #6b7280;
 }
 

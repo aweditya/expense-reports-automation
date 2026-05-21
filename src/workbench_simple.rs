@@ -14,7 +14,7 @@ use crate::expense_report_model::{
     ExpenseReportTransactionLinesItemAirfareDetails,
     ExpenseReportTransactionLinesItemGroundTransportDetails,
     ExpenseReportTransactionLinesItemLodgingDetails,
-    ExpenseReportTransactionLinesItemMealDetails, ExpenseReportTransactionSummary,
+    ExpenseReportTransactionLinesItemMealDetails,
 };
 use crate::extracted_receipt::ExtractedReceipt;
 use crate::meta::{ConfidenceLevel, EvidenceKind, FieldMetadata, Wrapped};
@@ -78,7 +78,6 @@ pub fn render_workbench_html(
     html.push_str("<main class=\"main-col\">\n");
     render_general_information(&mut html, &report.general_information);
     render_transaction_lines(&mut html, report);
-    render_transaction_summary(&mut html, &report.transaction_summary);
     render_source_documents(&mut html, receipts);
     html.push_str("</main>\n");
 
@@ -730,7 +729,7 @@ fn field_anchor(path: &str) -> String {
 
 fn render_general_information(html: &mut String, gi: &ExpenseReportGeneralInformation) {
     html.push_str("<section class=\"panel\">\n");
-    html.push_str("<p class=\"eyebrow\">Section 1</p>\n<h2>General Information</h2>\n");
+    html.push_str("<h2>General Information</h2>\n");
     html.push_str("<div class=\"field-grid\">\n");
 
     field_card_text(html, "Category", &gi.category, "expense_report.general_information.category", |c: &crate::expense_report_model::ExpenseReportGeneralInformationCategoryEnum| c.as_str().replace('_', " "));
@@ -760,26 +759,11 @@ fn render_general_information(html: &mut String, gi: &ExpenseReportGeneralInform
     html.push_str("</section>\n");
 }
 
-// ─── Transaction Summary ───────────────────────────────────────────────────
-
-fn render_transaction_summary(html: &mut String, ts: &ExpenseReportTransactionSummary) {
-    html.push_str("<section class=\"panel\">\n");
-    html.push_str("<p class=\"eyebrow\">Section 2</p>\n<h2>Transaction Summary</h2>\n");
-    html.push_str("<div class=\"field-grid\">\n");
-
-    field_card_text(html, "Transaction Date", &ts.transaction_date, "expense_report.transaction_summary.transaction_date", |d: &crate::expense_report_model::IsoDate| d.0.clone());
-    field_card_text(html, "Transaction Number", &ts.transaction_number, "expense_report.transaction_summary.transaction_number", |s: &String| s.clone());
-    field_card_optional_enum(html, "Status", &ts.status, "expense_report.transaction_summary.status", |s: &crate::expense_report_model::ExpenseReportTransactionSummaryStatusEnum| s.as_str().to_owned());
-    field_card_text(html, "Total USD", &ts.total_usd, "expense_report.transaction_summary.total_usd", |t: &f64| format!("${:.2}", t));
-
-    html.push_str("</div>\n</section>\n");
-}
-
 // ─── Transaction Lines ─────────────────────────────────────────────────────
 
 fn render_transaction_lines(html: &mut String, report: &ExpenseReport) {
     html.push_str("<section class=\"panel\">\n");
-    html.push_str("<p class=\"eyebrow\">Section 3</p>\n<h2>Transaction Lines</h2>\n");
+    html.push_str("<h2>Transaction Lines</h2>\n");
 
     let lines = report.transaction_lines.as_ref().map(|v| v.as_slice()).unwrap_or(&[]);
     if lines.is_empty() {
@@ -1349,14 +1333,17 @@ fn field_card_inner(html: &mut String, label: &str, path: &str, value: &str, met
     // prominent amber styling that flags "look at this." Older cached
     // extractions without the field render the same as before (no extra
     // line).
+    // Confidence is conveyed entirely by the colored .conf-dot next to
+    // the value. Reason text reads on its own line, no "High:" / "Medium:"
+    // prefix — but we still emit the right CSS class so the high-confidence
+    // (calm grey) vs medium/low (amber) color split survives.
     let reason_block = match meta.confidence_reason.as_deref() {
         Some(r) if !r.is_empty() => {
-            let (label, class) = match meta.confidence {
-                ConfidenceLevel::High => ("High", "field-reason field-reason--high"),
-                ConfidenceLevel::Medium => ("Medium", "field-reason"),
-                ConfidenceLevel::Low => ("Low", "field-reason"),
+            let class = match meta.confidence {
+                ConfidenceLevel::High => "field-reason field-reason--high",
+                _ => "field-reason",
             };
-            format!("<p class=\"{class}\">{label}: {}</p>", escape(r))
+            format!("<p class=\"{class}\">{}</p>", escape(r))
         }
         _ => String::new(),
     };
