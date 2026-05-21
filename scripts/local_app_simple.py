@@ -26,12 +26,14 @@ import os
 import re
 import subprocess
 import sys
+import threading
+import time
 import uuid
 from datetime import datetime
 from html import escape as html_escape
 from pathlib import Path
 
-from flask import Flask, abort, redirect, request, send_from_directory
+from flask import Flask, Response, abort, redirect, request, send_from_directory
 from PIL import Image
 from pillow_heif import register_heif_opener
 
@@ -90,6 +92,42 @@ class PipelineError(RuntimeError):
         super().__init__(f"{step} failed: {detail[:200]}")
 
 
+# ─── Async job state (friday Stage 5) ──────────────────────────────────────
+#
+# JOBS holds per-upload progress so the SSE endpoint can stream it to the
+# browser while the extract → reduce → render pipeline runs in a worker
+# thread. Single-process (gunicorn --workers 1 + Cloud Run --max-instances=1)
+# so a plain dict + lock is fine. Cleared on instance restart; entries are
+# small enough that we don't bother garbage-collecting completed jobs
+# within the lifetime of an instance.
+#
+# Shape per upload_id:
+#   {
+#     "phase":    "extract" | "reduce" | "render" | "done" | "error",
+#     "files":    [{"name": str, "kind": str, "status": "pending"|"extracting"|"done"}],
+#     "current":  int,   # index into files of the currently-extracting file
+#     "error":    str,   # populated only when phase == "error"
+#   }
+JOBS: dict[str, dict] = {}
+JOBS_LOCK = threading.Lock()
+
+
+def _set_job(upload_id: str, **updates) -> None:
+    """Thread-safe partial update of a JOBS entry. Creates the entry if
+    it doesn't exist (defensive — callers should init first)."""
+    with JOBS_LOCK:
+        if upload_id not in JOBS:
+            JOBS[upload_id] = {}
+        JOBS[upload_id].update(updates)
+
+
+def _get_job(upload_id: str) -> dict:
+    """Thread-safe snapshot read. Returns a shallow copy so the SSE
+    serializer can JSON-encode without holding the lock."""
+    with JOBS_LOCK:
+        return dict(JOBS.get(upload_id, {}))
+
+
 # ─── Routes ────────────────────────────────────────────────────────────────
 
 @app.get("/")
@@ -137,14 +175,75 @@ def upload():
     write_fa_input(request.form, fa_input_path)
 
     saved = save_uploaded_files(pairs, files_dir)
-    extract_all(saved, extractions_dir)
-    reduce(extractions_dir, reduced_path, fa_input_path=fa_input_path)
-    render_workbench(reduced_path, extractions_dir, workbench_path)
 
-    # POST/Redirect/GET: send the browser to a bookmarkable URL for the
-    # rendered workbench. Refresh-friendly; back-button-friendly; no
-    # double-submit on reload.
-    return redirect(f"/uploads/{upload_id}/workbench.html", code=303)
+    # Stage 5 async: initialize the per-upload JOBS entry with the
+    # file list, spawn a background thread to run extract → reduce →
+    # render, and return the progress page immediately. The page's
+    # EventSource subscribes to /upload/progress/<id> and the FA sees
+    # phase + per-file status update live. On 'done' it auto-redirects
+    # to the workbench (1s delay so the chime registers).
+    _set_job(
+        upload_id,
+        phase="initializing",
+        current=0,
+        files=[
+            {"name": s.name, "kind": k, "status": "pending"}
+            for s, k in saved
+        ],
+        error="",
+    )
+    threading.Thread(
+        target=_run_pipeline_in_background,
+        args=(upload_id, saved, extractions_dir, reduced_path,
+              workbench_path, fa_input_path),
+        name=f"pipeline-{upload_id}",
+        daemon=True,
+    ).start()
+
+    return render_progress_page(upload_id)
+
+
+@app.get("/upload/progress/<upload_id>")
+def upload_progress(upload_id: str):
+    """Server-Sent Events stream of JOBS[upload_id] updates. The
+    progress page's EventSource subscribes here and gets phase + file
+    statuses pushed every 0.5s. Closes once phase reaches 'done' or
+    'error'."""
+    safe_id = sanitize_id(upload_id)
+
+    def event_stream():
+        while True:
+            snapshot = _get_job(safe_id)
+            if not snapshot:
+                # JOBS hasn't been initialized yet (race) or the upload
+                # doesn't exist. Send a minimal placeholder and let the
+                # client decide what to do.
+                snapshot = {"phase": "initializing"}
+            yield f"data: {json.dumps(snapshot)}\n\n"
+            if snapshot.get("phase") in ("done", "error"):
+                return
+            time.sleep(0.5)
+
+    return Response(
+        event_stream(),
+        mimetype="text/event-stream",
+        headers={
+            # Disable any intermediate buffering — Cloud Run + gunicorn
+            # need this to actually stream rather than buffering the
+            # whole response.
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+def render_progress_page(upload_id: str) -> str:
+    """The HTML page the FA sees while extraction runs in the
+    background. EventSource subscribes to /upload/progress/<id>,
+    updates the progress bar + per-file list live, plays a Web Audio
+    'done' chime when complete, redirects to the workbench after a
+    1-second pause so the chime registers."""
+    return PROGRESS_PAGE_HTML.replace("__UPLOAD_ID__", html_escape(upload_id))
 
 
 @app.errorhandler(PipelineError)
@@ -395,16 +494,27 @@ def convert_heic_to_jpeg_if_needed(
 
 
 def extract_all(
-    saved: list[tuple[Path, str]], extractions_dir: Path
+    saved: list[tuple[Path, str]],
+    extractions_dir: Path,
+    on_file_start: callable | None = None,
+    on_file_done: callable | None = None,
 ) -> list[Path]:
     """Phase 1: sequential per-file extraction. Each file routes to the
     extractor matching its FA-supplied kind (meal, transport, …).
+
+    `on_file_start(index, name)` fires before each file's subprocess; the
+    background-pipeline runner uses it to update JOBS so the FA's
+    progress page sees the file flip to 'extracting'. `on_file_done(
+    index, name)` fires after, flipping that file to 'done'. Both are
+    optional — synchronous callers pass None and get the original
+    behaviour.
+
     To parallelize later: replace this body with a ThreadPoolExecutor
     over the same call. Nothing downstream cares — the contract is
     list[(input path, kind)] -> list[output JSON paths].
     """
     out: list[Path] = []
-    for src, kind in saved:
+    for idx, (src, kind) in enumerate(saved):
         extractor = EXTRACTORS.get(kind)
         if extractor is None:
             # Should be unreachable — /upload validates kind before saving —
@@ -415,6 +525,8 @@ def extract_all(
                 detail=f"unknown kind {kind!r} for {src.name}",
                 filename=src.name,
             )
+        if on_file_start is not None:
+            on_file_start(idx, src.name)
         out_path = extractions_dir / f"{src.stem}.json"
         run_subprocess(
             [
@@ -426,6 +538,8 @@ def extract_all(
             label=f"extract {kind} {src.name}",
             filename=src.name,
         )
+        if on_file_done is not None:
+            on_file_done(idx, src.name)
         out.append(out_path)
     return out
 
@@ -459,6 +573,53 @@ def render_workbench(
         ],
         label="render",
     )
+
+
+def _run_pipeline_in_background(
+    upload_id: str,
+    saved: list[tuple[Path, str]],
+    extractions_dir: Path,
+    reduced_path: Path,
+    workbench_path: Path,
+    fa_input_path: Path,
+) -> None:
+    """Worker-thread entry point. Runs extract → reduce → render while
+    updating JOBS[upload_id] so the SSE endpoint can stream phase +
+    per-file progress to the browser. Catches exceptions and writes them
+    to JOBS so the progress page can surface a friendly error instead
+    of the thread silently dying.
+    """
+    def file_start(idx: int, _name: str) -> None:
+        with JOBS_LOCK:
+            job = JOBS.setdefault(upload_id, {})
+            files = job.setdefault("files", [])
+            if idx < len(files):
+                files[idx]["status"] = "extracting"
+            job["current"] = idx
+
+    def file_done(idx: int, _name: str) -> None:
+        with JOBS_LOCK:
+            files = JOBS.setdefault(upload_id, {}).setdefault("files", [])
+            if idx < len(files):
+                files[idx]["status"] = "done"
+
+    try:
+        _set_job(upload_id, phase="extract")
+        extract_all(
+            saved, extractions_dir,
+            on_file_start=file_start,
+            on_file_done=file_done,
+        )
+        _set_job(upload_id, phase="reduce")
+        reduce(extractions_dir, reduced_path, fa_input_path=fa_input_path)
+        _set_job(upload_id, phase="render")
+        render_workbench(reduced_path, extractions_dir, workbench_path)
+        _set_job(upload_id, phase="done")
+    except PipelineError as err:
+        _set_job(upload_id, phase="error",
+                 error=f"{err.step}: {err.detail[:300]}")
+    except Exception as err:  # noqa: BLE001 — surface anything to the FA
+        _set_job(upload_id, phase="error", error=f"unexpected: {err!r}"[:300])
 
 
 def run_subprocess(cmd: list[str], label: str, filename: str | None = None) -> None:
@@ -845,6 +1006,210 @@ UPLOAD_FORM_HTML = """\
       }
     });
   })();
+</script>
+</body>
+</html>
+"""
+
+
+# friday Stage 5 — page the FA sees while the background pipeline runs.
+# `__UPLOAD_ID__` is replaced by the route handler at render time so the
+# JS knows where to subscribe the EventSource. Inline CSS + inline JS,
+# same pattern as the other templates in this file — no static-file
+# dependency, ships as one string in the gunicorn process.
+PROGRESS_PAGE_HTML = """\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stanford Expense Report — Processing</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+         sans-serif; margin:0; padding:0;
+         background:#f6f7f9; color:#1a1d1f; }
+  .shell { max-width:560px; margin:80px auto; padding:32px 28px; background:#fff;
+           border:1px solid #e5e7eb; border-radius:8px;
+           box-shadow:0 1px 3px rgba(0,0,0,0.04); }
+  .eyebrow { font-size:11px; font-weight:600; text-transform:uppercase;
+             letter-spacing:0.08em; color:#6b7280; margin:0 0 8px; }
+  h1 { font-size:24px; margin:0 0 6px; }
+  .status { font-size:14px; color:#4b5563; margin:0 0 20px; min-height:20px; }
+  .bar-outer { width:100%; height:8px; background:#e5e7eb; border-radius:999px;
+               overflow:hidden; margin:0 0 24px; }
+  .bar-inner { height:100%; background:#2563eb; width:0%;
+               transition:width 0.4s ease; }
+  .bar-inner.done { background:#10b981; }
+  .bar-inner.error { background:#ef4444; }
+  .file-list { margin:0 0 8px; padding:0; list-style:none;
+               border-top:1px solid #f3f4f6; }
+  .file-item { display:flex; align-items:center; gap:10px;
+               padding:10px 0; border-bottom:1px solid #f3f4f6;
+               font-size:13px; }
+  .file-status { width:18px; height:18px; border-radius:50%;
+                 display:inline-flex; align-items:center; justify-content:center;
+                 font-size:12px; line-height:1; flex-shrink:0;
+                 background:#e5e7eb; color:#6b7280; }
+  .file-status.extracting { background:#dbeafe; color:#1e40af;
+                            animation:pulse 1.2s ease-in-out infinite; }
+  .file-status.done { background:#dcfce7; color:#15803d; }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(0.85); opacity: 0.7; }
+  }
+  .file-name { flex:1; min-width:0; overflow:hidden;
+               text-overflow:ellipsis; white-space:nowrap; }
+  .file-kind { font-size:11px; color:#9ca3af; }
+  .note { font-size:12px; color:#6b7280; margin:16px 0 0; }
+  .error-box { background:#fef2f2; border:1px solid #fecaca; color:#991b1b;
+               padding:12px 14px; border-radius:6px; margin:0 0 16px;
+               font-size:13px; }
+  .error-box[hidden] { display:none; }
+  .retry-link { color:#1e40af; text-decoration:none; font-weight:500; }
+  .retry-link:hover { text-decoration:underline; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <p class="eyebrow">Stanford Expense Report</p>
+  <h1>Processing your receipts</h1>
+  <p id="status" class="status">Getting ready…</p>
+  <div class="bar-outer">
+    <div id="bar" class="bar-inner"></div>
+  </div>
+  <p id="error-box" class="error-box" hidden></p>
+  <ul id="file-list" class="file-list"></ul>
+  <p class="note">Don't refresh — we'll redirect you when it's done.</p>
+</div>
+<script>
+  const UPLOAD_ID = "__UPLOAD_ID__";
+  const statusEl = document.getElementById('status');
+  const barEl = document.getElementById('bar');
+  const errEl = document.getElementById('error-box');
+  const listEl = document.getElementById('file-list');
+
+  // Render the per-file list once we have the initial JOBS snapshot.
+  // Subsequent updates only flip status classes — same DOM nodes.
+  let listRendered = false;
+  function renderFileList(files) {
+    if (listRendered) return;
+    listEl.innerHTML = files.map(function(f, i) {
+      return '<li class="file-item" data-idx="' + i + '">' +
+             '  <span class="file-status pending" data-status>•</span>' +
+             '  <span class="file-name">' +
+                  f.name.replace(/[<>&]/g, function(c) {
+                    return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c];
+                  }) +
+             '  </span>' +
+             '  <span class="file-kind">' + f.kind + '</span>' +
+             '</li>';
+    }).join('');
+    listRendered = true;
+  }
+
+  function updateFileStatuses(files) {
+    files.forEach(function(f, i) {
+      const item = listEl.querySelector('[data-idx="' + i + '"] [data-status]');
+      if (!item) return;
+      item.className = 'file-status ' + f.status;
+      item.textContent = f.status === 'done' ? '✓' :
+                         f.status === 'extracting' ? '…' : '•';
+    });
+  }
+
+  // Map (phase, current, total) → 0–100% for the progress bar.
+  // Extract takes the bulk of the time so it gets 0-70%; the
+  // reduce + render steps are fast and just bump to 80/90; done = 100.
+  function pctFor(snapshot) {
+    const phase = snapshot.phase;
+    const files = snapshot.files || [];
+    const total = files.length || 1;
+    const done = files.filter(function(f) { return f.status === 'done'; }).length;
+    if (phase === 'initializing') return 2;
+    if (phase === 'extract') return 5 + Math.round(65 * done / total);
+    if (phase === 'reduce') return 80;
+    if (phase === 'render') return 90;
+    if (phase === 'done') return 100;
+    if (phase === 'error') return 100;
+    return 0;
+  }
+
+  function statusFor(snapshot) {
+    const phase = snapshot.phase;
+    const files = snapshot.files || [];
+    if (phase === 'initializing') return 'Getting ready…';
+    if (phase === 'extract') {
+      const cur = (snapshot.current || 0);
+      const f = files[cur];
+      const name = f ? f.name : '';
+      return 'Extracting receipt ' + (cur + 1) + ' of ' + files.length +
+             (name ? ': ' + name : '');
+    }
+    if (phase === 'reduce') return 'Combining extracted data into one report…';
+    if (phase === 'render') return 'Rendering your workbench…';
+    if (phase === 'done') return 'Done ✓';
+    if (phase === 'error') return 'Something went wrong';
+    return phase;
+  }
+
+  // Soft 2-note "complete" chime via Web Audio API. No file, no CDN.
+  // Silently no-ops if the browser blocks audio (no recent user
+  // gesture); we don't let that block the redirect.
+  function playDoneChime() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      function tone(freq, startOffset, duration) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0, ctx.currentTime + startOffset);
+        gain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + startOffset + 0.02);
+        gain.gain.linearRampToValueAtTime(0, ctx.currentTime + startOffset + duration);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(ctx.currentTime + startOffset);
+        osc.stop(ctx.currentTime + startOffset + duration);
+      }
+      tone(523.25, 0, 0.18);    // C5
+      tone(659.25, 0.15, 0.25); // E5 overlapping for a chord-y feel
+    } catch (e) { /* no audio — that's fine */ }
+  }
+
+  const es = new EventSource('/upload/progress/' + UPLOAD_ID);
+  let redirected = false;
+  es.onmessage = function(e) {
+    let snap;
+    try { snap = JSON.parse(e.data); } catch (err) { return; }
+    if (snap.files) {
+      renderFileList(snap.files);
+      updateFileStatuses(snap.files);
+    }
+    statusEl.textContent = statusFor(snap);
+    barEl.style.width = pctFor(snap) + '%';
+    if (snap.phase === 'done') {
+      barEl.classList.add('done');
+      if (!redirected) {
+        redirected = true;
+        playDoneChime();
+        es.close();
+        // 1s pause so the chime + status text register before redirect.
+        setTimeout(function() {
+          window.location = '/uploads/' + UPLOAD_ID + '/workbench.html';
+        }, 1000);
+      }
+    } else if (snap.phase === 'error') {
+      barEl.classList.add('error');
+      errEl.textContent = snap.error || 'Unknown error';
+      errEl.innerHTML += ' &nbsp;<a class="retry-link" href="/">Try again →</a>';
+      errEl.hidden = false;
+      es.close();
+    }
+  };
+  es.onerror = function() {
+    // Network blip / SSE got cut. The stream will reconnect on its
+    // own — no UI change needed unless we already errored out.
+  };
 </script>
 </body>
 </html>
