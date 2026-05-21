@@ -565,17 +565,49 @@ UPLOAD_FORM_HTML = """\
   button.secondary { background:#fff; color:#1a1d1f; border:1px solid #d1d5db; }
   button.secondary:hover { background:#f3f4f6; }
   .note { font-size:12px; color:#6b7280; margin-top:16px; }
+  /* Friendly callout between the receipts upload and the FA detail
+     fieldset (friday Stage 4). Gives the FA confidence about why
+     they're being asked to fill more details ('AI will be working
+     while you do this') + naturally adds the breathing room
+     that the cramped '+ Add another file' → '<fieldset>' transition
+     was missing. */
+  .ai-callout { background:#eff6ff; border:1px solid #bfdbfe;
+                color:#1e40af; font-size:13px; line-height:1.5;
+                padding:10px 14px; border-radius:6px;
+                margin:14px 0 20px; }
+  .ai-callout strong { font-weight:600; }
 </style>
 </head>
 <body>
 <div class="shell">
   <p class="eyebrow">Stanford Expense Report</p>
   <h1>Upload Receipts</h1>
-  <p>Fill in the report details below, then attach each receipt (PDF, JPEG,
-     PNG) and tell the system what kind of document it is. We'll extract
+  <p>Attach each receipt (PDF, JPEG, PNG) and tell the system what kind of
+     document it is, then fill in the report details below. We'll extract
      fields from the receipts, combine them with what you entered, and show
      you what's filled and what still needs your input.</p>
   <form method="post" action="/upload" enctype="multipart/form-data">
+
+    <h2>Receipts</h2>
+    <div id="file-rows">
+      <div class="file-row">
+        <input type="file" name="file_0" required
+               accept="image/png,image/jpeg,application/pdf">
+        <select name="kind_0" required>
+          <option value="meal">Meal Receipt</option>
+          <option value="transport">Ground Transport</option>
+          <option value="lodging">Lodging Folio</option>
+          <option value="airfare">Airfare / Flight Ticket</option>
+        </select>
+      </div>
+    </div>
+    <div class="actions">
+      <button type="button" class="secondary" onclick="addFileRow()">+ Add another file</button>
+    </div>
+
+    <p class="ai-callout">AI extraction takes a couple of minutes once you click
+      <strong>Process Receipts</strong> — how about filling in the report
+      details below in the meantime?</p>
 
     <fieldset>
       <legend>Report details</legend>
@@ -672,25 +704,12 @@ UPLOAD_FORM_HTML = """\
       </div>
     </fieldset>
 
-    <h2>Receipts</h2>
-    <div id="file-rows">
-      <div class="file-row">
-        <input type="file" name="file_0" required
-               accept="image/png,image/jpeg,application/pdf">
-        <select name="kind_0" required>
-          <option value="meal">Meal Receipt</option>
-          <option value="transport">Ground Transport</option>
-          <option value="lodging">Lodging Folio</option>
-          <option value="airfare">Airfare / Flight Ticket</option>
-        </select>
-      </div>
-    </div>
     <div class="actions">
-      <button type="button" class="secondary" onclick="addFileRow()">+ Add another file</button>
       <button type="submit">Process Receipts</button>
     </div>
   </form>
-  <p class="note">Please don't refresh the page while processing.</p>
+  <p class="note">Don't refresh while we process — we'll redirect you when
+     it's done.</p>
 </div>
 <script>
   // Each row is one (file, kind) pair. Indexed names match the server-side
