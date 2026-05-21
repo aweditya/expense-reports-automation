@@ -310,13 +310,14 @@ fn render_hero(html: &mut String, report: &ExpenseReport, validation: &Validatio
     // the browser to save rather than render. The links render
     // regardless of file presence — if the file is missing, the FA gets
     // a 404 and we'll know to wire the args. (Browsers don't probe for
-    // existence before showing a link.)
+    // existence before showing a link.) The business-purpose .txt
+    // download was dropped in friday Stage 3; its content is now the
+    // "Combined (for Stanford portal)" click-to-copy card under
+    // General Information.
     html.push_str(
         "<p class=\"hero-downloads\">\
          <a class=\"download-link\" href=\"lines.csv\" download>\
          ⬇ Download CSV (Expense Lines)</a>\
-         <a class=\"download-link\" href=\"business_purpose.txt\" download>\
-         ⬇ Download Business Purpose text</a>\
          </p>\n",
     );
     html.push_str("</header>\n");
@@ -754,6 +755,21 @@ fn render_general_information(html: &mut String, gi: &ExpenseReportGeneralInform
     field_card_text(html, "Where", &gi.business_purpose.r#where, "expense_report.general_information.business_purpose.where", |s: &String| s.clone());
     field_card_text(html, "Why", &gi.business_purpose.why, "expense_report.general_information.business_purpose.why", |s: &String| s.clone());
     field_card_text(html, "Key (30 chars)", &gi.business_purpose.key_30char, "expense_report.general_information.business_purpose.key_30char", |s: &String| s.clone());
+    // friday Stage 3 — single combined card so the FA can click-to-copy
+    // the same labeled blob they'd otherwise hand-concatenate from the
+    // 6 sub-fields above, then paste into Stanford's report-level
+    // Business Purpose text box. Existing data-copy-value machinery
+    // does the copy; this card just supplies multi-line content + the
+    // .field-value--multiline modifier for line-break preservation.
+    let combined = crate::csv_export::business_purpose_to_text(&gi.business_purpose);
+    if !combined.is_empty() {
+        field_card_multiline_bare(
+            html,
+            "Combined (for Stanford portal)",
+            "expense_report.general_information.business_purpose.combined",
+            &combined,
+        );
+    }
     html.push_str("</div>\n");
 
     html.push_str("</section>\n");
@@ -1383,6 +1399,29 @@ fn field_card_bare(html: &mut String, label: &str, path: &str, value: &str) {
         escape(label),
         escape(value),
         copy_class = if copy_attrs.is_empty() { "" } else { " field-card--copyable" },
+        copy_attrs = copy_attrs,
+    ));
+}
+
+/// Multi-line variant of `field_card_bare`. Adds the `--multiline`
+/// modifier to the value so CSS preserves line breaks (white-space:
+/// pre-line). Spans both columns of the field-grid so the labeled
+/// blob has room to breathe. Card is always copyable (callers only
+/// invoke this when there's content worth copying).
+fn field_card_multiline_bare(html: &mut String, label: &str, path: &str, value: &str) {
+    // Copy attrs encode the raw value (newlines + all) into the
+    // data-copy-value attribute; the click handler reads it via
+    // getAttribute and ships to navigator.clipboard.writeText, which
+    // preserves \n into the clipboard for paste-into-textbox.
+    let copy_attrs = copy_attrs_for(value);
+    html.push_str(&format!(
+        "<div class=\"field-card field-card--copyable field-card--full\" id=\"{}\"{copy_attrs}>\
+           <p class=\"field-label\">{}</p>\
+           <p class=\"field-value field-value--multiline\">{}</p>\
+         </div>\n",
+        field_anchor(path),
+        escape(label),
+        escape(value),
         copy_attrs = copy_attrs,
     ));
 }

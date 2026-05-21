@@ -467,6 +467,22 @@ body {
   align-items: center;
   gap: 6px;
 }
+/* friday Stage 3: multi-line value (e.g. the combined business-purpose
+   card). Need block layout instead of flex+center so \n in the text
+   actually renders as line breaks, and pre-line so consecutive spaces
+   collapse but newlines stay. */
+.field-value--multiline {
+  display: block;
+  white-space: pre-line;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+/* Span the full field-grid width — the combined card carries a 6-line
+   labeled blob, doesn't make sense to squeeze into one column. */
+.field-card--full {
+  grid-column: 1 / -1;
+}
 .conf-dot {
   display: inline-block;
   width: 6px;

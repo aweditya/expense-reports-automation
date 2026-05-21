@@ -170,12 +170,18 @@ fn currency_code_to_full(code: &str) -> String {
     format!("{code} - {name}")
 }
 
-/// Concatenate the report's business_purpose sub-fields into one
-/// labeled text blob the FA can paste into Stanford's report-level
-/// Business Purpose box. Missing fields are skipped (rather than
-/// emitting `Who: \n`) so the blob stays readable.
-pub fn report_to_business_purpose_text(report: &ExpenseReport) -> String {
-    let bp = &report.general_information.business_purpose;
+/// Concatenate the business_purpose sub-fields into one labeled text
+/// blob the FA can paste into Stanford's report-level Business Purpose
+/// box. Missing fields are skipped (rather than emitting `Who: \n`)
+/// so the blob stays readable.
+///
+/// Now consumed by the workbench renderer, which embeds the result
+/// as a single click-to-copy field card alongside the 6 individual
+/// sub-cards (Stage 3 of the 2026-05-20 FA feedback round) — the
+/// download-then-copy .txt flow was bad UX.
+pub fn business_purpose_to_text(
+    bp: &crate::expense_report_model::ExpenseReportGeneralInformationBusinessPurpose,
+) -> String {
     let mut out = String::new();
     let pairs: [(&str, Option<&String>); 6] = [
         ("Who", bp.who.value.as_ref()),
@@ -473,7 +479,6 @@ Line,Expense Date,Expense Currency,Expense Amount,USD Amount,Expense Type,Remark
 
     #[test]
     fn business_purpose_text_concatenates_with_labels() {
-        let mut report = ExpenseReport::default();
         let mut bp = ExpenseReportGeneralInformationBusinessPurpose::default();
         bp.who = Wrapped { value: Some("Jane Doe".to_owned()), meta: FieldMetadata::default() };
         bp.what = Wrapped { value: Some("Presented research".to_owned()), meta: FieldMetadata::default() };
@@ -481,9 +486,8 @@ Line,Expense Date,Expense Currency,Expense Amount,USD Amount,Expense Type,Remark
         bp.r#where = Wrapped { value: Some("Buenos Aires".to_owned()), meta: FieldMetadata::default() };
         bp.why = Wrapped { value: Some("Disseminate".to_owned()), meta: FieldMetadata::default() };
         bp.key_30char = Wrapped { value: Some("ISCA 2024".to_owned()), meta: FieldMetadata::default() };
-        report.general_information.business_purpose = bp;
 
-        let text = report_to_business_purpose_text(&report);
+        let text = business_purpose_to_text(&bp);
         let expected = "\
 Who: Jane Doe
 What: Presented research
@@ -497,19 +501,17 @@ Key (≤30 chars): ISCA 2024
 
     #[test]
     fn business_purpose_text_skips_missing_fields() {
-        let mut report = ExpenseReport::default();
         let mut bp = ExpenseReportGeneralInformationBusinessPurpose::default();
         bp.who = Wrapped { value: Some("Jane".to_owned()), meta: FieldMetadata::default() };
         // Leave the other 5 as None.
-        report.general_information.business_purpose = bp;
-        let text = report_to_business_purpose_text(&report);
+        let text = business_purpose_to_text(&bp);
         assert_eq!(text, "Who: Jane\n");
     }
 
     #[test]
     fn business_purpose_text_empty_when_no_bp_filled() {
-        let report = ExpenseReport::default();
-        let text = report_to_business_purpose_text(&report);
+        let bp = ExpenseReportGeneralInformationBusinessPurpose::default();
+        let text = business_purpose_to_text(&bp);
         assert_eq!(text, "");
     }
 }
