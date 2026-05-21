@@ -72,6 +72,7 @@ body {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+  align-items: center;
 }
 .download-link {
   font-size: 12px;
@@ -86,6 +87,22 @@ body {
   background: #dbeafe;
   border-color: #60a5fa;
   text-decoration: none;
+}
+/* friday Stage 6: the global "Show extraction provenance" toggle —
+   lives in the hero alongside the download link. Unchecked by
+   default (matches the FA's 'hide things that are not important'). */
+.evidence-toggle {
+  font-size: 12px;
+  color: #4b5563;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+.evidence-toggle input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
 }
 .pill {
   display: inline-block;
@@ -564,15 +581,50 @@ body {
   border-top: 1px solid #f3f4f6;
   padding-top: 14px;
 }
+/* friday Stage 6: nested <details> per transaction line that holds the
+   secondary fields (original currency / amount / exchange rate /
+   country). Closed by default — FA expands only when they need to
+   verify FX conversion. Styled subtly so it doesn't compete with
+   primary data above. */
+.line-details-secondary {
+  margin: 14px 0 0;
+  border-top: 1px solid #f3f4f6;
+  padding-top: 10px;
+}
+.line-details-secondary > summary {
+  font-size: 11px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  list-style: none;
+  padding: 4px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.line-details-secondary > summary::-webkit-details-marker { display: none; }
+.line-details-secondary > summary::before {
+  content: "▸ ";
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+.line-details-secondary[open] > summary::before { content: "▾ "; }
+.line-details-secondary > summary:hover { color: #1a1d1f; }
+.line-details-secondary > .field-grid { margin-top: 10px; }
 
 /* Inline evidence quote (always visible, no hover) ────────────────────── */
 .field-evidence {
+  /* friday Stage 6: hidden by default per FA feedback ('hide things
+     that are not important'). The hero's "Show extraction provenance"
+     checkbox sets body.show-evidence to reveal them on demand —
+     spot-check ↗ button works regardless. */
+  display: none;
   margin: 4px 0 0;
   font-size: 11px;
   font-style: italic;
   color: #9ca3af;
   line-height: 1.4;
 }
+body.show-evidence .field-evidence { display: block; }
 /* Confidence justification — shown for every leaf when the extractor
    wrote one. Two tiers:
    - default (medium/low): amber, slightly prominent — "look at this"

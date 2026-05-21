@@ -241,6 +241,19 @@ document.addEventListener('click', function(e) {
   });
 })();
 
+// friday Stage 6 — global toggle: when checked, body gains
+// .show-evidence and the CSS reveals every .field-evidence quote
+// underneath each field's value. Default off (per FA feedback —
+// 'things that are not important should be hidden'). No persistence;
+// FA toggles per visit. Spotcheck halos stay clickable either way.
+(function setupEvidenceToggle() {
+  const toggle = document.getElementById('evidence-toggle');
+  if (!toggle) return;
+  toggle.addEventListener('change', function() {
+    document.body.classList.toggle('show-evidence', toggle.checked);
+  });
+})();
+
 // Click a card with [data-copy-value] → copy that value to clipboard
 // and show a brief toast. Skips if the click was on the issue-jump
 // arrow inside the card (so jump and copy don't conflict).
@@ -318,6 +331,9 @@ fn render_hero(html: &mut String, report: &ExpenseReport, validation: &Validatio
         "<p class=\"hero-downloads\">\
          <a class=\"download-link\" href=\"lines.csv\" download>\
          ⬇ Download CSV (Expense Lines)</a>\
+         <label class=\"evidence-toggle\" title=\"Show the verbatim text the extractor used to ground each value\">\
+         <input type=\"checkbox\" id=\"evidence-toggle\"> Show extraction provenance\
+         </label>\
          </p>\n",
     );
     html.push_str("</header>\n");
@@ -835,8 +851,36 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
 
     html.push_str("<div class=\"field-grid\">\n");
     let path_prefix = format!("expense_report.transaction_lines[{idx}].common");
+    // Primary fields — the ones the FA verifies at-a-glance (friday
+    // Stage 6 / F4). Date, Amount, Expense Type, Remarks, Foreign
+    // Activity Type stay visible.
     field_card_text(html, "Date", &line.common.date, &format!("{path_prefix}.date"), |d| d.0.clone());
     field_card_optional_money(html, "Amount (USD)", &line.common.line_amount_usd, &format!("{path_prefix}.line_amount_usd"));
+    field_card_text(html, "Expense Type", &line.common.expense_type, &format!("{path_prefix}.expense_type"), |e| display_expense_type(e, line.meal_details.as_ref()));
+    field_card_text(html, "Remarks", &line.common.remarks, &format!("{path_prefix}.remarks"), |s: &String| s.clone());
+    // Foreign Activity Type: enum (conference / research_collaboration /
+    // fieldwork / other) only meaningful for foreign-typed lines. Renders
+    // "—" for domestic; per-line conditional means no missing-field flag
+    // on those.
+    field_card_text(
+        html,
+        "Foreign Activity Type",
+        &line.common.foreign_activity_type,
+        &format!("{path_prefix}.foreign_activity_type"),
+        |a| title_case(a.as_str()),
+    );
+    html.push_str("</div>\n");
+
+    // Secondary fields (FX conversion + country) — hidden by default
+    // under a nested <details>. FA's quote 2026-05-20: 'things that
+    // are not important should be hidden and then you can expand and
+    // see.' These are the 'how we got the USD amount' fields the FA
+    // only needs when they're verifying a foreign-currency line.
+    html.push_str(
+        "<details class=\"line-details-secondary\">\
+         <summary>Show extraction details</summary>\
+         <div class=\"field-grid\">\n",
+    );
     field_card_text_opt(html, "Original Currency", &line.common.original_currency, &format!("{path_prefix}.original_currency"), |s: &String| s.clone());
     field_card_original_amount(
         html,
@@ -862,21 +906,8 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
             None => format!("{:.4}", r),
         },
     );
-    field_card_text(html, "Expense Type", &line.common.expense_type, &format!("{path_prefix}.expense_type"), |e| display_expense_type(e, line.meal_details.as_ref()));
-    field_card_text(html, "Remarks", &line.common.remarks, &format!("{path_prefix}.remarks"), |s: &String| s.clone());
     field_card_text_opt(html, "Country", &line.common.country_of_activity, &format!("{path_prefix}.country_of_activity"), |s: &String| s.clone());
-    // Foreign Activity Type: enum (conference / research_collaboration /
-    // fieldwork / other) only meaningful for foreign-typed lines. Renders
-    // "—" for domestic; per-line conditional means no missing-field flag
-    // on those.
-    field_card_text(
-        html,
-        "Foreign Activity Type",
-        &line.common.foreign_activity_type,
-        &format!("{path_prefix}.foreign_activity_type"),
-        |a| title_case(a.as_str()),
-    );
-    html.push_str("</div>\n");
+    html.push_str("</div>\n</details>\n");
 
     if let Some(meal) = &line.meal_details {
         html.push_str("<h4 class=\"subsection-title\">Meal Details</h4>\n");
