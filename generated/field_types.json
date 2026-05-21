@@ -1,0 +1,441 @@
+{
+  "schema_version": "0.1.0",
+  "fields": {
+    "expense_report.general_information.category": {
+      "type": "enum",
+      "nullable": false
+    },
+    "expense_report.general_information.payee.name": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.general_information.payee.affiliation": {
+      "type": "enum",
+      "nullable": false
+    },
+    "expense_report.general_information.rush_processing": {
+      "type": "enum",
+      "nullable": false
+    },
+    "expense_report.general_information.payment_method": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.general_information.business_purpose.who": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.general_information.business_purpose.what": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.general_information.business_purpose.when": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.general_information.business_purpose.where": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.general_information.business_purpose.why": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.general_information.business_purpose.key_30char": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.general_information.event_name": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.general_information.student_certification.supports_faculty_research": {
+      "type": "boolean",
+      "nullable": true
+    },
+    "expense_report.general_information.student_certification.presenting_at_conference": {
+      "type": "boolean",
+      "nullable": true
+    },
+    "expense_report.general_information.student_certification.integral_to_degree_work": {
+      "type": "boolean",
+      "nullable": true
+    },
+    "expense_report.general_information.student_certification.related_to_employment": {
+      "type": "boolean",
+      "nullable": true
+    },
+    "expense_report.general_information.student_certification.other": {
+      "type": "boolean",
+      "nullable": true
+    },
+    "expense_report.general_information.student_certification.other_explanation": {
+      "type": "string",
+      "nullable": true
+    },
+    "expense_report.general_information.authorized_by": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_summary.transaction_number": {
+      "type": "string",
+      "nullable": true
+    },
+    "expense_report.transaction_summary.transaction_date": {
+      "type": "date",
+      "nullable": false
+    },
+    "expense_report.transaction_summary.status": {
+      "type": "enum",
+      "nullable": true
+    },
+    "expense_report.transaction_summary.total_usd": {
+      "type": "number",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].common.date": {
+      "type": "date",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].common.line_amount_usd": {
+      "type": "number",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].common.original_currency": {
+      "type": "string",
+      "nullable": true
+    },
+    "expense_report.transaction_lines[].common.original_amount": {
+      "type": "number",
+      "nullable": true
+    },
+    "expense_report.transaction_lines[].common.exchange_rate": {
+      "type": "number",
+      "nullable": true
+    },
+    "expense_report.transaction_lines[].common.expense_type": {
+      "type": "enum",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].common.remarks": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].common.country_of_activity": {
+      "type": "string",
+      "nullable": true
+    },
+    "expense_report.transaction_lines[].common.foreign_activity_type": {
+      "type": "enum",
+      "nullable": true
+    },
+    "expense_report.transaction_lines[].common.source_document.filename": {
+      "type": "string",
+      "nullable": true
+    },
+    "expense_report.transaction_lines[].common.source_document.document_type": {
+      "type": "enum",
+      "nullable": true
+    },
+    "expense_report.transaction_lines[].airfare_details.travelers_name": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].airfare_details.ticket_number": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].airfare_details.ticket_amount": {
+      "type": "number",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].airfare_details.booking_method": {
+      "type": "enum",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].airfare_details.airline": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].airfare_details.class_of_ticket": {
+      "type": "enum",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].airfare_details.departure_airport": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].airfare_details.destination_airport": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].airfare_details.round_trip": {
+      "type": "boolean",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].lodging_details.hotel_name": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].lodging_details.location": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].lodging_details.check_in_date": {
+      "type": "date",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].lodging_details.check_out_date": {
+      "type": "date",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].lodging_details.number_of_nights": {
+      "type": "number",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].lodging_details.daily_rate": {
+      "type": "number",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].lodging_details.booking_method": {
+      "type": "enum",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].lodging_details.is_shared_lodging": {
+      "type": "boolean",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].lodging_details.shared_with_transaction_number": {
+      "type": "string",
+      "nullable": true
+    },
+    "expense_report.transaction_lines[].lodging_details.personal_nights_excluded": {
+      "type": "number",
+      "nullable": true
+    },
+    "expense_report.transaction_lines[].ground_transport_details.origin": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].ground_transport_details.destination": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].ground_transport_details.service_provider": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].ground_transport_details.missing_receipt": {
+      "type": "boolean",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].conference_registration_details.conference_name": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].conference_registration_details.order_number": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].conference_registration_details.ticket_type": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].conference_registration_details.attendee_name": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].conference_registration_details.registration_system": {
+      "type": "enum",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].conference_registration_details.conference_start_date": {
+      "type": "date",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].conference_registration_details.conference_end_date": {
+      "type": "date",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].conference_registration_details.meals_included.schedule[].date": {
+      "type": "date",
+      "nullable": true
+    },
+    "expense_report.transaction_lines[].conference_registration_details.meals_included.schedule[].breakfast": {
+      "type": "boolean",
+      "nullable": true
+    },
+    "expense_report.transaction_lines[].conference_registration_details.meals_included.schedule[].lunch": {
+      "type": "boolean",
+      "nullable": true
+    },
+    "expense_report.transaction_lines[].conference_registration_details.meals_included.schedule[].dinner": {
+      "type": "boolean",
+      "nullable": true
+    },
+    "expense_report.transaction_lines[].meal_details.venue_name": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].meal_details.attendees[].name": {
+      "type": "string",
+      "nullable": true
+    },
+    "expense_report.transaction_lines[].meal_details.attendees[].affiliation": {
+      "type": "string",
+      "nullable": true
+    },
+    "expense_report.transaction_lines[].meal_details.meal_purpose": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].meal_details.alcohol_amount": {
+      "type": "number",
+      "nullable": true
+    },
+    "expense_report.transaction_lines[].meal_details.tip_amount": {
+      "type": "number",
+      "nullable": true
+    },
+    "expense_report.transaction_lines[].meal_details.has_alcohol_on_receipt": {
+      "type": "boolean",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].car_rental_details.rental_company": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].car_rental_details.pickup_location": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].car_rental_details.return_location": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].car_rental_details.rental_start_date": {
+      "type": "date",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].car_rental_details.rental_end_date": {
+      "type": "date",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].car_rental_details.vehicle_class": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].car_rental_details.insurance_included": {
+      "type": "boolean",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].gift_details.recipient_name": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].gift_details.recipient_relationship": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].gift_details.gift_purpose": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].human_subject_details.irb_protocol_number": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].human_subject_details.number_of_subjects": {
+      "type": "number",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].human_subject_details.per_subject_amount": {
+      "type": "number",
+      "nullable": false
+    },
+    "expense_report.per_diem_expenses[].expense_type": {
+      "type": "enum",
+      "nullable": false
+    },
+    "expense_report.per_diem_expenses[].start_date": {
+      "type": "date",
+      "nullable": false
+    },
+    "expense_report.per_diem_expenses[].end_date": {
+      "type": "date",
+      "nullable": false
+    },
+    "expense_report.per_diem_expenses[].number_of_days": {
+      "type": "number",
+      "nullable": false
+    },
+    "expense_report.per_diem_expenses[].location": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.per_diem_expenses[].country_of_activity": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.per_diem_expenses[].foreign_activity_type": {
+      "type": "enum",
+      "nullable": true
+    },
+    "expense_report.per_diem_expenses[].per_diem_rate": {
+      "type": "number",
+      "nullable": false
+    },
+    "expense_report.per_diem_expenses[].remarks": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.per_diem_expenses[].meal_deductions[].date": {
+      "type": "date",
+      "nullable": true
+    },
+    "expense_report.per_diem_expenses[].meal_deductions[].breakfast_provided": {
+      "type": "boolean",
+      "nullable": true
+    },
+    "expense_report.per_diem_expenses[].meal_deductions[].lunch_provided": {
+      "type": "boolean",
+      "nullable": true
+    },
+    "expense_report.per_diem_expenses[].meal_deductions[].dinner_provided": {
+      "type": "boolean",
+      "nullable": true
+    },
+    "expense_report.per_diem_expenses[].meal_deductions[].deduction_amount": {
+      "type": "number",
+      "nullable": true
+    },
+    "expense_report.per_diem_expenses[].reimbursement_summary[].date": {
+      "type": "date",
+      "nullable": true
+    },
+    "expense_report.per_diem_expenses[].reimbursement_summary[].per_diem_amount": {
+      "type": "number",
+      "nullable": true
+    },
+    "expense_report.per_diem_expenses[].reimbursement_summary[].meal_deduction": {
+      "type": "number",
+      "nullable": true
+    },
+    "expense_report.per_diem_expenses[].reimbursement_summary[].net_amount": {
+      "type": "number",
+      "nullable": true
+    },
+    "expense_report.allocation_and_approvers.other_beneficiaries": {
+      "type": "boolean",
+      "nullable": false
+    },
+    "expense_report.allocation_and_approvers.beneficiary_list[].name": {
+      "type": "string",
+      "nullable": true
+    },
+    "expense_report.allocation_and_approvers.beneficiary_list[].relationship": {
+      "type": "string",
+      "nullable": true
+    }
+  }
+}

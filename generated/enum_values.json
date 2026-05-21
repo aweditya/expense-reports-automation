@@ -1,0 +1,108 @@
+{
+  "schema_version": "0.1.0",
+  "enums": {
+    "expense_report.general_information.category": [
+      "expenses_domestic",
+      "expenses_foreign",
+      "athletic_use_only",
+      "hr_use_only",
+      "human_subjects",
+      "relocation"
+    ],
+    "expense_report.general_information.payee.affiliation": [
+      "stanford_student",
+      "stanford_postdoc",
+      "stanford_faculty",
+      "stanford_staff",
+      "other"
+    ],
+    "expense_report.general_information.rush_processing": [
+      "yes",
+      "no"
+    ],
+    "expense_report.transaction_summary.status": [
+      "draft",
+      "submitted",
+      "approved",
+      "returned",
+      "paid"
+    ],
+    "expense_report.transaction_lines[].common.expense_type": [
+      "adjusted_per_diem",
+      "airfare_domestic",
+      "airfare_foreign",
+      "ancillary_airline_fee",
+      "business_meal",
+      "car_rental",
+      "conference_registration",
+      "gift_card_employee_foreign",
+      "gifts_foreign_activity",
+      "ground_transportation_foreign",
+      "ground_transportation_domestic",
+      "group_travel_meal",
+      "human_subject_incentive",
+      "lodging_domestic",
+      "lodging_foreign",
+      "other_business_expense"
+    ],
+    "expense_report.transaction_lines[].common.foreign_activity_type": [
+      "conference",
+      "research_collaboration",
+      "fieldwork",
+      "other"
+    ],
+    "expense_report.transaction_lines[].common.source_document.document_type": [
+      "receipt",
+      "booking_confirmation",
+      "price_comparison",
+      "currency_conversion",
+      "conference_program",
+      "missing_receipt_form",
+      "other"
+    ],
+    "expense_report.transaction_lines[].airfare_details.booking_method": [
+      "stanford_travel_egencia",
+      "stanford_travel_key_travel",
+      "stanford_travel_connect_ua",
+      "stanford_travel_connect_dl",
+      "stanford_travel_connect_aa",
+      "stanford_travel_connect_as",
+      "stanford_travel_connect_ha",
+      "other"
+    ],
+    "expense_report.transaction_lines[].airfare_details.class_of_ticket": [
+      "coach",
+      "premium_economy",
+      "business",
+      "first"
+    ],
+    "expense_report.transaction_lines[].lodging_details.booking_method": [
+      "conference_hotel",
+      "stanford_travel_egencia",
+      "stanford_travel_key_travel",
+      "other"
+    ],
+    "expense_report.transaction_lines[].conference_registration_details.registration_system": [
+      "whova",
+      "cvent",
+      "acm_regonline",
+      "eventbrite",
+      "usenix",
+      "other"
+    ],
+    "expense_report.per_diem_expenses[].expense_type": [
+      "alaska_hawaii_lodging",
+      "alaska_hawaii_meals",
+      "continental_us_lodging",
+      "continental_us_meals",
+      "international_lodging",
+      "international_meals"
+    ],
+    "expense_report.per_diem_expenses[].foreign_activity_type": [
+      "conference",
+      "research_collaboration",
+      "fieldwork",
+      "other"
+    ]
+  }
+}

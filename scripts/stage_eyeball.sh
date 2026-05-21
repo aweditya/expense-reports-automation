@@ -67,8 +67,13 @@ echo "    render → ${WORKBENCH}"
   >/dev/null
 
 echo "    stage → ${UPLOAD_DIR}"
-mkdir -p "${UPLOAD_DIR}/files"
+mkdir -p "${UPLOAD_DIR}/files" "${UPLOAD_DIR}/reduced" "${UPLOAD_DIR}/extractions"
 cp "${WORKBENCH}" "${CSV}" "${UPLOAD_DIR}/"
+# friday Stage 7 needs reduced/report.json + extractions/* so the
+# /uploads/<id>/edit endpoint can read the report and re-render the
+# workbench after an edit. Without these the edit POST returns 404.
+cp "${REPORT}" "${UPLOAD_DIR}/reduced/report.json"
+cp .scratch/spike/*.json "${UPLOAD_DIR}/extractions/" 2>/dev/null || true
 # Copy receipts so spot-check links resolve. Globs allowed to fail
 # silently if a particular extension isn't in the corpus.
 cp receipts/*.pdf "${UPLOAD_DIR}/files/" 2>/dev/null || true

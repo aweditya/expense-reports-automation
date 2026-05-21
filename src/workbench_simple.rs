@@ -241,6 +241,186 @@ document.addEventListener('click', function(e) {
   });
 })();
 
+// friday Stage 7 — click-to-edit on any field value. POST hits
+// /uploads/<id>/edit which mutates report.json + re-renders
+// workbench.html. Page reloads on success so the FA sees the
+// persisted edit.
+//
+// Type guards mirror the server-side validation in
+// scripts/local_app_simple.py::edit_field — keeping client-side as
+// the first line of defense (no failed round-trip on bad input)
+// without trusting it.
+(function setupClickToEdit() {
+  // pathname like '/uploads/<id>/workbench.html' — split + index, no
+  // regex (avoids Rust-raw-string × JS-regex-literal escape pain;
+  // earlier version with /\/uploads\/.../ failed to parse and broke
+  // every JS handler on the page).
+  const segs = window.location.pathname.split('/');
+  if (segs.length < 3 || segs[1] !== 'uploads') return;
+  const uploadId = segs[2];
+
+  function isAmountPath(path) {
+    const tail = path.split('.').pop().toLowerCase();
+    return tail.indexOf('amount') !== -1
+        || tail.endsWith('_usd')
+        || tail === 'exchange_rate'
+        || tail === 'tip_amount'
+        || tail === 'alcohol_amount'
+        || tail === 'rate'
+        || tail === 'taxes_and_fees'
+        || tail === 'daily_rate';
+  }
+  function isDatePath(path) {
+    const tail = path.split('.').pop().toLowerCase();
+    return tail === 'date' || tail === 'transaction_date'
+        || tail.endsWith('_date');
+  }
+  // Regex literals below: use the RegExp constructor to avoid raw-
+  // string escape collisions. Same patterns as `/^\d{4}-\d{2}-\d{2}$/`
+  // and `/^-?\d+(\.\d+)?$/` — RegExp() takes a plain string and
+  // doesn't care about forward slashes.
+  const AMOUNT_RE = new RegExp('^-?\\d+(\\.\\d+)?$');
+  const DATE_RE = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+  function validate(path, value) {
+    const v = value.trim();
+    if (v === '') return true; // empty = clear
+    if (isAmountPath(path)) {
+      const cleaned = v.replace(/[$,\s]/g, '');
+      return AMOUNT_RE.test(cleaned);
+    }
+    if (isDatePath(path)) {
+      return DATE_RE.test(v);
+    }
+    return true; // text fields: anything
+  }
+
+  document.addEventListener('click', function(e) {
+    // Bail if click was inside an interactive control inside the card —
+    // spotcheck/copy/jump/restore/dismiss buttons all need their own
+    // click handlers and shouldn't trigger edit mode.
+    if (e.target.closest('button, a, input, .conf-dot, summary')) return;
+    const value = e.target.closest('.field-value');
+    if (!value) return;
+    const card = value.closest('.field-card');
+    if (!card || !card.dataset.path) return;
+    if (value.querySelector('input.inline-edit-input')) return;
+
+    const path = card.dataset.path;
+    const original = value.textContent.trim();
+    // Strip leading currency for amount fields so the FA edits a clean
+    // number, not "$1234.56".
+    let initial = original === '—' ? '' : original;
+    if (isAmountPath(path)) initial = initial.replace(/[$,]/g, '').trim();
+
+    // Hide everything inside .field-value (which includes the conf
+    // dot span); replace with input + inline error hint + cancel
+    // button. We restore on cancel.
+    const originalHTML = value.innerHTML;
+    value.innerHTML = '';
+    const wrap = document.createElement('div');
+    wrap.className = 'inline-edit-wrap';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'inline-edit-input';
+    input.value = initial;
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'inline-edit-cancel';
+    cancelBtn.textContent = '✕';
+    cancelBtn.title = 'Cancel (Esc)';
+    const hint = document.createElement('p');
+    hint.className = 'inline-edit-hint';
+    hint.textContent = '';
+    wrap.appendChild(input);
+    wrap.appendChild(cancelBtn);
+    value.appendChild(wrap);
+    value.appendChild(hint);
+    input.focus();
+    input.select();
+
+    function setHint(text, isError) {
+      hint.textContent = text;
+      hint.classList.toggle('inline-edit-hint--error', !!isError);
+    }
+    // Clear error hint as soon as the FA types again.
+    input.addEventListener('input', function() {
+      if (hint.classList.contains('inline-edit-hint--error')) {
+        setHint('', false);
+        input.classList.remove('invalid');
+      }
+    });
+
+    let saving = false;
+    function cancel() {
+      if (saving) return;
+      value.innerHTML = originalHTML;
+    }
+    function validationMessage(path, value) {
+      if (isAmountPath(path)) return 'Amount must be a number (e.g. 32.50).';
+      if (isDatePath(path)) return 'Date must be YYYY-MM-DD (e.g. 2024-09-02).';
+      return 'Invalid value.';
+    }
+    async function save() {
+      const newValue = input.value;
+      if (!validate(path, newValue)) {
+        input.classList.add('invalid');
+        setHint(validationMessage(path, newValue), true);
+        return;
+      }
+      saving = true;
+      input.disabled = true;
+      cancelBtn.disabled = true;
+      setHint('Saving…', false);
+      try {
+        const r = await fetch('/uploads/' + uploadId + '/edit', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({path: path, value: newValue}),
+        });
+        if (r.ok) {
+          // Anchor to the edited field so the page scrolls back here
+          // after reload + render.
+          window.location.href = window.location.pathname + '#' + card.id;
+          window.location.reload();
+        } else {
+          saving = false;
+          input.disabled = false;
+          cancelBtn.disabled = false;
+          input.classList.add('invalid');
+          const err = await r.json().catch(function() { return {}; });
+          setHint('Save failed: ' + (err.error || ('HTTP ' + r.status)) +
+                  ' — press Esc to cancel.', true);
+        }
+      } catch (netErr) {
+        saving = false;
+        input.disabled = false;
+        cancelBtn.disabled = false;
+        input.classList.add('invalid');
+        setHint('Network error — press Esc to cancel and retry.', true);
+      }
+    }
+    input.addEventListener('keydown', function(ke) {
+      if (ke.key === 'Enter') { ke.preventDefault(); save(); }
+      else if (ke.key === 'Escape') { ke.preventDefault(); cancel(); }
+    });
+    // Cancel button works even when the input is disabled (so the
+    // FA always has a way out of an error state).
+    cancelBtn.addEventListener('mousedown', function(me) {
+      me.preventDefault();  // don't blur the input before we cancel
+    });
+    cancelBtn.addEventListener('click', function(ce) {
+      ce.preventDefault();
+      saving = false;  // override; cancel button is the always-out
+      cancel();
+    });
+    // Blur cancels too — but skip if focus moved to the cancel button.
+    input.addEventListener('blur', function(be) {
+      if (be.relatedTarget === cancelBtn) return;
+      cancel();
+    });
+  });
+})();
+
 // friday Stage 6 — global toggle: when checked, body gains
 // .show-evidence and the CSS reveals every .field-evidence quote
 // underneath each field's value. Default off (per FA feedback —
@@ -1395,9 +1575,12 @@ fn field_card_inner(html: &mut String, label: &str, path: &str, value: &str, met
         _ => String::new(),
     };
 
-    let copy_attrs = copy_attrs_for(value);
+    // friday Stage 7: editable cards drop click-to-copy. Same click
+    // target can't do two things; FA confirmed (2026-05-21) that
+    // edit-only is cleaner. Copy stays on the hero summary cards +
+    // the Combined-for-Stanford-portal card (different render fns).
     html.push_str(&format!(
-        "<div class=\"field-card{copy_class}\" id=\"{}\"{copy_attrs}>\
+        "<div class=\"field-card field-card--editable\" id=\"{}\" data-path=\"{}\">\
            {}\
            <p class=\"field-label\">{}</p>\
            <p class=\"field-value\">{} <span class=\"conf-dot {}\"></span></p>\
@@ -1406,6 +1589,7 @@ fn field_card_inner(html: &mut String, label: &str, path: &str, value: &str, met
            {}\
          </div>\n",
         field_anchor(path),
+        escape(path),
         spotcheck_icon,
         escape(label),
         escape(value),
@@ -1413,24 +1597,21 @@ fn field_card_inner(html: &mut String, label: &str, path: &str, value: &str, met
         evidence_block,
         reason_block,
         needs_review_tag,
-        copy_class = if copy_attrs.is_empty() { "" } else { " field-card--copyable" },
-        copy_attrs = copy_attrs,
     ));
 }
 
 fn field_card_bare(html: &mut String, label: &str, path: &str, value: &str) {
     // For T1/T2 fields without a Wrapped/_meta — no confidence dot.
-    let copy_attrs = copy_attrs_for(value);
+    // Editable, no copy — same reasoning as field_card_inner.
     html.push_str(&format!(
-        "<div class=\"field-card{copy_class}\" id=\"{}\"{copy_attrs}>\
+        "<div class=\"field-card field-card--editable\" id=\"{}\" data-path=\"{}\">\
            <p class=\"field-label\">{}</p>\
            <p class=\"field-value\">{}</p>\
          </div>\n",
         field_anchor(path),
+        escape(path),
         escape(label),
         escape(value),
-        copy_class = if copy_attrs.is_empty() { "" } else { " field-card--copyable" },
-        copy_attrs = copy_attrs,
     ));
 }
 

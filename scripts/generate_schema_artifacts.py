@@ -829,6 +829,54 @@ def write_yaml(path: Path, payload: dict[str, Any]) -> None:
         yaml.safe_dump(payload, handle, sort_keys=False, allow_unicode=False, width=120)
 
 
+def build_field_types(root: SchemaNode) -> dict[str, dict[str, object]]:
+    """Walk the schema; emit a {path_template: {type, nullable}} map
+    for every leaf. Used by the Flask edit endpoint to coerce FA input
+    to the right type when the existing value is null (the type can't
+    be inferred from a null in JSON).
+
+    `type` values mirror schema.yaml's node_type: "string", "number",
+    "boolean", "enum", "date" (treated as string at the wire layer).
+    `nullable` is True if the leaf is optional (`required: false`).
+    """
+    out: dict[str, dict[str, object]] = {}
+    def walk(node: SchemaNode) -> None:
+        if node.is_leaf:
+            out[node.path_string] = {
+                "type": node.node_type,
+                "nullable": not node.required,
+            }
+            return
+        for child in node.fields:
+            walk(child)
+        if node.item is not None:
+            walk(node.item)
+    walk(root)
+    return out
+
+
+def build_enum_values(root: SchemaNode) -> dict[str, list[str]]:
+    """Walk the schema; emit a {path_template: [snake_case values]}
+    map for every enum-typed leaf. Path template uses `[]` for list
+    indices (per SchemaNode.path_string), so the Flask edit endpoint
+    can normalize incoming concrete paths (`[7]` → `[]`) and look up
+    valid values without duplicating the schema in Python.
+    """
+    out: dict[str, list[str]] = {}
+    def walk(node: SchemaNode) -> None:
+        if node.is_leaf:
+            if node.node_type == "enum" and node.allowed_values:
+                # path_string includes the 'expense_report.' prefix.
+                out[node.path_string] = list(node.allowed_values)
+            return
+        for child in node.fields:
+            walk(child)
+        if node.item is not None:
+            walk(node.item)
+    walk(root)
+    return out
+
+
 def generate(schema_path: Path, output_dir: Path) -> None:
     schema = load_schema(schema_path)
     schema_version = str(schema["schema_version"])
@@ -840,6 +888,8 @@ def generate(schema_path: Path, output_dir: Path) -> None:
     validation_rules = build_validation_rules(root, schema_version, generated_at)
     rust_validation_rules = generate_rust_validation_rules(validation_rules, schema_version)
     ui_field_map = build_ui_field_map(root, schema_version, generated_at)
+    enum_values = build_enum_values(root)
+    field_types = build_field_types(root)
 
     for stale_path in (output_dir / "__init__.py", output_dir / "expense_report_model.py"):
         stale_path.unlink(missing_ok=True)
@@ -847,6 +897,28 @@ def generate(schema_path: Path, output_dir: Path) -> None:
     write_text(output_dir / "validation_rules.rs", rust_validation_rules)
     write_yaml(output_dir / "validation_rules.yaml", validation_rules)
     write_yaml(output_dir / "ui_field_map.yaml", ui_field_map)
+    # enum_values.json — single source of truth for the Flask edit
+    # endpoint's enum validation. Python reads this at import time;
+    # no more hand-maintained mirror in local_app_simple.py.
+    write_text(
+        output_dir / "enum_values.json",
+        json.dumps(
+            {"schema_version": schema_version, "enums": enum_values},
+            indent=2, ensure_ascii=False,
+        ) + "\n",
+    )
+    # field_types.json — SSOT for runtime type per leaf. Flask's edit
+    # endpoint uses this to coerce FA input when the existing JSON
+    # value is null (type can't be inferred). Audit script uses it to
+    # generate type-appropriate test values for previously-empty
+    # fields.
+    write_text(
+        output_dir / "field_types.json",
+        json.dumps(
+            {"schema_version": schema_version, "fields": field_types},
+            indent=2, ensure_ascii=False,
+        ) + "\n",
+    )
 
 
 def main() -> None:

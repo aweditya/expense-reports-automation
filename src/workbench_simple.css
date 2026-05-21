@@ -625,6 +625,78 @@ body {
   line-height: 1.4;
 }
 body.show-evidence .field-evidence { display: block; }
+
+/* friday Stage 7: inline-edit input that replaces the value text
+   when the FA clicks a .field-value. Matches the surrounding
+   field-value typography so the FA's input visually IS the value.
+   Wrap holds (input + cancel-button) side-by-side; the hint
+   paragraph below carries error / saving messages. */
+.inline-edit-wrap {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  width: 100%;
+}
+.inline-edit-input {
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  color: #111827;
+  background: #fff;
+  border: 1px solid #2563eb;
+  border-radius: 3px;
+  padding: 2px 6px;
+  flex: 1;
+  min-width: 0;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+.inline-edit-input.invalid {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15);
+}
+.inline-edit-input:disabled {
+  background: #f3f4f6;
+  cursor: wait;
+}
+/* Always-clickable cancel button — gives FA a way out even when the
+   input is disabled (during save) or in an error state. */
+.inline-edit-cancel {
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 3px;
+  color: #6b7280;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.inline-edit-cancel:hover { background: #f3f4f6; color: #1a1d1f; }
+.inline-edit-cancel:disabled { cursor: default; opacity: 0.5; }
+/* Inline hint below the input — empty by default; populated with
+   'Saving…' during save, or a validation/save error in red. */
+.inline-edit-hint {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 1.4;
+  min-height: 16px;  /* reserve space so cards don't reflow */
+}
+.inline-edit-hint--error {
+  color: #dc2626;
+  font-weight: 500;
+}
+/* Field-value flex layout puts the conf-dot beside the value text.
+   When the input replaces it, we want the input to fill the row,
+   so override align-items + grow the input cell. */
+.field-value:has(.inline-edit-wrap) {
+  display: block;
+}
+/* friday Stage 7: editable cards drop click-to-copy but keep the
+   click-cursor hint so the FA knows the value is interactive. */
+.field-card--editable .field-value { cursor: text; }
+.field-card--editable:hover { background: #f3f4f6; }
 /* Confidence justification — shown for every leaf when the extractor
    wrote one. Two tiers:
    - default (medium/low): amber, slightly prominent — "look at this"

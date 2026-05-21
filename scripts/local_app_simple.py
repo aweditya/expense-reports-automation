@@ -345,6 +345,366 @@ def places_autocomplete():
     return ({"suggestions": suggestions}, 200)
 
 
+_EDIT_PATH_RE = re.compile(r"\[(\d+)\]|\.|([^.\[\]]+)")
+
+
+def _fa_edit_meta() -> dict:
+    """FieldMetadata for a Wrapped<T> that was just created or
+    mutated by the FA's edit. Mirrors the shape Rust's FieldMetadata
+    serializes (confidence + evidence with kind=user_input + the
+    origin string). Used when the walker auto-creates a previously-
+    skip-serialized Wrapped, and could also be used to mark in-place
+    edits (not done yet — Stage 7 doesn't mark edited cards visually
+    in the UI; deferred polish)."""
+    return {
+        "confidence": "high",
+        "confidence_reason": "Edited by FA in the workbench.",
+        "evidence": [{"kind": "user_input", "origin": "fa_workbench_edit"}],
+        "needs_review": False,
+        "flags": [],
+    }
+
+
+def _walk_to_leaf(report: dict, path: str):
+    """Walk a dotted-and-bracketed field path
+    (e.g. 'expense_report.transaction_lines[0].common.line_amount_usd')
+    into the report dict and return (existing_value, setter_fn) where
+    setter_fn(coerced_value) mutates the right slot. None on path miss.
+
+    Two leaf shapes:
+    1. **Wrapped<T>** (most fields): leaf is `{value, _meta}`. setter
+       mutates `.value`.
+    2. **Bare scalar** (e.g. `authorized_by` is `Option<String>`).
+       setter re-binds on the parent.
+
+    Returning `existing_value` lets the caller pick a coercion
+    (float / bool / str) based on the schema-derived type instead of
+    a path-name heuristic. Empty-string FA input means "clear" — the
+    caller maps it to None when the existing value is None-able.
+    """
+    # Save the original (full) path for schema-template lookup below;
+    # we strip the prefix for traversal but need it for field_types
+    # validation when auto-creating.
+    original_path = path
+    if path.startswith("expense_report."):
+        path = path[len("expense_report."):]
+    else:
+        # Bogus paths (no expense_report prefix) never resolve. The
+        # Flask edit endpoint already rejects these with 400; this is
+        # defense in depth so the walker is also strict if anyone
+        # calls it directly.
+        return None
+    parts: list[tuple[str, str | int]] = []
+    for chunk in path.split("."):
+        m = re.match(r"^([^\[]+)((?:\[\d+\])*)$", chunk)
+        if not m:
+            return None
+        parts.append(("key", m.group(1)))
+        for idx_match in re.finditer(r"\[(\d+)\]", m.group(2) or ""):
+            parts.append(("idx", int(idx_match.group(1))))
+    if not parts:
+        return None
+
+    parent = None
+    last_step: tuple[str, str | int] | None = None
+    cursor: object = report
+    for i, (kind, val) in enumerate(parts):
+        is_last = i == len(parts) - 1
+        parent = cursor
+        last_step = (kind, val)
+        if kind == "key":
+            if not isinstance(cursor, dict):
+                return None
+            if val not in cursor:
+                # Last-step miss is benign ONLY if the schema knows
+                # about the path — codegen's skip_serializing_if=
+                # Wrapped::is_unknown drops empty Wrappeds on
+                # serialize, but the renderer still emits a card for
+                # them. Auto-create lets the FA's edit land. Bogus
+                # paths (not in field_types.json) fail loudly so we
+                # don't silently create garbage state.
+                if not is_last:
+                    return None
+                template = _normalize_path_template(original_path)
+                if _FIELD_TYPES_BY_PATH and template not in _FIELD_TYPES_BY_PATH:
+                    return None
+                cursor[val] = {
+                    "value": None,
+                    "_meta": _fa_edit_meta(),
+                }
+            cursor = cursor[val]
+        else:  # idx
+            if not isinstance(cursor, list) or val >= len(cursor):
+                return None
+            cursor = cursor[val]
+
+    # Wrapped<T> leaf: existing value lives at cursor["value"]; setter
+    # mutates it in place. Most fields take this path.
+    if isinstance(cursor, dict) and "value" in cursor:
+        existing = cursor["value"]
+        wrapped = cursor
+        def setter(coerced):
+            wrapped["value"] = coerced
+        return (existing, setter)
+    # Bare scalar leaf (e.g. authorized_by is Option<String> directly
+    # on the parent dict, not wrapped). Setter re-binds on the parent.
+    if last_step is None or parent is None:
+        return None
+    last_kind, last_val = last_step
+    if last_kind == "key" and isinstance(parent, dict):
+        existing = cursor
+        parent_dict = parent
+        key = last_val
+        def setter(coerced):
+            parent_dict[key] = coerced
+        return (existing, setter)
+    if last_kind == "idx" and isinstance(parent, list):
+        existing = cursor
+        parent_list = parent
+        idx = last_val
+        def setter(coerced):
+            parent_list[idx] = coerced
+        return (existing, setter)
+    return None
+
+
+def _coerce_to_existing_type(
+    raw: str, existing, path: str = ""
+) -> tuple[object, str | None]:
+    """Coerce FA's string input to the type the schema expects.
+    Decision order: existing-value runtime type first (works for
+    populated fields), then path-template lookup against the codegen
+    field_types.json (works for null-existing fields, which carry no
+    runtime type signal).
+
+    Returns (coerced, error_message_or_none).
+    """
+    s = raw.strip()
+
+    # Booleans first — `bool` is a subclass of `int` in Python, so
+    # check it before the int/float branch.
+    if isinstance(existing, bool):
+        return _coerce_to_bool(s)
+    if isinstance(existing, (int, float)):
+        return _coerce_to_number(s)
+    if isinstance(existing, str) and existing:
+        if s == "":
+            return (None, None)
+        return (s, None)
+
+    # existing is None or empty string — no runtime type signal.
+    # Fall back to codegen-emitted field type.
+    template = _normalize_path_template(path)
+    field_meta = _FIELD_TYPES_BY_PATH.get(template) if template else None
+    schema_type = (field_meta or {}).get("type")
+
+    if schema_type == "boolean":
+        return _coerce_to_bool(s)
+    if schema_type == "number":
+        if s == "":
+            return (None, None)  # null-clear; render handles Wrapped<f64>=null
+        return _coerce_to_number(s)
+    if schema_type in ("string", "enum", "date", None):
+        if s == "":
+            return (None, None)
+        return (s, None)
+    # Unknown type from schema (array/object slipped through?) — treat as string.
+    return (s, None) if s else (None, None)
+
+
+def _coerce_to_bool(s: str) -> tuple[object, str | None]:
+    lowered = s.lower()
+    if lowered in ("yes", "true", "1", "y", "t"):
+        return (True, None)
+    if lowered in ("no", "false", "0", "n", "f"):
+        return (False, None)
+    if lowered == "":
+        return (None, None)  # null-clear
+    return (None, "must be yes or no")
+
+
+def _coerce_to_number(s: str) -> tuple[object, str | None]:
+    # Strip $ and , for FA convenience (so "$1,234.56" works).
+    cleaned = s.replace("$", "").replace(",", "").strip()
+    if cleaned == "":
+        return (None, None)  # null-clear
+    try:
+        return (float(cleaned), None)
+    except ValueError:
+        return (None, "must be a number (e.g. 32.50)")
+
+
+# Codegen-emitted single sources of truth — loaded at import time.
+# generated/enum_values.json: path_template → list of valid snake_case
+#   enum strings.
+# generated/field_types.json: path_template → {type, nullable} for
+#   every schema leaf. Type values: "string" | "number" | "boolean" |
+#   "enum" | "date" (date is a string at the wire layer).
+# Keyed by path TEMPLATE — array indices normalized to `[]` so
+# `transaction_lines[0].x` and `transaction_lines[3].x` share entries.
+_ENUM_VALUES_BY_PATH: dict[str, list[str]] = {}
+_FIELD_TYPES_BY_PATH: dict[str, dict] = {}
+_GENERATED_DIR = Path(__file__).resolve().parent.parent / "generated"
+try:
+    _ENUM_VALUES_BY_PATH = dict(
+        json.loads((_GENERATED_DIR / "enum_values.json").read_text()).get("enums", {})
+    )
+except FileNotFoundError:
+    pass
+try:
+    _FIELD_TYPES_BY_PATH = dict(
+        json.loads((_GENERATED_DIR / "field_types.json").read_text()).get("fields", {})
+    )
+except FileNotFoundError:
+    # Codegen artifact missing — happens in a fresh clone before
+    # `scripts/generate_schema_artifacts.py` has run. Edit endpoint
+    # will fall back to runtime-type inference and accept anything
+    # for null-existing fields; Rust render catches mistypes at
+    # serialize-time with a less friendly error. Not fatal for boot.
+    pass
+
+
+# Match either `[N]` (a numeric index) — gets normalized to `[]` so
+# lookups against _ENUM_VALUES_BY_PATH succeed regardless of which
+# transaction line / per-diem entry the FA is editing.
+_INDEX_RE = re.compile(r"\[\d+\]")
+
+
+def _normalize_path_template(path: str) -> str:
+    """Strip concrete indices so `transaction_lines[0].common.x` and
+    `transaction_lines[3].common.x` both look up the same enum
+    entry."""
+    return _INDEX_RE.sub("[]", path)
+
+
+def _validate_enum(path: str, value: object) -> str | None:
+    """If path's template names an enum field, check value is in the
+    valid set. Returns error message or None if OK (or not an enum
+    field). Path lookup uses the template (indices normalized to
+    `[]`) so lookups match the codegen-emitted JSON."""
+    if not isinstance(value, str):
+        return None
+    template = _normalize_path_template(path)
+    valid = _ENUM_VALUES_BY_PATH.get(template)
+    if valid is None:
+        return None
+    if value in valid:
+        return None
+    # Show up to 5 valid examples so the error msg doesn't get huge.
+    preview = ", ".join(valid[:5])
+    if len(valid) > 5:
+        preview += f", … ({len(valid)} total)"
+    return f"must be one of: {preview}"
+
+
+def _recompute_summary(report: dict) -> None:
+    """After an edit, recompute the hero summary fields that derive
+    from transaction_lines (total_usd, transaction_date). The render
+    binary doesn't recompute these — they're snapshots written by
+    the original reducer pass. Keeping the cascade tight: only the
+    two summary fields the hero displays. Other derived fields (per-
+    line USD if FA edits currency + amount, lodging totals, etc.) are
+    NOT cascaded — out of scope for Stage 7 MVP.
+    """
+    lines = report.get("transaction_lines") or []
+    if not lines:
+        return
+    totals = []
+    dates = []
+    for line in lines:
+        common = (line or {}).get("common") or {}
+        usd = (common.get("line_amount_usd") or {}).get("value")
+        if isinstance(usd, (int, float)):
+            totals.append(float(usd))
+        date = (common.get("date") or {}).get("value")
+        if isinstance(date, str) and date:
+            dates.append(date)
+    summary = report.setdefault("transaction_summary", {})
+    if totals:
+        total_block = summary.setdefault("total_usd", {})
+        total_block["value"] = round(sum(totals), 2)
+    if dates:
+        date_block = summary.setdefault("transaction_date", {})
+        date_block["value"] = min(dates)  # ISO date strings sort lexicographically
+
+
+@app.post("/uploads/<upload_id>/edit")
+def edit_field(upload_id: str):
+    """Stage 7: FA-side edit-in-place. Frontend POSTs `{path, value}`;
+    we walk the path into reduced/report.json, mutate the leaf Wrapped
+    object's `value` field, write back, re-render workbench.html so
+    the next page load shows the edit.
+
+    JSON body shape: `{"path": "expense_report.transaction_lines[0].common.line_amount_usd", "value": "42.50"}`.
+    Returns 200 on success, 400 on bad path/value, 404 if the upload
+    doesn't exist.
+    """
+    safe_id = sanitize_id(upload_id)
+    upload_dir = UPLOADS_ROOT / safe_id
+    if not upload_dir.is_dir():
+        abort(404)
+    body = request.get_json(silent=True) or {}
+    path = body.get("path", "")
+    new_value_raw = body.get("value", "")
+    if not isinstance(path, str) or not path.startswith("expense_report"):
+        return ({"error": "invalid path"}, 400)
+    if not isinstance(new_value_raw, str):
+        return ({"error": "value must be a string"}, 400)
+
+    report_path = upload_dir / "reduced" / "report.json"
+    if not report_path.exists():
+        return ({"error": "report not found"}, 404)
+    report = json.loads(report_path.read_text())
+
+    # Walk to leaf first; gives us the existing value (type hint for
+    # coercion) + a setter that mutates the right slot.
+    walk_result = _walk_to_leaf(report, path)
+    if walk_result is None:
+        return ({"error": "path did not resolve"}, 400)
+    existing, setter = walk_result
+
+    # Coerce FA's raw string to the schema-derived type. Existing
+    # value's runtime type is the first signal; path-template lookup
+    # against generated/field_types.json is the fallback for null-
+    # existing fields where runtime type is unknown.
+    coerced, coerce_err = _coerce_to_existing_type(new_value_raw, existing, path)
+    if coerce_err is not None:
+        return ({"error": coerce_err}, 400)
+
+    # Enum validation: if the path tail names an enum field, reject
+    # values outside the known set. Friendly error names a few valid
+    # options.
+    enum_err = _validate_enum(path, coerced)
+    if enum_err is not None:
+        return ({"error": enum_err}, 400)
+
+    setter(coerced)
+
+    # Cascade: if the edit touched a transaction line's USD or date,
+    # recompute the hero summary so Total USD + Trip Date reflect the
+    # new state. Idempotent; safe to call after any edit.
+    _recompute_summary(report)
+
+    report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False))
+
+    # Re-render workbench.html (+ lines.csv) so the next GET reflects
+    # the edit. Re-uses the same render() helper the upload pipeline
+    # uses on first processing.
+    workbench_path = upload_dir / "workbench.html"
+    extractions_dir = upload_dir / "extractions"
+    try:
+        render_workbench(report_path, extractions_dir, workbench_path)
+    except PipelineError as err:
+        # Strip filesystem paths from the user-facing message — the FA
+        # doesn't need to see /Users/adityasriram/... in their error.
+        detail = err.detail
+        for prefix in (str(UPLOADS_ROOT), str(REPO_ROOT) if "REPO_ROOT" in globals() else ""):
+            if prefix:
+                detail = detail.replace(prefix, "…")
+        return ({"error": f"render failed: {detail[:200]}"}, 500)
+    return ({"ok": True}, 200)
+
+
 @app.get("/uploads/<upload_id>/<path:filename>")
 def serve_upload_file(upload_id: str, filename: str):
     """Static-file route for everything under a per-upload directory:
