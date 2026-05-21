@@ -26,46 +26,148 @@ use crate::expense_report_model::{
     ExpenseReportTransactionLinesItemCommonExpenseTypeEnum as ExpenseType,
 };
 
-/// Render the report's transaction lines as a CSV string matching the
-/// Stanford ERS Template column order. Always includes the header row.
-/// Lines with missing date or amount still emit (with blanks) so the
-/// FA can see/fix them in Excel rather than silently dropping data.
+/// Render the report's transaction lines as a CSV string matching
+/// Stanford's live "Expense Lines Upload" portal column order (per
+/// the screenshot the FA shared 2026-05-20):
+///
+///   Line | Expense Date | Expense Currency | Expense Amount |
+///   USD Amount | Expense Type | Remarks
+///
+/// Line numbers auto-increment from 1. Date format is DD-MMM-YYYY
+/// (e.g. `02-Sep-2024`). Expense Currency is the ISO 4217 code +
+/// full name (e.g. `BRL - Brazilian Real`); USD-only lines emit
+/// `USD - US Dollar`. Expense Amount is the receipt's original
+/// currency value; USD Amount is the converted value. For
+/// USD-printed receipts these are the same.
+///
+/// Lines with missing data still emit (with blanks in those
+/// columns) so the FA sees/fixes them in Excel rather than silently
+/// dropping data.
 pub fn report_to_lines_csv(report: &ExpenseReport) -> String {
-    let mut out = String::from("Date,Amount,Expense Type,Remarks\n");
+    let mut out = String::from(
+        "Line,Expense Date,Expense Currency,Expense Amount,USD Amount,Expense Type,Remarks\n",
+    );
     let lines = match report.transaction_lines.as_ref() {
         Some(v) => v,
         None => return out,
     };
-    for line in lines {
+    for (idx, line) in lines.iter().enumerate() {
+        let line_no = idx + 1;
         let date = line
             .common
             .date
             .value
             .as_ref()
-            .map(|d| d.0.as_str())
-            .unwrap_or("");
-        let amount = line
-            .common
-            .line_amount_usd
-            .value
-            .map(|v| format!("{v:.2}"))
+            .map(|d| format_portal_date(&d.0))
             .unwrap_or_default();
-        let expense_type = map_expense_type(line);
-        let remarks = line
+        let original_currency = line
             .common
-            .remarks
+            .original_currency
             .value
-            .as_deref()
-            .unwrap_or("");
+            .as_deref();
+        let usd_amount = line.common.line_amount_usd.value;
+        // Foreign lines have original_currency + original_amount; USD
+        // lines leave original_* null. Portal wants both columns
+        // populated even for USD — emit USD code + the USD amount.
+        let (currency_display, expense_amount) = if let Some(code) = original_currency {
+            let amt = line
+                .common
+                .original_amount
+                .value
+                .map(|v| format!("{v:.2}"))
+                .unwrap_or_default();
+            (currency_code_to_full(code), amt)
+        } else {
+            (
+                currency_code_to_full("USD"),
+                usd_amount.map(|v| format!("{v:.2}")).unwrap_or_default(),
+            )
+        };
+        let usd_str = usd_amount.map(|v| format!("{v:.2}")).unwrap_or_default();
+        let expense_type = map_expense_type(line);
+        let remarks = line.common.remarks.value.as_deref().unwrap_or("");
         out.push_str(&format!(
-            "{},{},{},{}\n",
-            csv_field(date),
-            csv_field(&amount),
+            "{},{},{},{},{},{},{}\n",
+            line_no,
+            csv_field(&date),
+            csv_field(&currency_display),
+            csv_field(&expense_amount),
+            csv_field(&usd_str),
             csv_field(expense_type),
             csv_field(remarks),
         ));
     }
     out
+}
+
+/// Convert ISO 8601 date `YYYY-MM-DD` → portal format `DD-MMM-YYYY`
+/// (e.g. `2024-09-02` → `02-Sep-2024`). Falls back to passthrough
+/// for malformed input so a bad date doesn't lose the row entirely
+/// (FA can fix in Excel).
+fn format_portal_date(iso: &str) -> String {
+    if iso.len() != 10 || &iso[4..5] != "-" || &iso[7..8] != "-" {
+        return iso.to_owned();
+    }
+    let Ok(month_idx) = iso[5..7].parse::<usize>() else {
+        return iso.to_owned();
+    };
+    if !(1..=12).contains(&month_idx) {
+        return iso.to_owned();
+    }
+    const MONTHS: [&str; 12] = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ];
+    format!("{}-{}-{}", &iso[8..10], MONTHS[month_idx - 1], &iso[0..4])
+}
+
+/// ISO 4217 currency code → portal display string (`<code> - <name>`).
+/// Covers the ~40 currencies a Stanford research traveller realistically
+/// encounters. Unknown codes fall back to `<code> - <code>` so the row
+/// still emits with a recognizable currency column the FA can correct.
+fn currency_code_to_full(code: &str) -> String {
+    let name = match code {
+        "USD" => "US Dollar",
+        "EUR" => "Euro",
+        "GBP" => "British Pound",
+        "JPY" => "Japanese Yen",
+        "CAD" => "Canadian Dollar",
+        "AUD" => "Australian Dollar",
+        "CHF" => "Swiss Franc",
+        "CNY" => "Chinese Yuan",
+        "SGD" => "Singapore Dollar",
+        "INR" => "Indian Rupee",
+        "BRL" => "Brazilian Real",
+        "MXN" => "Mexican Peso",
+        "ARS" => "Argentine Peso",
+        "KRW" => "South Korean Won",
+        "HKD" => "Hong Kong Dollar",
+        "TWD" => "Taiwan Dollar",
+        "THB" => "Thai Baht",
+        "IDR" => "Indonesian Rupiah",
+        "ZAR" => "South African Rand",
+        "TRY" => "Turkish Lira",
+        "ILS" => "Israeli Shekel",
+        "AED" => "UAE Dirham",
+        "SAR" => "Saudi Riyal",
+        "NZD" => "New Zealand Dollar",
+        "SEK" => "Swedish Krona",
+        "NOK" => "Norwegian Krone",
+        "DKK" => "Danish Krone",
+        "PLN" => "Polish Zloty",
+        "CZK" => "Czech Koruna",
+        "HUF" => "Hungarian Forint",
+        "RON" => "Romanian Leu",
+        "VND" => "Vietnamese Dong",
+        "PHP" => "Philippine Peso",
+        "MYR" => "Malaysian Ringgit",
+        "CLP" => "Chilean Peso",
+        "COP" => "Colombian Peso",
+        "PEN" => "Peruvian Sol",
+        "EGP" => "Egyptian Pound",
+        unknown => return format!("{unknown} - {unknown}"),
+    };
+    format!("{code} - {name}")
 }
 
 /// Concatenate the report's business_purpose sub-fields into one
@@ -94,9 +196,17 @@ pub fn report_to_business_purpose_text(report: &ExpenseReport) -> String {
 }
 
 /// Internal-enum → Stanford-taxonomy mapping. Returns the literal
-/// string the FA's Stanford portal expects (must match the dropdown
-/// values in `ERS Template.xlsm` exactly; misspellings will be
-/// rejected at upload time).
+/// string the FA's Stanford portal expects.
+///
+/// **Updated 2026-05-20 against the live portal screenshot** the FA
+/// shared during the meeting (`.scratch/img_1132.jpg`). Where the
+/// screenshot directly showed a value (`Lodging - Foreign and
+/// Domestic`, `Airfare - Foreign and Domestic`) we use that exact
+/// string. Other types that have fore/dom variants in our schema get
+/// the same suffix by symmetry (Ground Transportation); types with
+/// only one variant or non-territorial types keep their .xlsm
+/// taxonomy string. FA review at next upload catches any wrong ones;
+/// the mapping is one function so updates are one edit.
 ///
 /// Takes `&ExpenseReportTransactionLinesItem` so meal lines can
 /// promote to "with Alcohol" variants when `meal_details.
@@ -112,7 +222,10 @@ fn map_expense_type(line: &ExpenseReportTransactionLinesItem) -> &'static str {
         .unwrap_or(false);
     match kind {
         ExpenseType::AdjustedPerDiem => "Adjusted Per Diem",
-        ExpenseType::AirfareDomestic | ExpenseType::AirfareForeign => "Airfare",
+        // Screenshot-confirmed: portal value is "Airfare - Foreign and Domestic".
+        ExpenseType::AirfareDomestic | ExpenseType::AirfareForeign => {
+            "Airfare - Foreign and Domestic"
+        }
         ExpenseType::AncillaryAirlineFee => "Ancillary Airline Fee",
         ExpenseType::BusinessMeal => {
             if alcohol { "Business Meal with Alcohol" } else { "Business Meal" }
@@ -121,13 +234,17 @@ fn map_expense_type(line: &ExpenseReportTransactionLinesItem) -> &'static str {
         ExpenseType::ConferenceRegistration => "Conference Registration",
         ExpenseType::GiftCardEmployeeForeign => "Gift Card - Employee",
         ExpenseType::GiftsForeignActivity => "Gifts",
+        // Symmetry with Airfare + Lodging — same fore/dom collapse pattern.
         ExpenseType::GroundTransportationDomestic
-        | ExpenseType::GroundTransportationForeign => "Ground Transportation",
+        | ExpenseType::GroundTransportationForeign => "Ground Transportation - Foreign and Domestic",
         ExpenseType::GroupTravelMeal => {
             if alcohol { "Group Travel Meal with Alcohol" } else { "Group Travel Meal" }
         }
         ExpenseType::HumanSubjectIncentive => "Human Subject Incentive",
-        ExpenseType::LodgingDomestic | ExpenseType::LodgingForeign => "Lodging",
+        // Screenshot-confirmed: portal value is "Lodging - Foreign and Domestic".
+        ExpenseType::LodgingDomestic | ExpenseType::LodgingForeign => {
+            "Lodging - Foreign and Domestic"
+        }
         ExpenseType::OtherBusinessExpense => "Miscellaneous",
     }
 }
@@ -184,20 +301,63 @@ mod tests {
         line
     }
 
+    fn line_with_currency(
+        date: &str,
+        usd: f64,
+        original_currency: Option<&str>,
+        original_amount: Option<f64>,
+        kind: ExpenseType,
+        remarks: &str,
+    ) -> ExpenseReportTransactionLinesItem {
+        let mut line = line_with(date, usd, kind, remarks);
+        if let Some(code) = original_currency {
+            line.common.original_currency = Wrapped {
+                value: Some(code.to_owned()),
+                meta: FieldMetadata::default(),
+            };
+        }
+        if let Some(amt) = original_amount {
+            line.common.original_amount = Wrapped {
+                value: Some(amt),
+                meta: FieldMetadata::default(),
+            };
+        }
+        line
+    }
+
     #[test]
-    fn csv_emits_header_then_rows_in_template_order() {
+    fn csv_emits_seven_column_header_and_portal_date_format() {
         let mut report = ExpenseReport::default();
         report.transaction_lines = Some(vec![
-            line_with("2024-09-02", 1234.56, ExpenseType::AirfareForeign, "BOM to SFO"),
+            line_with("2024-09-02", 970.75, ExpenseType::AirfareForeign, "BOM to SFO"),
             line_with("2024-09-04", 79.59, ExpenseType::BusinessMeal, "Dinner"),
         ]);
         let csv = report_to_lines_csv(&report);
         let expected = "\
-Date,Amount,Expense Type,Remarks
-2024-09-02,1234.56,Airfare,BOM to SFO
-2024-09-04,79.59,Business Meal,Dinner
+Line,Expense Date,Expense Currency,Expense Amount,USD Amount,Expense Type,Remarks
+1,02-Sep-2024,USD - US Dollar,970.75,970.75,Airfare - Foreign and Domestic,BOM to SFO
+2,04-Sep-2024,USD - US Dollar,79.59,79.59,Business Meal,Dinner
 ";
         assert_eq!(csv, expected);
+    }
+
+    #[test]
+    fn csv_foreign_currency_emits_original_amount_and_full_currency_name() {
+        let mut report = ExpenseReport::default();
+        report.transaction_lines = Some(vec![line_with_currency(
+            "2026-04-23",
+            104.18,
+            Some("BRL"),
+            Some(519.20),
+            ExpenseType::LodgingForeign,
+            "Early check-in charge",
+        )]);
+        let csv = report_to_lines_csv(&report);
+        // The portal screenshot row 1: BRL - Brazilian Real, 519.20, 104.18.
+        assert!(
+            csv.contains("1,23-Apr-2026,BRL - Brazilian Real,519.20,104.18,Lodging - Foreign and Domestic,"),
+            "csv:\n{csv}"
+        );
     }
 
     #[test]
@@ -235,15 +395,57 @@ Date,Amount,Expense Type,Remarks
         line.common.expense_type = Wrapped::default();
         report.transaction_lines = Some(vec![line]);
         let csv = report_to_lines_csv(&report);
-        // Empty fields, no expense_type → Miscellaneous fallback.
-        assert_eq!(csv, "Date,Amount,Expense Type,Remarks\n,,Miscellaneous,\n");
+        // Empty fields, no expense_type → Miscellaneous fallback. Line still emits
+        // (FA can fix in Excel) with line number 1, USD currency default, blanks
+        // elsewhere.
+        assert_eq!(
+            csv,
+            "Line,Expense Date,Expense Currency,Expense Amount,USD Amount,Expense Type,Remarks\n\
+             1,,USD - US Dollar,,,Miscellaneous,\n"
+        );
     }
 
     #[test]
     fn csv_header_only_when_no_lines() {
         let report = ExpenseReport::default();
         let csv = report_to_lines_csv(&report);
-        assert_eq!(csv, "Date,Amount,Expense Type,Remarks\n");
+        assert_eq!(
+            csv,
+            "Line,Expense Date,Expense Currency,Expense Amount,USD Amount,Expense Type,Remarks\n"
+        );
+    }
+
+    #[test]
+    fn portal_date_format_round_trip() {
+        assert_eq!(format_portal_date("2024-09-02"), "02-Sep-2024");
+        assert_eq!(format_portal_date("2026-04-23"), "23-Apr-2026");
+        assert_eq!(format_portal_date("2026-01-01"), "01-Jan-2026");
+        assert_eq!(format_portal_date("2026-12-31"), "31-Dec-2026");
+    }
+
+    #[test]
+    fn portal_date_format_passes_through_malformed_input() {
+        // Don't lose the row if the date is garbage — FA fixes in Excel.
+        assert_eq!(format_portal_date(""), "");
+        assert_eq!(format_portal_date("April 23 2026"), "April 23 2026");
+        assert_eq!(format_portal_date("2026-13-01"), "2026-13-01");
+        assert_eq!(format_portal_date("2026/04/23"), "2026/04/23");
+    }
+
+    #[test]
+    fn currency_code_known_returns_code_dash_name() {
+        assert_eq!(currency_code_to_full("USD"), "USD - US Dollar");
+        assert_eq!(currency_code_to_full("BRL"), "BRL - Brazilian Real");
+        assert_eq!(currency_code_to_full("JPY"), "JPY - Japanese Yen");
+        assert_eq!(currency_code_to_full("EGP"), "EGP - Egyptian Pound");
+    }
+
+    #[test]
+    fn currency_code_unknown_falls_back_to_code_dash_code() {
+        // Don't drop the row for an unknown 3-letter code — emit it twice so
+        // the FA sees what we received and can correct.
+        assert_eq!(currency_code_to_full("XYZ"), "XYZ - XYZ");
+        assert_eq!(currency_code_to_full(""), " - ");
     }
 
     #[test]
