@@ -238,3 +238,119 @@ Before starting stage 1:
 - [x] D scope confirmed: MVP + minimal type guards.
 - [x] B scope confirmed: real SSE.
 - [x] F4 partition confirmed.
+
+---
+
+## 8. Post-Friday addendum (2026-05-21, deferred)
+
+Captured during the Friday push as the FA dropped additional context
++ asks. None of these are implemented; this section is the record so
+the next session has the queue.
+
+### 8a — Domestic vs foreign expense-type taxonomy (Stage 1 CSV regression)
+
+**Context**: the FA shared `reference/ers-expense-type-dropdown-domestic.png`
+(domestic page) and `reference/ers-template-foreign.xlsx` (foreign
+template, sheet "Expense Type"). Confirmed: Stanford's portal has
+**two different expense-type vocabularies** depending on whether
+the FA is filing a domestic-only or a foreign report:
+
+| Internal enum                  | Domestic page             | Foreign page                     |
+|---|---|---|
+| `airfare_domestic` / `_foreign` | `Airfare`                 | `Airfare - Foreign and Domestic` |
+| `lodging_domestic` / `_foreign` | `Lodging`                 | `Lodging - Foreign and Domestic` |
+| `ground_transportation_*`       | `Ground Transportation`   | `Ground Transportation-Foreign`  |
+| `business_meal` + alcohol       | `Business Meal with Alcohol` | `Business Meal with Alcohol`  |
+| (n/a)                           | `Membership Dues`         | `Membership Dues - Foreign`      |
+| (n/a)                           | `Miscellaneous`           | `Miscellaneous - Foreign`        |
+| (n/a)                           | `Parking Fees`            | `Parking Fees - Foreign`         |
+| (n/a)                           | `STAP`                    | `STAP - Foreign`                 |
+| (n/a)                           | `Subscriptions`           | `Subscriptions - Foreign`        |
+| (n/a)                           | `Gift Card - Employee`    | `Gift Card - Employee (Foreign)` |
+| (n/a)                           | `Gifts`                   | `Gifts - Foreign Activity`       |
+
+Plus a Stanford-side typo on the foreign list: `Travel
+Meal-SingleMealwAlcohl` (missing `o` in Alcohol) — must match
+exactly, can't fix.
+
+**Stage 1 (friday-feedback) shipped the wrong mapping**: my
+`map_expense_type` in `src/csv_export.rs` emits the
+"- Foreign and Domestic" suffix uniformly. **For a domestic-only
+report, Stanford's portal upload will reject the CSV** ("Airfare -
+Foreign and Domestic" is not a valid value on the domestic page).
+This is a real correctness regression already in prod (rev 132+).
+
+**Fix shape (Stage 8a, post-Friday)**:
+- Derive a per-report flag `is_foreign_report` from
+  `general_information.category == "expenses_foreign"` (or detect
+  any line whose expense_type ends in `_foreign`).
+- `map_expense_type` becomes `map_expense_type(line, is_foreign_report)`.
+- For `is_foreign_report == true`, emit the foreign-page strings
+  (Foreign suffix variants from `reference/ers-template-foreign.xlsx`
+  sheet "Expense Type").
+- For `is_foreign_report == false`, emit the domestic-page strings
+  (no suffix, from `reference/ers-expense-type-dropdown-domestic.png`).
+- ~30 LOC + a test that exercises both branches.
+
+Severity: high (currently-shipped CSV won't upload on domestic
+reports). Bump to next session's top of queue.
+
+### 8b — Foreign template has 20 CSV columns
+
+`reference/ers-template-foreign.xlsx` sheet "Sheet1" shows the
+foreign portal expects per-line columns including:
+
+- General (A-H): category, expense_date, expense_currency,
+  expense_amount, expense_type, remarks, country_of_activity,
+  activity_type
+- Traveler (I-K): affiliation, traveler_sunet, traveler_name
+- Airfare details (L-Q): ticket_number, travel_booking_method,
+  airline, class_of_ticket, departure_airport, destination_airport
+- Lodging details (R-T): number_of_nights, location, conference_hotel
+
+So the foreign template inlines per-kind details into the CSV
+rather than expecting them on a separate page. The current Stage 1
+CSV is missing 13 columns when the report is foreign.
+
+**Fix shape (Stage 8b)**: `report_to_lines_csv` becomes branched on
+`is_foreign_report` — wide-form (20 cols) for foreign, narrow-form
+(7 cols) for domestic. The per-line detail columns pull from
+`airfare_details.*` / `lodging_details.*` / `common.*` of each
+transaction line. Per-kind variation in cell content but stable
+header. ~80 LOC + tests for both forms.
+
+### 8c — Visual attention effect on spot-check halo
+
+**FA's advisor's ask (2026-05-21)**: when the spot-check ↗ icon
+opens a side panel with a halo around the source-document quote,
+add a visual effect (animation / pulse / flash) so the FA's eye is
+immediately drawn to the halo.
+
+Current state: halo is a static colored rectangle overlay (per
+`src/workbench_spotcheck.css`). Side panel scrolls to the page but
+the FA may not notice the halo if it's small or surrounded by
+similar-looking text.
+
+**Fix shape (Stage 8c)**: pure CSS animation on first reveal —
+3-second pulsing border / scale-up-then-down / glowing yellow
+flash. ~15 LOC in `workbench_spotcheck.css`. Pick the animation in
+collaboration with the FA at next eyeball.
+
+---
+
+## 9. Session-end status (2026-05-21)
+
+Shipped to prod (rev 133 + Stage 7 rev pending): Stages 1-7 of the
+Friday bundle. Robustness audit clean (307/307 editable paths
+working end-to-end). FX research captured in this doc; not
+implemented (Stage 8 was always post-Friday).
+
+Open queue:
+- Stage 8a (domestic-vs-foreign taxonomy — **high severity**, prod
+  regression)
+- Stage 8b (foreign template wide-form CSV)
+- Stage 8c (spot-check halo visual attention)
+- FX rates (real OANDA/Frankfurter lookup — see earlier addendum)
+- E.4 polish (per-card edit indicator, undo-on-edit)
+- Mark-as-reviewed-chime debug (Web Audio autoplay)
+- #54 retire text-matching fallback (stability window)
