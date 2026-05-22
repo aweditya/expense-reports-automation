@@ -213,24 +213,58 @@ def upload():
         daemon=True,
     ).start()
 
-    return render_progress_page(upload_id)
+    # POST-redirect-GET: send the FA to a GET URL for the progress
+    # page so a refresh re-fetches state instead of triggering the
+    # browser's "Resubmit form?" prompt + a duplicate upload.
+    return redirect(f"/upload/status/{upload_id}", code=303)
+
+
+@app.get("/upload/status/<upload_id>")
+def upload_status(upload_id: str):
+    """Idempotent GET endpoint for the live-progress page. Refresh-safe:
+    a browser reload re-renders the same page and the EventSource on
+    the page reconnects to /upload/progress/<id>. Returns 404 if the
+    upload directory doesn't exist (typo / stale bookmark) so the FA
+    sees a clean error instead of a forever-loading bar."""
+    safe_id = sanitize_id(upload_id)
+    upload_dir = UPLOADS_ROOT / safe_id
+    if not upload_dir.exists():
+        abort(404)
+    return render_progress_page(safe_id)
 
 
 @app.get("/upload/progress/<upload_id>")
 def upload_progress(upload_id: str):
     """Server-Sent Events stream of JOBS[upload_id] updates. The
     progress page's EventSource subscribes here and gets phase + file
-    statuses pushed every 0.5s. Closes once phase reaches 'done' or
-    'error'."""
+    statuses pushed every 0.5s. Closes once phase reaches 'done',
+    'error', or 'not_found' so the browser doesn't hang forever."""
     safe_id = sanitize_id(upload_id)
+    upload_dir = UPLOADS_ROOT / safe_id
 
     def event_stream():
+        # Cap the "initializing" grace period so a stale ID (container
+        # restart wiped JOBS, or typo'd URL) doesn't stream
+        # `{phase: initializing}` forever and hang the EventSource.
+        # ~10s is enough for the background thread to set the first
+        # JOBS entry on a fresh upload.
+        init_ticks_remaining = 20  # 20 × 0.5s = 10s grace
         while True:
             snapshot = _get_job(safe_id)
             if not snapshot:
-                # JOBS hasn't been initialized yet (race) or the upload
-                # doesn't exist. Send a minimal placeholder and let the
-                # client decide what to do.
+                if not upload_dir.exists():
+                    # No JOBS entry AND no upload directory → truly
+                    # unknown. Tell the client + close so they can
+                    # show a friendly error page.
+                    yield f"data: {json.dumps({'phase': 'not_found'})}\n\n"
+                    return
+                init_ticks_remaining -= 1
+                if init_ticks_remaining <= 0:
+                    # Upload dir exists but JOBS never appeared after
+                    # 10s — pipeline thread crashed before its first
+                    # _set_job, or container restarted and lost JOBS.
+                    yield f"data: {json.dumps({'phase': 'lost'})}\n\n"
+                    return
                 snapshot = {"phase": "initializing"}
             yield f"data: {json.dumps(snapshot)}\n\n"
             if snapshot.get("phase") in ("done", "error"):
@@ -1587,9 +1621,12 @@ PROGRESS_PAGE_HTML = """\
              (name ? ': ' + name : '');
     }
     if (phase === 'reduce') return 'Combining extracted data into one report…';
+    if (phase === 'fx') return 'Looking up live exchange rates…';
     if (phase === 'render') return 'Rendering your workbench…';
     if (phase === 'done') return 'Done ✓';
     if (phase === 'error') return 'Something went wrong';
+    if (phase === 'not_found') return "We can't find this upload — was the URL typed by hand?";
+    if (phase === 'lost') return 'The upload state was lost (server restart). Please re-upload.';
     return phase;
   }
 
@@ -1642,6 +1679,16 @@ PROGRESS_PAGE_HTML = """\
       barEl.classList.add('error');
       errEl.textContent = snap.error || 'Unknown error';
       errEl.innerHTML += ' &nbsp;<a class="retry-link" href="/">Try again →</a>';
+      errEl.hidden = false;
+      es.close();
+    } else if (snap.phase === 'not_found' || snap.phase === 'lost') {
+      // Stale URL / typo / container restart wiped JOBS. Surface a
+      // clean message + a back-to-form link instead of looping the
+      // EventSource forever (which is what the old code did and what
+      // the FA called "refresh crashes the website").
+      barEl.classList.add('error');
+      errEl.innerHTML = statusFor(snap) +
+        ' &nbsp;<a class="retry-link" href="/">Back to upload →</a>';
       errEl.hidden = false;
       es.close();
     }
