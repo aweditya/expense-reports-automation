@@ -51,6 +51,12 @@ expense_report:
           type: string
           required: true
           infer_from: "Traveler name on flight booking or hotel folio"
+        sunet:
+          type: string
+          required: true
+          source: T1
+          description: "Stanford SUNet ID (e.g. 'doejohn'). Required by Stanford's foreign-page Airfare row + general traveler identification."
+          infer_from: "FA enters on upload form. Not inferrable from receipts."
         affiliation:
           type: enum
           required: true

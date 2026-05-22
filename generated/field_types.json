@@ -9,6 +9,10 @@
       "type": "string",
       "nullable": false
     },
+    "expense_report.general_information.payee.sunet": {
+      "type": "string",
+      "nullable": false
+    },
     "expense_report.general_information.payee.affiliation": {
       "type": "enum",
       "nullable": false

@@ -770,6 +770,7 @@ mod tests {
                         "payee",
                         ReportValue::object([
                             ("name", text("Olivia")),
+                            ("sunet", text("oliviak")),
                             ("affiliation", text("stanford_student")),
                         ]),
                     ),
@@ -875,6 +876,10 @@ mod tests {
                 metadata(ConfidenceLevel::High, "itinerary.pdf", false),
             ),
             (
+                "expense_report.general_information.payee.sunet".to_owned(),
+                metadata(ConfidenceLevel::High, "fa_input", false),
+            ),
+            (
                 "expense_report.general_information.payee.affiliation".to_owned(),
                 metadata(ConfidenceLevel::Medium, "fa_input", true),
             ),
@@ -950,6 +955,7 @@ mod tests {
                         "payee",
                         ReportValue::object([
                             ("name", text("Olivia")),
+                            ("sunet", text("oliviak")),
                             ("affiliation", text("stanford_student")),
                         ]),
                     ),
@@ -1001,6 +1007,7 @@ mod tests {
                         "payee",
                         ReportValue::object([
                             ("name", text("Olivia")),
+                            ("sunet", text("oliviak")),
                             ("affiliation", text("stanford_student")),
                         ]),
                     ),

@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-generated_at_utc: '2026-05-21T19:13:12+00:00'
+generated_at_utc: '2026-05-22T17:16:53+00:00'
 field_rules:
 - path: expense_report
   node_kind: object
@@ -77,6 +77,20 @@ field_rules:
   default: null
   description: null
   infer_from: Traveler name on flight booking or hotel folio
+  validation: null
+- path: expense_report.general_information.payee.sunet
+  node_kind: field
+  schema_type: string
+  rust_type: String
+  required: true
+  required_expression: null
+  source: T1
+  effective_source: T1
+  depends_on: []
+  allowed_values: []
+  default: null
+  description: Stanford SUNet ID (e.g. 'doejohn'). Required by Stanford's foreign-page Airfare row + general traveler identification.
+  infer_from: FA enters on upload form. Not inferrable from receipts.
   validation: null
 - path: expense_report.general_information.payee.affiliation
   node_kind: field

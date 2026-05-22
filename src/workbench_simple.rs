@@ -941,6 +941,7 @@ fn render_general_information(html: &mut String, gi: &ExpenseReportGeneralInform
 
     field_card_text(html, "Category", &gi.category, "expense_report.general_information.category", |c: &crate::expense_report_model::ExpenseReportGeneralInformationCategoryEnum| c.as_str().replace('_', " "));
     field_card_text(html, "Payee Name", &gi.payee.name, "expense_report.general_information.payee.name", |s: &String| s.clone());
+    field_card_optional_string(html, "Payee SUNet", gi.payee.sunet.as_deref(), "expense_report.general_information.payee.sunet");
     field_card_text(html, "Affiliation", &gi.payee.affiliation, "expense_report.general_information.payee.affiliation", |a: &crate::expense_report_model::ExpenseReportGeneralInformationPayeeAffiliationEnum| a.as_str().replace('_', " "));
     field_card_text(html, "Event Name", &gi.event_name, "expense_report.general_information.event_name", |s: &String| s.clone());
     field_card_optional_string(html, "Authorized By", gi.authorized_by.as_deref(), "expense_report.general_information.authorized_by");

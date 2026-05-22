@@ -167,6 +167,11 @@ def upload():
     if not request.form.get("fa_event_name", "").strip():
         return ("Missing required field: Event name. Use the browser's "
                 "back button to return to the form.", 400)
+    # Stage 8c.1: SUNet is required by Stanford's foreign-page Airfare row.
+    # Form has required + pattern; re-check server-side for non-browser POSTs.
+    if not request.form.get("fa_payee_sunet", "").strip():
+        return ("Missing required field: Payee SUNet ID. Use the browser's "
+                "back button to return to the form.", 400)
 
     upload_id = generate_upload_id()
     upload_dir = UPLOADS_ROOT / upload_id
@@ -742,6 +747,7 @@ def write_fa_input(form, out_path: Path) -> None:
     """
     mapping = {
         "fa_payee_name": "payee_name",
+        "fa_payee_sunet": "payee_sunet",
         "fa_payee_affiliation": "payee_affiliation",
         "fa_event_name": "event_name",
         "fa_bp_who": "business_purpose_who",
@@ -1150,6 +1156,12 @@ UPLOAD_FORM_HTML = """\
         <div class="field">
           <label for="fa_payee_name">Payee name <span class="req">*</span></label>
           <input type="text" id="fa_payee_name" name="fa_payee_name" required>
+        </div>
+        <div class="field">
+          <label for="fa_payee_sunet">Payee SUNet ID <span class="req">*</span></label>
+          <input type="text" id="fa_payee_sunet" name="fa_payee_sunet" required
+                 placeholder="e.g. doejohn" pattern="[A-Za-z0-9_-]{2,16}">
+          <span class="hint">Stanford SUNet ID. Required on every foreign-page airfare row.</span>
         </div>
         <div class="field">
           <label for="fa_payee_affiliation">Payee affiliation <span class="req">*</span></label>

@@ -37,6 +37,8 @@ pub struct FaInput {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub payee_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub payee_sunet: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub payee_affiliation: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub event_name: Option<String>,
@@ -89,6 +91,11 @@ pub fn apply_to_report(report: &mut ExpenseReport, fa: &FaInput) {
 
     if let Some(v) = &fa.payee_name {
         gi.payee.name = fa_wrapped(v.clone());
+    }
+    if let Some(v) = &fa.payee_sunet {
+        // T1 source → bare Option<String>; codegen pattern for FA-only
+        // fields (same as authorized_by). No Wrapped/_meta wrapping.
+        gi.payee.sunet = Some(v.clone());
     }
     if let Some(s) = &fa.payee_affiliation {
         if let Some(e) = parse_payee_affiliation(s) {
@@ -278,6 +285,7 @@ mod tests {
     fn full_fa_input() -> FaInput {
         FaInput {
             payee_name: Some("Test Researcher".to_owned()),
+            payee_sunet: Some("testresearcher".to_owned()),
             payee_affiliation: Some("stanford_postdoc".to_owned()),
             event_name: Some("ASPLOS 2026".to_owned()),
             business_purpose_who: Some("Payee + collaborators".to_owned()),

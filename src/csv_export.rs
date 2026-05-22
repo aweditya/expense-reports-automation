@@ -35,6 +35,7 @@
 //! e.g. `Travel Meal-SingleMealwAlcohl` and `Adminstrative: Academic
 //! Support`). Stanford's dropdown is case- and character-sensitive.
 
+use crate::airport_codes::airport_code_to_full;
 use crate::expense_report_model::{
     ExpenseReport,
     ExpenseReportGeneralInformationCategoryEnum as Category,
@@ -128,11 +129,22 @@ pub fn report_to_foreign_csv(report: &ExpenseReport) -> String {
         .map(|a| map_affiliation_foreign(*a))
         .unwrap_or("");
     let traveler_name = payee.name.value.as_deref().unwrap_or("");
+    // payee.sunet is Option<String> (T1 source = bare option, not Wrapped).
+    let traveler_sunet = payee.sunet.as_deref().unwrap_or("");
 
     for line in lines {
         if !route_to_foreign(line, category) {
             continue;
         }
+        // Stanford requires affiliation + traveler_sunet + traveler_name
+        // ONLY on Airfare rows (per ers-template-foreign-example-filled.xlsx,
+        // which leaves these cells blank on lodging + meal rows). Emitting
+        // them on non-airfare rows is harmless but inconsistent and may
+        // trigger Stanford-side validation; gate them on expense_type.
+        let is_airfare = matches!(
+            line.common.expense_type.value.as_ref(),
+            Some(ExpenseType::AirfareDomestic) | Some(ExpenseType::AirfareForeign)
+        );
         // A — category. The xlsx hint at A1 is "Expenses (Foreign)" and
         // that's what every row gets on the foreign page.
         let col_a = "Expenses (Foreign)";
@@ -165,16 +177,21 @@ pub fn report_to_foreign_csv(report: &ExpenseReport) -> String {
         let col_h = line.common.foreign_activity_type.value.as_ref()
             .map(|a| map_foreign_activity_type(*a))
             .unwrap_or("");
-        // I — affiliation
-        let col_i = affiliation_str;
-        // J — traveler_sunet. No analogous schema field; emit blank and
-        // FA fills in Excel before upload.
-        let col_j = "";
-        // K — traveler_name
-        let col_k = traveler_name;
-        // L–Q — airfare details (blank if not an airfare line)
+        // I — affiliation (only on airfare rows per Stanford's filled example)
+        let col_i = if is_airfare { affiliation_str } else { "" };
+        // J — traveler_sunet (only on airfare rows)
+        let col_j = if is_airfare { traveler_sunet } else { "" };
+        // K — traveler_name (only on airfare rows)
+        let col_k = if is_airfare { traveler_name } else { "" };
+        // L–Q — airfare details (blank when not an airfare line).
+        // Airport cols (P, Q) use the Stanford-portal full display
+        // string ("SFO - San Francisco International (San Francisco, ...)")
+        // looked up from generated/airport_codes.json. Unknown codes
+        // fall back to the raw IATA so the row still emits.
         let (col_l, col_m, col_n, col_o, col_p, col_q) =
             if let Some(af) = line.airfare_details.as_ref() {
+                let departure = af.departure_airport.value.as_deref().unwrap_or("");
+                let destination = af.destination_airport.value.as_deref().unwrap_or("");
                 (
                     af.ticket_number.value.as_deref().unwrap_or("").to_owned(),
                     af.booking_method.value.as_ref()
@@ -184,8 +201,8 @@ pub fn report_to_foreign_csv(report: &ExpenseReport) -> String {
                     af.class_of_ticket.value.as_ref()
                         .map(|c| map_class_of_ticket_foreign(*c).to_owned())
                         .unwrap_or_default(),
-                    af.departure_airport.value.as_deref().unwrap_or("").to_owned(),
-                    af.destination_airport.value.as_deref().unwrap_or("").to_owned(),
+                    airport_code_to_full(departure).unwrap_or_else(|| departure.to_owned()),
+                    airport_code_to_full(destination).unwrap_or_else(|| destination.to_owned()),
                 )
             } else {
                 (String::new(), String::new(), String::new(),
@@ -741,13 +758,75 @@ Line,Expense Date,Expense Currency,Expense Amount,USD Amount,Expense Type,Remark
 
         let mut report = report_with_category(Some(Category::ExpensesForeign), vec![line]);
         report.general_information.payee.name = wrap("Jane Doe".to_owned());
+        report.general_information.payee.sunet = Some("janedoe".to_owned());
         report.general_information.payee.affiliation = wrap(Affiliation::StanfordFaculty);
 
         let csv = report_to_foreign_csv(&report);
         let data_row = csv.lines().nth(1).expect("data row");
-        // Spot-check key fields by substring (full CSV equality is fragile).
-        assert!(data_row.starts_with("Expenses (Foreign),02-Sep-2024,INR - Indian Rupee,80000.00,Airfare - Foreign and Domestic,BOM to SFO,India,Conferences,Stanford Traveler,,Jane Doe,TKT12345,Stanford Travel - Egencia,Air India,Coach,BOM,SFO,,,"),
-                "data row: {data_row}");
+        // Spot-check by substring (full CSV equality is fragile vs the
+        // 9208-entry airport table which Stanford may update).
+        assert!(data_row.contains("Stanford Traveler,janedoe,Jane Doe,TKT12345"),
+                "traveler block: {data_row}");
+        // Airport codes expanded via airport_codes::airport_code_to_full;
+        // SFO's display string contains a comma so it's CSV-quoted.
+        assert!(data_row.contains("BOM - Chhatrapati Shivaji"),
+                "BOM not expanded: {data_row}");
+        assert!(data_row.contains("\"SFO - San Francisco International"),
+                "SFO not expanded + quoted: {data_row}");
+    }
+
+    #[test]
+    fn foreign_csv_clears_traveler_cols_on_non_airfare_rows() {
+        // Stanford's filled example leaves affiliation/sunet/name BLANK
+        // on lodging + meal rows. Confirm we mirror that.
+        let mut lodging = line_with_currency(
+            "2024-09-03", 200.0, Some("CHF"), Some(180.0),
+            ExpenseType::LodgingForeign, "hotel",
+        );
+        let mut ld = ExpenseReportTransactionLinesItemLodgingDetails::default();
+        ld.number_of_nights = wrap(2.0);
+        ld.location = wrap("Zurich".to_owned());
+        ld.booking_method = wrap(LodgingBookingMethod::Other);
+        lodging.lodging_details = Some(ld);
+
+        let meal = line_with("2024-09-04", 50.0, ExpenseType::BusinessMeal, "dinner");
+
+        let mut report = report_with_category(
+            Some(Category::ExpensesForeign),
+            vec![lodging, meal],
+        );
+        report.general_information.payee.name = wrap("Jane Doe".to_owned());
+        report.general_information.payee.sunet = Some("janedoe".to_owned());
+        report.general_information.payee.affiliation = wrap(Affiliation::StanfordFaculty);
+
+        let csv = report_to_foreign_csv(&report);
+        for row in csv.lines().skip(1) {
+            assert!(!row.contains("Stanford Traveler"),
+                    "non-airfare row leaked affiliation: {row}");
+            assert!(!row.contains("janedoe"),
+                    "non-airfare row leaked sunet: {row}");
+            assert!(!row.contains("Jane Doe"),
+                    "non-airfare row leaked traveler_name: {row}");
+        }
+    }
+
+    #[test]
+    fn foreign_csv_falls_back_to_raw_iata_for_unknown_airport_code() {
+        let mut line = line_with_currency(
+            "2024-09-02", 100.0, Some("USD"), Some(100.0),
+            ExpenseType::AirfareForeign, "",
+        );
+        let mut af = ExpenseReportTransactionLinesItemAirfareDetails::default();
+        af.departure_airport = wrap("ZZZQ".to_owned());  // not in xlsx
+        af.destination_airport = wrap("SFO".to_owned());
+        line.airfare_details = Some(af);
+        let report = report_with_category(Some(Category::ExpensesForeign), vec![line]);
+        let csv = report_to_foreign_csv(&report);
+        let data_row = csv.lines().nth(1).expect("data row");
+        // Unknown code → raw IATA passthrough so the row still emits.
+        assert!(data_row.contains(",ZZZQ,"), "unknown code raw passthrough: {data_row}");
+        // SFO still expanded.
+        assert!(data_row.contains("SFO - San Francisco"), "SFO not expanded: {data_row}");
     }
 
     #[test]

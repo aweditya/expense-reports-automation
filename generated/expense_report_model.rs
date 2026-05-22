@@ -671,6 +671,12 @@ pub struct ExpenseReportGeneralInformationPayee {
     /// Infer from:  Traveler name on flight booking or hotel folio
     #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub name: Wrapped<String>,
+    ///  Stanford SUNet ID (e.g. 'doejohn'). Required by Stanford's foreign-page Airfare row +
+    /// general traveler identification.
+    /// Source tier: T1
+    /// Infer from:  FA enters on upload form. Not inferrable from receipts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sunet: Option<String>,
     /// Source tier: T3
     /// Infer from:  Context from uploaded docs or FA input
     #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
