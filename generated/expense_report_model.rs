@@ -1015,6 +1015,23 @@ pub struct ExpenseReportTransactionLinesItemGroundTransportDetails {
     /// Infer from:  Receipt header (Uber, Lyft, taxi company, etc.)
     #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub service_provider: Wrapped<String>,
+    ///  Driver tip. Used to flag tip > 20% of post-tax fare per Stanford guideline.
+    /// Source tier: T3
+    /// Infer from:  Uber/Lyft receipt — 'Tip' line
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
+    pub tip_amount: Wrapped<f64>,
+    ///  Ride fare + service fees, before tax + tip. Used to compute the 20%-of-post-tax tip cap
+    /// warning.
+    /// Source tier: T3
+    /// Infer from:  Receipt subtotal line
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
+    pub pre_tax_amount: Wrapped<f64>,
+    ///  Tax on the ride. Used with pre_tax_amount to compute the 20%-of-post-tax tip cap
+    /// warning.
+    /// Source tier: T3
+    /// Infer from:  Receipt tax line
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
+    pub tax_amount: Wrapped<f64>,
     ///  If true, missing receipt form is used instead
     /// Source tier: T1
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1130,6 +1147,17 @@ pub struct ExpenseReportTransactionLinesItemMealDetails {
     /// Infer from:  Receipt
     #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub tip_amount: Wrapped<f64>,
+    ///  Subtotal before tax + tip. Used to compute the 20%-of-post-tax tip cap warning. Null
+    /// when receipt doesn't itemize.
+    /// Source tier: T3
+    /// Infer from:  Receipt subtotal line (often labeled 'Subtotal' or 'Pre-Tax')
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
+    pub pre_tax_amount: Wrapped<f64>,
+    ///  Tax amount. Used with pre_tax_amount to compute the 20%-of-post-tax tip cap warning.
+    /// Source tier: T3
+    /// Infer from:  Receipt tax line (often labeled 'Tax' or 'GST'/'VAT' for foreign)
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
+    pub tax_amount: Wrapped<f64>,
     ///  Flag for validation: if true but expense_type is non-alcohol variant, raise
     /// irregularity
     /// Source tier: T3

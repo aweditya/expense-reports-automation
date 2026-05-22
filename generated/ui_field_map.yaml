@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-generated_at_utc: '2026-05-22T17:16:53+00:00'
+generated_at_utc: '2026-05-22T17:46:22+00:00'
 sections:
 - key: general_information
   label: General Information
@@ -595,6 +595,33 @@ sections:
     required_expression: null
     review_priority: medium
     allowed_values: []
+  - path: expense_report.transaction_lines[].ground_transport_details.tip_amount
+    label: Tip Amount
+    control: currency
+    source: T3
+    entry_mode: model_prefill_review
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.transaction_lines[].ground_transport_details.pre_tax_amount
+    label: Pre Tax Amount
+    control: currency
+    source: T3
+    entry_mode: model_prefill_review
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.transaction_lines[].ground_transport_details.tax_amount
+    label: Tax Amount
+    control: currency
+    source: T3
+    entry_mode: model_prefill_review
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
   - path: expense_report.transaction_lines[].ground_transport_details.missing_receipt
     label: Missing Receipt
     control: checkbox
@@ -756,6 +783,24 @@ sections:
     allowed_values: []
   - path: expense_report.transaction_lines[].meal_details.tip_amount
     label: Tip Amount
+    control: currency
+    source: T3
+    entry_mode: model_prefill_review
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.transaction_lines[].meal_details.pre_tax_amount
+    label: Pre Tax Amount
+    control: currency
+    source: T3
+    entry_mode: model_prefill_review
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.transaction_lines[].meal_details.tax_amount
+    label: Tax Amount
     control: currency
     source: T3
     entry_mode: model_prefill_review

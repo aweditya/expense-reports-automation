@@ -986,6 +986,180 @@
               "_meta"
             ]
           },
+          "pre_tax_amount": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "confidence_reason": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "token_ids": {
+                          "type": "array",
+                          "items": {
+                            "type": "integer"
+                          },
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "tax_amount": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "confidence_reason": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "token_ids": {
+                          "type": "array",
+                          "items": {
+                            "type": "integer"
+                          },
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
           "has_alcohol_on_receipt": {
             "type": "object",
             "properties": {
@@ -1077,6 +1251,8 @@
           "venue_name",
           "alcohol_amount",
           "tip_amount",
+          "pre_tax_amount",
+          "tax_amount",
           "has_alcohol_on_receipt"
         ]
       },
