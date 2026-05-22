@@ -225,18 +225,6 @@
       "type": "string",
       "nullable": false
     },
-    "expense_report.transaction_lines[].ground_transport_details.tip_amount": {
-      "type": "number",
-      "nullable": true
-    },
-    "expense_report.transaction_lines[].ground_transport_details.pre_tax_amount": {
-      "type": "number",
-      "nullable": true
-    },
-    "expense_report.transaction_lines[].ground_transport_details.tax_amount": {
-      "type": "number",
-      "nullable": true
-    },
     "expense_report.transaction_lines[].ground_transport_details.missing_receipt": {
       "type": "boolean",
       "nullable": false
@@ -306,14 +294,6 @@
       "nullable": true
     },
     "expense_report.transaction_lines[].meal_details.tip_amount": {
-      "type": "number",
-      "nullable": true
-    },
-    "expense_report.transaction_lines[].meal_details.pre_tax_amount": {
-      "type": "number",
-      "nullable": true
-    },
-    "expense_report.transaction_lines[].meal_details.tax_amount": {
       "type": "number",
       "nullable": true
     },

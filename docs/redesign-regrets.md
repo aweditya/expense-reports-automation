@@ -789,3 +789,56 @@ scraping, GSA per diem lookups, etc.).
 **Heuristic for 403/blocked-by-CDN debugging:** if `curl` works and
 your code doesn't, set User-Agent first before suspecting auth /
 URL / TLS. CDN bot blockers fire on UA more often than on headers/IP.
+
+### 2026-05-22 — Stage 9c silently broke the meal + transport extractors in prod (Vertex schema ceiling, the SECOND time)
+
+**What happened:** Stage 9c (tip-cap validator) added 2 fields to
+`meal_details` (`pre_tax_amount` + `tax_amount`) and 3 to
+`ground_transport_details` (`tip_amount` + `pre_tax_amount` +
+`tax_amount`). All tests passed; eyeballed locally; pushed to prod
+(rev 136). FA tried to upload 6 receipts; got "Try again" after
+file 3 with a Python traceback. Bisected: every meal + transport
+extraction was failing with Vertex returning `400 INVALID_ARGUMENT`
+("Request contains an invalid argument."). Root cause:
+**Vertex's response_schema property-count ceiling** — the same
+ceiling that forced lodging to be split into 2 parallel calls
+back on 2026-05-13.
+
+**Why the FIRST regrets entry didn't prevent this:** the 2026-05-13
+entry warned about lodging specifically + documented the
+single-call workaround for kinds under the ceiling. It didn't
+flag the general rule **"every schema add to a per-kind detail
+block tightens the ceiling — re-verify the call still works after
+ANY add, especially with a real Gemini call."** Stage 9c's tests
+hit `field_card_optional_money` rendering and mock-based validator
+unit tests — neither exercises Vertex's actual SDK contract. So
+the ceiling-overshoot was invisible until prod.
+
+**What we did:** reverted the schema additions on both blocks +
+removed the workbench cards + simplified the validator to use only
+the existing `meal_details.tip_amount` + the fallback formula
+`tip ≤ 0.20 × (total − tip)` (mathematically equivalent threshold
+to the precise version). Lost the transport tip-cap entirely until
+we split the transport extractor into 2 parallel calls (planned
+9c.2 follow-up).
+
+**Rule going forward:**
+1. **No schema add to a per-kind detail block ships without a
+   real-Gemini smoke test.** A single live extraction against an
+   existing receipt for that kind. Costs ~$0.05; saves
+   "oops we broke prod for an FA who's actively trying to file."
+2. **If you're already past 4 T2/T3 leaves in a detail block,
+   plan the split-call BEFORE adding the next field.** The
+   2026-05-13 lodging-split is the template
+   (`scripts/extract_lodging.py` + two `response_schema_lodging_*.json`).
+3. **The acceptance harness needs a `--probe-schema` mode**: a
+   minimal Gemini call against each kind's response_schema to fail
+   loudly when a schema add overshoots. Without that automated
+   gate, regrets entries are aspirational — they need a runnable
+   check.
+
+**Detection heuristic:** `400 INVALID_ARGUMENT` from
+`google.genai.errors.ClientError` on a previously-working extractor
+right after a schema add → almost certainly schema ceiling.
+Bisect by removing the just-added fields. Don't chase the prompt
+or the inputs first.

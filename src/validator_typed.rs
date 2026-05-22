@@ -211,14 +211,12 @@ fn check_tip_under_cap(report: &ExpenseReport, issues: &mut Vec<ValidationIssue>
     for (idx, line) in lines.iter().enumerate() {
         let total = line.common.line_amount_usd.value;
         // ─── Meal path ─────────────────────────────────────────────
+        // Stage 9c reverted pre_tax_amount + tax_amount (Vertex schema
+        // ceiling regression); meal tip cap now uses the fallback
+        // formula (mathematically equivalent threshold).
         if let Some(meal) = line.meal_details.as_ref() {
             let Some(tip) = meal.tip_amount.value else { continue; };
-            let exceeded = cap_exceeded(
-                tip,
-                meal.pre_tax_amount.value,
-                meal.tax_amount.value,
-                total,
-            );
+            let exceeded = cap_exceeded(tip, None, None, total);
             if let Some((cap, basis)) = exceeded {
                 issues.push(ValidationIssue {
                     severity: ValidationSeverity::Warning,
@@ -233,27 +231,11 @@ fn check_tip_under_cap(report: &ExpenseReport, issues: &mut Vec<ValidationIssue>
             }
         }
         // ─── Ground transport path ─────────────────────────────────
-        if let Some(gt) = line.ground_transport_details.as_ref() {
-            let Some(tip) = gt.tip_amount.value else { continue; };
-            let exceeded = cap_exceeded(
-                tip,
-                gt.pre_tax_amount.value,
-                gt.tax_amount.value,
-                total,
-            );
-            if let Some((cap, basis)) = exceeded {
-                issues.push(ValidationIssue {
-                    severity: ValidationSeverity::Warning,
-                    kind: ValidationIssueKind::ManualReviewRequired,
-                    path: format!("expense_report.transaction_lines[{idx}].ground_transport_details.tip_amount"),
-                    schema_path: "expense_report.transaction_lines[*].ground_transport_details.tip_amount".to_owned(),
-                    message: format!(
-                        "Driver tip ${tip:.2} exceeds Stanford's 20% guideline (cap ${cap:.2}, {basis}). \
-                         Verify with the FA before filing."
-                    ),
-                });
-            }
-        }
+        // Disabled until we split the transport extractor into 2
+        // parallel Gemini calls (planned 9c.2 follow-up). The
+        // ground_transport_details schema has no tip_amount field
+        // currently — adding it broke the extractor (Vertex schema
+        // ceiling). See docs/redesign-regrets.md.
     }
 }
 
@@ -1298,9 +1280,7 @@ mod tests {
             .collect::<Vec<_>>().leak().iter().collect()
     }
 
-    fn meal_line_with_tip(
-        tip: f64, pre_tax: Option<f64>, tax: Option<f64>, total: f64,
-    ) -> ExpenseReportTransactionLinesItem {
+    fn meal_line_with_tip(tip: f64, total: f64) -> ExpenseReportTransactionLinesItem {
         let mut line = ExpenseReportTransactionLinesItem::default();
         line.common.line_amount_usd = Wrapped { value: Some(total), meta: FieldMetadata::default() };
         line.common.expense_type = Wrapped {
@@ -1309,12 +1289,6 @@ mod tests {
         };
         let mut md = ExpenseReportTransactionLinesItemMealDetails::default();
         md.tip_amount = Wrapped { value: Some(tip), meta: FieldMetadata::default() };
-        if let Some(p) = pre_tax {
-            md.pre_tax_amount = Wrapped { value: Some(p), meta: FieldMetadata::default() };
-        }
-        if let Some(t) = tax {
-            md.tax_amount = Wrapped { value: Some(t), meta: FieldMetadata::default() };
-        }
         line.meal_details = Some(md);
         line
     }
@@ -1325,55 +1299,41 @@ mod tests {
         r
     }
 
+    // Stage 9c reverted pre_tax_amount + tax_amount on meal_details
+    // because the expanded response_schema broke the meal Gemini call
+    // (Vertex schema-too-large). The tip-cap check now always uses the
+    // fallback formula `tip ≤ 0.20 × (total − tip)` — mathematically
+    // equivalent to `tip ≤ 0.20 × (pre_tax + tax)`. Tests below cover
+    // the fallback path only.
+
     #[test]
     fn tip_within_cap_fires_no_warning() {
-        // $100 pre_tax + $10 tax = $110 post-tax. 20% cap = $22.
-        // $20 tip is fine.
-        let report = report_with_lines(vec![meal_line_with_tip(20.0, Some(100.0), Some(10.0), 130.0)]);
+        // total=$130 tip=$20 → 0.20 × ($130 − $20) = $22 cap. $20 ≤ $22.
+        let report = report_with_lines(vec![meal_line_with_tip(20.0, 130.0)]);
         assert!(tip_issues(&report).is_empty());
     }
 
     #[test]
-    fn tip_at_cap_fires_no_warning() {
-        // Exactly 20% — should not fire (the >cap check has epsilon).
-        let report = report_with_lines(vec![meal_line_with_tip(22.0, Some(100.0), Some(10.0), 132.0)]);
-        assert!(tip_issues(&report).is_empty());
-    }
-
-    #[test]
-    fn tip_over_cap_with_pretax_and_tax_fires_warning() {
-        // $100 + $10 = $110 post-tax. 20% cap = $22. $30 tip exceeds.
-        let report = report_with_lines(vec![meal_line_with_tip(30.0, Some(100.0), Some(10.0), 140.0)]);
+    fn tip_over_cap_fires_warning_with_fallback_formula() {
+        // total=$120 tip=$22 → 0.20 × ($120 − $22) = $19.60 cap. $22 > $19.60.
+        let report = report_with_lines(vec![meal_line_with_tip(22.0, 120.0)]);
         let issues = tip_issues(&report);
         assert_eq!(issues.len(), 1, "expected one tip warning");
         let msg = &issues[0].message;
-        assert!(msg.contains("$30.00"), "msg: {msg}");
-        assert!(msg.contains("cap $22.00"), "msg: {msg}");
-        assert!(msg.contains("post-tax"), "msg: {msg}");
-    }
-
-    #[test]
-    fn tip_over_cap_with_missing_pretax_uses_fallback_formula() {
-        // No pre_tax/tax extracted. Fallback: tip ≤ 0.20 × (total − tip)
-        // For total=$120 tip=$22: 0.20 × ($120 − $22) = $19.60 cap.
-        // $22 > $19.60 → fires.
-        let report = report_with_lines(vec![meal_line_with_tip(22.0, None, None, 120.0)]);
-        let issues = tip_issues(&report);
-        assert_eq!(issues.len(), 1);
-        assert!(issues[0].message.contains("(total − tip)"),
-                "should use fallback formula: {}", issues[0].message);
+        assert!(msg.contains("$22.00"), "msg: {msg}");
+        assert!(msg.contains("(total − tip)"),
+                "should mention fallback formula: {msg}");
     }
 
     #[test]
     fn zero_or_missing_tip_skips_check() {
-        // tip_amount is None → skip.
+        // tip_amount=None → skip; tip=$0 → skip (no tip, no concern).
         let mut line = ExpenseReportTransactionLinesItem::default();
         line.common.expense_type = Wrapped {
             value: Some(ExpenseReportTransactionLinesItemCommonExpenseTypeEnum::BusinessMeal),
             meta: FieldMetadata::default(),
         };
         line.meal_details = Some(ExpenseReportTransactionLinesItemMealDetails::default());
-        // Also tip_amount = Some(0.0) → still skip (no tip, no cap concern).
         let mut line_zero = line.clone();
         let md = line_zero.meal_details.as_mut().unwrap();
         md.tip_amount = Wrapped { value: Some(0.0), meta: FieldMetadata::default() };
@@ -1381,27 +1341,8 @@ mod tests {
         assert!(tip_issues(&report).is_empty());
     }
 
-    #[test]
-    fn transport_tip_over_cap_fires_warning() {
-        use crate::expense_report_model::{
-            ExpenseReportTransactionLinesItemGroundTransportDetails as GtDetails,
-        };
-        let mut line = ExpenseReportTransactionLinesItem::default();
-        line.common.line_amount_usd = Wrapped { value: Some(30.0), meta: FieldMetadata::default() };
-        line.common.expense_type = Wrapped {
-            value: Some(ExpenseReportTransactionLinesItemCommonExpenseTypeEnum::GroundTransportationDomestic),
-            meta: FieldMetadata::default(),
-        };
-        let mut gt = GtDetails::default();
-        gt.tip_amount = Wrapped { value: Some(10.0), meta: FieldMetadata::default() };
-        gt.pre_tax_amount = Wrapped { value: Some(20.0), meta: FieldMetadata::default() };
-        gt.tax_amount = Wrapped { value: Some(0.0), meta: FieldMetadata::default() };
-        line.ground_transport_details = Some(gt);
-        let report = report_with_lines(vec![line]);
-        // $20 pre-tax × 20% = $4 cap. $10 tip → fires.
-        let issues = tip_issues(&report);
-        assert_eq!(issues.len(), 1);
-        assert!(issues[0].message.contains("Driver tip"), "msg: {}", issues[0].message);
-        assert!(issues[0].path.contains("ground_transport_details"), "path: {}", issues[0].path);
-    }
+    // Transport tip-cap test removed with Stage 9c revert. The
+    // ground_transport_details schema doesn't carry tip_amount anymore;
+    // adding it broke the Gemini extractor. Restore this test when the
+    // split-extractor (9c.2) lands.
 }

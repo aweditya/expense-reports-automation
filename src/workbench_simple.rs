@@ -1146,10 +1146,9 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
 
 fn render_meal_details(html: &mut String, meal: &ExpenseReportTransactionLinesItemMealDetails, path: &str) {
     field_card_text(html, "Venue", &meal.venue_name, &format!("{path}.venue_name"), |s: &String| s.clone());
-    // Tip / Pre-Tax / Tax — used by check_tip_under_cap to flag tips > 20%
-    // of post-tax. Render side-by-side so the FA can spot-verify.
-    field_card_optional_money(html, "Pre-Tax", &meal.pre_tax_amount, &format!("{path}.pre_tax_amount"));
-    field_card_optional_money(html, "Tax", &meal.tax_amount, &format!("{path}.tax_amount"));
+    // Stage 9c reverted pre_tax_amount + tax_amount on meal_details
+    // (broke the meal Gemini call — Vertex schema-too-large). tip_amount
+    // stays; check_tip_under_cap uses fallback math now.
     field_card_optional_money(html, "Tip", &meal.tip_amount, &format!("{path}.tip_amount"));
     field_card_optional_money(html, "Alcohol", &meal.alcohol_amount, &format!("{path}.alcohol_amount"));
     field_card_text(html, "Has Alcohol", &meal.has_alcohol_on_receipt, &format!("{path}.has_alcohol_on_receipt"), |b| if *b { "yes".into() } else { "no".into() });
@@ -1181,10 +1180,11 @@ fn render_ground_transport_details(
     field_card_text(html, "Service Provider", &gt.service_provider, &format!("{path}.service_provider"), |s: &String| s.clone());
     field_card_text(html, "Origin", &gt.origin, &format!("{path}.origin"), |s: &String| s.clone());
     field_card_text(html, "Destination", &gt.destination, &format!("{path}.destination"), |s: &String| s.clone());
-    // Tip / Pre-Tax / Tax — Stanford guideline: tip ≤ 20% of post-tax.
-    field_card_optional_money(html, "Pre-Tax", &gt.pre_tax_amount, &format!("{path}.pre_tax_amount"));
-    field_card_optional_money(html, "Tax", &gt.tax_amount, &format!("{path}.tax_amount"));
-    field_card_optional_money(html, "Tip", &gt.tip_amount, &format!("{path}.tip_amount"));
+    // Stage 9c added tip/pre_tax/tax here — reverted because the
+    // expanded schema broke the transport Gemini call (Vertex's
+    // property-count ceiling). Tip-cap warning for transport is
+    // disabled until we split the extractor into two parallel calls
+    // (planned 9c.2 follow-up).
 }
 
 fn render_lodging_details(

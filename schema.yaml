@@ -453,24 +453,6 @@ expense_report:
               required: true
               source: T3
               infer_from: "Receipt header (Uber, Lyft, taxi company, etc.)"
-            tip_amount:
-              type: number
-              required: false
-              source: T3
-              description: "Driver tip. Used to flag tip > 20% of post-tax fare per Stanford guideline."
-              infer_from: "Uber/Lyft receipt — 'Tip' line"
-            pre_tax_amount:
-              type: number
-              required: false
-              source: T3
-              description: "Ride fare + service fees, before tax + tip. Used to compute the 20%-of-post-tax tip cap warning."
-              infer_from: "Receipt subtotal line"
-            tax_amount:
-              type: number
-              required: false
-              source: T3
-              description: "Tax on the ride. Used with pre_tax_amount to compute the 20%-of-post-tax tip cap warning."
-              infer_from: "Receipt tax line"
             missing_receipt:
               type: boolean
               required: true
@@ -584,18 +566,6 @@ expense_report:
               required: false
               source: T3
               infer_from: "Receipt"
-            pre_tax_amount:
-              type: number
-              required: false
-              source: T3
-              description: "Subtotal before tax + tip. Used to compute the 20%-of-post-tax tip cap warning. Null when receipt doesn't itemize."
-              infer_from: "Receipt subtotal line (often labeled 'Subtotal' or 'Pre-Tax')"
-            tax_amount:
-              type: number
-              required: false
-              source: T3
-              description: "Tax amount. Used with pre_tax_amount to compute the 20%-of-post-tax tip cap warning."
-              infer_from: "Receipt tax line (often labeled 'Tax' or 'GST'/'VAT' for foreign)"
             has_alcohol_on_receipt:
               type: boolean
               required: true

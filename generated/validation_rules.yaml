@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-generated_at_utc: '2026-05-22T22:17:42+00:00'
+generated_at_utc: '2026-05-22T23:14:34+00:00'
 field_rules:
 - path: expense_report
   node_kind: object
@@ -1043,48 +1043,6 @@ field_rules:
   description: null
   infer_from: Receipt header (Uber, Lyft, taxi company, etc.)
   validation: null
-- path: expense_report.transaction_lines[].ground_transport_details.tip_amount
-  node_kind: field
-  schema_type: number
-  rust_type: f64
-  required: false
-  required_expression: null
-  source: T3
-  effective_source: T3
-  depends_on: []
-  allowed_values: []
-  default: null
-  description: Driver tip. Used to flag tip > 20% of post-tax fare per Stanford guideline.
-  infer_from: "Uber/Lyft receipt \u2014 'Tip' line"
-  validation: null
-- path: expense_report.transaction_lines[].ground_transport_details.pre_tax_amount
-  node_kind: field
-  schema_type: number
-  rust_type: f64
-  required: false
-  required_expression: null
-  source: T3
-  effective_source: T3
-  depends_on: []
-  allowed_values: []
-  default: null
-  description: Ride fare + service fees, before tax + tip. Used to compute the 20%-of-post-tax tip cap warning.
-  infer_from: Receipt subtotal line
-  validation: null
-- path: expense_report.transaction_lines[].ground_transport_details.tax_amount
-  node_kind: field
-  schema_type: number
-  rust_type: f64
-  required: false
-  required_expression: null
-  source: T3
-  effective_source: T3
-  depends_on: []
-  allowed_values: []
-  default: null
-  description: Tax on the ride. Used with pre_tax_amount to compute the 20%-of-post-tax tip cap warning.
-  infer_from: Receipt tax line
-  validation: null
 - path: expense_report.transaction_lines[].ground_transport_details.missing_receipt
   node_kind: field
   schema_type: boolean
@@ -1442,34 +1400,6 @@ field_rules:
   default: null
   description: null
   infer_from: Receipt
-  validation: null
-- path: expense_report.transaction_lines[].meal_details.pre_tax_amount
-  node_kind: field
-  schema_type: number
-  rust_type: f64
-  required: false
-  required_expression: null
-  source: T3
-  effective_source: T3
-  depends_on: []
-  allowed_values: []
-  default: null
-  description: Subtotal before tax + tip. Used to compute the 20%-of-post-tax tip cap warning. Null when receipt doesn't itemize.
-  infer_from: Receipt subtotal line (often labeled 'Subtotal' or 'Pre-Tax')
-  validation: null
-- path: expense_report.transaction_lines[].meal_details.tax_amount
-  node_kind: field
-  schema_type: number
-  rust_type: f64
-  required: false
-  required_expression: null
-  source: T3
-  effective_source: T3
-  depends_on: []
-  allowed_values: []
-  default: null
-  description: Tax amount. Used with pre_tax_amount to compute the 20%-of-post-tax tip cap warning.
-  infer_from: Receipt tax line (often labeled 'Tax' or 'GST'/'VAT' for foreign)
   validation: null
 - path: expense_report.transaction_lines[].meal_details.has_alcohol_on_receipt
   node_kind: field

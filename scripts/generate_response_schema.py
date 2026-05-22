@@ -197,16 +197,12 @@ def meal_details_block_schema() -> dict:
             # Architecture B in docs/redesign-plan.md.
             "alcohol_amount": leaf({"type": "number", "nullable": True}),
             "tip_amount": leaf({"type": "number", "nullable": True}),
-            "pre_tax_amount": leaf({"type": "number", "nullable": True}),
-            "tax_amount": leaf({"type": "number", "nullable": True}),
             "has_alcohol_on_receipt": leaf({"type": "boolean"}),
         },
         "required": [
             "venue_name",
             "alcohol_amount",
             "tip_amount",
-            "pre_tax_amount",
-            "tax_amount",
             "has_alcohol_on_receipt",
         ],
     }
@@ -219,16 +215,10 @@ def ground_transport_details_block_schema() -> dict:
             "origin": leaf({"type": "string"}),
             "destination": leaf({"type": "string"}),
             "service_provider": leaf({"type": "string"}),
-            "tip_amount": leaf({"type": "number", "nullable": True}),
-            "pre_tax_amount": leaf({"type": "number", "nullable": True}),
-            "tax_amount": leaf({"type": "number", "nullable": True}),
             # missing_receipt is intentionally NOT in the per-receipt
             # schema — it's T1 (FA fills later if a receipt was lost).
         },
-        "required": [
-            "origin", "destination", "service_provider",
-            "tip_amount", "pre_tax_amount", "tax_amount",
-        ],
+        "required": ["origin", "destination", "service_provider"],
     }
 
 
