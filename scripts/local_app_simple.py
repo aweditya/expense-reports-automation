@@ -55,6 +55,7 @@ EXTRACTORS: dict[str, Path] = {
     "transport": REPO_ROOT / "scripts" / "extract_transport.py",
     "lodging": REPO_ROOT / "scripts" / "extract_lodging.py",
     "airfare": REPO_ROOT / "scripts" / "extract_airfare.py",
+    "miscellaneous": REPO_ROOT / "scripts" / "extract_miscellaneous.py",
 }
 
 # Cloud Run sets PORT; locally default 8765 (matches existing app's muscle memory).
@@ -1194,6 +1195,7 @@ UPLOAD_FORM_HTML = """\
           <option value="transport">Ground Transport</option>
           <option value="lodging">Lodging Folio</option>
           <option value="airfare">Airfare / Flight Ticket</option>
+          <option value="miscellaneous">Miscellaneous (posters, printing, etc.)</option>
         </select>
         <button type="button" class="row-remove" onclick="removeFileRow(this)"
                 aria-label="Remove this file" title="Remove this file">✕</button>
@@ -1325,6 +1327,7 @@ UPLOAD_FORM_HTML = """\
         <option value="transport">Ground Transport</option>
         <option value="lodging">Lodging Folio</option>
         <option value="airfare">Airfare / Flight Ticket</option>
+        <option value="miscellaneous">Miscellaneous (posters, printing, etc.)</option>
       </select>
       <button type="button" class="row-remove" onclick="removeFileRow(this)"
               aria-label="Remove this file" title="Remove this file">✕</button>

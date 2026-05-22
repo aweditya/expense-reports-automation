@@ -60,6 +60,11 @@ KIND_EXPENSE_TYPES: dict[str, list[str]] = {
     # master enum — same enum value for both. The trip's foreignness is
     # signaled by the receipt's currency / the trip's airfare line.
     "conference_registration": ["conference_registration"],
+    # Catch-all for things that don't fit a dedicated kind: posters,
+    # printing services, software subscriptions for the trip, etc.
+    # Schema maps `other_business_expense` to "Miscellaneous" on the
+    # domestic CSV and "Miscellaneous - Foreign" on the foreign CSV.
+    "miscellaneous": ["other_business_expense"],
 }
 
 
@@ -815,6 +820,17 @@ SCHEMAS_TO_GENERATE: list[tuple[str, dict]] = [
             expense_type_values=KIND_EXPENSE_TYPES["conference_registration"],
             detail_block_name="conference_registration_details",
             detail_block=conference_registration_details_block_schema(),
+        ),
+    ),
+    # Miscellaneous (posters, printing, etc.): no kind-specific detail
+    # block — the common + extras blocks carry everything we need.
+    # `expense_type` is restricted to `other_business_expense` so
+    # Gemini can't accidentally re-route a poster as e.g. car_rental.
+    (
+        "response_schema_miscellaneous.json",
+        dict(
+            expense_type_values=KIND_EXPENSE_TYPES["miscellaneous"],
+            include_detail=False,
         ),
     ),
 ]
