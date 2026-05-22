@@ -49,6 +49,7 @@ pub fn validate_typed(report: &ExpenseReport) -> ValidationReport {
     check_category_country_consistency(report, &mut issues);
     check_dates_within_trip_window(report, &mut issues);
     check_tip_under_cap(report, &mut issues);
+    check_car_rental_mileage_cap(report, &mut issues);
     ValidationReport { issues }
 }
 
@@ -103,6 +104,69 @@ fn check_dates_within_trip_window(report: &ExpenseReport, issues: &mut Vec<Valid
             });
         }
     }
+}
+
+/// Stanford guideline: car rental reimbursement caps at 350 miles per
+/// day of rental. Beyond that, the FA needs to either eat the excess
+/// or get special approval. Fires when both `miles_driven` and the
+/// rental dates are extracted (typically only on post-return receipts;
+/// pre-rental agreements don't print miles). Warning-only — FA can
+/// still file but should verify.
+///
+/// Math: `cap = max(1, days) × 350` where `days = end - start + 1`
+/// (inclusive of both pickup and return days, matching Stanford's
+/// typical per-day reimbursement convention). Same-day rentals count
+/// as 1 day, so the cap floor is 350 miles.
+fn check_car_rental_mileage_cap(report: &ExpenseReport, issues: &mut Vec<ValidationIssue>) {
+    const PER_DAY_CAP: f64 = 350.0;
+    let Some(lines) = report.transaction_lines.as_ref() else { return; };
+    for (idx, line) in lines.iter().enumerate() {
+        let Some(cr) = line.car_rental_details.as_ref() else { continue; };
+        let Some(miles) = cr.miles_driven.value else { continue; };
+        if miles <= 0.0 { continue; }
+        let (Some(start), Some(end)) = (
+            cr.rental_start_date.value.as_ref().map(|d| d.0.as_str()),
+            cr.rental_end_date.value.as_ref().map(|d| d.0.as_str()),
+        ) else { continue; };
+        let Some(days) = days_inclusive(start, end) else { continue; };
+        let days = days.max(1);
+        let cap = days as f64 * PER_DAY_CAP;
+        if miles > cap + 0.5 {  // 0.5-mile epsilon
+            issues.push(ValidationIssue {
+                severity: ValidationSeverity::Warning,
+                kind: ValidationIssueKind::ManualReviewRequired,
+                path: format!("expense_report.transaction_lines[{idx}].car_rental_details.miles_driven"),
+                schema_path: "expense_report.transaction_lines[*].car_rental_details.miles_driven".to_owned(),
+                message: format!(
+                    "{miles:.0} miles over {days} day(s) exceeds Stanford's \
+                     350 mi/day cap (max {cap:.0} mi). Verify with the FA — \
+                     excess may need special approval or won't be reimbursed."
+                ),
+            });
+        }
+    }
+}
+
+/// Days from start to end inclusive of both endpoints. ISO-8601 date
+/// strings only (`YYYY-MM-DD`); returns None for malformed input
+/// rather than panicking — those have their own missing/format issues.
+/// Same-day → 1 day; consecutive days → 2; etc.
+fn days_inclusive(start: &str, end: &str) -> Option<i64> {
+    fn to_ord(s: &str) -> Option<i64> {
+        if s.len() != 10 { return None; }
+        let y: i64 = s[0..4].parse().ok()?;
+        let m: i64 = s[5..7].parse().ok()?;
+        let d: i64 = s[8..10].parse().ok()?;
+        if !(1..=12).contains(&m) || !(1..=31).contains(&d) { return None; }
+        // Rata Die approximation: good enough for date-difference math
+        // within ~200 years either side of 2000 with no calendar nuances
+        // we care about (just need ordering + difference).
+        let (y2, m2) = if m < 3 { (y - 1, m + 12) } else { (y, m) };
+        let ord = 365 * y2 + y2 / 4 - y2 / 100 + y2 / 400 + (153 * (m2 - 3) + 2) / 5 + d;
+        Some(ord)
+    }
+    let (s_ord, e_ord) = (to_ord(start)?, to_ord(end)?);
+    Some(e_ord - s_ord + 1)
 }
 
 /// Stanford guideline: gratuity on meals and Uber/Lyft should not

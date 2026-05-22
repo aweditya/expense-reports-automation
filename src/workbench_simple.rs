@@ -1123,6 +1123,14 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
         html.push_str("</div>\n");
     }
 
+    if let Some(cr) = &line.car_rental_details {
+        html.push_str("<h4 class=\"subsection-title\">Car Rental Details</h4>\n");
+        html.push_str("<div class=\"field-grid\">\n");
+        let crp = format!("expense_report.transaction_lines[{idx}].car_rental_details");
+        render_car_rental_details(html, cr, &crp);
+        html.push_str("</div>\n");
+    }
+
     if let Some(airfare) = &line.airfare_details {
         html.push_str("<h4 class=\"subsection-title\">Airfare Details</h4>\n");
         html.push_str("<div class=\"field-grid\">\n");
@@ -1145,6 +1153,24 @@ fn render_meal_details(html: &mut String, meal: &ExpenseReportTransactionLinesIt
     field_card_optional_money(html, "Tip", &meal.tip_amount, &format!("{path}.tip_amount"));
     field_card_optional_money(html, "Alcohol", &meal.alcohol_amount, &format!("{path}.alcohol_amount"));
     field_card_text(html, "Has Alcohol", &meal.has_alcohol_on_receipt, &format!("{path}.has_alcohol_on_receipt"), |b| if *b { "yes".into() } else { "no".into() });
+}
+
+fn render_car_rental_details(
+    html: &mut String,
+    cr: &crate::expense_report_model::ExpenseReportTransactionLinesItemCarRentalDetails,
+    path: &str,
+) {
+    field_card_text(html, "Rental Company", &cr.rental_company, &format!("{path}.rental_company"), |s: &String| s.clone());
+    field_card_text(html, "Vehicle Class", &cr.vehicle_class, &format!("{path}.vehicle_class"), |s: &String| s.clone());
+    field_card_text(html, "Pickup Location", &cr.pickup_location, &format!("{path}.pickup_location"), |s: &String| s.clone());
+    field_card_text(html, "Return Location", &cr.return_location, &format!("{path}.return_location"), |s: &String| s.clone());
+    field_card_text(html, "Rental Start", &cr.rental_start_date, &format!("{path}.rental_start_date"), |d| d.0.clone());
+    field_card_text(html, "Rental End", &cr.rental_end_date, &format!("{path}.rental_end_date"), |d| d.0.clone());
+    field_card_text(html, "Insurance Included", &cr.insurance_included, &format!("{path}.insurance_included"), |b| if *b { "yes".into() } else { "no".into() });
+    // miles_driven: T3 optional; FA fills via click-to-edit from a
+    // post-return receipt. check_car_rental_mileage_cap fires a warning
+    // when miles / days > 350. Same render shape as meal_details.tip_amount.
+    field_card_text(html, "Miles Driven", &cr.miles_driven, &format!("{path}.miles_driven"), |n| format!("{n:.0} mi"));
 }
 
 fn render_ground_transport_details(

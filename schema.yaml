@@ -641,6 +641,12 @@ expense_report:
               required: true
               source: T3
               infer_from: "Rental receipt line items"
+            miles_driven:
+              type: number
+              required: false
+              source: T3
+              description: "Total miles driven during the rental. Used with rental_start_date/rental_end_date to flag the >350 mi/day Stanford reimbursement cap. Only present on the FINAL receipt (post-return); pre-rental agreements don't have it."
+              infer_from: "Rental return receipt — 'Miles Driven' / odometer in − out"
 
         gift_details:
           required: "expense_type in [gift_card_employee_foreign, gifts_foreign_activity]"

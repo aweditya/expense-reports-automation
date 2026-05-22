@@ -349,6 +349,10 @@
       "type": "boolean",
       "nullable": false
     },
+    "expense_report.transaction_lines[].car_rental_details.miles_driven": {
+      "type": "number",
+      "nullable": true
+    },
     "expense_report.transaction_lines[].gift_details.recipient_name": {
       "type": "string",
       "nullable": false

@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-generated_at_utc: '2026-05-22T21:00:45+00:00'
+generated_at_utc: '2026-05-22T22:17:42+00:00'
 field_rules:
 - path: expense_report
   node_kind: object
@@ -1596,6 +1596,21 @@ field_rules:
   default: null
   description: null
   infer_from: Rental receipt line items
+  validation: null
+- path: expense_report.transaction_lines[].car_rental_details.miles_driven
+  node_kind: field
+  schema_type: number
+  rust_type: f64
+  required: false
+  required_expression: null
+  source: T3
+  effective_source: T3
+  depends_on: []
+  allowed_values: []
+  default: null
+  description: Total miles driven during the rental. Used with rental_start_date/rental_end_date to flag the >350 mi/day Stanford
+    reimbursement cap. Only present on the FINAL receipt (post-return); pre-rental agreements don't have it.
+  infer_from: "Rental return receipt \u2014 'Miles Driven' / odometer in \u2212 out"
   validation: null
 - path: expense_report.transaction_lines[].gift_details
   node_kind: object

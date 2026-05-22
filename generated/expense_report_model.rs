@@ -1196,6 +1196,13 @@ pub struct ExpenseReportTransactionLinesItemCarRentalDetails {
     /// Infer from:  Rental receipt line items
     #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub insurance_included: Wrapped<bool>,
+    ///  Total miles driven during the rental. Used with rental_start_date/rental_end_date to
+    /// flag the >350 mi/day Stanford reimbursement cap. Only present on the FINAL receipt
+    /// (post-return); pre-rental agreements don't have it.
+    /// Source tier: T3
+    /// Infer from:  Rental return receipt — 'Miles Driven' / odometer in − out
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
+    pub miles_driven: Wrapped<f64>,
 
 }
 
