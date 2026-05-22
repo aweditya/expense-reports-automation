@@ -907,49 +907,69 @@ def extract_all(
     extractions_dir: Path,
     on_file_start: callable | None = None,
     on_file_done: callable | None = None,
+    on_file_fail: callable | None = None,
 ) -> list[Path]:
     """Phase 1: sequential per-file extraction. Each file routes to the
     extractor matching its FA-supplied kind (meal, transport, …).
 
-    `on_file_start(index, name)` fires before each file's subprocess; the
-    background-pipeline runner uses it to update JOBS so the FA's
-    progress page sees the file flip to 'extracting'. `on_file_done(
-    index, name)` fires after, flipping that file to 'done'. Both are
-    optional — synchronous callers pass None and get the original
-    behaviour.
+    **Per-file isolation (FA feedback 2026-05-22):** a single bad
+    receipt (DocAI rejection, weird PDF, etc.) used to abort the whole
+    batch and lose the work on already-extracted files. Now we
+    try/except per-file: on PipelineError, fire `on_file_fail(idx, name,
+    detail)`, skip to the next file, and continue. The pipeline only
+    raises out of here if EVERY file failed — partial success proceeds
+    to reduce + render with whatever extractions/*.json landed.
+
+    `on_file_start(index, name)` fires before each file's subprocess;
+    `on_file_done(index, name)` after success; `on_file_fail(index,
+    name, detail)` after a per-file failure. All optional.
 
     To parallelize later: replace this body with a ThreadPoolExecutor
     over the same call. Nothing downstream cares — the contract is
     list[(input path, kind)] -> list[output JSON paths].
     """
     out: list[Path] = []
+    failures: list[tuple[str, str]] = []  # (filename, error_detail)
     for idx, (src, kind) in enumerate(saved):
         extractor = EXTRACTORS.get(kind)
         if extractor is None:
-            # Should be unreachable — /upload validates kind before saving —
-            # but raise a PipelineError rather than crash so the FA sees a
-            # friendly page instead of a Flask traceback.
-            raise PipelineError(
-                step="extract",
-                detail=f"unknown kind {kind!r} for {src.name}",
-                filename=src.name,
-            )
+            # Should be unreachable — /upload validates kind before saving.
+            # Treat as a per-file failure rather than aborting the batch.
+            detail = f"unknown kind {kind!r}"
+            if on_file_fail is not None:
+                on_file_fail(idx, src.name, detail)
+            failures.append((src.name, detail))
+            continue
         if on_file_start is not None:
             on_file_start(idx, src.name)
         out_path = extractions_dir / f"{src.stem}.json"
-        run_subprocess(
-            [
-                str(PYTHON),
-                str(extractor),
-                "--image", str(src),
-                "--output", str(out_path),
-            ],
-            label=f"extract {kind} {src.name}",
-            filename=src.name,
-        )
+        try:
+            run_subprocess(
+                [
+                    str(PYTHON),
+                    str(extractor),
+                    "--image", str(src),
+                    "--output", str(out_path),
+                ],
+                label=f"extract {kind} {src.name}",
+                filename=src.name,
+            )
+        except PipelineError as err:
+            if on_file_fail is not None:
+                on_file_fail(idx, src.name, err.detail)
+            failures.append((src.name, err.detail))
+            continue
         if on_file_done is not None:
             on_file_done(idx, src.name)
         out.append(out_path)
+
+    # Only raise if EVERY file failed — partial success proceeds.
+    if not out and failures:
+        joined = "; ".join(f"{n}: {d[:100]}" for n, d in failures)
+        raise PipelineError(
+            step="extract",
+            detail=f"all {len(failures)} file(s) failed extraction. {joined}",
+        )
     return out
 
 
@@ -1030,12 +1050,23 @@ def _run_pipeline_in_background(
             if idx < len(files):
                 files[idx]["status"] = "done"
 
+    def file_fail(idx: int, _name: str, detail: str) -> None:
+        # Per-file failure (Stage 11c): keep processing the rest of the
+        # batch but mark this file as failed + carry a short error
+        # message so the progress page can surface it per-file.
+        with JOBS_LOCK:
+            files = JOBS.setdefault(upload_id, {}).setdefault("files", [])
+            if idx < len(files):
+                files[idx]["status"] = "failed"
+                files[idx]["error"] = detail[:200]
+
     try:
         _set_job(upload_id, phase="extract")
         extract_all(
             saved, extractions_dir,
             on_file_start=file_start,
             on_file_done=file_done,
+            on_file_fail=file_fail,
         )
         _set_job(upload_id, phase="reduce")
         reduce(extractions_dir, reduced_path, fa_input_path=fa_input_path)
@@ -1602,6 +1633,9 @@ PROGRESS_PAGE_HTML = """\
   .file-status.extracting { background:#dbeafe; color:#1e40af;
                             animation:pulse 1.2s ease-in-out infinite; }
   .file-status.done { background:#dcfce7; color:#15803d; }
+  .file-status.failed { background:#fee2e2; color:#dc2626; }
+  .file-error { font-size:12px; color:#dc2626; margin:4px 0 0 28px;
+                font-family:ui-monospace, SFMono-Regular, monospace; }
   @keyframes pulse {
     0%, 100% { transform: scale(1); opacity: 1; }
     50% { transform: scale(0.85); opacity: 0.7; }
@@ -1640,17 +1674,22 @@ PROGRESS_PAGE_HTML = """\
   // Render the per-file list once we have the initial JOBS snapshot.
   // Subsequent updates only flip status classes — same DOM nodes.
   let listRendered = false;
+  function escapeHtml(s) {
+    return String(s || '').replace(/[<>&]/g, function(c) {
+      return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c];
+    });
+  }
+
   function renderFileList(files) {
     if (listRendered) return;
     listEl.innerHTML = files.map(function(f, i) {
-      return '<li class="file-item" data-idx="' + i + '">' +
-             '  <span class="file-status pending" data-status>•</span>' +
-             '  <span class="file-name">' +
-                  f.name.replace(/[<>&]/g, function(c) {
-                    return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c];
-                  }) +
-             '  </span>' +
-             '  <span class="file-kind">' + f.kind + '</span>' +
+      return '<li class="file-item-wrap" data-idx="' + i + '">' +
+             '  <div class="file-item">' +
+             '    <span class="file-status pending" data-status>•</span>' +
+             '    <span class="file-name">' + escapeHtml(f.name) + '</span>' +
+             '    <span class="file-kind">' + escapeHtml(f.kind) + '</span>' +
+             '  </div>' +
+             '  <p class="file-error" data-error hidden></p>' +
              '</li>';
     }).join('');
     listRendered = true;
@@ -1662,7 +1701,18 @@ PROGRESS_PAGE_HTML = """\
       if (!item) return;
       item.className = 'file-status ' + f.status;
       item.textContent = f.status === 'done' ? '✓' :
-                         f.status === 'extracting' ? '…' : '•';
+                         f.status === 'extracting' ? '…' :
+                         f.status === 'failed' ? '✗' : '•';
+      // Per-file error message (Stage 11c) — only failed files have it.
+      const errLine = listEl.querySelector('[data-idx="' + i + '"] [data-error]');
+      if (errLine) {
+        if (f.status === 'failed' && f.error) {
+          errLine.textContent = f.error;
+          errLine.hidden = false;
+        } else {
+          errLine.hidden = true;
+        }
+      }
     });
   }
 
