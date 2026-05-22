@@ -1783,4 +1783,9 @@ if __name__ == "__main__":
     print(f"local_app_simple listening on http://{HOST}:{PORT}", flush=True)
     print(f"  uploads dir:         {UPLOADS_ROOT}", flush=True)
     ensure_vertex_project_env()
-    app.run(host=HOST, port=PORT, debug=False)
+    # Werkzeug's dev server defaults to single-threaded — all HTTP
+    # requests serialize through one thread, which makes SSE + concurrent
+    # POSTs serialize artificially in local testing. Cloud Run uses
+    # gunicorn `--workers 1 --threads 8`, so prod is multi-threaded;
+    # mirror that here so local stress tests reflect prod behavior.
+    app.run(host=HOST, port=PORT, debug=False, threaded=True)
