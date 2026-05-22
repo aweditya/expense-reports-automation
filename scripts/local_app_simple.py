@@ -160,6 +160,14 @@ def upload():
     if not pairs:
         return ("No files uploaded.", 400)
 
+    # Stage 9a: event_name is FA-compulsory (form has `required`, but a
+    # programmatic POST or a JS-disabled browser can bypass that — so
+    # re-check server-side). Validator also fires MissingRequiredField
+    # if it somehow lands in the report blank, as a third defense.
+    if not request.form.get("fa_event_name", "").strip():
+        return ("Missing required field: Event name. Use the browser's "
+                "back button to return to the form.", 400)
+
     upload_id = generate_upload_id()
     upload_dir = UPLOADS_ROOT / upload_id
     files_dir = upload_dir / "files"
@@ -1155,9 +1163,9 @@ UPLOAD_FORM_HTML = """\
           </select>
         </div>
         <div class="field full">
-          <label for="fa_event_name">Event name <span class="opt">(optional)</span></label>
-          <input type="text" id="fa_event_name" name="fa_event_name">
-          <span class="hint">Conference / event name. Skip for non-event reports.</span>
+          <label for="fa_event_name">Event name <span class="req">*</span></label>
+          <input type="text" id="fa_event_name" name="fa_event_name" required>
+          <span class="hint">Conference / event name (e.g. ASPLOS 2026). Use a short label for non-conference trips (e.g. "Field visit — INRIA").</span>
         </div>
         <div class="field">
           <label for="fa_authorized_by">Authorized by <span class="req">*</span></label>
