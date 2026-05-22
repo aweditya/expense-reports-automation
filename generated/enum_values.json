@@ -43,6 +43,7 @@
       "human_subject_incentive",
       "lodging_domestic",
       "lodging_foreign",
+      "membership_dues",
       "other_business_expense"
     ],
     "expense_report.transaction_lines[].common.foreign_activity_type": [

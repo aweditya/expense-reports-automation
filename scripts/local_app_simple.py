@@ -1373,6 +1373,74 @@ UPLOAD_FORM_HTML = """\
     });
   })();
 
+  // Form persistence: save fa_* text/select values to localStorage on
+  // every change; restore on page load; clear on successful submit.
+  // Solves the FA pain point where clicking "Try again" after a
+  // pipeline error landed her on a blank form and forced her to
+  // re-type everything. Files can't be persisted (browser security
+  // forbids programmatic File access) — the FA still re-picks files
+  // but keeps her typed fieldset, dropdown choices, and dates.
+  (function setupFormPersistence() {
+    const STORAGE_KEY = 'stanford-expense-form-draft-v1';
+    const form = document.querySelector('form[action="/upload"]');
+    if (!form || !window.localStorage) return;
+
+    function eligible(el) {
+      // Persist any fa_* named field that has a value attribute the
+      // browser can set back (text/date/email/select/textarea). Skip
+      // file inputs (browser security) and the dynamic file_N/kind_N
+      // pairs (they only make sense alongside their file).
+      if (!el.name || !el.name.startsWith('fa_')) return false;
+      if (el.type === 'file') return false;
+      return true;
+    }
+
+    function save() {
+      const snapshot = {};
+      form.querySelectorAll('input, select, textarea').forEach(function(el) {
+        if (eligible(el)) snapshot[el.name] = el.value;
+      });
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+      } catch (e) { /* quota / private mode — silently no-op */ }
+    }
+
+    function restore() {
+      let snapshot;
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        snapshot = JSON.parse(raw);
+      } catch (e) { return; }
+      if (!snapshot || typeof snapshot !== 'object') return;
+      Object.keys(snapshot).forEach(function(name) {
+        const el = form.querySelector('[name="' + CSS.escape(name) + '"]');
+        if (el && eligible(el)) el.value = snapshot[name];
+      });
+      // Trigger change on date-from so the same-month-default for date-to
+      // also restores if it was set.
+      const fromInput = document.getElementById('fa_bp_when_from');
+      if (fromInput && fromInput.value) {
+        fromInput.dispatchEvent(new Event('change'));
+      }
+    }
+
+    let saveTimer = null;
+    function debouncedSave() {
+      if (saveTimer) clearTimeout(saveTimer);
+      saveTimer = setTimeout(save, 300);
+    }
+    form.addEventListener('input', debouncedSave);
+    form.addEventListener('change', debouncedSave);
+    // NOTE: do NOT clear on submit. If we cleared on submit + the
+    // pipeline then errored, the FA's "Try again" → / would land on a
+    // blank form (the exact pain we're fixing). Instead, the progress
+    // page's done-handler clears the draft AFTER a successful upload.
+    // The error path leaves the draft intact for the Try Again click.
+
+    restore();
+  })();
+
   // Custom combobox for 'Where' autocomplete. Implements the WAI-ARIA
   // combobox 1.2 pattern (role=combobox + role=listbox + role=option
   // + aria-activedescendant). Why custom and not <datalist>: the
@@ -1676,6 +1744,12 @@ PROGRESS_PAGE_HTML = """\
         redirected = true;
         playDoneChime();
         es.close();
+        // Upload succeeded — clear the form-persistence draft so a
+        // fresh GET / starts blank. Error path doesn't trigger this,
+        // so "Try again" still restores typed fields (the FA's pain
+        // from 2026-05-22). Key must match setupFormPersistence in
+        // the upload form HTML.
+        try { localStorage.removeItem('stanford-expense-form-draft-v1'); } catch (e) {}
         // 1s pause so the chime + status text register before redirect.
         setTimeout(function() {
           window.location = '/uploads/' + UPLOAD_ID + '/workbench.html';
