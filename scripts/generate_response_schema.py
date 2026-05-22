@@ -65,6 +65,11 @@ KIND_EXPENSE_TYPES: dict[str, list[str]] = {
     # Schema maps `other_business_expense` to "Miscellaneous" on the
     # domestic CSV and "Miscellaneous - Foreign" on the foreign CSV.
     "miscellaneous": ["other_business_expense"],
+    # Membership dues for a professional society / conference org. Maps
+    # to "Membership Dues" on the domestic CSV and "Membership Dues -
+    # Foreign" on the foreign CSV. No kind-specific detail block — the
+    # receipt typically only carries org name + amount + date.
+    "membership": ["membership_dues"],
 }
 
 
@@ -830,6 +835,17 @@ SCHEMAS_TO_GENERATE: list[tuple[str, dict]] = [
         "response_schema_miscellaneous.json",
         dict(
             expense_type_values=KIND_EXPENSE_TYPES["miscellaneous"],
+            include_detail=False,
+        ),
+    ),
+    # Membership: professional society / conference org dues. Same
+    # shape as miscellaneous (no detail block); enum restriction
+    # ensures Gemini emits membership_dues, which the CSV mappers
+    # render as "Membership Dues" / "Membership Dues - Foreign".
+    (
+        "response_schema_membership.json",
+        dict(
+            expense_type_values=KIND_EXPENSE_TYPES["membership"],
             include_detail=False,
         ),
     ),

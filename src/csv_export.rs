@@ -326,6 +326,7 @@ fn map_expense_type_domestic(line: &ExpenseReportTransactionLinesItem) -> &'stat
         }
         ExpenseType::HumanSubjectIncentive => "Human Subject Incentive",
         ExpenseType::LodgingDomestic | ExpenseType::LodgingForeign => "Lodging",
+        ExpenseType::MembershipDues => "Membership Dues",
         ExpenseType::OtherBusinessExpense => "Miscellaneous",
     }
 }
@@ -365,6 +366,7 @@ fn map_expense_type_foreign(line: &ExpenseReportTransactionLinesItem) -> &'stati
         ExpenseType::HumanSubjectIncentive => "Human Subject Incentive",
         ExpenseType::LodgingDomestic
         | ExpenseType::LodgingForeign => "Lodging - Foreign and Domestic",
+        ExpenseType::MembershipDues => "Membership Dues - Foreign",
         ExpenseType::OtherBusinessExpense => "Miscellaneous - Foreign",
     }
 }
@@ -948,7 +950,7 @@ Line,Expense Date,Expense Currency,Expense Amount,USD Amount,Expense Type,Remark
             BusinessMeal, CarRental, ConferenceRegistration, GiftCardEmployeeForeign,
             GiftsForeignActivity, GroundTransportationDomestic, GroundTransportationForeign,
             GroupTravelMeal, HumanSubjectIncentive, LodgingDomestic, LodgingForeign,
-            OtherBusinessExpense,
+            MembershipDues, OtherBusinessExpense,
         ] {
             let mut line = ExpenseReportTransactionLinesItem::default();
             line.common.expense_type = wrap(kind);
@@ -965,7 +967,7 @@ Line,Expense Date,Expense Currency,Expense Amount,USD Amount,Expense Type,Remark
             BusinessMeal, CarRental, ConferenceRegistration, GiftCardEmployeeForeign,
             GiftsForeignActivity, GroundTransportationDomestic, GroundTransportationForeign,
             GroupTravelMeal, HumanSubjectIncentive, LodgingDomestic, LodgingForeign,
-            OtherBusinessExpense,
+            MembershipDues, OtherBusinessExpense,
         ] {
             let mut line = ExpenseReportTransactionLinesItem::default();
             line.common.expense_type = wrap(kind);

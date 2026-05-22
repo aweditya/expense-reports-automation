@@ -222,6 +222,7 @@ pub enum ExpenseReportTransactionLinesItemCommonExpenseTypeEnum {
     HumanSubjectIncentive,
     LodgingDomestic,
     LodgingForeign,
+    MembershipDues,
     OtherBusinessExpense,
 }
 
@@ -243,6 +244,7 @@ impl ExpenseReportTransactionLinesItemCommonExpenseTypeEnum {
             Self::HumanSubjectIncentive => "human_subject_incentive",
             Self::LodgingDomestic => "lodging_domestic",
             Self::LodgingForeign => "lodging_foreign",
+            Self::MembershipDues => "membership_dues",
             Self::OtherBusinessExpense => "other_business_expense",
         }
     }
@@ -268,6 +270,7 @@ impl core::str::FromStr for ExpenseReportTransactionLinesItemCommonExpenseTypeEn
             "human_subject_incentive" => Ok(Self::HumanSubjectIncentive),
             "lodging_domestic" => Ok(Self::LodgingDomestic),
             "lodging_foreign" => Ok(Self::LodgingForeign),
+            "membership_dues" => Ok(Self::MembershipDues),
             "other_business_expense" => Ok(Self::OtherBusinessExpense),
             _ => Err("invalid enum value"),
         }

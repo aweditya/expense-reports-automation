@@ -667,7 +667,7 @@ pub const FIELD_RULES: &[FieldRule] = &[
         source: Some(SourceTier::T3),
         effective_source: Some(SourceTier::T3),
         depends_on: &[],
-        allowed_values: &["adjusted_per_diem", "airfare_domestic", "airfare_foreign", "ancillary_airline_fee", "business_meal", "car_rental", "conference_registration", "gift_card_employee_foreign", "gifts_foreign_activity", "ground_transportation_foreign", "ground_transportation_domestic", "group_travel_meal", "human_subject_incentive", "lodging_domestic", "lodging_foreign", "other_business_expense"],
+        allowed_values: &["adjusted_per_diem", "airfare_domestic", "airfare_foreign", "ancillary_airline_fee", "business_meal", "car_rental", "conference_registration", "gift_card_employee_foreign", "gifts_foreign_activity", "ground_transportation_foreign", "ground_transportation_domestic", "group_travel_meal", "human_subject_incentive", "lodging_domestic", "lodging_foreign", "membership_dues", "other_business_expense"],
         default_value: None,
         description: None,
         infer_from: Some("LLM classifies from receipt content"),

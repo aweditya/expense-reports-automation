@@ -255,6 +255,7 @@ expense_report:
               - human_subject_incentive
               - lodging_domestic
               - lodging_foreign
+              - membership_dues
               - other_business_expense
             infer_from: "LLM classifies from receipt content"
           remarks:
