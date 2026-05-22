@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-generated_at_utc: '2026-05-22T17:46:22+00:00'
+generated_at_utc: '2026-05-22T20:13:03+00:00'
 sections:
 - key: general_information
   label: General Information
@@ -114,15 +114,6 @@ sections:
     control: textarea
     source: T4
     entry_mode: model_prefill_review
-    required: true
-    required_expression: null
-    review_priority: medium
-    allowed_values: []
-  - path: expense_report.general_information.business_purpose.key_30char
-    label: Key 30char
-    control: textarea
-    source: T2
-    entry_mode: computed_readonly
     required: true
     required_expression: null
     review_priority: medium

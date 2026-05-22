@@ -45,10 +45,6 @@
       "type": "string",
       "nullable": false
     },
-    "expense_report.general_information.business_purpose.key_30char": {
-      "type": "string",
-      "nullable": false
-    },
     "expense_report.general_information.event_name": {
       "type": "string",
       "nullable": false

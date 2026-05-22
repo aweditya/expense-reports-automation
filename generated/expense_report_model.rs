@@ -715,11 +715,6 @@ pub struct ExpenseReportGeneralInformationBusinessPurpose {
     /// Infer from: fallback when no conference docs
     #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub why: Wrapped<String>,
-    ///  30-character lookup key. Reduction derives from event_name + earliest scheduled date
-    /// (e.g. 'ASPLOS-2026'); T1 fallback when neither is available.
-    /// Source tier: T2
-    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
-    pub key_30char: Wrapped<String>,
 
 }
 

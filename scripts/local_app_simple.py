@@ -754,7 +754,6 @@ def write_fa_input(form, out_path: Path) -> None:
         "fa_bp_what": "business_purpose_what",
         "fa_bp_where": "business_purpose_where",
         "fa_bp_why": "business_purpose_why",
-        "fa_bp_key": "business_purpose_key_30char",
         "fa_authorized_by": "authorized_by",
         "fa_rush_processing": "rush_processing",
         "fa_payment_method": "payment_method",
@@ -1111,6 +1110,14 @@ UPLOAD_FORM_HTML = """\
   .combobox-option.active { background:#e0f2fe; color:#075985; }
   .file-row { display:flex; gap:10px; align-items:center; margin:0 0 12px; }
   .file-row input[type=file] { flex:1; min-width:0; font-size:13px; }
+  .row-remove {
+    background:none; border:1px solid #d1d5db; border-radius:4px;
+    color:#6b7280; cursor:pointer; padding:4px 9px; font-size:14px;
+    line-height:1; transition:background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .row-remove:hover {
+    background:#fef2f2; color:#dc2626; border-color:#fecaca;
+  }
   .file-row select { padding:6px 8px; border:1px solid #d1d5db; border-radius:4px;
                      font-size:13px; background:#fff; color:#1a1d1f; cursor:pointer; }
   .actions { display:flex; gap:12px; align-items:center; margin-top:20px; }
@@ -1154,6 +1161,8 @@ UPLOAD_FORM_HTML = """\
           <option value="lodging">Lodging Folio</option>
           <option value="airfare">Airfare / Flight Ticket</option>
         </select>
+        <button type="button" class="row-remove" onclick="removeFileRow(this)"
+                aria-label="Remove this file" title="Remove this file">✕</button>
       </div>
     </div>
     <div class="actions">
@@ -1257,11 +1266,6 @@ UPLOAD_FORM_HTML = """\
           <input type="text" id="fa_bp_why" name="fa_bp_why" required
                  placeholder="e.g. Advance Stanford research collaboration">
         </div>
-        <div class="field full">
-          <label for="fa_bp_key">Short label <span class="req">*</span> <span class="opt">(max 30 chars)</span></label>
-          <input type="text" id="fa_bp_key" name="fa_bp_key" required maxlength="30"
-                 placeholder="e.g. ASPLOS-2026-Pittsburgh">
-        </div>
       </div>
     </fieldset>
 
@@ -1288,10 +1292,46 @@ UPLOAD_FORM_HTML = """\
         <option value="lodging">Lodging Folio</option>
         <option value="airfare">Airfare / Flight Ticket</option>
       </select>
+      <button type="button" class="row-remove" onclick="removeFileRow(this)"
+              aria-label="Remove this file" title="Remove this file">✕</button>
     `;
     document.getElementById('file-rows').appendChild(row);
     rowCount++;
   }
+
+  // Remove a file row when the FA clicks the ✕ button. Always keeps at
+  // least one row visible — the form needs ≥1 file or backend rejects.
+  // Sparse indexes (e.g. file_0 + file_2 after removing file_1) are
+  // fine — /upload iterates whatever the form submits.
+  function removeFileRow(btn) {
+    const rows = document.querySelectorAll('#file-rows .file-row');
+    if (rows.length <= 1) {
+      // Don't remove the last row — just clear the file input so the FA
+      // sees "no file picked" and can pick a different one.
+      const input = btn.parentElement.querySelector('input[type=file]');
+      if (input) input.value = '';
+      return;
+    }
+    btn.parentElement.remove();
+  }
+
+  // Date sanity: when the FA picks From, default To to the same date
+  // (clobber only when To is empty or before the new From — don't
+  // overwrite a manual choice). Also set To's `min` so its calendar
+  // starts at the From date.
+  (function setupDateDefaultMonth() {
+    const fromInput = document.getElementById('fa_bp_when_from');
+    const toInput = document.getElementById('fa_bp_when_to');
+    if (!fromInput || !toInput) return;
+    fromInput.addEventListener('change', function() {
+      const v = fromInput.value;
+      if (!v) return;
+      toInput.min = v;
+      if (!toInput.value || toInput.value < v) {
+        toInput.value = v;
+      }
+    });
+  })();
 
   // Custom combobox for 'Where' autocomplete. Implements the WAI-ARIA
   // combobox 1.2 pattern (role=combobox + role=listbox + role=option

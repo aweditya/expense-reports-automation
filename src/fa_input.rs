@@ -53,8 +53,6 @@ pub struct FaInput {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub business_purpose_why: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub business_purpose_key_30char: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub authorized_by: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rush_processing: Option<String>,
@@ -119,9 +117,6 @@ pub fn apply_to_report(report: &mut ExpenseReport, fa: &FaInput) {
     }
     if let Some(v) = &fa.business_purpose_why {
         gi.business_purpose.why = fa_wrapped(v.clone());
-    }
-    if let Some(v) = &fa.business_purpose_key_30char {
-        gi.business_purpose.key_30char = fa_wrapped(v.clone());
     }
     // authorized_by is a bare Option<String> in the codegen'd model —
     // no metadata wrapper. FA-entered renders as label+value only in
@@ -293,7 +288,6 @@ mod tests {
             business_purpose_when: Some("March 14-19 2026".to_owned()),
             business_purpose_where: Some("Pittsburgh, PA".to_owned()),
             business_purpose_why: Some("Conference participation".to_owned()),
-            business_purpose_key_30char: Some("ASPLOS-2026-Pittsburgh".to_owned()),
             authorized_by: Some("Advisor".to_owned()),
             rush_processing: Some("no".to_owned()),
             payment_method: Some("PCard".to_owned()),
@@ -310,7 +304,6 @@ mod tests {
         assert_eq!(gi.payee.affiliation.value, Some(Aff::StanfordPostdoc));
         assert_eq!(gi.event_name.value.as_deref(), Some("ASPLOS 2026"));
         assert_eq!(gi.business_purpose.who.value.as_deref(), Some("Payee + collaborators"));
-        assert_eq!(gi.business_purpose.key_30char.value.as_deref(), Some("ASPLOS-2026-Pittsburgh"));
         assert_eq!(gi.authorized_by.as_deref(), Some("Advisor"));
         assert_eq!(gi.rush_processing, Some(Rush::No));
         assert_eq!(gi.payment_method.value.as_deref(), Some("PCard"));

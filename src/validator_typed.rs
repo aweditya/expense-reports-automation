@@ -238,7 +238,6 @@ fn walk_business_purpose(
     check_wrapped(&join(base, "when"), &bp.when, issues);
     check_wrapped(&join(base, "where"), &bp.r#where, issues);
     check_wrapped(&join(base, "why"), &bp.why, issues);
-    check_wrapped(&join(base, "key_30char"), &bp.key_30char, issues);
 }
 
 fn walk_student_certification(

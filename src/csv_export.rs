@@ -541,13 +541,12 @@ pub fn business_purpose_to_text(
     bp: &crate::expense_report_model::ExpenseReportGeneralInformationBusinessPurpose,
 ) -> String {
     let mut out = String::new();
-    let pairs: [(&str, Option<&String>); 6] = [
+    let pairs: [(&str, Option<&String>); 5] = [
         ("Who", bp.who.value.as_ref()),
         ("What", bp.what.value.as_ref()),
         ("When", bp.when.value.as_ref()),
         ("Where", bp.r#where.value.as_ref()),
         ("Why", bp.why.value.as_ref()),
-        ("Key (≤30 chars)", bp.key_30char.value.as_ref()),
     ];
     for (label, value) in pairs {
         if let Some(v) = value {
@@ -1065,7 +1064,6 @@ Line,Expense Date,Expense Currency,Expense Amount,USD Amount,Expense Type,Remark
         bp.when = wrap("2024-09-01 to 2024-09-05".to_owned());
         bp.r#where = wrap("Buenos Aires".to_owned());
         bp.why = wrap("Disseminate".to_owned());
-        bp.key_30char = wrap("ISCA 2024".to_owned());
 
         let text = business_purpose_to_text(&bp);
         let expected = "\
@@ -1074,7 +1072,6 @@ What: Presented research
 When: 2024-09-01 to 2024-09-05
 Where: Buenos Aires
 Why: Disseminate
-Key (≤30 chars): ISCA 2024
 ";
         assert_eq!(text, expected);
     }

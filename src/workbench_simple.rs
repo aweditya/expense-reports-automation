@@ -961,7 +961,6 @@ fn render_general_information(html: &mut String, gi: &ExpenseReportGeneralInform
     field_card_text(html, "When", &gi.business_purpose.when, "expense_report.general_information.business_purpose.when", |s: &String| s.clone());
     field_card_text(html, "Where", &gi.business_purpose.r#where, "expense_report.general_information.business_purpose.where", |s: &String| s.clone());
     field_card_text(html, "Why", &gi.business_purpose.why, "expense_report.general_information.business_purpose.why", |s: &String| s.clone());
-    field_card_text(html, "Key (30 chars)", &gi.business_purpose.key_30char, "expense_report.general_information.business_purpose.key_30char", |s: &String| s.clone());
     // friday Stage 3 — single combined card so the FA can click-to-copy
     // the same labeled blob they'd otherwise hand-concatenate from the
     // 6 sub-fields above, then paste into Stanford's report-level

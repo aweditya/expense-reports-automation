@@ -113,12 +113,6 @@ expense_report:
           required: true
           source: T4
           infer_from: "Synthesis: composed sentence — presenting / collaboration / etc.; T1 fallback when no conference docs"
-        key_30char:
-          type: string
-          required: true
-          source: T2
-          description: "30-character lookup key. Reduction derives from event_name + earliest scheduled date (e.g. 'ASPLOS-2026'); T1 fallback when neither is available."
-
     event_name:
       type: string
       required: true

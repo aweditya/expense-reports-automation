@@ -41,7 +41,6 @@ class TestWriteFaInput(unittest.TestCase):
             "fa_bp_when_to": "2026-03-19",
             "fa_bp_where": "San Diego, USA",
             "fa_bp_why": "Disseminating Stanford research",
-            "fa_bp_key": "ASPLOS 2026 trip",
             "fa_authorized_by": "advisor@stanford.edu",
             "fa_rush_processing": "no",
             "fa_payment_method": "Personal",
@@ -55,7 +54,6 @@ class TestWriteFaInput(unittest.TestCase):
         self.assertEqual(data["event_name"], "ASPLOS 2026")
         self.assertEqual(data["business_purpose_who"], "Jane Doe + 2 collaborators")
         self.assertEqual(data["business_purpose_when"], "2026-03-15 to 2026-03-19")
-        self.assertEqual(data["business_purpose_key_30char"], "ASPLOS 2026 trip")
         self.assertEqual(data["authorized_by"], "advisor@stanford.edu")
         self.assertEqual(data["rush_processing"], "no")
         self.assertEqual(data["payment_method"], "Personal")
