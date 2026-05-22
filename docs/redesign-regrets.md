@@ -759,3 +759,33 @@ scripts/local_app_simple.py >.scratch/server/flask.log 2>&1 &` step.
 **Heuristic:** uniform error string across all audit results means
 "server-side state issue, not per-path code issue." Per-path coercion
 or walker bugs would show different errors per path.
+
+### 2026-05-22 — Frankfurter (Cloudflare) silently 403'd default Python-urllib UA
+
+**What happened:** Stage 9b's `fx_lookup.py` used `urllib.request.urlopen`
+with no `User-Agent` header. Local `curl` against the same Frankfurter
+URL returned 200; my Python call returned 403. Bisected by trying
+`curl -A 'Python-urllib/3.11'` — also 403. So the API's Cloudflare
+front specifically blocks the default `Python-urllib/*` UA family,
+likely as a generic bot-blocker. Lost ~5 minutes to "is it the URL
+format? the headers? the API itself?"
+
+**Rule going forward:** any Python HTTP call to a third-party API
+(especially CDN-fronted) must set an explicit `User-Agent` in
+`urllib.request.Request(headers={...})`. Default form:
+`<project>/<version> (+<contact-url>)`. Example from `fx_lookup.py`:
+```
+headers = {
+    "Accept": "application/json",
+    "User-Agent": "stanford-expense-reports/1.0 (+https://expense-reports-wgnivgelea-uw.a.run.app)",
+}
+```
+
+Goes beyond fx_lookup — applies to any future API integration
+(Cloud Logging, Cloud Storage signed-URL fetches not using google
+client libs, OANDA / xe / future FX fallback, conference site
+scraping, GSA per diem lookups, etc.).
+
+**Heuristic for 403/blocked-by-CDN debugging:** if `curl` works and
+your code doesn't, set User-Agent first before suspecting auth /
+URL / TLS. CDN bot blockers fire on UA more often than on headers/IP.
