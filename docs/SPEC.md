@@ -24,7 +24,8 @@ If a piece of code touches two layers' worth of concern, it is wrong.
 |---|---|---|---|
 | 1 | **Extraction** | `scripts/extract_<kind>.py` (one per expense kind) | One Gemini call per uploaded document — receipt image → typed JSON — for most kinds (meal, transport). Kinds whose detail block exceeds Vertex's schema property-count ceiling (lodging today; > ~5 `_meta`-wrapped T2/T3 leaves) make **two parallel calls** with their schema split across them; the per-kind script merges the outputs back into the same per-doc JSON shape. The dispatcher in `local_app_simple.py` picks the script based on the FA's per-file kind choice in the upload form. See §7 for when to use the multi-call pattern. **Each extractor also makes ONE Document AI OCR call per document BEFORE Gemini** (Leapfrog L.3–L.5; docs/leapfrog-plan.md): DocAI's numbered token list gets appended to Gemini's prompt; Gemini returns the value + a verbatim `quote` + `token_ids` (integer indices into the token list) per `document_span` evidence entry. After Gemini returns, `scripts/evidence_bbox.py::populate_bboxes` resolves `token_ids` to bboxes via dict lookup. A Levenshtein verifier (threshold 0.7) catches Gemini-hallucinated IDs; on rejection (or absent token_ids) the code falls back to the legacy text-matching path against the same DocAI tokens. Either way bboxes land in `_meta.evidence[].bboxes` — pure metadata the workbench reads at render time to draw a spot-check halo. OCR failure is non-fatal: extraction proceeds, bboxes are absent, workbench falls back to "no halo." |
 | 2 | **Derivation** | (inside extraction) | Fields a single document can yield from its own contents. No cross-document signal. |
-| 3 | **Reduction** | `src/reduce.rs` (+ `src/fa_input.rs::apply_to_report`) | Combines per-document JSONs into one `ExpenseReport`. Aggregations like `total_usd`, `transaction_date`, derived `category` + confidence. **FA-entered general_information fields** (payee, business_purpose, authorized_by, payment_method, foreign_activity_type) overlay the reduced report via `apply_to_report` when the `reduce_extractions` binary gets `--fa-input <path>`; FA values are wrapped with `kind: user_input, origin: fa_upload_form` evidence. |
+| 3 | **Reduction** | `src/reduce.rs` (+ `src/fa_input.rs::apply_to_report`) | Combines per-document JSONs into one `ExpenseReport`. Aggregations like `total_usd`, `transaction_date`, derived `category` + confidence. Foreign lines get a **mock FX rate** here as a safety fallback; the real rate is patched in step 3a. **FA-entered general_information fields** (payee, business_purpose, authorized_by, payment_method, foreign_activity_type) overlay the reduced report via `apply_to_report` when the `reduce_extractions` binary gets `--fa-input <path>`; FA values are wrapped with `kind: user_input, origin: fa_upload_form` evidence. |
+| 3a | **FX enrichment** | `scripts/fx_enrich.py` (uses `scripts/fx_lookup.py`) | Walks `transaction_lines`; for every foreign line (`common.original_currency` set), calls Frankfurter (`https://api.frankfurter.dev/v1/{date}?from={ccy}&to=USD`) for the historical ECB rate, overwrites `common.exchange_rate.value` + recomputes `common.line_amount_usd`, then cascades `transaction_summary.total_usd`. Failure-tolerant: network errors / unsupported currencies / 4xx responses leave the reducer's mock rate in place so the workbench still renders. Stamps `_meta.evidence[].origin = "fx_enrich.frankfurter"` so the FA can audit which lines came from a live lookup vs mock. |
 | 4 | **Validation** | `src/validator_typed.rs` (+ `src/validator.rs`) | Checks the assembled `ExpenseReport` against business rules. Produces `ValidationReport` (issues only — never mutates the report). Includes hand-written passes alongside the rule-engine ones — e.g. `check_dates_within_trip_window` warns when a transaction line's date falls outside the FA-entered `business_purpose.when` window. |
 | 5 | **Display** | `src/workbench_simple.rs` (+ `src/workbench_simple.css`) + `src/csv_export.rs` | Renders typed report + validation issues into the FA-facing workbench HTML. Pure formatting; no business decisions. Also emits FA-downloadable line-item CSVs alongside the workbench — one per Stanford portal page: `lines-domestic.csv` (7 columns, plain expense-type strings) and `lines-foreign.csv` (20 columns, suffixed expense-type strings with the Stanford-side typos preserved verbatim). Per-line routing in `csv_export::route_to_foreign` decides which file each line lands in; either file may be header-only when the report has no lines routed to that page. Both are static-served via the existing `/uploads/<id>/<filename>` route. The business_purpose concatenated text used to be a sidecar `.txt` download but is now an in-page click-to-copy card under General Information (friday Stage 3). |
 | 6 | **Submission** | (not implemented) | Future: translate the internal model into Stanford's portal API payload. Today the FA reads the workbench and submits manually. |
@@ -149,6 +150,8 @@ sequenceDiagram
     participant Gemini as Gemini API
     participant DocAI as Document AI
     participant Reduce as reduce_extractions (Rust)
+    participant FxEnrich as fx_enrich.py
+    participant Frankfurter as Frankfurter API
     participant Render as render_workbench_from_report (Rust)
     participant Disk as .scratch/uploads/{id}/
 
@@ -174,9 +177,19 @@ sequenceDiagram
     Flask->>Reduce: subprocess: --in extractions/ --out reduced/report.json --fa-input fa_input.json
     Reduce->>Disk: read all extractions/*.json
     Reduce->>Disk: read fa_input.json (if present)
-    Note over Reduce: reduce_to_expense_report(receipts)<br/>then fa_input::apply_to_report(report, fa)
+    Note over Reduce: reduce_to_expense_report(receipts)<br/>then fa_input::apply_to_report(report, fa)<br/>foreign lines get a mock FX rate as safety fallback
     Reduce->>Disk: write reduced/report.json
     Reduce-->>Flask: exit 0
+
+    Flask->>FxEnrich: subprocess: --in reduced/report.json --out reduced/report.json
+    FxEnrich->>Disk: read reduced/report.json
+    loop for each unique (currency, date) on a foreign line
+        FxEnrich->>Frankfurter: GET /v1/{date}?from={ccy}&to=USD
+        Frankfurter-->>FxEnrich: rate (or 4xx for unsupported)
+    end
+    Note over FxEnrich: overwrite mock exchange_rate + line_amount_usd<br/>cascade transaction_summary.total_usd<br/>fall back to mock on network / unsupported
+    FxEnrich->>Disk: write reduced/report.json
+    FxEnrich-->>Flask: exit 0
 
     Flask->>Render: subprocess: --report reduced/... --receipts-dir extractions/ --out workbench.html --csv-domestic-out lines-domestic.csv --csv-foreign-out lines-foreign.csv
     Render->>Disk: read report.json + extractions

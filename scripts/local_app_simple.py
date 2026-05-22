@@ -932,6 +932,18 @@ def reduce(
     run_subprocess(cmd, label="reduce")
 
 
+def fx_enrich(reduced_path: Path) -> None:
+    """Post-reduce step: overwrite mock exchange_rate + line_amount_usd
+    on foreign lines with real Frankfurter rates. Failure-tolerant —
+    skips per-line on network/unsupported errors, leaving the reducer's
+    mock in place. See scripts/fx_enrich.py for details."""
+    run_subprocess(
+        [str(PYTHON), str(REPO_ROOT / "scripts" / "fx_enrich.py"),
+         "--in", str(reduced_path), "--out", str(reduced_path)],
+        label="fx_enrich",
+    )
+
+
 def render_workbench(
     reduced_path: Path,
     extractions_dir: Path,
@@ -992,6 +1004,8 @@ def _run_pipeline_in_background(
         )
         _set_job(upload_id, phase="reduce")
         reduce(extractions_dir, reduced_path, fa_input_path=fa_input_path)
+        _set_job(upload_id, phase="fx")
+        fx_enrich(reduced_path)
         _set_job(upload_id, phase="render")
         render_workbench(reduced_path, extractions_dir, workbench_path)
         _set_job(upload_id, phase="done")

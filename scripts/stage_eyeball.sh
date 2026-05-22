@@ -60,6 +60,9 @@ echo "    reduce → ${REPORT}"
   --fa-input "${FA_INPUT}" \
   >/dev/null
 
+echo "    fx_enrich → ${REPORT} (Frankfurter live rates)"
+./.venv/bin/python scripts/fx_enrich.py --in "${REPORT}" --out "${REPORT}"
+
 echo "    render → ${WORKBENCH}"
 ./target/debug/render_workbench_from_report \
   --report "${REPORT}" \
