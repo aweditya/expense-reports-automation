@@ -1,0 +1,12 @@
+# Developer-only deps (NOT shipped to Cloud Run).
+#
+# deploy/requirements.txt is the production install; this file is for
+# the test harness extras that don't belong in the container.
+#
+# Install:
+#   ./.venv/bin/pip install -r dev-requirements.txt
+#   ./.venv/bin/playwright install chromium
+#
+# Used by:
+#   tests/test_workbench_browser.py (Stage 24 — headless-JS regression)
+playwright>=1.40

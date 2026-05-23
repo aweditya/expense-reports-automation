@@ -92,6 +92,12 @@ History of how this came together is in `docs/redesign-plan.md` and
   end-to-end acceptance harness against four real receipts in
   `receipts/`. By default it checks the cached `.scratch/spike/*.json`;
   pass `--run` to re-invoke Gemini (~3 min, costs API calls).
+- `tests/test_workbench_browser.py` is a Playwright headless-Chromium
+  regression test for the workbench HTML/JS. Skips itself when
+  Playwright isn't installed. To enable locally:
+  `./.venv/bin/pip install -r dev-requirements.txt && ./.venv/bin/playwright install chromium`.
+  Dev-only — NOT in `deploy/requirements.txt`, so it doesn't ship
+  to Cloud Run.
 
 ## Schema artifacts
 
