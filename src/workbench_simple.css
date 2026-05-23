@@ -531,11 +531,11 @@ body {
 }
 .line-summary {
   display: grid;
-  /* chev | kind icon | index | headline | date | amount
+  /* chev | kind icon | index | headline | date | amount | delete (Stage 23)
      (Stage 6 follow-up: dropped the verbose "kind text" column —
      the left-side icon already conveys the kind, the text was just
      duplication.) */
-  grid-template-columns: 14px 22px 32px 1fr auto auto;
+  grid-template-columns: 14px 22px 32px 1fr auto auto auto;
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
@@ -545,6 +545,47 @@ body {
   /* Tinted band so the line header reads as distinct from its body. */
   background: #f3f4f6;
   border-bottom: 1px solid transparent;
+}
+/* Stage 23: × delete button on each transaction-line card. Subdued
+   until hover so the FA's eye doesn't catch on it during review. */
+.line-delete {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: #9ca3af;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 3px 8px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.line-delete:hover {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+/* Stage 23: undo button in the hero. Hidden by default; the
+   setupUndoButton JS reveals it via [hidden] removal after polling
+   /uploads/<id>/undo-available. */
+.hero-undo { margin: 8px 0 0; }
+.undo-btn {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  color: #374151;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 12px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.undo-btn:hover {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+}
+.undo-btn:disabled {
+  cursor: wait;
+  opacity: 0.6;
 }
 .line-icon {
   font-size: 16px;

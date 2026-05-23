@@ -725,6 +725,67 @@ def _recompute_summary(report: dict) -> None:
         date_block["value"] = min(dates)  # ISO date strings sort lexicographically
 
 
+# ─── Stage 23: per-upload edit history (separate JSON file) ────────────────
+#
+# Persisted in `<upload_dir>/edit_history.json` rather than inside
+# report.json — keeps the Rust ExpenseReport struct unchanged (it
+# would reject an unknown `_edit_history` field on deserialize) and
+# keeps history Python-only. Last 20 entries, FIFO. Cleared entirely
+# when a transaction line is deleted (path indexes become invalid).
+
+EDIT_HISTORY_MAX_ENTRIES = 20
+
+
+def _history_path(upload_dir: Path) -> Path:
+    return upload_dir / "edit_history.json"
+
+
+def _read_history(upload_dir: Path) -> list[dict]:
+    p = _history_path(upload_dir)
+    if not p.exists():
+        return []
+    try:
+        data = json.loads(p.read_text())
+        return data if isinstance(data, list) else []
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def _write_history(upload_dir: Path, history: list[dict]) -> None:
+    _history_path(upload_dir).write_text(json.dumps(history, indent=2,
+                                                    ensure_ascii=False))
+
+
+def _append_history(upload_dir: Path, path: str,
+                    old_value: object, new_value: object) -> None:
+    history = _read_history(upload_dir)
+    history.append({
+        "path": path,
+        "old_value": old_value,
+        "new_value": new_value,
+        "timestamp": time.time(),
+    })
+    # FIFO cap — drop oldest entries when we'd exceed the limit.
+    if len(history) > EDIT_HISTORY_MAX_ENTRIES:
+        history = history[-EDIT_HISTORY_MAX_ENTRIES:]
+    _write_history(upload_dir, history)
+
+
+def _pop_history(upload_dir: Path) -> dict | None:
+    history = _read_history(upload_dir)
+    if not history:
+        return None
+    entry = history.pop()
+    _write_history(upload_dir, history)
+    return entry
+
+
+def _clear_history(upload_dir: Path) -> None:
+    p = _history_path(upload_dir)
+    if p.exists():
+        p.unlink()
+
+
 @app.post("/uploads/<upload_id>/edit")
 def edit_field(upload_id: str):
     """Stage 7: FA-side edit-in-place. Frontend POSTs `{path, value}`;
@@ -775,6 +836,11 @@ def edit_field(upload_id: str):
     if enum_err is not None:
         return ({"error": enum_err}, 400)
 
+    # Stage 23: record the edit BEFORE applying so the FA can undo.
+    # `existing` was captured by _walk_to_leaf above; pass it through
+    # str() to avoid serializing a Wrapped-shaped dict accidentally.
+    _append_history(upload_dir, path, existing, coerced)
+
     setter(coerced)
 
     # Cascade: if the edit touched a transaction line's USD or date,
@@ -800,6 +866,106 @@ def edit_field(upload_id: str):
                 detail = detail.replace(prefix, "…")
         return ({"error": f"render failed: {detail[:200]}"}, 500)
     return ({"ok": True}, 200)
+
+
+@app.post("/uploads/<upload_id>/delete-line/<int:idx>")
+def delete_transaction_line(upload_id: str, idx: int):
+    """Stage 23: remove `transaction_lines[idx]` from the report. The
+    delete is destructive (no undo) because the remaining lines'
+    indexes shift — keeping edit history pointing at old indexes
+    would silently corrupt subsequent undos. We clear history on
+    delete and the workbench shows a confirm dialog before posting.
+    """
+    safe_id = sanitize_id(upload_id)
+    upload_dir = UPLOADS_ROOT / safe_id
+    if not upload_dir.is_dir():
+        abort(404)
+    report_path = upload_dir / "reduced" / "report.json"
+    if not report_path.exists():
+        return ({"error": "report not found"}, 404)
+    report = json.loads(report_path.read_text())
+    lines = report.get("transaction_lines") or []
+    if not 0 <= idx < len(lines):
+        return ({"error": f"line index {idx} out of range "
+                          f"(0..{len(lines) - 1})"}, 400)
+    deleted = lines.pop(idx)
+    _recompute_summary(report)
+    report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False))
+    _clear_history(upload_dir)
+    log_event("workbench.delete_line", upload_id=safe_id, line_idx=idx,
+              expense_type=(deleted.get("common") or {}).get(
+                  "expense_type", {}).get("value"))
+    workbench_path = upload_dir / "workbench.html"
+    extractions_dir = upload_dir / "extractions"
+    try:
+        render_workbench(report_path, extractions_dir, workbench_path)
+    except PipelineError as err:
+        return ({"error": f"render failed: {err.detail[:200]}"}, 500)
+    return ({"ok": True, "remaining_lines": len(lines)}, 200)
+
+
+@app.post("/uploads/<upload_id>/undo")
+def undo_last_edit(upload_id: str):
+    """Stage 23: revert the most recent edit from the FA's per-upload
+    history. No-op if history is empty (returns 200 with
+    {"undone": null}). Pops the last entry, walks path, sets value
+    back to old_value, re-renders. Concurrent edits race the history
+    last-writer-wins; today this is fine since each upload has one FA."""
+    safe_id = sanitize_id(upload_id)
+    upload_dir = UPLOADS_ROOT / safe_id
+    if not upload_dir.is_dir():
+        abort(404)
+    entry = _pop_history(upload_dir)
+    if entry is None:
+        return ({"ok": True, "undone": None,
+                 "message": "nothing to undo"}, 200)
+    report_path = upload_dir / "reduced" / "report.json"
+    if not report_path.exists():
+        return ({"error": "report not found"}, 404)
+    report = json.loads(report_path.read_text())
+    walk_result = _walk_to_leaf(report, entry["path"])
+    if walk_result is None:
+        # Path no longer resolves — probably a delete-line cleared the
+        # report shape. History should have been cleared on delete, so
+        # this is unexpected; surface to operator + return graceful.
+        log_error("workbench.undo_stale_path", upload_id=safe_id,
+                  path=entry["path"])
+        return ({"ok": True, "undone": None,
+                 "message": "history entry's path no longer resolves"}, 200)
+    _, setter = walk_result
+    setter(entry["old_value"])
+    _recompute_summary(report)
+    report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False))
+    log_event("workbench.undo", upload_id=safe_id, path=entry["path"])
+    workbench_path = upload_dir / "workbench.html"
+    extractions_dir = upload_dir / "extractions"
+    try:
+        render_workbench(report_path, extractions_dir, workbench_path)
+    except PipelineError as err:
+        return ({"error": f"render failed: {err.detail[:200]}"}, 500)
+    return ({"ok": True, "undone": entry}, 200)
+
+
+@app.get("/uploads/<upload_id>/undo-available")
+def undo_available(upload_id: str):
+    """Stage 23: tiny JSON endpoint the workbench JS polls on load to
+    decide whether to show the Undo button + tooltip. Returns the
+    most recent history entry's path + a friendly summary, or 200
+    with {"available": false} when history is empty."""
+    safe_id = sanitize_id(upload_id)
+    upload_dir = UPLOADS_ROOT / safe_id
+    if not upload_dir.is_dir():
+        abort(404)
+    history = _read_history(upload_dir)
+    if not history:
+        return ({"available": False}, 200)
+    last = history[-1]
+    return ({
+        "available": True,
+        "path": last["path"],
+        "old_value": last["old_value"],
+        "new_value": last["new_value"],
+    }, 200)
 
 
 @app.get("/uploads/<upload_id>/<path:filename>")

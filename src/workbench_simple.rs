@@ -435,6 +435,75 @@ document.addEventListener('click', function(e) {
   });
 })();
 
+// Stage 23: delete-line button on each transaction-line card +
+// undo button in the hero. Both reuse the upload_id extraction
+// pattern from setupClickToEdit (window.pathname split, no regex).
+(function setupDeleteLine() {
+  const segs = window.location.pathname.split('/');
+  if (segs.length < 3 || segs[1] !== 'uploads') return;
+  const uploadId = segs[2];
+  document.body.addEventListener('click', function(e) {
+    const btn = e.target.closest('.line-delete');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const idx = btn.getAttribute('data-line-idx');
+    // Read the line's headline for a confirm message the FA can
+    // reason about ("Delete line #3 — Hyatt Las Vegas $200?").
+    const summary = btn.closest('.line-summary');
+    const headline = (summary && summary.querySelector('.line-venue').textContent) || '';
+    const amount = (summary && summary.querySelector('.line-amount').textContent) || '';
+    const msg = 'Delete line #' + (Number(idx) + 1) +
+                (headline ? ' — ' + headline : '') +
+                (amount ? ' ' + amount : '') + '?\\n\\n' +
+                'This cannot be undone (clears your edit history too).';
+    if (!confirm(msg)) return;
+    fetch('/uploads/' + uploadId + '/delete-line/' + idx, {method: 'POST'})
+      .then(function(r) {
+        if (!r.ok) { return r.json().then(function(j) {
+          throw new Error(j.error || ('HTTP ' + r.status)); }); }
+        return r.json();
+      })
+      .then(function() { window.location.reload(); })
+      .catch(function(err) { alert('Delete failed: ' + err.message); });
+  });
+})();
+
+(function setupUndoButton() {
+  const segs = window.location.pathname.split('/');
+  if (segs.length < 3 || segs[1] !== 'uploads') return;
+  const uploadId = segs[2];
+  const btn = document.getElementById('undo-button');
+  if (!btn) return;
+  // On load: ask the server if there's anything to undo. Reveal
+  // the button + populate its tooltip if so.
+  fetch('/uploads/' + uploadId + '/undo-available')
+    .then(function(r) { return r.json(); })
+    .then(function(j) {
+      if (!j.available) return;
+      btn.hidden = false;
+      const pathTail = (j.path || '').split('.').slice(-2).join('.');
+      btn.title = 'Undo: ' + pathTail + ' was changed from ' +
+                  JSON.stringify(j.old_value) + ' to ' +
+                  JSON.stringify(j.new_value);
+    })
+    .catch(function() { /* network blip — leave hidden */ });
+  btn.addEventListener('click', function() {
+    btn.disabled = true;
+    fetch('/uploads/' + uploadId + '/undo', {method: 'POST'})
+      .then(function(r) {
+        if (!r.ok) { return r.json().then(function(j) {
+          throw new Error(j.error || ('HTTP ' + r.status)); }); }
+        return r.json();
+      })
+      .then(function() { window.location.reload(); })
+      .catch(function(err) {
+        btn.disabled = false;
+        alert('Undo failed: ' + err.message);
+      });
+  });
+})();
+
 // Click a card with [data-copy-value] → copy that value to clipboard
 // and show a brief toast. Skips if the click was on the issue-jump
 // arrow inside the card (so jump and copy don't conflict).
@@ -525,6 +594,15 @@ fn render_hero(html: &mut String, report: &ExpenseReport, validation: &Validatio
          <input type=\"checkbox\" id=\"evidence-toggle\"> Show extraction provenance\
          </label>\
          </p>\n",
+    );
+    // Stage 23: undo button. Hidden by default; setupUndoButton JS in
+    // the workbench script polls /uploads/<id>/undo-available on load
+    // and reveals it (with the last-edit tooltip) when history is
+    // non-empty. Click → POST /uploads/<id>/undo + reload.
+    html.push_str(
+        "<p class=\"hero-undo\"><button type=\"button\" id=\"undo-button\" \
+         class=\"undo-btn\" hidden title=\"Revert your most recent edit\">\
+         ↶ Undo last edit</button></p>\n",
     );
     html.push_str("</header>\n");
 }
@@ -1030,6 +1108,8 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
            <span class=\"line-venue\">{}</span>\
            <span class=\"line-date\">{}</span>\
            <span class=\"line-amount\">{}</span>\
+           <button type=\"button\" class=\"line-delete\" data-line-idx=\"{}\" \
+                   title=\"Delete this line\" aria-label=\"Delete this line\">✕</button>\
          </summary>\n\
          <div class=\"line-body\">\n",
         icon,
@@ -1037,6 +1117,7 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
         escape(&headline),
         escape(&summary_date),
         escape(&summary_amount),
+        idx,
     ));
 
     html.push_str("<div class=\"field-grid\">\n");
