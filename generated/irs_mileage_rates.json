@@ -1,0 +1,93 @@
+{
+  "$comment": "Cached IRS standard mileage rates. Regenerate by running scripts/fetch_irs_mileage_rate.py. Values are cents/mile.",
+  "fetched_at": "2026-05-23T17:31:27+00:00",
+  "source_url": "https://www.irs.gov/tax-professionals/standard-mileage-rates",
+  "unit": "cents_per_mile",
+  "rates_by_period": {
+    "2025": {
+      "business": 70.0,
+      "charity": 14.0,
+      "medical_or_military_moving": 21.0
+    },
+    "2024": {
+      "business": 67.0,
+      "charity": 14.0,
+      "medical_or_military_moving": 21.0
+    },
+    "2023": {
+      "business": 65.5,
+      "charity": 14.0,
+      "medical_or_military_moving": 22.0
+    },
+    "7/1/2022-12/31/2022": {
+      "business": 62.5,
+      "charity": 14.0,
+      "medical_or_military_moving": 22.0
+    },
+    "1/1/2022-6/30/2022": {
+      "business": 58.5,
+      "charity": 14.0,
+      "medical_or_military_moving": 18.0
+    },
+    "2021": {
+      "business": 56.0,
+      "charity": 14.0,
+      "medical_or_military_moving": 16.0
+    },
+    "2020": {
+      "business": 57.5,
+      "charity": 14.0,
+      "medical_or_military_moving": 17.0
+    },
+    "2019": {
+      "business": 58.0,
+      "charity": 14.0,
+      "medical_or_military_moving": 20.0
+    },
+    "2018\n\t\t\t\n\t\t\t\tTCJA": {
+      "business": 54.5,
+      "charity": 14.0,
+      "medical_or_military_moving": 18.0
+    },
+    "2017": {
+      "business": 53.5,
+      "charity": 14.0,
+      "medical_or_military_moving": 17.0
+    },
+    "2016": {
+      "business": 54.0,
+      "charity": 14.0,
+      "medical_or_military_moving": 19.0
+    },
+    "2015": {
+      "business": 57.5,
+      "charity": 14.0,
+      "medical_or_military_moving": 23.0
+    },
+    "2014": {
+      "business": 56.0,
+      "charity": 14.0,
+      "medical_or_military_moving": 23.5
+    },
+    "2013": {
+      "business": 56.5,
+      "charity": 14.0,
+      "medical_or_military_moving": 24.0
+    },
+    "2012": {
+      "business": 55.5,
+      "charity": 14.0,
+      "medical_or_military_moving": 23.0
+    },
+    "7/1/2011-12/31/2011": {
+      "business": 55.5,
+      "charity": 14.0,
+      "medical_or_military_moving": 23.5
+    },
+    "1/1/2011-6/30/2011": {
+      "business": 51.0,
+      "charity": 14.0,
+      "medical_or_military_moving": 19.0
+    }
+  }
+}
