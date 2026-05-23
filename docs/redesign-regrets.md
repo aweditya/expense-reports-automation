@@ -923,3 +923,28 @@ CI.
 This pattern has now consumed entries on 2026-05-22 (twice) and
 2026-05-23 (once). If it happens again, escalate the rule from
 "please don't" to "always extract first, then run."
+
+### 2026-05-23 — wrote to `/tmp/a1.html` during Stage A verification (rule 5 slip)
+
+**What happened:** While running A1 (POST 66MB to `/upload` to verify
+the 413 page), I redirected curl's output to `/tmp/a1.html` to inspect
+the body. CLAUDE.md rule 5 explicitly forbids `/tmp` — use `.scratch/`
+for ephemeral artifacts. The very next command (A2) used `.scratch/perf/
+a2.html`, so the muscle memory IS there for the right pattern — I just
+slipped on the first one.
+
+**Why it slipped:** the same "fast" reflex that produces inline scripts.
+Two-character path (`/tmp/`) is shorter to type than the project-local
+one (`.scratch/perf/`). Same root cause as the inline-script pattern: a
+reflex that saves seconds while violating a rule that exists for a
+reason. Rule 5's reason is "ephemeral artifacts that survive past the
+session should be inspectable + cleanup-controlled by the repo's
+`.gitignore` — not the OS's tmp policy."
+
+**Fix this time:** removed `/tmp/a1.html`, switched A2 + A3 to
+`.scratch/perf/`, captured this entry.
+
+**Rule sharpened:** any time I'm about to type `/tmp/`, `/var/folders/`,
+or call `mktemp` — stop, switch to `.scratch/<subdir>/`. No exceptions
+for "I'll just look at it once." The .scratch/ tree is gitignored at the
+top level so cleanup is free.
