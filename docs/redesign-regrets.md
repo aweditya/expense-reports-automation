@@ -842,3 +842,46 @@ we split the transport extractor into 2 parallel calls (planned
 right after a schema add → almost certainly schema ceiling.
 Bisect by removing the just-added fields. Don't chase the prompt
 or the inputs first.
+
+### 2026-05-22 — reached for a bash heredoc splice when a Python script was the answer (Stage 18d cleanup)
+
+**What happened:** mid-Stage-18d (extracting 3 inline HTML constants
+out of `scripts/local_app_simple.py` into `templates/`), I wrote a
+shell pipeline `{ head -n 1143 …; cat <<'EOF' …; tail -n +1892 …; }
+> new` to splice the file in place. The heredoc body contained an
+em-dash inside an existing Python comment; the splice inserted that
+em-dash into a location where it became a SyntaxError when Python
+parsed the file (`SyntaxError: invalid character '—'`). Flask
+wouldn't boot. User caught it almost immediately ("non-negotiables
+check. lets avoid making inline scripts and using /tmp?") — second
+reminder this session about non-negotiable #4.
+
+**Root cause:** the splice itself was an inline multi-line bash
+script. The CLAUDE.md non-negotiable already says "if it's a script,
+it lives as a real file in `scripts/`." I knew this — I'd JUST
+extracted the inline `python -c` into `scripts/sse_wait_for_phase.py`
+earlier in the session, captured by a regrets entry. Then I did the
+same class of thing again, this time with bash heredocs.
+
+**Fix:** reverted via `git checkout` + wrote
+`scripts/_one_off_extract_templates.py` (a real Python file). That
+script operates on byte-level slices with explicit start/end
+markers — no shell character-set surprises, no quoting hell.
+Deleted after use.
+
+**Rule going forward (sharper than #4):**
+- ANY operation that synthesizes or mutates source files based on
+  string content lives in a real `scripts/` file. Even one-shot
+  splices.
+- The shell is for: invoking binaries, simple pipelines (`grep |
+  head`), reading file sizes / metadata. NOT for: heredocs that
+  produce code, `sed -i` against templated content, awk programs >2
+  lines.
+- One-off scripts get the `_one_off_` prefix + a "delete after
+  use" comment in the docstring, so the next session knows they're
+  not load-bearing infrastructure.
+
+**Heuristic:** if I'm about to write `{ head; cat <<EOF; tail; }` or
+similar, that's the smell. Stop, write `scripts/<thing>.py`. The
+extra 30 seconds beats the inevitable bisect when a character in
+the heredoc breaks the output file.
