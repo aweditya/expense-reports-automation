@@ -27,6 +27,12 @@ COPY scripts/ /app/scripts/
 # the rest of generated/ is already baked into the Rust binaries. Glob lets
 # future per-kind schemas ship without a Dockerfile change.
 COPY generated/response_schema_*.json /app/generated/
+# Stage 18d extracted the upload-form / progress / error HTML strings
+# from scripts/local_app_simple.py into dedicated template files.
+# local_app_simple.py reads them at module import via
+# (_TEMPLATES_DIR / "...").read_text(); without this COPY the
+# container crashes on Flask startup with FileNotFoundError.
+COPY templates/ /app/templates/
 
 WORKDIR /app
 
