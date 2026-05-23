@@ -99,6 +99,19 @@ History of how this came together is in `docs/redesign-plan.md` and
 - `scripts/generate_schema_artifacts.py` regenerates `generated/`:
   `expense_report_model.rs`, `validation_rules.rs`, plus YAML mirrors. Run it
   after every `schema.yaml` edit.
+- `scripts/generate_response_schema.py` regenerates per-kind
+  `generated/response_schema_<kind>.json` for each Gemini extractor.
+  Run after any `schema.yaml` change to a per-kind detail block.
+- **Required pre-push gate after ANY change to a detail block**:
+  `VERTEX_PROJECT_ID=soe-agile-agents ./.venv/bin/python scripts/probe_response_schemas.py`.
+  Sends one minimal live `generate_content` per schema (~$0.01 each,
+  <2s per file) — catches Vertex's property-count ceiling rejections
+  that `cargo test` + local SDK validation miss. Stage 9c shipped
+  without running this and broke prod for the FA; the regrets log
+  captures it. Known-broken schemas (no extractor wires them yet,
+  e.g. conference_registration) are allowlisted in
+  `probe_response_schemas.py::KNOWN_BROKEN` so the gate still passes
+  for active schemas.
 - The generator parses only the `expense_report:` top-level key; sibling keys
   like `_meta_convention:` are intentional documentation/spec living alongside
   the schema but outside codegen.

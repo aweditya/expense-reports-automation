@@ -33,24 +33,26 @@ from google.genai import types
 REPO_ROOT = Path(__file__).resolve().parent.parent
 GENERATED_DIR = REPO_ROOT / "generated"
 
-# Each generated schema we expect Vertex to accept. Single-call kinds
-# (meal, transport) have one file; multi-call kinds (lodging) have
-# multiple. Matches `SCHEMAS_TO_GENERATE` in
-# `scripts/generate_response_schema.py`.
-SCHEMA_FILES = [
-    "response_schema_meal.json",
-    "response_schema_transport.json",
-    "response_schema_lodging_main.json",
-    "response_schema_lodging_extras.json",
-    "response_schema_airfare_main.json",
-    "response_schema_airfare_aux.json",
-    "response_schema_airfare_extras.json",
-    "response_schema_conference_registration.json",
-    "response_schema_supporting_conference_doc.json",
-    "response_schema_synthesis_conference_bundle.json",
-]
+# Auto-discover every generated response_schema. Previously a hand-
+# maintained list — drift between this list and SCHEMAS_TO_GENERATE
+# in generate_response_schema.py meant new schemas (e.g. Stage 13's
+# miscellaneous + Stage 14's membership) wouldn't get probed unless
+# we remembered to add them here. Globbing closes that gap so every
+# future schema is gated automatically.
+def discover_schema_files() -> list[str]:
+    return sorted(p.name for p in GENERATED_DIR.glob("response_schema_*.json"))
 
 MODEL = "gemini-3-flash-preview"
+
+# Schemas we know exceed Vertex's property-count ceiling but haven't
+# yet split (a la lodging) because no extractor / form-option wires
+# them today. Surfaced by the probe but skipped for gate purposes so
+# active schemas don't get bundled with already-known-broken ones.
+# When you wire one of these, drop it from this dict + ship the split.
+KNOWN_BROKEN: dict[str, str] = {
+    "response_schema_conference_registration.json":
+        "exceeds Vertex ceiling; needs split-call wiring (planned post-9c.2)",
+}
 
 
 def get_client() -> genai.Client:
@@ -90,17 +92,26 @@ def probe(client: genai.Client, schema_dict: dict) -> tuple[bool, str]:
 def main() -> int:
     client = get_client()
     failures = 0
-    for filename in SCHEMA_FILES:
+    schema_files = discover_schema_files()
+    if not schema_files:
+        print("no generated/response_schema_*.json found — run "
+              "scripts/generate_response_schema.py first")
+        return 2
+    print(f"# probing {len(schema_files)} schemas against Vertex {MODEL}")
+    for filename in schema_files:
         path = GENERATED_DIR / filename
+        # Trim the "response_schema_" prefix and ".json" suffix for display.
+        label = filename[len("response_schema_") : -len(".json")]
+        if filename in KNOWN_BROKEN:
+            print(f"SKIP  {label:30s}  known-broken: {KNOWN_BROKEN[filename]}")
+            continue
         if not path.exists():
-            print(f"FAIL  {filename}  (not found — run scripts/generate_response_schema.py)")
+            print(f"FAIL  {label:30s}  not found — run scripts/generate_response_schema.py")
             failures += 1
             continue
         schema_dict = json.loads(path.read_text())
         ok, msg = probe(client, schema_dict)
         marker = "OK  " if ok else "FAIL"
-        # Trim the "response_schema_" prefix and ".json" suffix for display.
-        label = filename[len("response_schema_") : -len(".json")]
         print(f"{marker}  {label:30s}  {msg}")
         if not ok:
             failures += 1
