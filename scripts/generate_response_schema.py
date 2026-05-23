@@ -75,6 +75,12 @@ KIND_EXPENSE_TYPES: dict[str, list[str]] = {
     # Foreign" on the foreign CSV. No kind-specific detail block — the
     # receipt typically only carries org name + amount + date.
     "membership": ["membership_dues"],
+    # B2: personal mileage reimbursement at IRS Standard Mileage Rate
+    # (business use). The FA attaches a Google Maps screenshot / driving
+    # log showing the route + distance; reduction multiplies by the
+    # current IRS rate (generated/irs_mileage_rates.json) to get the
+    # line amount.
+    "mileage": ["personal_mileage"],
 }
 
 
@@ -218,6 +224,25 @@ def meal_details_block_schema() -> dict:
             "pre_tax_amount",
             "tax_amount",
         ],
+    }
+
+
+def mileage_details_block_schema() -> dict:
+    # B2: personal mileage. Small detail block — single-call extractor.
+    # vehicle_class is T1 (FA picks, defaults to personal_car), so it's
+    # NOT in the response schema. trip_date is T3 here because typical
+    # Google Maps screenshots / driving logs have the date visible.
+    return {
+        "type": "object",
+        "properties": {
+            "distance_miles": leaf({"type": "number"}),
+            "origin": leaf({"type": "string"}),
+            "destination": leaf({"type": "string"}),
+            "trip_date": leaf(
+                {"type": "string", "description": "ISO 8601 date (YYYY-MM-DD)"}
+            ),
+        },
+        "required": ["distance_miles", "origin", "destination", "trip_date"],
     }
 
 
@@ -892,6 +917,18 @@ SCHEMAS_TO_GENERATE: list[tuple[str, dict]] = [
         dict(
             expense_type_values=KIND_EXPENSE_TYPES["membership"],
             include_detail=False,
+        ),
+    ),
+    # B2: personal mileage. Single-call — mileage_details has only 4
+    # T3 leaves which is well under Vertex's schema-property ceiling.
+    # extras block still included (merchant_address null for mileage,
+    # printed_currency null since IRS rate is USD-denominated).
+    (
+        "response_schema_mileage.json",
+        dict(
+            expense_type_values=KIND_EXPENSE_TYPES["mileage"],
+            detail_block_name="mileage_details",
+            detail_block=mileage_details_block_schema(),
         ),
     ),
 ]

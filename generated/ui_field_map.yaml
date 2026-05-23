@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-generated_at_utc: '2026-05-23T09:00:02+00:00'
+generated_at_utc: '2026-05-23T17:33:44+00:00'
 sections:
 - key: general_information
   label: General Information
@@ -315,6 +315,7 @@ sections:
     - lodging_foreign
     - membership_dues
     - other_business_expense
+    - personal_mileage
   - path: expense_report.transaction_lines[].common.remarks
     label: Remarks
     control: textarea
@@ -881,6 +882,53 @@ sections:
     required_expression: null
     review_priority: low
     allowed_values: []
+  - path: expense_report.transaction_lines[].mileage_details.distance_miles
+    label: Distance Miles
+    control: number
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].mileage_details.origin
+    label: Origin
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].mileage_details.destination
+    label: Destination
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].mileage_details.trip_date
+    label: Trip Date
+    control: date
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: high
+    allowed_values: []
+  - path: expense_report.transaction_lines[].mileage_details.vehicle_class
+    label: Vehicle Class
+    control: select
+    source: T1
+    entry_mode: user_confirmed_input
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values:
+    - personal_car
+    - motorcycle
   - path: expense_report.transaction_lines[].gift_details.recipient_name
     label: Recipient Name
     control: text

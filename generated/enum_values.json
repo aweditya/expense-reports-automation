@@ -44,7 +44,8 @@
       "lodging_domestic",
       "lodging_foreign",
       "membership_dues",
-      "other_business_expense"
+      "other_business_expense",
+      "personal_mileage"
     ],
     "expense_report.transaction_lines[].common.foreign_activity_type": [
       "conference",
@@ -90,6 +91,10 @@
       "eventbrite",
       "usenix",
       "other"
+    ],
+    "expense_report.transaction_lines[].mileage_details.vehicle_class": [
+      "personal_car",
+      "motorcycle"
     ],
     "expense_report.per_diem_expenses[].expense_type": [
       "alaska_hawaii_lodging",

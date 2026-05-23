@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-generated_at_utc: '2026-05-23T09:00:02+00:00'
+generated_at_utc: '2026-05-23T17:33:44+00:00'
 field_rules:
 - path: expense_report
   node_kind: object
@@ -573,6 +573,7 @@ field_rules:
   - lodging_foreign
   - membership_dues
   - other_business_expense
+  - personal_mileage
   default: null
   description: null
   infer_from: LLM classifies from receipt content
@@ -1614,6 +1615,93 @@ field_rules:
     reimbursement cap. Only present on the FINAL receipt (post-return); pre-rental agreements don't have it.
   infer_from: "Rental return receipt \u2014 'Miles Driven' / odometer in \u2212 out"
   validation: null
+- path: expense_report.transaction_lines[].mileage_details
+  node_kind: object
+  schema_type: object
+  rust_type: ExpenseReportTransactionLinesItemMileageDetails
+  required: false
+  required_expression: expense_type == personal_mileage
+  source: null
+  effective_source: null
+  depends_on: []
+  allowed_values: []
+  default: null
+  description: null
+  infer_from: null
+  validation: null
+- path: expense_report.transaction_lines[].mileage_details.distance_miles
+  node_kind: field
+  schema_type: number
+  rust_type: f64
+  required: true
+  required_expression: null
+  source: T3
+  effective_source: T3
+  depends_on: []
+  allowed_values: []
+  default: null
+  description: "One-way OR round-trip distance from the receipt \u2014 whichever the FA is claiming. Reduction multiplies\
+    \ by the IRS rate to get the reimbursement amount."
+  infer_from: "Google Maps screenshot \u2014 total miles shown; or driving log total"
+  validation: null
+- path: expense_report.transaction_lines[].mileage_details.origin
+  node_kind: field
+  schema_type: string
+  rust_type: String
+  required: true
+  required_expression: null
+  source: T3
+  effective_source: T3
+  depends_on: []
+  allowed_values: []
+  default: null
+  description: null
+  infer_from: Starting address / location on the map
+  validation: null
+- path: expense_report.transaction_lines[].mileage_details.destination
+  node_kind: field
+  schema_type: string
+  rust_type: String
+  required: true
+  required_expression: null
+  source: T3
+  effective_source: T3
+  depends_on: []
+  allowed_values: []
+  default: null
+  description: null
+  infer_from: Ending address / location on the map
+  validation: null
+- path: expense_report.transaction_lines[].mileage_details.trip_date
+  node_kind: field
+  schema_type: date
+  rust_type: IsoDate
+  required: true
+  required_expression: null
+  source: T3
+  effective_source: T3
+  depends_on: []
+  allowed_values: []
+  default: null
+  description: Date the trip was taken. Used to look up the IRS rate in effect that year.
+  infer_from: Date stamp on the screenshot/log, or FA-supplied
+  validation: null
+- path: expense_report.transaction_lines[].mileage_details.vehicle_class
+  node_kind: field
+  schema_type: enum
+  rust_type: ExpenseReportTransactionLinesItemMileageDetailsVehicleClassEnum
+  required: false
+  required_expression: null
+  source: T1
+  effective_source: T1
+  depends_on: []
+  allowed_values:
+  - personal_car
+  - motorcycle
+  default: null
+  description: 'Personal car (default for IRS rate). Future: motorcycle/etc. could have different rates.'
+  infer_from: Default personal_car; FA can override
+  validation: null
 - path: expense_report.transaction_lines[].gift_details
   node_kind: object
   schema_type: object
@@ -2241,6 +2329,9 @@ conditional_rules:
 - rule_type: required_when
   target_path: expense_report.transaction_lines[].car_rental_details
   expression: expense_type == car_rental
+- rule_type: required_when
+  target_path: expense_report.transaction_lines[].mileage_details
+  expression: expense_type == personal_mileage
 - rule_type: required_when
   target_path: expense_report.transaction_lines[].gift_details
   expression: expense_type in [gift_card_employee_foreign, gifts_foreign_activity]

@@ -353,6 +353,26 @@
       "type": "number",
       "nullable": true
     },
+    "expense_report.transaction_lines[].mileage_details.distance_miles": {
+      "type": "number",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].mileage_details.origin": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].mileage_details.destination": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].mileage_details.trip_date": {
+      "type": "date",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].mileage_details.vehicle_class": {
+      "type": "enum",
+      "nullable": true
+    },
     "expense_report.transaction_lines[].gift_details.recipient_name": {
       "type": "string",
       "nullable": false

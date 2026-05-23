@@ -257,6 +257,7 @@ expense_report:
               - lodging_foreign
               - membership_dues
               - other_business_expense
+              - personal_mileage
             infer_from: "LLM classifies from receipt content"
           remarks:
             type: string
@@ -647,6 +648,47 @@ expense_report:
               source: T3
               description: "Total miles driven during the rental. Used with rental_start_date/rental_end_date to flag the >350 mi/day Stanford reimbursement cap. Only present on the FINAL receipt (post-return); pre-rental agreements don't have it."
               infer_from: "Rental return receipt — 'Miles Driven' / odometer in − out"
+
+        mileage_details:
+          # B2: personal mileage reimbursement at the IRS Standard Mileage
+          # Rate (business use). The reimbursement amount is computed by
+          # reduction as distance_miles × rate (rate looked up in
+          # generated/irs_mileage_rates.json by the trip's year). FAs
+          # typically attach a Google Maps screenshot showing the route +
+          # distance, or a driving log.
+          required: "expense_type == personal_mileage"
+          fields:
+            distance_miles:
+              type: number
+              required: true
+              source: T3
+              description: "One-way OR round-trip distance from the receipt — whichever the FA is claiming. Reduction multiplies by the IRS rate to get the reimbursement amount."
+              infer_from: "Google Maps screenshot — total miles shown; or driving log total"
+            origin:
+              type: string
+              required: true
+              source: T3
+              infer_from: "Starting address / location on the map"
+            destination:
+              type: string
+              required: true
+              source: T3
+              infer_from: "Ending address / location on the map"
+            trip_date:
+              type: date
+              required: true
+              source: T3
+              description: "Date the trip was taken. Used to look up the IRS rate in effect that year."
+              infer_from: "Date stamp on the screenshot/log, or FA-supplied"
+            vehicle_class:
+              type: enum
+              required: false
+              source: T1
+              description: "Personal car (default for IRS rate). Future: motorcycle/etc. could have different rates."
+              allowed_values:
+                - personal_car
+                - motorcycle
+              infer_from: "Default personal_car; FA can override"
 
         gift_details:
           required: "expense_type in [gift_card_employee_foreign, gifts_foreign_activity]"

@@ -224,6 +224,7 @@ pub enum ExpenseReportTransactionLinesItemCommonExpenseTypeEnum {
     LodgingForeign,
     MembershipDues,
     OtherBusinessExpense,
+    PersonalMileage,
 }
 
 impl ExpenseReportTransactionLinesItemCommonExpenseTypeEnum {
@@ -246,6 +247,7 @@ impl ExpenseReportTransactionLinesItemCommonExpenseTypeEnum {
             Self::LodgingForeign => "lodging_foreign",
             Self::MembershipDues => "membership_dues",
             Self::OtherBusinessExpense => "other_business_expense",
+            Self::PersonalMileage => "personal_mileage",
         }
     }
 }
@@ -272,6 +274,7 @@ impl core::str::FromStr for ExpenseReportTransactionLinesItemCommonExpenseTypeEn
             "lodging_foreign" => Ok(Self::LodgingForeign),
             "membership_dues" => Ok(Self::MembershipDues),
             "other_business_expense" => Ok(Self::OtherBusinessExpense),
+            "personal_mileage" => Ok(Self::PersonalMileage),
             _ => Err("invalid enum value"),
         }
     }
@@ -567,6 +570,44 @@ impl core::str::FromStr for ExpenseReportTransactionLinesItemConferenceRegistrat
 }
 
 impl core::fmt::Display for ExpenseReportTransactionLinesItemConferenceRegistrationDetailsRegistrationSystemEnum {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+///  Personal car (default for IRS rate). Future: motorcycle/etc. could have different rates.
+/// Source tier: T1
+/// Infer from:  Default personal_car; FA can override
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExpenseReportTransactionLinesItemMileageDetailsVehicleClassEnum {
+    #[default]
+    PersonalCar,
+    Motorcycle,
+}
+
+impl ExpenseReportTransactionLinesItemMileageDetailsVehicleClassEnum {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::PersonalCar => "personal_car",
+            Self::Motorcycle => "motorcycle",
+        }
+    }
+}
+
+impl core::str::FromStr for ExpenseReportTransactionLinesItemMileageDetailsVehicleClassEnum {
+    type Err = &'static str;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "personal_car" => Ok(Self::PersonalCar),
+            "motorcycle" => Ok(Self::Motorcycle),
+            _ => Err("invalid enum value"),
+        }
+    }
+}
+
+impl core::fmt::Display for ExpenseReportTransactionLinesItemMileageDetailsVehicleClassEnum {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str(self.as_str())
     }
@@ -1205,6 +1246,37 @@ pub struct ExpenseReportTransactionLinesItemCarRentalDetails {
 
 }
 
+/// Conditionally required when:  expense_type == personal_mileage
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct ExpenseReportTransactionLinesItemMileageDetails {
+    ///  One-way OR round-trip distance from the receipt — whichever the FA is claiming.
+    /// Reduction multiplies by the IRS rate to get the reimbursement amount.
+    /// Source tier: T3
+    /// Infer from:  Google Maps screenshot — total miles shown; or driving log total
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
+    pub distance_miles: Wrapped<f64>,
+    /// Source tier: T3
+    /// Infer from:  Starting address / location on the map
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
+    pub origin: Wrapped<String>,
+    /// Source tier: T3
+    /// Infer from:  Ending address / location on the map
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
+    pub destination: Wrapped<String>,
+    ///  Date the trip was taken. Used to look up the IRS rate in effect that year.
+    /// Source tier: T3
+    /// Infer from:  Date stamp on the screenshot/log, or FA-supplied
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
+    pub trip_date: Wrapped<IsoDate>,
+    ///  Personal car (default for IRS rate). Future: motorcycle/etc. could have different
+    /// rates.
+    /// Source tier: T1
+    /// Infer from:  Default personal_car; FA can override
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vehicle_class: Option<ExpenseReportTransactionLinesItemMileageDetailsVehicleClassEnum>,
+
+}
+
 /// Conditionally required when:  expense_type in [gift_card_employee_foreign,
 /// Conditionally required when: gifts_foreign_activity]
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
@@ -1262,6 +1334,9 @@ pub struct ExpenseReportTransactionLinesItem {
     /// Conditionally required when:  expense_type == car_rental
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub car_rental_details: Option<ExpenseReportTransactionLinesItemCarRentalDetails>,
+    /// Conditionally required when:  expense_type == personal_mileage
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mileage_details: Option<ExpenseReportTransactionLinesItemMileageDetails>,
     /// Conditionally required when:  expense_type in [gift_card_employee_foreign,
     /// Conditionally required when: gifts_foreign_activity]
     #[serde(default, skip_serializing_if = "Option::is_none")]

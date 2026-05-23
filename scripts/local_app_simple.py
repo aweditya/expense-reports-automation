@@ -58,6 +58,7 @@ EXTRACTORS: dict[str, Path] = {
     "airfare": REPO_ROOT / "scripts" / "extract_airfare.py",
     "miscellaneous": REPO_ROOT / "scripts" / "extract_miscellaneous.py",
     "membership": REPO_ROOT / "scripts" / "extract_membership.py",
+    "mileage": REPO_ROOT / "scripts" / "extract_mileage.py",
 }
 
 # Cloud Run sets PORT; locally default 8765 (matches existing app's muscle memory).
