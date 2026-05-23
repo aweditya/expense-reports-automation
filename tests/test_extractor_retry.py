@@ -19,6 +19,7 @@ from extractor_lib import (  # noqa: E402
     RETRY_MAX_ATTEMPTS,
     _is_retryable,
     _retry_with_backoff,
+    merge_two_call_lines,
 )
 
 
@@ -123,6 +124,47 @@ class TestRetryWithBackoff(unittest.TestCase):
         # If we remove 503, we lose retry on the most common Vertex flake.
         for code in (408, 429, 500, 502, 503, 504):
             self.assertIn(code, RETRYABLE_HTTP_STATUSES)
+
+
+class TestMergeTwoCallLines(unittest.TestCase):
+    """B1.r: covers the merge helper that lodging+meal+transport
+    all use to combine their two parallel single_call outputs into
+    one per-doc transaction line."""
+
+    def test_disjoint_keys_merge_into_one_line(self):
+        main = [{"common": {"x": 1}, "meal_details": {"venue": "Tamarine"}}]
+        extras = [{"extras": {"merchant_address": "123 Main St"}}]
+        merged = merge_two_call_lines(main, extras)
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(set(merged[0].keys()),
+                         {"common", "meal_details", "extras"})
+        self.assertEqual(merged[0]["meal_details"]["venue"], "Tamarine")
+        self.assertEqual(merged[0]["extras"]["merchant_address"], "123 Main St")
+
+    def test_main_not_single_element_raises(self):
+        with self.assertRaises(ValueError):
+            merge_two_call_lines([], [{"extras": {}}])
+        with self.assertRaises(ValueError):
+            merge_two_call_lines([{"a": 1}, {"b": 2}], [{"extras": {}}])
+
+    def test_extras_not_single_element_raises(self):
+        with self.assertRaises(ValueError):
+            merge_two_call_lines([{"common": {}}], [])
+
+    def test_non_dict_elements_raise(self):
+        with self.assertRaises(ValueError):
+            merge_two_call_lines(["not a dict"], [{"extras": {}}])
+        with self.assertRaises(ValueError):
+            merge_two_call_lines([{"common": {}}], ["not a dict"])
+
+    def test_extras_keys_win_on_conflict(self):
+        # Defensive: if both calls accidentally emit the same key,
+        # the spread order means extras wins. This shouldn't happen
+        # given disjoint schemas, but the merge shouldn't crash.
+        main = [{"common": {"v": "main"}}]
+        extras = [{"common": {"v": "extras"}, "extras": {}}]
+        merged = merge_two_call_lines(main, extras)
+        self.assertEqual(merged[0]["common"]["v"], "extras")
 
 
 if __name__ == "__main__":

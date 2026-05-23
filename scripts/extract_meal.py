@@ -38,6 +38,7 @@ from evidence_bbox import (
 from extractor_lib import (
     GeminiCallFailed,
     detect_mime_type,
+    merge_two_call_lines,
     parse_args,
     single_call,
 )
@@ -183,29 +184,6 @@ block populated. Shape is enforced by the response schema.
 {META_CONVENTION}"""
 
 
-def merge_transaction_lines(main_result: list, extras_result: list) -> list:
-    """Merge the two single-call outputs into one transaction line.
-
-    The two arrays' first elements have disjoint top-level keys —
-    `main = {common, meal_details}` and `extras = {extras}` — so a
-    dict merge yields the same per-doc JSON shape a single-call
-    extraction would have produced.
-    """
-    if not (isinstance(main_result, list) and len(main_result) == 1):
-        raise ValueError(
-            f"main result not a single-element array: {main_result!r}"
-        )
-    if not (isinstance(extras_result, list) and len(extras_result) == 1):
-        raise ValueError(
-            f"extras result not a single-element array: {extras_result!r}"
-        )
-    main_line = main_result[0]
-    extras_line = extras_result[0]
-    if not (isinstance(main_line, dict) and isinstance(extras_line, dict)):
-        raise ValueError("merge expects dict elements")
-    return [{**main_line, **extras_line}]
-
-
 def main() -> int:
     args = parse_args(__doc__)
 
@@ -281,7 +259,7 @@ def main() -> int:
             print(err, file=sys.stderr)
             return 1
 
-    merged = merge_transaction_lines(result_main, result_extras)
+    merged = merge_two_call_lines(result_main, result_extras)
     for entry in merged:
         if isinstance(entry, dict):
             entry["source_filename"] = args.image.name

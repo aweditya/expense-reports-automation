@@ -127,6 +127,34 @@ class GeminiCallFailed(Exception):
     """
 
 
+def merge_two_call_lines(main_result: list, extras_result: list) -> list:
+    """Merge two single-element single_call() outputs into one
+    transaction line (B1 dedup — was duplicated across lodging,
+    meal, transport).
+
+    Each call returns a JSON array containing exactly one transaction-
+    line dict. The two dicts have disjoint top-level keys (`main`
+    typically has `{common, <kind>_details}`; `extras` has just
+    `{extras}`), so a shallow merge yields the per-doc JSON shape a
+    single-call extraction would have produced.
+
+    Raises ValueError when either input isn't `[{...}]` — defensive
+    against a Gemini schema-rejection that returns a different shape."""
+    if not (isinstance(main_result, list) and len(main_result) == 1):
+        raise ValueError(
+            f"main result not a single-element array: {main_result!r}"
+        )
+    if not (isinstance(extras_result, list) and len(extras_result) == 1):
+        raise ValueError(
+            f"extras result not a single-element array: {extras_result!r}"
+        )
+    main_line = main_result[0]
+    extras_line = extras_result[0]
+    if not (isinstance(main_line, dict) and isinstance(extras_line, dict)):
+        raise ValueError("merge expects dict elements")
+    return [{**main_line, **extras_line}]
+
+
 def parse_args(description: str | None = None) -> argparse.Namespace:
     """Parse the standard per-kind extractor CLI.
 
