@@ -211,12 +211,19 @@ fn check_tip_under_cap(report: &ExpenseReport, issues: &mut Vec<ValidationIssue>
     for (idx, line) in lines.iter().enumerate() {
         let total = line.common.line_amount_usd.value;
         // ─── Meal path ─────────────────────────────────────────────
-        // Stage 9c reverted pre_tax_amount + tax_amount (Vertex schema
-        // ceiling regression); meal tip cap now uses the fallback
-        // formula (mathematically equivalent threshold).
+        // B1: meal extractor is now split-call, so pre_tax_amount +
+        // tax_amount are extracted again and the precise cap is used
+        // when both are present. Falls back to total-math when either
+        // is missing (older receipts, faded scans, take-out without
+        // an itemized subtotal).
         if let Some(meal) = line.meal_details.as_ref() {
             let Some(tip) = meal.tip_amount.value else { continue; };
-            let exceeded = cap_exceeded(tip, None, None, total);
+            let exceeded = cap_exceeded(
+                tip,
+                meal.pre_tax_amount.value,
+                meal.tax_amount.value,
+                total,
+            );
             if let Some((cap, basis)) = exceeded {
                 issues.push(ValidationIssue {
                     severity: ValidationSeverity::Warning,
@@ -231,11 +238,30 @@ fn check_tip_under_cap(report: &ExpenseReport, issues: &mut Vec<ValidationIssue>
             }
         }
         // ─── Ground transport path ─────────────────────────────────
-        // Disabled until we split the transport extractor into 2
-        // parallel Gemini calls (planned 9c.2 follow-up). The
-        // ground_transport_details schema has no tip_amount field
-        // currently — adding it broke the extractor (Vertex schema
-        // ceiling). See docs/redesign-regrets.md.
+        // B1: transport extractor is now split-call (was disabled
+        // until 9c.2). pre_tax_amount + tax_amount + tip_amount all
+        // ride in ground_transport_details; same cap, same fallback.
+        if let Some(transport) = line.ground_transport_details.as_ref() {
+            let Some(tip) = transport.tip_amount.value else { continue; };
+            let exceeded = cap_exceeded(
+                tip,
+                transport.pre_tax_amount.value,
+                transport.tax_amount.value,
+                total,
+            );
+            if let Some((cap, basis)) = exceeded {
+                issues.push(ValidationIssue {
+                    severity: ValidationSeverity::Warning,
+                    kind: ValidationIssueKind::ManualReviewRequired,
+                    path: format!("expense_report.transaction_lines[{idx}].ground_transport_details.tip_amount"),
+                    schema_path: "expense_report.transaction_lines[*].ground_transport_details.tip_amount".to_owned(),
+                    message: format!(
+                        "Driver tip ${tip:.2} exceeds Stanford's 20% guideline (cap ${cap:.2}, {basis}). \
+                         Verify with the FA before filing."
+                    ),
+                });
+            }
+        }
     }
 }
 
@@ -1299,22 +1325,57 @@ mod tests {
         r
     }
 
-    // Stage 9c reverted pre_tax_amount + tax_amount on meal_details
-    // because the expanded response_schema broke the meal Gemini call
-    // (Vertex schema-too-large). The tip-cap check now always uses the
-    // fallback formula `tip ≤ 0.20 × (total − tip)` — mathematically
-    // equivalent to `tip ≤ 0.20 × (pre_tax + tax)`. Tests below cover
-    // the fallback path only.
+    // B1: meal + transport are now split-call. pre_tax_amount + tax_amount
+    // are extracted again, so the validator uses the precise cap
+    // `tip ≤ 0.20 × (pre_tax + tax)` when both are present and falls
+    // back to `tip ≤ 0.20 × (total − tip)` when either is missing
+    // (older receipts, formats we can't parse).
+
+    fn meal_line_with_tip_and_tax(
+        tip: f64, total: f64, pre_tax: Option<f64>, tax: Option<f64>,
+    ) -> ExpenseReportTransactionLinesItem {
+        let mut line = meal_line_with_tip(tip, total);
+        let md = line.meal_details.as_mut().unwrap();
+        if let Some(p) = pre_tax {
+            md.pre_tax_amount = Wrapped { value: Some(p), meta: FieldMetadata::default() };
+        }
+        if let Some(t) = tax {
+            md.tax_amount = Wrapped { value: Some(t), meta: FieldMetadata::default() };
+        }
+        line
+    }
+
+    fn transport_line_with_tip(
+        tip: f64, total: f64, pre_tax: Option<f64>, tax: Option<f64>,
+    ) -> ExpenseReportTransactionLinesItem {
+        let mut line = ExpenseReportTransactionLinesItem::default();
+        line.common.line_amount_usd = Wrapped { value: Some(total), meta: FieldMetadata::default() };
+        line.common.expense_type = Wrapped {
+            value: Some(ExpenseReportTransactionLinesItemCommonExpenseTypeEnum::GroundTransportationDomestic),
+            meta: FieldMetadata::default(),
+        };
+        let mut gt = crate::expense_report_model::ExpenseReportTransactionLinesItemGroundTransportDetails::default();
+        gt.tip_amount = Wrapped { value: Some(tip), meta: FieldMetadata::default() };
+        if let Some(p) = pre_tax {
+            gt.pre_tax_amount = Wrapped { value: Some(p), meta: FieldMetadata::default() };
+        }
+        if let Some(t) = tax {
+            gt.tax_amount = Wrapped { value: Some(t), meta: FieldMetadata::default() };
+        }
+        line.ground_transport_details = Some(gt);
+        line
+    }
 
     #[test]
     fn tip_within_cap_fires_no_warning() {
-        // total=$130 tip=$20 → 0.20 × ($130 − $20) = $22 cap. $20 ≤ $22.
+        // total=$130 tip=$20 → fallback: 0.20 × ($130 − $20) = $22 cap. $20 ≤ $22.
         let report = report_with_lines(vec![meal_line_with_tip(20.0, 130.0)]);
         assert!(tip_issues(&report).is_empty());
     }
 
     #[test]
     fn tip_over_cap_fires_warning_with_fallback_formula() {
+        // No pre_tax/tax extracted → falls back to total math.
         // total=$120 tip=$22 → 0.20 × ($120 − $22) = $19.60 cap. $22 > $19.60.
         let report = report_with_lines(vec![meal_line_with_tip(22.0, 120.0)]);
         let issues = tip_issues(&report);
@@ -1323,6 +1384,35 @@ mod tests {
         assert!(msg.contains("$22.00"), "msg: {msg}");
         assert!(msg.contains("(total − tip)"),
                 "should mention fallback formula: {msg}");
+    }
+
+    #[test]
+    fn meal_tip_uses_precise_cap_when_pre_tax_and_tax_present() {
+        // pre_tax=$100, tax=$10 → cap = 0.20 × $110 = $22. tip=$25 > cap.
+        // Under fallback (total=$135, tip=$25), cap would be 0.20 × $110 = $22
+        // — identical here, but the basis text differs ("post-tax" vs "total − tip").
+        let report = report_with_lines(vec![meal_line_with_tip_and_tax(
+            25.0, 135.0, Some(100.0), Some(10.0),
+        )]);
+        let issues = tip_issues(&report);
+        assert_eq!(issues.len(), 1);
+        let msg = &issues[0].message;
+        assert!(msg.contains("post-tax"),
+                "should mention the precise basis: {msg}");
+        assert!(msg.contains("$110.00"),
+                "should mention pre_tax+tax sum: {msg}");
+    }
+
+    #[test]
+    fn meal_tip_falls_back_when_only_pre_tax_present() {
+        // pre_tax extracted but tax missing → fallback math.
+        // total=$130, tip=$22 → fallback cap = $21.60 → fires.
+        let report = report_with_lines(vec![meal_line_with_tip_and_tax(
+            22.0, 130.0, Some(100.0), None,
+        )]);
+        let issues = tip_issues(&report);
+        assert_eq!(issues.len(), 1);
+        assert!(issues[0].message.contains("(total − tip)"));
     }
 
     #[test]
@@ -1341,8 +1431,52 @@ mod tests {
         assert!(tip_issues(&report).is_empty());
     }
 
-    // Transport tip-cap test removed with Stage 9c revert. The
-    // ground_transport_details schema doesn't carry tip_amount anymore;
-    // adding it broke the Gemini extractor. Restore this test when the
-    // split-extractor (9c.2) lands.
+    #[test]
+    fn transport_tip_over_cap_with_precise_basis_fires() {
+        // Driver tip $10 on a $15 pre_tax + $5 tax fare:
+        // cap = 0.20 × $20 = $4, tip $10 > $4 → fires.
+        let report = report_with_lines(vec![transport_line_with_tip(
+            10.0, 35.0, Some(15.0), Some(5.0),
+        )]);
+        let issues = tip_issues(&report);
+        assert_eq!(issues.len(), 1);
+        let msg = &issues[0].message;
+        assert!(msg.contains("Driver tip"),
+                "transport warning should say 'Driver tip': {msg}");
+        assert!(msg.contains("post-tax"));
+    }
+
+    #[test]
+    fn transport_tip_within_cap_no_warning() {
+        // Driver tip $4 on pre_tax+tax of $20 → cap $4 → exactly at cap.
+        let report = report_with_lines(vec![transport_line_with_tip(
+            4.0, 24.0, Some(15.0), Some(5.0),
+        )]);
+        assert!(tip_issues(&report).is_empty());
+    }
+
+    #[test]
+    fn transport_tip_fallback_when_pre_tax_missing() {
+        // pre_tax not extracted (older Uber receipt). Falls back to total math.
+        // total=$30 tip=$10 → fallback cap = 0.20 × $20 = $4 → fires.
+        let report = report_with_lines(vec![transport_line_with_tip(
+            10.0, 30.0, None, None,
+        )]);
+        let issues = tip_issues(&report);
+        assert_eq!(issues.len(), 1);
+        assert!(issues[0].message.contains("(total − tip)"));
+    }
+
+    #[test]
+    fn transport_tip_none_skips_check() {
+        // No tip extracted (taxi receipt with no tip line) → skip.
+        let mut line = ExpenseReportTransactionLinesItem::default();
+        line.common.expense_type = Wrapped {
+            value: Some(ExpenseReportTransactionLinesItemCommonExpenseTypeEnum::GroundTransportationDomestic),
+            meta: FieldMetadata::default(),
+        };
+        line.ground_transport_details = Some(crate::expense_report_model::ExpenseReportTransactionLinesItemGroundTransportDetails::default());
+        let report = report_with_lines(vec![line]);
+        assert!(tip_issues(&report).is_empty());
+    }
 }

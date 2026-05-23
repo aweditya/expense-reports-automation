@@ -1227,9 +1227,13 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
 
 fn render_meal_details(html: &mut String, meal: &ExpenseReportTransactionLinesItemMealDetails, path: &str) {
     field_card_text(html, "Venue", &meal.venue_name, &format!("{path}.venue_name"), |s: &String| s.clone());
-    // Stage 9c reverted pre_tax_amount + tax_amount on meal_details
-    // (broke the meal Gemini call — Vertex schema-too-large). tip_amount
-    // stays; check_tip_under_cap uses fallback math now.
+    // B1: pre_tax_amount + tax_amount re-added after the Stage 9c
+    // revert; the meal extractor is now split-call so the schema
+    // fits under Vertex's ceiling. check_tip_under_cap uses these
+    // as the precise base when present, falling back to total math
+    // when either is missing.
+    field_card_optional_money(html, "Subtotal (pre-tax)", &meal.pre_tax_amount, &format!("{path}.pre_tax_amount"));
+    field_card_optional_money(html, "Tax", &meal.tax_amount, &format!("{path}.tax_amount"));
     field_card_optional_money(html, "Tip", &meal.tip_amount, &format!("{path}.tip_amount"));
     field_card_optional_money(html, "Alcohol", &meal.alcohol_amount, &format!("{path}.alcohol_amount"));
     field_card_text(html, "Has Alcohol", &meal.has_alcohol_on_receipt, &format!("{path}.has_alcohol_on_receipt"), |b| if *b { "yes".into() } else { "no".into() });
@@ -1261,11 +1265,14 @@ fn render_ground_transport_details(
     field_card_text(html, "Service Provider", &gt.service_provider, &format!("{path}.service_provider"), |s: &String| s.clone());
     field_card_text(html, "Origin", &gt.origin, &format!("{path}.origin"), |s: &String| s.clone());
     field_card_text(html, "Destination", &gt.destination, &format!("{path}.destination"), |s: &String| s.clone());
-    // Stage 9c added tip/pre_tax/tax here — reverted because the
-    // expanded schema broke the transport Gemini call (Vertex's
-    // property-count ceiling). Tip-cap warning for transport is
-    // disabled until we split the extractor into two parallel calls
-    // (planned 9c.2 follow-up).
+    // B1: tip/pre_tax/tax re-added after the Stage 9c revert; the
+    // transport extractor is now split-call so the schema fits under
+    // Vertex's ceiling. check_tip_under_cap fires a warning when
+    // driver tip > 20% of (pre_tax + tax), with fallback to total
+    // math when either is missing.
+    field_card_optional_money(html, "Fare (pre-tax)", &gt.pre_tax_amount, &format!("{path}.pre_tax_amount"));
+    field_card_optional_money(html, "Taxes & Fees", &gt.tax_amount, &format!("{path}.tax_amount"));
+    field_card_optional_money(html, "Driver Tip", &gt.tip_amount, &format!("{path}.tip_amount"));
 }
 
 fn render_lodging_details(
