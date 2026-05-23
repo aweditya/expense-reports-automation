@@ -67,6 +67,13 @@ B1_FLASK_URL = "http://localhost:8088"
 # side (Mileage Details card) without depending on Vertex.
 B2_FIXTURE = REPO_ROOT / ".scratch" / "uploads" / "b2-eye"
 
+# Stage 18c: import the storage-key constant from local_app_simple
+# rather than redeclaring the string here. Without this import, a
+# rename in Python would leave the test asserting against the old
+# key — silent drift that survives unit tests.
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+from local_app_simple import FORM_DRAFT_KEY  # noqa: E402
+
 try:
     from playwright.sync_api import sync_playwright
     PLAYWRIGHT_AVAILABLE = True
@@ -691,7 +698,9 @@ class TestUploadFormBrowser(unittest.TestCase):
 
     HOME_URL = f"{B1_FLASK_URL}/"
     WORKBENCH_URL = f"{B1_FLASK_URL}/uploads/b1-eye/workbench.html"
-    STORAGE_KEY = "stanford-expense-form-draft-v1"
+    # Stage 18c: imported from local_app_simple so a Python-side
+    # rename can't silently leave the test stale.
+    STORAGE_KEY = FORM_DRAFT_KEY
 
     @classmethod
     def setUpClass(cls):

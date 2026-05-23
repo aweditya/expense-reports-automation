@@ -159,21 +159,23 @@ def _get_job(upload_id: str) -> dict:
         return dict(JOBS.get(upload_id, {}))
 
 
-# ─── Routes ────────────────────────────────────────────────────────────────
-
-@app.get("/")
-def upload_form() -> str:
-    """Tiny upload form. Inline-styled — no external CSS dependency."""
-    return UPLOAD_FORM_HTML.replace("__FORM_DRAFT_KEY__", FORM_DRAFT_KEY)
-
-
 # Single source of truth for the browser localStorage key the form-
 # persistence JS uses (Stage 11b). Referenced by both the upload form
 # (writes drafts on input) and the progress page (clears the draft on
 # phase=done after a successful upload). Both templates use the
 # `__FORM_DRAFT_KEY__` placeholder which gets string-replaced at render
 # time. Bumping the suffix invalidates all existing draft browser-state.
+# Tests import this constant rather than redeclaring the string so a
+# rename here can't silently leave test assertions stale.
 FORM_DRAFT_KEY = "stanford-expense-form-draft-v1"
+
+
+# ─── Routes ────────────────────────────────────────────────────────────────
+
+@app.get("/")
+def upload_form() -> str:
+    """Tiny upload form. Inline-styled — no external CSS dependency."""
+    return UPLOAD_FORM_HTML.replace("__FORM_DRAFT_KEY__", FORM_DRAFT_KEY)
 
 
 @app.post("/upload")
