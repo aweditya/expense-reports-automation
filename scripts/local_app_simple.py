@@ -77,6 +77,33 @@ def rust_bin(name: str) -> list[str]:
 
 app = Flask(__name__)
 
+# Stage 21: hard caps on what we accept from the upload form.
+#
+# MAX_CONTENT_LENGTH: Flask returns 413 if the entire multipart body
+# exceeds this. 64 MiB covers ~8-12 typical receipt PDFs/JPEGs plus
+# the FA-fieldset overhead. Protects against accidental huge uploads
+# + malicious DoS attempts that would OOM the Cloud Run container.
+app.config["MAX_CONTENT_LENGTH"] = 64 * 1024 * 1024  # 64 MiB
+
+# ALLOWED_UPLOAD_EXTENSIONS: only formats the extractors actually
+# support. Rejecting unknown formats upfront beats letting them through
+# to extract_*.py only to fail with an opaque DocAI / Pillow error.
+ALLOWED_UPLOAD_EXTENSIONS = frozenset({".pdf", ".png", ".jpg", ".jpeg",
+                                       ".heic", ".heif"})
+
+
+@app.errorhandler(413)
+def too_large(_err):
+    """Friendly 413 page when MAX_CONTENT_LENGTH trips. Flask's default
+    is a bare stack trace — give the FA an actionable message."""
+    return (
+        "<h1>Upload too large</h1>"
+        f"<p>Total upload exceeded the {app.config['MAX_CONTENT_LENGTH'] // (1024*1024)} MiB cap. "
+        "Try uploading fewer receipts at a time, or split the batch.</p>"
+        '<p><a href="/">Back to upload</a></p>',
+        413,
+    )
+
 
 class PipelineError(RuntimeError):
     """Raised when a pipeline step (extract / reduce / render) fails. Carries
@@ -166,6 +193,13 @@ def upload():
         if kind not in EXTRACTORS:
             return (f"Unknown kind {kind!r} for file {f.filename!r} "
                     f"(known: {sorted(EXTRACTORS)}).", 400)
+        # Stage 21: extension whitelist. Catch unsupported formats up
+        # front rather than letting them fail deep in the extractor with
+        # an opaque DocAI / Pillow error.
+        ext = Path(f.filename).suffix.lower()
+        if ext not in ALLOWED_UPLOAD_EXTENSIONS:
+            return (f"Unsupported file type {ext!r} for {f.filename!r}. "
+                    f"Allowed: {sorted(ALLOWED_UPLOAD_EXTENSIONS)}.", 400)
         pairs.append((f, kind))
 
     if not pairs:

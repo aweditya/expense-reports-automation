@@ -36,6 +36,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -49,6 +50,68 @@ from evidence_bbox import (
 DEFAULT_MODEL = "gemini-3-flash-preview"
 DEFAULT_LOCATION = "global"
 DEFAULT_MAX_OUTPUT_TOKENS = 65536
+
+# Stage 21: retry transient Vertex failures (rate limit, 5xx, network
+# blips) with exponential backoff. Don't retry permanent failures (400
+# INVALID_ARGUMENT means our schema is wrong; 403 means auth is wrong;
+# retrying won't help and just wastes time + quota). 3 attempts means
+# we tolerate up to ~7s of transient flakiness (1+2+4 backoff) before
+# bubbling the failure up to the per-file PipelineError path, which
+# Stage 11c isolates from the rest of the batch.
+RETRYABLE_HTTP_STATUSES = {408, 429, 500, 502, 503, 504}
+RETRY_MAX_ATTEMPTS = 3
+RETRY_BACKOFF_BASE_SEC = 1.0
+
+
+def _is_retryable(exc: BaseException) -> bool:
+    """Decide whether to retry a Gemini call after the given exception.
+
+    Retryable: HTTP 408/429/5xx (transient server-side issues), TCP
+    timeouts, generic network errors. NOT retryable: 4xx other than
+    429 (the request itself is bad — retrying makes it bad again);
+    JSONDecodeError (model truncated, not transient); auth errors."""
+    # google.genai uses a ClientError class with a `.code` attribute.
+    code = getattr(exc, "code", None)
+    if isinstance(code, int) and code in RETRYABLE_HTTP_STATUSES:
+        return True
+    # Network-level errors (DNS, TCP timeout, broken pipe).
+    if isinstance(exc, (TimeoutError, ConnectionError)):
+        return True
+    # google.api_core wraps some transient errors as ServiceUnavailable /
+    # InternalServerError / DeadlineExceeded. Detect by name to avoid
+    # importing google.api_core just for this check.
+    name = type(exc).__name__
+    if name in {"ServiceUnavailable", "InternalServerError",
+                "DeadlineExceeded", "GoogleAPIError", "RetryError"}:
+        return True
+    return False
+
+
+def _retry_with_backoff(fn, *, label: str):
+    """Run `fn()`. On retryable exceptions, sleep + retry with
+    exponential backoff. Re-raise the last exception when attempts
+    are exhausted, or any non-retryable exception immediately.
+
+    `label` is used only for stderr logging so the operator can see
+    "retrying meal extract for foo.pdf after 503" in Cloud Logging."""
+    last_exc: BaseException | None = None
+    for attempt in range(1, RETRY_MAX_ATTEMPTS + 1):
+        try:
+            return fn()
+        except Exception as exc:  # noqa: BLE001 — we re-raise non-retryables
+            if not _is_retryable(exc):
+                raise
+            last_exc = exc
+            if attempt == RETRY_MAX_ATTEMPTS:
+                break
+            delay = RETRY_BACKOFF_BASE_SEC * (2 ** (attempt - 1))
+            print(f"  ⟳ {label}: {type(exc).__name__} on attempt {attempt}/"
+                  f"{RETRY_MAX_ATTEMPTS}; retrying in {delay:.1f}s",
+                  file=sys.stderr, flush=True)
+            time.sleep(delay)
+    # All retries exhausted — re-raise the last exception.
+    assert last_exc is not None
+    raise last_exc
 
 
 class GeminiCallFailed(Exception):
@@ -145,24 +208,34 @@ def single_call(
 
     response_schema = _load_response_schema(response_schema_path)
 
-    response = client.models.generate_content(
-        model=model,
-        contents=[
-            f"Filename: {image_filename}\n\n{prompt}",
-            types.Part.from_bytes(data=image_bytes, mime_type=mime),
-        ],
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=response_schema,
-            # Gemini 3 includes "thinking" tokens in this budget. Tamarine
-            # spent 7860 thinking tokens at 8192 = too small. After Stage 6
-            # added confidence_reason on every leaf the output volume grew
-            # again — uber1.pdf blew past 32768 mid-JSON. 65536 leaves
-            # headroom for multi-page PDFs (Uber receipts are 2 pages,
-            # hotel folios can be longer).
-            max_output_tokens=DEFAULT_MAX_OUTPUT_TOKENS,
-            temperature=0.0,
-        ),
+    # Stage 21: wrap the generate_content call in retry logic to survive
+    # transient Vertex flakiness (rate limit / 5xx / network blip). The
+    # JSON-decode path BELOW the call is not retried — truncation +
+    # malformed output are model issues, not transient.
+    def _do_call():
+        return client.models.generate_content(
+            model=model,
+            contents=[
+                f"Filename: {image_filename}\n\n{prompt}",
+                types.Part.from_bytes(data=image_bytes, mime_type=mime),
+            ],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=response_schema,
+                # Gemini 3 includes "thinking" tokens in this budget. Tamarine
+                # spent 7860 thinking tokens at 8192 = too small. After Stage 6
+                # added confidence_reason on every leaf the output volume grew
+                # again — uber1.pdf blew past 32768 mid-JSON. 65536 leaves
+                # headroom for multi-page PDFs (Uber receipts are 2 pages,
+                # hotel folios can be longer).
+                max_output_tokens=DEFAULT_MAX_OUTPUT_TOKENS,
+                temperature=0.0,
+            ),
+        )
+
+    response = _retry_with_backoff(
+        _do_call,
+        label=f"generate_content {image_filename}{f' ({diag_label})' if diag_label else ''}",
     )
 
     raw_text = response.text or ""
