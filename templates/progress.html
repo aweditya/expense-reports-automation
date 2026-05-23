@@ -20,8 +20,20 @@
                overflow:hidden; margin:0 0 24px; }
   .bar-inner { height:100%; background:#2563eb; width:0%;
                transition:width 0.4s ease; }
-  .bar-inner.done { background:#10b981; }
+  .bar-inner.done {
+    background:#10b981;
+    /* Brief glow when the pipeline finishes — backup signal in case
+       the browser blocks the audio chime (Safari, muted tab, etc).
+       Plays once on transition into .done. */
+    animation: done-flash 0.9s ease-out 1;
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6);
+  }
   .bar-inner.error { background:#ef4444; }
+  @keyframes done-flash {
+    0%   { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.8); }
+    60%  { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+  }
   .file-list { margin:0 0 8px; padding:0; list-style:none;
                border-top:1px solid #f3f4f6; }
   .file-item { display:flex; align-items:center; gap:10px;
@@ -158,9 +170,24 @@
   // Soft 2-note "complete" chime via Web Audio API. No file, no CDN.
   // Silently no-ops if the browser blocks audio (no recent user
   // gesture); we don't let that block the redirect.
+  //
+  // Browser autoplay policy quirk: the AudioContext is often created
+  // in `suspended` state on this page because the form-submit user
+  // activation was on / (the previous page), and many browsers don't
+  // carry activation across navigations. `ctx.resume()` returns a
+  // promise that resolves when the context starts (most browsers
+  // permit it after a recent navigation; Safari may still refuse).
+  // We schedule the tones inside the resume callback so they only
+  // play once the context is running. Without this, osc.start() on
+  // a suspended context silently produces no sound — which is why
+  // FAs reported the chime never plays.
   function playDoneChime() {
+    let ctx;
     try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) { return; }
+
+    function playTones() {
       function tone(freq, startOffset, duration) {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
@@ -175,7 +202,13 @@
       }
       tone(523.25, 0, 0.18);    // C5
       tone(659.25, 0.15, 0.25); // E5 overlapping for a chord-y feel
-    } catch (e) { /* no audio — that's fine */ }
+    }
+
+    if (ctx.state === 'suspended') {
+      ctx.resume().then(playTones, function() { /* still blocked; skip */ });
+    } else {
+      playTones();
+    }
   }
 
   const es = new EventSource('/upload/progress/' + UPLOAD_ID);
