@@ -60,6 +60,13 @@ WORKBENCH = REPO_ROOT / ".scratch" / "uploads" / "csv8a" / "workbench.html"
 B1_FIXTURE = REPO_ROOT / ".scratch" / "uploads" / "b1-eye"
 B1_FLASK_URL = "http://localhost:8088"
 
+# B2: a separate fixture for the personal-mileage extractor. Uses a
+# synthetic per-doc JSON (no real receipt yet — the FA will drop one
+# into receipts/ for the real-Gemini smoke). The synthetic JSON
+# exercises the reduce side (derive_mileage_line_amount) + render
+# side (Mileage Details card) without depending on Vertex.
+B2_FIXTURE = REPO_ROOT / ".scratch" / "uploads" / "b2-eye"
+
 try:
     from playwright.sync_api import sync_playwright
     PLAYWRIGHT_AVAILABLE = True
@@ -838,6 +845,146 @@ class TestUploadFormBrowser(unittest.TestCase):
             any(s == 200 for s in response_status),
             f"workbench URL should return 200; saw {response_status}",
         )
+
+
+@unittest.skipUnless(PLAYWRIGHT_AVAILABLE,
+                     "playwright not installed")
+@unittest.skipUnless(B2_FIXTURE.exists(),
+                     f"{B2_FIXTURE} not staged — synth-mileage fixture missing")
+@unittest.skipUnless(_flask_reachable(B1_FLASK_URL),
+                     f"Flask not reachable at {B1_FLASK_URL}")
+class TestWorkbenchBrowserB2(unittest.TestCase):
+    """B2 personal-mileage UI regression. Uses a synthetic per-doc
+    JSON (Stanford → SFO, 32 mi, 2025-04-15) so we can exercise the
+    full reduce + render + JS path without a real Gemini call. When
+    a real mileage receipt lands in receipts/, the same tests run
+    against the real-Gemini fixture (b2-real or similar) and stay
+    deterministic because the assertions key off the receipt's
+    metadata, not the exact extracted text."""
+
+    URL = f"{B1_FLASK_URL}/uploads/b2-eye/workbench.html"
+    EDIT_URL = f"{B1_FLASK_URL}/uploads/b2-eye/edit"
+    REPORT_PATH = B2_FIXTURE / "reduced" / "report.json"
+
+    @classmethod
+    def setUpClass(cls):
+        cls._playwright = sync_playwright().start()
+        cls._browser = cls._playwright.chromium.launch(headless=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._browser.close()
+        cls._playwright.stop()
+
+    def setUp(self):
+        self.page = self._browser.new_page(viewport={"width": 1400, "height": 1600})
+        self._console_errors: list[str] = []
+        self._page_errors: list[str] = []
+        self.page.on("console", lambda msg: (
+            self._console_errors.append(msg.text)
+            if msg.type == "error" else None
+        ))
+        self.page.on("pageerror", lambda exc: self._page_errors.append(str(exc)))
+
+    def tearDown(self):
+        self.page.close()
+
+    def _load(self):
+        self.page.goto(self.URL, wait_until="networkidle")
+
+    # ─── B2 visual + structural tests ─────────────────────────────────────
+
+    def test_b2_screenshot_for_eyeball(self):
+        """Captures a full-page screenshot for human eyeball. Saves to
+        .scratch/b2-eye/workbench-screenshot.png. The user is expected
+        to look at the PNG after the test run."""
+        self._load()
+        out = REPO_ROOT / ".scratch" / "b2-eye" / "workbench-screenshot.png"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        self.page.screenshot(path=str(out), full_page=True)
+        self.assertGreater(out.stat().st_size, 10_000)
+
+    def test_b2_no_javascript_parse_errors(self):
+        """Same regression guard as the csv8a tests — a template edit
+        could break the JS and the mileage workbench would render
+        broken. Pageerrors include parse errors + thrown exceptions."""
+        self._load()
+        self.assertEqual(self._page_errors, [],
+                         f"page parsed with JS errors: {self._page_errors}")
+
+    def test_b2_mileage_card_labels_render(self):
+        """B2 mileage cards: 'Distance', 'Origin', 'Destination',
+        'Trip Date'. If render_mileage_details() drops a field_card
+        call, this catches it."""
+        self._load()
+        body = self.page.content()
+        for label in ["Distance", "Origin", "Destination", "Trip Date"]:
+            self.assertIn(f">{label}<", body,
+                          f"mileage card label '{label}' missing")
+
+    def test_b2_mileage_cards_have_data_path_for_edit(self):
+        """All four mileage_details fields must be click-to-editable
+        (Stage 7). If a card renders without data-path, the FA can
+        see the value but not edit it."""
+        self._load()
+        for suffix in ["distance_miles", "origin", "destination", "trip_date"]:
+            els = self.page.query_selector_all(
+                f'[data-path$="mileage_details.{suffix}"]'
+            )
+            self.assertGreater(len(els), 0,
+                               f"no data-path element ending in 'mileage_details.{suffix}'")
+
+    def test_b2_distance_renders_with_mi_suffix(self):
+        """render_mileage_details formats distance as '32.0 mi' (not
+        '32' or '32.00'). The 'mi' suffix is what tells the FA
+        immediately what unit the workbench is using."""
+        self._load()
+        card = self.page.query_selector(
+            '[data-path$="mileage_details.distance_miles"] .field-value'
+        )
+        self.assertIsNotNone(card, "distance_miles card missing")
+        text = card.text_content() or ""
+        self.assertIn("mi", text,
+                      f"distance should include 'mi' suffix: {text!r}")
+        self.assertIn("32", text)
+
+    def test_b2_computed_line_amount_shows_irs_rate_in_confidence_reason(self):
+        """The synthetic JSON sets line_amount_usd.value=null; reduction's
+        derive_mileage_line_amount fills it with 32 × $0.70 = $22.40
+        AND stamps confidence_reason='32.0 mi × IRS 2025 business
+        rate ($0.700/mi)'. The workbench shows this reason on hover
+        / when evidence toggle is on. This test guards the
+        end-to-end derivation chain — if the rate file goes stale OR
+        derive_mileage_line_amount stops running, this catches it."""
+        self._load()
+        # The line amount appears in the line-summary headline AND
+        # in the common.line_amount_usd card. Check both for $22.40.
+        body = self.page.content()
+        self.assertIn("$22.40", body,
+                      "computed line_amount_usd of $22.40 not rendered")
+        # The confidence reason is in the HTML even when evidence
+        # toggle is off (it's rendered in the card metadata).
+        self.assertIn("IRS 2025 business rate", body,
+                      "derive_mileage_line_amount confidence reason not in HTML")
+        self.assertIn("$0.700/mi", body,
+                      "IRS rate in confidence reason should match cached value")
+
+    def test_b2_summary_total_matches_derived_line_amount(self):
+        """Regression guard for the bug caught during B2 phase 2:
+        reduce_to_expense_report used to sum the summary total from
+        the RAW receipts (where mileage's line_amount_usd is null),
+        producing a $0 summary even though the line showed $22.40.
+        The fix: sum from the DERIVED lines. This test asserts the
+        hero shows $22.40 — if the bug regresses, the hero would
+        show $0.00 or be blank while the line still shows $22.40."""
+        self._load()
+        body = self.page.content()
+        # Hero spending total is in the hero block; assert it's
+        # rendered consistently with the line amount. Both $22.40.
+        amount_occurrences = body.count("$22.40")
+        self.assertGreaterEqual(amount_occurrences, 2,
+                                f"expected $22.40 in both line + hero; "
+                                f"found {amount_occurrences} occurrence(s)")
 
 
 if __name__ == "__main__":

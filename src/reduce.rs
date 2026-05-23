@@ -433,17 +433,26 @@ pub fn reduce_to_expense_report(receipts: &[ExtractedReceipt]) -> ExpenseReport 
     let mut report = ExpenseReport::default();
 
     let lines = reduce_transaction_lines(receipts);
-    let total = reduce_total_usd(receipts);
+    // B2: sum from the DERIVED lines, not the raw receipts. For
+    // kinds like personal_mileage where the extractor defers
+    // line_amount_usd to reduction (computed from distance × IRS rate),
+    // summing from `receipts` would skip the null and produce a
+    // wrong total. Reading from `lines` picks up the derived value.
+    let total: f64 = lines
+        .iter()
+        .filter_map(|l| l.common.line_amount_usd.value)
+        .sum();
     let earliest = reduce_earliest_date(receipts);
     let category = reduce_inferred_category(receipts);
 
-    // Derive confidence floors from the contributing receipts' dates
-    // and amounts — same principle as category_confidence.
+    // Derive confidence floors from the contributing lines' dates
+    // and amounts (also using the post-derive lines so mileage's
+    // High-confidence system-generated amount is reflected).
     let date_confidence = confidence_floor(
-        receipts.iter().map(|r| r.line.common.date.meta.confidence)
+        lines.iter().map(|l| l.common.date.meta.confidence)
     );
     let amount_confidence = confidence_floor(
-        receipts.iter().map(|r| r.line.common.line_amount_usd.meta.confidence)
+        lines.iter().map(|l| l.common.line_amount_usd.meta.confidence)
     );
 
     report.transaction_lines = Some(lines);
@@ -925,6 +934,36 @@ mod tests {
         };
         derive_mileage_line_amount(&mut line);
         assert_eq!(line.common.line_amount_usd.value, Some(19.99));
+    }
+
+    #[test]
+    fn mileage_summary_total_includes_derived_amount() {
+        // Regression for a real bug caught during B2 phase 2:
+        // reduce_to_expense_report used to sum total from the raw
+        // receipts (which have line_amount_usd=null for mileage),
+        // producing a $0 summary even when derive_mileage filled
+        // the per-line amount. Now we sum from the derived lines.
+        use crate::extracted_receipt::{ExtractedReceipt, Extras};
+        let receipt = ExtractedReceipt {
+            source_filename: "synthetic.png".to_string(),
+            line: make_mileage_line(40.0, "2025-05-01"),
+            extras: Extras::default(),
+        };
+        // Receipt's line_amount_usd starts None (extractor deferred).
+        assert!(receipt.line.common.line_amount_usd.value.is_none());
+        let report = super::reduce_to_expense_report(&[receipt]);
+        // After full assembly: line amount = 40 × $0.70 = $28.00,
+        // and the SUMMARY total picks that up.
+        assert_eq!(
+            report.transaction_lines.as_ref().unwrap()[0]
+                .common.line_amount_usd.value,
+            Some(28.00),
+        );
+        assert_eq!(
+            report.transaction_summary.total_usd.value,
+            Some(28.00),
+            "summary total should reflect the derived mileage amount, not the pre-derive null",
+        );
     }
 
     #[test]
