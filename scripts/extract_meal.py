@@ -25,23 +25,10 @@ choice in the upload form.
 
 from __future__ import annotations
 
-import json
 import sys
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from evidence_bbox import (
-    format_tokens_for_prompt,
-    ocr_document,
-    populate_bboxes,
-)
-from extractor_lib import (
-    GeminiCallFailed,
-    detect_mime_type,
-    merge_two_call_lines,
-    parse_args,
-    single_call,
-)
+from extractor_lib import parse_args, run_two_call_extraction
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -184,92 +171,12 @@ block populated. Shape is enforced by the response schema.
 {META_CONVENTION}"""
 
 
-def main() -> int:
-    args = parse_args(__doc__)
-
-    if not args.image.exists():
-        sys.exit(f"image not found: {args.image}")
-    if not args.project:
-        sys.exit(
-            "project required: pass --project or set $VERTEX_PROJECT_ID. "
-            "Cloud Run gets this from --set-env-vars in deploy/cloudbuild.yaml."
-        )
-
-    from google import genai
-
-    client = genai.Client(
-        vertexai=True, project=args.project, location=args.location
-    )
-    image_bytes = args.image.read_bytes()
-    mime = detect_mime_type(args.image)
-
-    # Document AI runs ONCE; the tokens get appended to both prompts
-    # so they share the same global token-id range. Failure here is
-    # non-fatal — extraction proceeds without grounding; populate_bboxes
-    # falls back to text matching at write time.
-    doc = None
-    try:
-        doc = ocr_document(args.image)
-    except Exception as err:
-        print(
-            f"warning: Document AI OCR failed for {args.image}: {err}; "
-            "meal extraction will proceed without token-id grounding.",
-            file=sys.stderr,
-        )
-
-    prompt_main = PROMPT_MAIN
-    prompt_extras = PROMPT_EXTRAS
-    if doc is not None:
-        token_list_text, _, _ = format_tokens_for_prompt(doc)
-        suffix = (
-            "\n\n# Numbered Document AI tokens (for `token_ids` grounding)\n\n"
-            + token_list_text
-        )
-        prompt_main = PROMPT_MAIN + suffix
-        prompt_extras = PROMPT_EXTRAS + suffix
-
-    shared_call_kwargs = dict(
-        client=client,
-        model=args.model,
-        image_filename=args.image.name,
-        image_bytes=image_bytes,
-        mime=mime,
-        output_base=args.output,
-    )
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        future_main = executor.submit(
-            single_call,
-            prompt=prompt_main,
-            response_schema_path=SCHEMA_PATH_MAIN,
-            diag_label="main",
-            **shared_call_kwargs,
-        )
-        future_extras = executor.submit(
-            single_call,
-            prompt=prompt_extras,
-            response_schema_path=SCHEMA_PATH_EXTRAS,
-            diag_label="extras",
-            **shared_call_kwargs,
-        )
-        try:
-            result_main = future_main.result()
-            result_extras = future_extras.result()
-        except GeminiCallFailed as err:
-            print(err, file=sys.stderr)
-            return 1
-
-    merged = merge_two_call_lines(result_main, result_extras)
-    for entry in merged:
-        if isinstance(entry, dict):
-            entry["source_filename"] = args.image.name
-            populate_bboxes(entry, args.image, doc=doc)
-
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(merged, indent=2, ensure_ascii=False))
-    print(f"wrote {args.output}")
-    return 0
-
-
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run_two_call_extraction(
+        parse_args(__doc__),
+        prompt_main=PROMPT_MAIN,
+        prompt_extras=PROMPT_EXTRAS,
+        schema_main=SCHEMA_PATH_MAIN,
+        schema_extras=SCHEMA_PATH_EXTRAS,
+        kind_label="meal",
+    ))

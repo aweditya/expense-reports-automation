@@ -127,6 +127,122 @@ class GeminiCallFailed(Exception):
     """
 
 
+def run_two_call_extraction(
+    args: argparse.Namespace,
+    *,
+    prompt_main: str,
+    prompt_extras: str,
+    schema_main: Path,
+    schema_extras: Path,
+    kind_label: str,
+) -> int:
+    """Two parallel Gemini calls → merged JSON → disk.
+
+    The shared orchestration for multi-call extractors with the
+    main+extras pattern (lodging, meal, transport). Mirrors
+    `run_extraction` for single-call kinds: validates args, builds
+    the client, OCRs once, augments both prompts with the token
+    list, fires two threads, merges the results, populates bboxes,
+    writes the JSON. Returns the exit code.
+
+    `kind_label` is used only in the OCR-failure warning so the
+    operator can grep Cloud Logging for the affected kind
+    (e.g. "lodging extraction will proceed without grounding").
+
+    Airfare uses a 3-call orchestration (main+aux+extras with a
+    1-deep merge of `airfare_details`) and stays inline rather than
+    being squeezed into this 2-call shape — see extract_airfare.py.
+    """
+    if not args.image.exists():
+        sys.exit(f"image not found: {args.image}")
+    if not args.project:
+        sys.exit(
+            "project required: pass --project or set $VERTEX_PROJECT_ID. "
+            "Cloud Run gets this from --set-env-vars in deploy/cloudbuild.yaml."
+        )
+
+    # Late imports so module-level `from scripts.extractor_lib import ...`
+    # doesn't pay for google-genai / Document AI when the helper isn't
+    # being called (e.g. unit tests of merge_two_call_lines alone).
+    from concurrent.futures import ThreadPoolExecutor
+    from google import genai
+    from evidence_bbox import (
+        format_tokens_for_prompt,
+        ocr_document,
+        populate_bboxes,
+    )
+
+    client = genai.Client(
+        vertexai=True, project=args.project, location=args.location
+    )
+    image_bytes = args.image.read_bytes()
+    mime = detect_mime_type(args.image)
+
+    # Document AI runs ONCE; both prompts share the same token-id
+    # range. Failure is non-fatal — extraction proceeds without
+    # grounding and populate_bboxes falls back to text matching.
+    doc = None
+    try:
+        doc = ocr_document(args.image)
+    except Exception as err:
+        print(
+            f"warning: Document AI OCR failed for {args.image}: {err}; "
+            f"{kind_label} extraction will proceed without token-id grounding.",
+            file=sys.stderr,
+        )
+
+    if doc is not None:
+        token_list_text, _, _ = format_tokens_for_prompt(doc)
+        suffix = (
+            "\n\n# Numbered Document AI tokens (for `token_ids` grounding)\n\n"
+            + token_list_text
+        )
+        prompt_main = prompt_main + suffix
+        prompt_extras = prompt_extras + suffix
+
+    shared_kwargs = dict(
+        client=client,
+        model=args.model,
+        image_filename=args.image.name,
+        image_bytes=image_bytes,
+        mime=mime,
+        output_base=args.output,
+    )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        future_main = executor.submit(
+            single_call,
+            prompt=prompt_main,
+            response_schema_path=schema_main,
+            diag_label="main",
+            **shared_kwargs,
+        )
+        future_extras = executor.submit(
+            single_call,
+            prompt=prompt_extras,
+            response_schema_path=schema_extras,
+            diag_label="extras",
+            **shared_kwargs,
+        )
+        try:
+            result_main = future_main.result()
+            result_extras = future_extras.result()
+        except GeminiCallFailed as err:
+            print(err, file=sys.stderr)
+            return 1
+
+    merged = merge_two_call_lines(result_main, result_extras)
+    for entry in merged:
+        if isinstance(entry, dict):
+            entry["source_filename"] = args.image.name
+            populate_bboxes(entry, args.image, doc=doc)
+
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(json.dumps(merged, indent=2, ensure_ascii=False))
+    print(f"wrote {args.output}")
+    return 0
+
+
 def merge_two_call_lines(main_result: list, extras_result: list) -> list:
     """Merge two single-element single_call() outputs into one
     transaction line (B1 dedup — was duplicated across lodging,
