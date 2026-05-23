@@ -357,6 +357,9 @@ fn walk_transaction_lines(report: &ExpenseReport, issues: &mut Vec<ValidationIss
         if let Some(lodging) = &line.lodging_details {
             walk_lodging_details(lodging, &join(&base, "lodging_details"), issues);
         }
+        if let Some(mileage) = &line.mileage_details {
+            walk_mileage_details(mileage, &join(&base, "mileage_details"), issues);
+        }
         // Remaining detail blocks (airfare / car_rental /
         // conference_registration / gift / human_subject) intentionally
         // not walked yet — phases beyond Phase 3 add them when we have
@@ -442,6 +445,22 @@ fn walk_lodging_details(
     // personal_nights_excluded is T2 optional — derived later, not by
     // the extractor. Walking it produces no issues.
     check_wrapped(&join(base, "personal_nights_excluded"), &lodging.personal_nights_excluded, issues);
+}
+
+// B2: personal_mileage detail-block walk. distance_miles + origin +
+// destination + trip_date are all T3-required so check_wrapped will
+// emit MissingRequiredField when null. vehicle_class is T1 optional
+// (FA picks; defaults to personal_car) — bare Option, check_optional.
+fn walk_mileage_details(
+    m: &crate::expense_report_model::ExpenseReportTransactionLinesItemMileageDetails,
+    base: &str,
+    issues: &mut Vec<ValidationIssue>,
+) {
+    check_wrapped(&join(base, "distance_miles"), &m.distance_miles, issues);
+    check_wrapped(&join(base, "origin"), &m.origin, issues);
+    check_wrapped(&join(base, "destination"), &m.destination, issues);
+    check_wrapped(&join(base, "trip_date"), &m.trip_date, issues);
+    check_optional(&join(base, "vehicle_class"), &m.vehicle_class, issues);
 }
 
 // ─── Leaf checks ───────────────────────────────────────────────────────────

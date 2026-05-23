@@ -1212,6 +1212,14 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
         html.push_str("</div>\n");
     }
 
+    if let Some(mileage) = &line.mileage_details {
+        html.push_str("<h4 class=\"subsection-title\">Mileage Details</h4>\n");
+        html.push_str("<div class=\"field-grid\">\n");
+        let mlp = format!("expense_report.transaction_lines[{idx}].mileage_details");
+        render_mileage_details(html, mileage, &mlp);
+        html.push_str("</div>\n");
+    }
+
     if let Some(airfare) = &line.airfare_details {
         html.push_str("<h4 class=\"subsection-title\">Airfare Details</h4>\n");
         html.push_str("<div class=\"field-grid\">\n");
@@ -1273,6 +1281,22 @@ fn render_ground_transport_details(
     field_card_optional_money(html, "Fare (pre-tax)", &gt.pre_tax_amount, &format!("{path}.pre_tax_amount"));
     field_card_optional_money(html, "Taxes & Fees", &gt.tax_amount, &format!("{path}.tax_amount"));
     field_card_optional_money(html, "Driver Tip", &gt.tip_amount, &format!("{path}.tip_amount"));
+}
+
+// B2: personal mileage. The FA-facing amount (`line_amount_usd` in
+// common) is COMPUTED by reduction from distance_miles × IRS rate
+// — the rate doesn't appear in this card because it's not per-line
+// data (one rate per trip year). Use vehicle_class only to flag
+// non-default; default personal_car is implicit.
+fn render_mileage_details(
+    html: &mut String,
+    m: &crate::expense_report_model::ExpenseReportTransactionLinesItemMileageDetails,
+    path: &str,
+) {
+    field_card_text(html, "Distance", &m.distance_miles, &format!("{path}.distance_miles"), |n| format!("{n:.1} mi"));
+    field_card_text(html, "Origin", &m.origin, &format!("{path}.origin"), |s: &String| s.clone());
+    field_card_text(html, "Destination", &m.destination, &format!("{path}.destination"), |s: &String| s.clone());
+    field_card_text(html, "Trip Date", &m.trip_date, &format!("{path}.trip_date"), |d| d.0.clone());
 }
 
 fn render_lodging_details(

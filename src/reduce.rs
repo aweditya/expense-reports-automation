@@ -243,9 +243,109 @@ pub fn reduce_transaction_lines(
             if line.lodging_details.is_some() {
                 derive_lodging_fields(&mut line, &r.extras);
             }
+            // B2: mileage-specific. distance × IRS rate (looked up by
+            // trip year) → line_amount_usd. The extractor produces
+            // distance + addresses + date; reduction owns the
+            // dollar amount.
+            if line.mileage_details.is_some() {
+                derive_mileage_line_amount(&mut line);
+            }
             line
         })
         .collect()
+}
+
+// B2: IRS Standard Mileage Rate (business use) embedded at compile
+// time from generated/irs_mileage_rates.json. Refresh by running
+// scripts/fetch_irs_mileage_rate.py and committing the result.
+// No runtime I/O — the rate flows through on rebuild.
+const IRS_MILEAGE_RATES_JSON: &str =
+    include_str!("../generated/irs_mileage_rates.json");
+
+/// Look up the IRS business mileage rate (in DOLLARS per mile) for a
+/// given trip year. Returns the most-recent-year rate when the
+/// requested year isn't found (e.g. trip in 2030 but JSON only goes
+/// through 2025 — better to use last known than zero out the line).
+///
+/// The JSON stores cents-per-mile; this function converts to dollars.
+fn irs_business_rate_per_mile(trip_year: i32) -> Option<f64> {
+    let v: serde_json::Value = serde_json::from_str(IRS_MILEAGE_RATES_JSON).ok()?;
+    let rates = v.get("rates_by_period")?.as_object()?;
+    // Try exact-year match first ("2025").
+    let year_key = trip_year.to_string();
+    if let Some(year_rates) = rates.get(&year_key) {
+        if let Some(cents) = year_rates.get("business").and_then(|v| v.as_f64()) {
+            return Some(cents / 100.0);
+        }
+    }
+    // Fallback: max-year period. Period keys are "YYYY" or
+    // "M/D/YYYY-M/D/YYYY"; parsing the first 4 chars gives the year
+    // for both shapes (mid-year splits all start with the year).
+    // serde_json's default backing map is HashMap so we can't rely
+    // on insertion order — find the max explicitly.
+    let (_max_year, year_rates) = rates
+        .iter()
+        .filter_map(|(period, rates_obj)| {
+            let year = period.get(..4)?.parse::<i32>().ok()?;
+            Some((year, rates_obj))
+        })
+        .max_by_key(|(year, _)| *year)?;
+    let cents = year_rates.get("business").and_then(|v| v.as_f64())?;
+    Some(cents / 100.0)
+}
+
+/// Compute line_amount_usd from mileage_details.distance_miles ×
+/// IRS rate. No-op when distance is missing (validator will surface
+/// the missing required field) OR when line_amount_usd is already
+/// set (FA edited it manually via /edit endpoint).
+fn derive_mileage_line_amount(line: &mut ExpenseReportTransactionLinesItem) {
+    if line.common.line_amount_usd.value.is_some() {
+        return;
+    }
+    let mileage = line
+        .mileage_details
+        .as_ref()
+        .expect("called on a line with mileage_details");
+    let Some(distance) = mileage.distance_miles.value else { return; };
+    // Trip year from trip_date. ISO 8601 "YYYY-MM-DD" → year = first 4 chars.
+    let trip_year = mileage
+        .trip_date
+        .value
+        .as_ref()
+        .and_then(|d| d.0.get(..4).and_then(|s| s.parse::<i32>().ok()))
+        // No trip date → use current year so we still produce a number
+        // (validator will flag the missing date separately).
+        .unwrap_or_else(|| {
+            // Fallback: 2025 is the most recent rate we know about.
+            // Using a const here keeps tests deterministic — if you
+            // refresh IRS_MILEAGE_RATES_JSON to include 2026, bump this.
+            2025
+        });
+    let Some(rate) = irs_business_rate_per_mile(trip_year) else { return; };
+    let amount = (distance * rate * 100.0).round() / 100.0;  // round to cents
+
+    line.common.line_amount_usd = Wrapped {
+        value: Some(amount),
+        meta: FieldMetadata {
+            confidence: ConfidenceLevel::High,
+            confidence_reason: Some(format!(
+                "{distance:.1} mi × IRS {trip_year} business rate (${:.3}/mi)",
+                rate
+            )),
+            evidence: vec![EvidenceReference {
+                kind: EvidenceKind::SystemGenerated,
+                origin: Some("reduce.derive_mileage_line_amount".to_string()),
+                filename: None,
+                page: None,
+                quote: None,
+                document_id: None,
+                bboxes: None,
+                token_ids: None,
+            }],
+            needs_review: false,
+            flags: vec![],
+        },
+    };
 }
 
 /// Populate the T2 fields of `lodging_details` from the per-document
@@ -745,6 +845,95 @@ mod tests {
         let lines = reduce_transaction_lines(&receipts);
         let lodging = lines[0].lodging_details.as_ref().unwrap();
         assert_eq!(lodging.daily_rate.value, None);
+    }
+
+    // ─── B2: derive_mileage_line_amount ────────────────────────────────
+
+    fn make_mileage_line(distance: f64, trip_date: &str)
+        -> ExpenseReportTransactionLinesItem
+    {
+        use crate::expense_report_model::{
+            ExpenseReportTransactionLinesItemMileageDetails,
+            ExpenseReportTransactionLinesItemCommonExpenseTypeEnum,
+        };
+        let mut line = ExpenseReportTransactionLinesItem::default();
+        line.common.expense_type = Wrapped {
+            value: Some(ExpenseReportTransactionLinesItemCommonExpenseTypeEnum::PersonalMileage),
+            meta: FieldMetadata::default(),
+        };
+        line.mileage_details = Some(ExpenseReportTransactionLinesItemMileageDetails {
+            distance_miles: Wrapped { value: Some(distance), meta: FieldMetadata::default() },
+            origin: Wrapped { value: Some("Stanford".to_string()), meta: FieldMetadata::default() },
+            destination: Wrapped { value: Some("SFO".to_string()), meta: FieldMetadata::default() },
+            trip_date: Wrapped { value: Some(IsoDate(trip_date.to_string())), meta: FieldMetadata::default() },
+            vehicle_class: None,
+        });
+        line
+    }
+
+    #[test]
+    fn mileage_amount_uses_2025_rate_for_2025_trip() {
+        // 2025 IRS business rate = 70¢/mi. 30 mi × $0.70 = $21.00.
+        let mut line = make_mileage_line(30.0, "2025-06-15");
+        derive_mileage_line_amount(&mut line);
+        assert_eq!(line.common.line_amount_usd.value, Some(21.00));
+        assert_eq!(line.common.line_amount_usd.meta.confidence, ConfidenceLevel::High);
+        let reason = line.common.line_amount_usd.meta.confidence_reason.as_deref();
+        assert!(
+            reason.is_some_and(|r| r.contains("30.0 mi") && r.contains("2025")),
+            "expected reason to mention distance + year; got {reason:?}",
+        );
+    }
+
+    #[test]
+    fn mileage_amount_uses_2024_rate_for_2024_trip() {
+        // 2024 IRS business rate = 67¢/mi. 50 mi × $0.67 = $33.50.
+        let mut line = make_mileage_line(50.0, "2024-09-02");
+        derive_mileage_line_amount(&mut line);
+        assert_eq!(line.common.line_amount_usd.value, Some(33.50));
+    }
+
+    #[test]
+    fn mileage_amount_falls_back_to_latest_rate_for_unknown_year() {
+        // 2030 isn't in our JSON; fall back to most recent rate (2025).
+        let mut line = make_mileage_line(10.0, "2030-01-01");
+        derive_mileage_line_amount(&mut line);
+        // 10 × $0.70 = $7.00 (2025 rate).
+        assert_eq!(line.common.line_amount_usd.value, Some(7.00));
+    }
+
+    #[test]
+    fn mileage_amount_noop_when_distance_missing() {
+        let mut line = make_mileage_line(0.0, "2025-06-15");
+        // Clear the distance.
+        line.mileage_details.as_mut().unwrap().distance_miles =
+            Wrapped { value: None, meta: FieldMetadata::default() };
+        derive_mileage_line_amount(&mut line);
+        // line_amount_usd should stay None — validator will surface
+        // the missing distance separately.
+        assert_eq!(line.common.line_amount_usd.value, None);
+    }
+
+    #[test]
+    fn mileage_amount_does_not_overwrite_manual_edit() {
+        // FA edited the dollar amount via /edit (maybe rounding or
+        // a partial reimbursement). Reduction must NOT overwrite it.
+        let mut line = make_mileage_line(30.0, "2025-06-15");
+        line.common.line_amount_usd = Wrapped {
+            value: Some(19.99),
+            meta: FieldMetadata::default(),
+        };
+        derive_mileage_line_amount(&mut line);
+        assert_eq!(line.common.line_amount_usd.value, Some(19.99));
+    }
+
+    #[test]
+    fn mileage_amount_rounds_to_cents() {
+        // 7.3 mi × $0.70 = $5.11 exact, but use a distance that
+        // produces a non-trivial rounding: 7.77 × 0.70 = 5.439 → $5.44.
+        let mut line = make_mileage_line(7.77, "2025-06-15");
+        derive_mileage_line_amount(&mut line);
+        assert_eq!(line.common.line_amount_usd.value, Some(5.44));
     }
 
     #[test]
