@@ -458,6 +458,24 @@ expense_report:
               required: true
               source: T1
               description: "If true, missing receipt form is used instead"
+            tip_amount:
+              type: number
+              required: false
+              source: T3
+              description: "Driver tip from the receipt. Feeds the 20%-tip-cap validation."
+              infer_from: "Uber/Lyft receipt — Tip line"
+            pre_tax_amount:
+              type: number
+              required: false
+              source: T3
+              description: "Fare amount before taxes/fees/tip. Used as the base for the 20% tip cap when present."
+              infer_from: "Uber/Lyft receipt — subtotal or Trip Fare line"
+            tax_amount:
+              type: number
+              required: false
+              source: T3
+              description: "Sum of taxes/fees on the receipt (booking fees, sales tax, congestion charges, etc.). Combined with pre_tax_amount as the base for the 20% tip cap."
+              infer_from: "Uber/Lyft receipt — Taxes/Booking Fee/etc."
 
         conference_registration_details:
           required: "expense_type == conference_registration"
@@ -572,6 +590,18 @@ expense_report:
               source: T3
               description: "Flag for validation: if true but expense_type is non-alcohol variant, raise irregularity"
               infer_from: "Scan itemized receipt for alcohol items"
+            pre_tax_amount:
+              type: number
+              required: false
+              source: T3
+              description: "Subtotal before taxes/tip. The precise base for the 20% tip cap (fallback math: tip ≤ 0.20 × (total − tip) when this is missing)."
+              infer_from: "Itemized restaurant receipt — Subtotal line"
+            tax_amount:
+              type: number
+              required: false
+              source: T3
+              description: "Sales tax on the receipt. Combined with pre_tax_amount as the base for the 20% tip cap."
+              infer_from: "Itemized restaurant receipt — Tax line"
 
         car_rental_details:
           required: "expense_type == car_rental"

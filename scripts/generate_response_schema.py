@@ -2,15 +2,20 @@
 """Generate per-kind SDK response_schemas from schema.yaml.
 
 Reads `schema.yaml` and emits one or more
-`generated/response_schema_<name>.json` files. Most kinds get one file
-(`response_schema_meal.json`, `response_schema_transport.json`). The
-lodging kind is split across two parallel Gemini calls due to Vertex's
-schema property-count ceiling — see `docs/redesign-regrets.md` 2026-05-13
-— and emits two files (`response_schema_lodging_main.json` carries
-common + lodging_details; `response_schema_lodging_extras.json` carries
-the extras block including the per-night rate breakdown). The
-orchestration of the two calls lives in `scripts/extract_lodging.py`;
-this file just produces the schemas.
+`generated/response_schema_<name>.json` files. Multi-call kinds (the
+ones whose typed detail block pushes past Vertex's schema property-
+count ceiling) split into `<kind>_main` + `<kind>_extras` schema
+files that get merged in `scripts/extract_<kind>.py`. As of B1 the
+split applies to meal, transport, lodging (which also includes the
+per-night-rate breakdown in its extras) and airfare (which uses a
+3-call split: main + aux + extras). Single-call kinds — miscellaneous,
+membership, conference_registration — emit one file each.
+
+The split-call pattern was introduced for lodging on 2026-05-13 and
+extended to meal+transport in B1; see `docs/redesign-regrets.md`
+for the schema-ceiling history. The orchestration of the parallel
+calls lives in each `scripts/extract_<kind>.py`; this file just
+produces the schemas.
 
 Each schema:
 - restricts `expense_type` (when `common` is included) to only the
@@ -188,6 +193,10 @@ def common_block_schema(expense_type_values: list[str]) -> dict:
 
 
 def meal_details_block_schema() -> dict:
+    # B1: pre_tax_amount + tax_amount added back after the Stage 9c
+    # revert. The block fits now because the meal schema is split into
+    # meal_main + meal_extras (extras moved to its own call), freeing
+    # property budget under Vertex's ceiling.
     return {
         "type": "object",
         "properties": {
@@ -198,17 +207,24 @@ def meal_details_block_schema() -> dict:
             "alcohol_amount": leaf({"type": "number", "nullable": True}),
             "tip_amount": leaf({"type": "number", "nullable": True}),
             "has_alcohol_on_receipt": leaf({"type": "boolean"}),
+            "pre_tax_amount": leaf({"type": "number", "nullable": True}),
+            "tax_amount": leaf({"type": "number", "nullable": True}),
         },
         "required": [
             "venue_name",
             "alcohol_amount",
             "tip_amount",
             "has_alcohol_on_receipt",
+            "pre_tax_amount",
+            "tax_amount",
         ],
     }
 
 
 def ground_transport_details_block_schema() -> dict:
+    # B1: tip_amount + pre_tax_amount + tax_amount added back after the
+    # Stage 9c revert. The block fits now because the transport schema
+    # is split into transport_main + transport_extras.
     return {
         "type": "object",
         "properties": {
@@ -217,8 +233,18 @@ def ground_transport_details_block_schema() -> dict:
             "service_provider": leaf({"type": "string"}),
             # missing_receipt is intentionally NOT in the per-receipt
             # schema — it's T1 (FA fills later if a receipt was lost).
+            "tip_amount": leaf({"type": "number", "nullable": True}),
+            "pre_tax_amount": leaf({"type": "number", "nullable": True}),
+            "tax_amount": leaf({"type": "number", "nullable": True}),
         },
-        "required": ["origin", "destination", "service_provider"],
+        "required": [
+            "origin",
+            "destination",
+            "service_provider",
+            "tip_amount",
+            "pre_tax_amount",
+            "tax_amount",
+        ],
     }
 
 
@@ -726,20 +752,49 @@ def transaction_line_schema(
 # the calls lives in `scripts/extract_<kind>.py`; this list just owns
 # the schema files that get generated.
 SCHEMAS_TO_GENERATE: list[tuple[str, dict]] = [
+    # Meal: 2-call split (was single-call until B1). Stage 9c added
+    # pre_tax_amount + tax_amount to meal_details and Vertex rejected
+    # the schema with 400 INVALID_ARGUMENT (property-count ceiling).
+    # B1 splits meal the same way lodging is split: main carries
+    # common + meal_details (now expanded with the tax pair); extras
+    # carries the extras block alone. The two calls run in parallel
+    # in extract_meal.py and the dicts are merged before the per-doc
+    # JSON is written.
     (
-        "response_schema_meal.json",
+        "response_schema_meal_main.json",
         dict(
             expense_type_values=KIND_EXPENSE_TYPES["meal"],
             detail_block_name="meal_details",
             detail_block=meal_details_block_schema(),
+            include_extras=False,
         ),
     ),
     (
-        "response_schema_transport.json",
+        "response_schema_meal_extras.json",
+        dict(
+            include_common=False,
+            include_detail=False,
+        ),
+    ),
+    # Transport: 2-call split (was single-call until B1). Same reason
+    # as meal — Stage 9c added tip_amount + pre_tax_amount + tax_amount
+    # to ground_transport_details and Vertex rejected the schema. B1
+    # splits transport on the lodging pattern; the new tax/tip fields
+    # ride in transport_main.
+    (
+        "response_schema_transport_main.json",
         dict(
             expense_type_values=KIND_EXPENSE_TYPES["transport"],
             detail_block_name="ground_transport_details",
             detail_block=ground_transport_details_block_schema(),
+            include_extras=False,
+        ),
+    ),
+    (
+        "response_schema_transport_extras.json",
+        dict(
+            include_common=False,
+            include_detail=False,
         ),
     ),
     # Lodging is split across two parallel Gemini calls (see

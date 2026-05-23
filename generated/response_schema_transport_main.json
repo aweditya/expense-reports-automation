@@ -983,24 +983,13 @@
               "value",
               "_meta"
             ]
-          }
-        },
-        "required": [
-          "origin",
-          "destination",
-          "service_provider"
-        ]
-      },
-      "extras": {
-        "type": "object",
-        "properties": {
-          "merchant_address": {
+          },
+          "tip_amount": {
             "type": "object",
             "properties": {
               "value": {
-                "type": "string",
-                "nullable": true,
-                "description": "Full printed merchant address (street + city + region + country if visible)."
+                "type": "number",
+                "nullable": true
               },
               "_meta": {
                 "type": "object",
@@ -1082,13 +1071,99 @@
               "_meta"
             ]
           },
-          "printed_currency": {
+          "pre_tax_amount": {
             "type": "object",
             "properties": {
               "value": {
-                "type": "string",
-                "nullable": true,
-                "description": "ISO 4217 code if printed, else best-effort (e.g. 'USD' from a $ sign)."
+                "type": "number",
+                "nullable": true
+              },
+              "_meta": {
+                "type": "object",
+                "properties": {
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "confidence_reason": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "document_span",
+                            "document",
+                            "system_generated",
+                            "user_input"
+                          ]
+                        },
+                        "filename": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "page": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "quote": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "origin": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "token_ids": {
+                          "type": "array",
+                          "items": {
+                            "type": "integer"
+                          },
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "needs_review": {
+                    "type": "boolean"
+                  },
+                  "flags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "confidence",
+                  "evidence",
+                  "needs_review",
+                  "flags"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "_meta"
+            ]
+          },
+          "tax_amount": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
               },
               "_meta": {
                 "type": "object",
@@ -1172,15 +1247,18 @@
           }
         },
         "required": [
-          "merchant_address",
-          "printed_currency"
+          "origin",
+          "destination",
+          "service_provider",
+          "tip_amount",
+          "pre_tax_amount",
+          "tax_amount"
         ]
       }
     },
     "required": [
       "common",
-      "ground_transport_details",
-      "extras"
+      "ground_transport_details"
     ]
   }
 }

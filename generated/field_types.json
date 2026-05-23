@@ -229,6 +229,18 @@
       "type": "boolean",
       "nullable": false
     },
+    "expense_report.transaction_lines[].ground_transport_details.tip_amount": {
+      "type": "number",
+      "nullable": true
+    },
+    "expense_report.transaction_lines[].ground_transport_details.pre_tax_amount": {
+      "type": "number",
+      "nullable": true
+    },
+    "expense_report.transaction_lines[].ground_transport_details.tax_amount": {
+      "type": "number",
+      "nullable": true
+    },
     "expense_report.transaction_lines[].conference_registration_details.conference_name": {
       "type": "string",
       "nullable": false
@@ -300,6 +312,14 @@
     "expense_report.transaction_lines[].meal_details.has_alcohol_on_receipt": {
       "type": "boolean",
       "nullable": false
+    },
+    "expense_report.transaction_lines[].meal_details.pre_tax_amount": {
+      "type": "number",
+      "nullable": true
+    },
+    "expense_report.transaction_lines[].meal_details.tax_amount": {
+      "type": "number",
+      "nullable": true
     },
     "expense_report.transaction_lines[].car_rental_details.rental_company": {
       "type": "string",

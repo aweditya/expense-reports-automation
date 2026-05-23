@@ -1017,6 +1017,22 @@ pub struct ExpenseReportTransactionLinesItemGroundTransportDetails {
     /// Source tier: T1
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub missing_receipt: Option<bool>,
+    ///  Driver tip from the receipt. Feeds the 20%-tip-cap validation.
+    /// Source tier: T3
+    /// Infer from:  Uber/Lyft receipt — Tip line
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
+    pub tip_amount: Wrapped<f64>,
+    ///  Fare amount before taxes/fees/tip. Used as the base for the 20% tip cap when present.
+    /// Source tier: T3
+    /// Infer from:  Uber/Lyft receipt — subtotal or Trip Fare line
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
+    pub pre_tax_amount: Wrapped<f64>,
+    ///  Sum of taxes/fees on the receipt (booking fees, sales tax, congestion charges, etc.).
+    /// Combined with pre_tax_amount as the base for the 20% tip cap.
+    /// Source tier: T3
+    /// Infer from:  Uber/Lyft receipt — Taxes/Booking Fee/etc.
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
+    pub tax_amount: Wrapped<f64>,
 
 }
 
@@ -1134,6 +1150,17 @@ pub struct ExpenseReportTransactionLinesItemMealDetails {
     /// Infer from:  Scan itemized receipt for alcohol items
     #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
     pub has_alcohol_on_receipt: Wrapped<bool>,
+    ///  Subtotal before taxes/tip. The precise base for the 20% tip cap (fallback math: tip ≤
+    /// 0.20 × (total − tip) when this is missing).
+    /// Source tier: T3
+    /// Infer from:  Itemized restaurant receipt — Subtotal line
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
+    pub pre_tax_amount: Wrapped<f64>,
+    ///  Sales tax on the receipt. Combined with pre_tax_amount as the base for the 20% tip cap.
+    /// Source tier: T3
+    /// Infer from:  Itemized restaurant receipt — Tax line
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
+    pub tax_amount: Wrapped<f64>,
 
 }
 

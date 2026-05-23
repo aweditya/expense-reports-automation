@@ -1071,25 +1071,13 @@
               "value",
               "_meta"
             ]
-          }
-        },
-        "required": [
-          "venue_name",
-          "alcohol_amount",
-          "tip_amount",
-          "has_alcohol_on_receipt"
-        ]
-      },
-      "extras": {
-        "type": "object",
-        "properties": {
-          "merchant_address": {
+          },
+          "pre_tax_amount": {
             "type": "object",
             "properties": {
               "value": {
-                "type": "string",
-                "nullable": true,
-                "description": "Full printed merchant address (street + city + region + country if visible)."
+                "type": "number",
+                "nullable": true
               },
               "_meta": {
                 "type": "object",
@@ -1171,13 +1159,12 @@
               "_meta"
             ]
           },
-          "printed_currency": {
+          "tax_amount": {
             "type": "object",
             "properties": {
               "value": {
-                "type": "string",
-                "nullable": true,
-                "description": "ISO 4217 code if printed, else best-effort (e.g. 'USD' from a $ sign)."
+                "type": "number",
+                "nullable": true
               },
               "_meta": {
                 "type": "object",
@@ -1261,15 +1248,18 @@
           }
         },
         "required": [
-          "merchant_address",
-          "printed_currency"
+          "venue_name",
+          "alcohol_amount",
+          "tip_amount",
+          "has_alcohol_on_receipt",
+          "pre_tax_amount",
+          "tax_amount"
         ]
       }
     },
     "required": [
       "common",
-      "meal_details",
-      "extras"
+      "meal_details"
     ]
   }
 }

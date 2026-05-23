@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-generated_at_utc: '2026-05-22T23:14:34+00:00'
+generated_at_utc: '2026-05-23T09:00:02+00:00'
 sections:
 - key: general_information
   label: General Information
@@ -596,6 +596,33 @@ sections:
     required_expression: null
     review_priority: medium
     allowed_values: []
+  - path: expense_report.transaction_lines[].ground_transport_details.tip_amount
+    label: Tip Amount
+    control: currency
+    source: T3
+    entry_mode: model_prefill_review
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.transaction_lines[].ground_transport_details.pre_tax_amount
+    label: Pre Tax Amount
+    control: currency
+    source: T3
+    entry_mode: model_prefill_review
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.transaction_lines[].ground_transport_details.tax_amount
+    label: Tax Amount
+    control: currency
+    source: T3
+    entry_mode: model_prefill_review
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
   - path: expense_report.transaction_lines[].conference_registration_details.conference_name
     label: Conference Name
     control: text
@@ -763,6 +790,24 @@ sections:
     required: true
     required_expression: null
     review_priority: medium
+    allowed_values: []
+  - path: expense_report.transaction_lines[].meal_details.pre_tax_amount
+    label: Pre Tax Amount
+    control: currency
+    source: T3
+    entry_mode: model_prefill_review
+    required: false
+    required_expression: null
+    review_priority: low
+    allowed_values: []
+  - path: expense_report.transaction_lines[].meal_details.tax_amount
+    label: Tax Amount
+    control: currency
+    source: T3
+    entry_mode: model_prefill_review
+    required: false
+    required_expression: null
+    review_priority: low
     allowed_values: []
   - path: expense_report.transaction_lines[].car_rental_details.rental_company
     label: Rental Company
