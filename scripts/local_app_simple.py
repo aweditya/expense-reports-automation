@@ -915,6 +915,9 @@ def convert_heic_to_jpeg_if_needed(
     return jpeg_bytes, new_name
 
 
+EXTRACT_MAX_PARALLEL = int(os.environ.get("EXTRACT_MAX_PARALLEL", "4"))
+
+
 def extract_all(
     saved: list[tuple[Path, str]],
     extractions_dir: Path,
@@ -922,40 +925,60 @@ def extract_all(
     on_file_done: callable | None = None,
     on_file_fail: callable | None = None,
 ) -> list[Path]:
-    """Phase 1: sequential per-file extraction. Each file routes to the
-    extractor matching its FA-supplied kind (meal, transport, …).
+    """Phase 1: per-file extraction (parallelized via ThreadPoolExecutor).
+    Each file routes to the extractor matching its FA-supplied kind
+    (meal, transport, …) and is spawned in its own subprocess so they
+    can run truly in parallel (subprocess.run releases the GIL during
+    its wait + each child is a fresh Python interpreter with its own
+    Vertex SDK client).
 
-    **Per-file isolation (FA feedback 2026-05-22):** a single bad
-    receipt (DocAI rejection, weird PDF, etc.) used to abort the whole
-    batch and lose the work on already-extracted files. Now we
-    try/except per-file: on PipelineError, fire `on_file_fail(idx, name,
-    detail)`, skip to the next file, and continue. The pipeline only
-    raises out of here if EVERY file failed — partial success proceeds
-    to reduce + render with whatever extractions/*.json landed.
+    **Stage 17 (2026-05-23):** the loop used to be sequential and a
+    6-receipt batch took ~12 min wallclock (~121s/receipt). Per the
+    Stage 20 investigation, the bottleneck appeared to be the
+    sequential loop itself, not Vertex-side queueing. With this
+    change, the SAME 6-receipt batch should drop to ~max(per-file
+    times) ≈ 2 min — assuming Vertex's per-project quota
+    accommodates 4-6 concurrent extraction subprocesses. Cap via
+    EXTRACT_MAX_PARALLEL env var (default 4) so we don't overwhelm
+    Vertex if a batch grows large.
 
-    `on_file_start(index, name)` fires before each file's subprocess;
-    `on_file_done(index, name)` after success; `on_file_fail(index,
-    name, detail)` after a per-file failure. All optional.
+    **Per-file isolation (FA feedback 2026-05-22):** still applies.
+    Each future independently catches PipelineError and reports via
+    `on_file_fail`. Other concurrent files keep processing. The
+    pipeline only raises out of here if EVERY file failed — partial
+    success proceeds to reduce + render with whatever extractions/
+    *.json landed.
 
-    To parallelize later: replace this body with a ThreadPoolExecutor
-    over the same call. Nothing downstream cares — the contract is
-    list[(input path, kind)] -> list[output JSON paths].
+    `on_file_start(index, name)` fires before each file's subprocess
+    runs; `on_file_done(index, name)` after success; `on_file_fail(
+    index, name, detail)` after a per-file failure. All optional.
+    Callbacks fire from worker threads, so JOBS-mutating callbacks
+    must use JOBS_LOCK (the existing ones already do).
     """
-    out: list[Path] = []
+    # Pre-resolve extractors so the unknown-kind error path runs in
+    # the main thread (it's a logic bug, not a per-file extraction
+    # failure — surface it loudly even though we mark it as a
+    # per-file failure for consistency with the per-file callback API).
+    work: list[tuple[int, Path, str, Path, Path]] = []  # (idx, src, kind, extractor, out_path)
     failures: list[tuple[str, str]] = []  # (filename, error_detail)
     for idx, (src, kind) in enumerate(saved):
         extractor = EXTRACTORS.get(kind)
         if extractor is None:
-            # Should be unreachable — /upload validates kind before saving.
-            # Treat as a per-file failure rather than aborting the batch.
             detail = f"unknown kind {kind!r}"
             if on_file_fail is not None:
                 on_file_fail(idx, src.name, detail)
             failures.append((src.name, detail))
             continue
+        out_path = extractions_dir / f"{src.stem}.json"
+        work.append((idx, src, kind, extractor, out_path))
+
+    def _extract_one(item: tuple[int, Path, str, Path, Path]) -> tuple[int, Path | None, str | None]:
+        """Runs in a worker thread. Returns (idx, out_path, error_detail)
+        — error_detail is None on success. Fires the start/done/fail
+        callbacks at the right moments."""
+        idx, src, kind, extractor, out_path = item
         if on_file_start is not None:
             on_file_start(idx, src.name)
-        out_path = extractions_dir / f"{src.stem}.json"
         try:
             run_subprocess(
                 [
@@ -970,11 +993,35 @@ def extract_all(
         except PipelineError as err:
             if on_file_fail is not None:
                 on_file_fail(idx, src.name, err.detail)
-            failures.append((src.name, err.detail))
-            continue
+            return (idx, None, err.detail)
         if on_file_done is not None:
             on_file_done(idx, src.name)
-        out.append(out_path)
+        return (idx, out_path, None)
+
+    out: list[Path] = []
+    if work:
+        # Cap concurrency at min(len(work), EXTRACT_MAX_PARALLEL). For
+        # small batches (1-3 files) all run at once. For larger batches
+        # we leave headroom for Vertex's per-project quota (60 req/min
+        # default; 4 concurrent extractions × ~3 calls each ≈ 12
+        # in-flight at peak).
+        max_workers = min(len(work), max(1, EXTRACT_MAX_PARALLEL))
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=max_workers,
+                                thread_name_prefix="extract") as pool:
+            results = list(pool.map(_extract_one, work))
+        # Sort results back into the original file order (ThreadPoolExecutor.map
+        # preserves order, but be explicit so a future switch to as_completed
+        # doesn't silently scramble the output list — reduce.rs's per-line
+        # numbering keys off this order).
+        for idx, out_path, err in sorted(results, key=lambda r: r[0]):
+            if err is None and out_path is not None:
+                out.append(out_path)
+            elif err is not None:
+                # filename is the source name; look it up from the original
+                # `saved` list (idx is into `saved`, not `work`).
+                src_name = saved[idx][0].name
+                failures.append((src_name, err))
 
     # Only raise if EVERY file failed — partial success proceeds.
     if not out and failures:
