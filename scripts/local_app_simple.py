@@ -34,6 +34,7 @@ from html import escape as html_escape
 from pathlib import Path
 
 from flask import Flask, Response, abort, redirect, request, send_from_directory
+from log_event import log_error, log_event
 from PIL import Image
 from pillow_heif import register_heif_opener
 
@@ -1177,15 +1178,26 @@ def _run_pipeline_in_background(
 
 
 def run_subprocess(cmd: list[str], label: str, filename: str | None = None) -> None:
-    """Run a subprocess; raise PipelineError with stderr on failure. Streams
-    progress to the server's stdout so an operator can see what's happening."""
-    print(f"  ▸ {label} ...", flush=True)
+    """Run a subprocess; raise PipelineError with stderr on failure. Emits
+    structured `subprocess.{start,done,fail}` events to Cloud Logging
+    so an operator can query slow extractions / failed labels / etc.
+    via jsonPayload filters in Logs Explorer."""
+    start_ts = time.time()
+    log_event("subprocess.start", label=label, filename=filename)
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(REPO_ROOT))
+    duration_ms = int((time.time() - start_ts) * 1000)
     if result.returncode != 0:
-        print(f"  ✗ {label} failed (exit {result.returncode})", flush=True)
+        log_error("subprocess.fail",
+                  label=label, filename=filename,
+                  exit_code=result.returncode,
+                  duration_ms=duration_ms,
+                  stderr_excerpt=result.stderr[:500])
+        # Preserve full stderr to stderr stream for legacy operators
+        # tailing raw output; Cloud Logging captures it as unstructured.
         print(result.stderr, file=sys.stderr)
         raise PipelineError(step=label, detail=result.stderr.strip(), filename=filename)
-    print(f"  ✓ {label} done", flush=True)
+    log_event("subprocess.done",
+              label=label, filename=filename, duration_ms=duration_ms)
 
 
 # ─── Helpers ───────────────────────────────────────────────────────────────
@@ -1258,20 +1270,19 @@ def ensure_vertex_project_env() -> None:
         project = ""
     if project and project != "(unset)":
         os.environ["VERTEX_PROJECT_ID"] = project
-        print(f"  VERTEX_PROJECT_ID:   {project} (from gcloud config)", flush=True)
+        log_event("server.vertex_config",
+                  vertex_project_id=project, source="gcloud config")
     else:
-        print(
-            "  WARNING: VERTEX_PROJECT_ID is unset and no active gcloud project. "
-            "Run `gcloud config set project soe-agile-agents` or "
-            "`export VERTEX_PROJECT_ID=soe-agile-agents` before uploading.",
-            flush=True,
-        )
+        log_error("server.vertex_unset",
+                  message="VERTEX_PROJECT_ID unset and no active gcloud project; "
+                  "extractors will 401. Fix: gcloud config set project "
+                  "soe-agile-agents OR export VERTEX_PROJECT_ID=soe-agile-agents")
 
 
 if __name__ == "__main__":
     UPLOADS_ROOT.mkdir(parents=True, exist_ok=True)
-    print(f"local_app_simple listening on http://{HOST}:{PORT}", flush=True)
-    print(f"  uploads dir:         {UPLOADS_ROOT}", flush=True)
+    log_event("server.startup",
+              host=HOST, port=PORT, uploads_dir=str(UPLOADS_ROOT))
     ensure_vertex_project_env()
     # Werkzeug's dev server defaults to single-threaded — all HTTP
     # requests serialize through one thread, which makes SSE + concurrent

@@ -45,6 +45,7 @@ from evidence_bbox import (
     ocr_document,
     populate_bboxes,
 )
+from log_event import log_event, log_warning
 
 
 DEFAULT_MODEL = "gemini-3-flash-preview"
@@ -105,9 +106,10 @@ def _retry_with_backoff(fn, *, label: str):
             if attempt == RETRY_MAX_ATTEMPTS:
                 break
             delay = RETRY_BACKOFF_BASE_SEC * (2 ** (attempt - 1))
-            print(f"  ⟳ {label}: {type(exc).__name__} on attempt {attempt}/"
-                  f"{RETRY_MAX_ATTEMPTS}; retrying in {delay:.1f}s",
-                  file=sys.stderr, flush=True)
+            log_warning("extract.retry",
+                        label=label, error_type=type(exc).__name__,
+                        attempt=attempt, max_attempts=RETRY_MAX_ATTEMPTS,
+                        retry_in_sec=delay)
             time.sleep(delay)
     # All retries exhausted — re-raise the last exception.
     assert last_exc is not None
@@ -367,5 +369,5 @@ def run_extraction(
         populate_bboxes(parsed, args.image, doc=doc)
 
     args.output.write_text(json.dumps(parsed, indent=2, ensure_ascii=False))
-    print(f"wrote {args.output}")
+    log_event("extract.wrote", output_path=str(args.output))
     return 0

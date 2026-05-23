@@ -31,6 +31,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from fx_lookup import fetch_rate  # noqa: E402
+from log_event import log_error, log_event  # noqa: E402
 
 
 def fa_fx_meta() -> dict:
@@ -109,15 +110,15 @@ def main() -> int:
     args = parser.parse_args()
 
     if not args.in_path.exists():
-        print(f"error: {args.in_path} does not exist", file=sys.stderr)
+        log_error("fx_enrich.input_missing", in_path=str(args.in_path))
         return 2
 
     report = json.loads(args.in_path.read_text())
     fetched, skipped, failed = enrich_report(report)
     args.out_path.parent.mkdir(parents=True, exist_ok=True)
     args.out_path.write_text(json.dumps(report, indent=2, ensure_ascii=False))
-    print(f"# fx_enrich: {fetched} lines enriched, {skipped} skipped (USD/missing), {failed} failed",
-          file=sys.stderr)
+    log_event("fx_enrich.summary",
+              fetched=fetched, skipped=skipped, failed=failed)
     return 0
 
 

@@ -29,6 +29,8 @@ import urllib.error
 import urllib.request
 from typing import Optional
 
+from log_event import log_warning
+
 BASE_URL = "https://api.frankfurter.dev/v1"
 TIMEOUT_SEC = 8.0
 
@@ -82,24 +84,27 @@ def fetch_rate(
         # no rate — record None in cache so we don't retry per-line.
         if cache is not None:
             cache[(ccy, date)] = None
-        print(f"# fx_lookup: {ccy} {date} → HTTP {err.code}", file=sys.stderr)
+        log_warning("fx.lookup.http_error", currency=ccy, date=date,
+                    http_code=err.code)
         return None
     except (urllib.error.URLError, TimeoutError, OSError) as err:
         # Network failure: DO NOT cache (might come back next call).
-        print(f"# fx_lookup: {ccy} {date} → {type(err).__name__}: {err}", file=sys.stderr)
+        log_warning("fx.lookup.network_error", currency=ccy, date=date,
+                    error_type=type(err).__name__, error=str(err)[:120])
         return None
 
     try:
         data = json.loads(body)
     except json.JSONDecodeError:
-        print(f"# fx_lookup: {ccy} {date} → bad JSON: {body[:120]!r}", file=sys.stderr)
+        log_warning("fx.lookup.bad_json", currency=ccy, date=date,
+                    body_excerpt=body[:120])
         return None
 
     rate = data.get("rates", {}).get("USD")
     if not isinstance(rate, (int, float)) or rate <= 0:
         if cache is not None:
             cache[(ccy, date)] = None
-        print(f"# fx_lookup: {ccy} {date} → no USD rate in response", file=sys.stderr)
+        log_warning("fx.lookup.no_rate", currency=ccy, date=date)
         return None
 
     rate_f = float(rate)
