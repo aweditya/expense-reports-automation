@@ -135,7 +135,16 @@ def _get_job(upload_id: str) -> dict:
 @app.get("/")
 def upload_form() -> str:
     """Tiny upload form. Inline-styled — no external CSS dependency."""
-    return UPLOAD_FORM_HTML
+    return UPLOAD_FORM_HTML.replace("__FORM_DRAFT_KEY__", FORM_DRAFT_KEY)
+
+
+# Single source of truth for the browser localStorage key the form-
+# persistence JS uses (Stage 11b). Referenced by both the upload form
+# (writes drafts on input) and the progress page (clears the draft on
+# phase=done after a successful upload). Both templates use the
+# `__FORM_DRAFT_KEY__` placeholder which gets string-replaced at render
+# time. Bumping the suffix invalidates all existing draft browser-state.
+FORM_DRAFT_KEY = "stanford-expense-form-draft-v1"
 
 
 @app.post("/upload")
@@ -292,7 +301,9 @@ def render_progress_page(upload_id: str) -> str:
     updates the progress bar + per-file list live, plays a Web Audio
     'done' chime when complete, redirects to the workbench after a
     1-second pause so the chime registers."""
-    return PROGRESS_PAGE_HTML.replace("__UPLOAD_ID__", html_escape(upload_id))
+    return (PROGRESS_PAGE_HTML
+            .replace("__UPLOAD_ID__", html_escape(upload_id))
+            .replace("__FORM_DRAFT_KEY__", FORM_DRAFT_KEY))
 
 
 @app.errorhandler(PipelineError)
@@ -1412,7 +1423,10 @@ UPLOAD_FORM_HTML = """\
   // forbids programmatic File access) — the FA still re-picks files
   // but keeps her typed fieldset, dropdown choices, and dates.
   (function setupFormPersistence() {
-    const STORAGE_KEY = 'stanford-expense-form-draft-v1';
+    // Key injected from Python (FORM_DRAFT_KEY) so the progress page's
+    // done-handler clears the same draft this form writes. Single
+    // source of truth: scripts/local_app_simple.py::FORM_DRAFT_KEY.
+    const STORAGE_KEY = '__FORM_DRAFT_KEY__';
     const form = document.querySelector('form[action="/upload"]');
     if (!form || !window.localStorage) return;
 
@@ -1799,7 +1813,8 @@ PROGRESS_PAGE_HTML = """\
         // so "Try again" still restores typed fields (the FA's pain
         // from 2026-05-22). Key must match setupFormPersistence in
         // the upload form HTML.
-        try { localStorage.removeItem('stanford-expense-form-draft-v1'); } catch (e) {}
+        // Key injected from Python (FORM_DRAFT_KEY); see form-page JS.
+        try { localStorage.removeItem('__FORM_DRAFT_KEY__'); } catch (e) {}
         // 1s pause so the chime + status text register before redirect.
         setTimeout(function() {
           window.location = '/uploads/' + UPLOAD_ID + '/workbench.html';
