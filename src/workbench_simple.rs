@@ -242,7 +242,7 @@ document.addEventListener('click', function(e) {
   });
 })();
 
-// friday Stage 7 — click-to-edit on any field value. POST hits
+// Click-to-edit on any field value. POST hits
 // /uploads/<id>/edit which mutates report.json + re-renders
 // workbench.html. Page reloads on success so the FA sees the
 // persisted edit.
@@ -422,7 +422,7 @@ document.addEventListener('click', function(e) {
   });
 })();
 
-// friday Stage 6 — global toggle: when checked, body gains
+// Global toggle: when checked, body gains
 // .show-evidence and the CSS reveals every .field-evidence quote
 // underneath each field's value. Default off (per FA feedback —
 // 'things that are not important should be hidden'). No persistence;
@@ -1039,7 +1039,7 @@ fn render_general_information(html: &mut String, gi: &ExpenseReportGeneralInform
     field_card_text(html, "When", &gi.business_purpose.when, "expense_report.general_information.business_purpose.when", |s: &String| s.clone());
     field_card_text(html, "Where", &gi.business_purpose.r#where, "expense_report.general_information.business_purpose.where", |s: &String| s.clone());
     field_card_text(html, "Why", &gi.business_purpose.why, "expense_report.general_information.business_purpose.why", |s: &String| s.clone());
-    // friday Stage 3 — single combined card so the FA can click-to-copy
+    // Single combined card so the FA can click-to-copy
     // the same labeled blob they'd otherwise hand-concatenate from the
     // 6 sub-fields above, then paste into Stanford's report-level
     // Business Purpose text box. Existing data-copy-value machinery
@@ -1123,7 +1123,7 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
     html.push_str("<div class=\"field-grid\">\n");
     let path_prefix = format!("expense_report.transaction_lines[{idx}].common");
     // Primary fields — the ones the FA verifies at-a-glance (friday
-    // Stage 6 / F4). Date, Amount, Expense Type, Remarks, Foreign
+    // evidence). Date, Amount, Expense Type, Remarks, Foreign
     // Activity Type stay visible.
     field_card_text(html, "Date", &line.common.date, &format!("{path_prefix}.date"), |d| d.0.clone());
     field_card_optional_money(html, "Amount (USD)", &line.common.line_amount_usd, &format!("{path_prefix}.line_amount_usd"));
@@ -1235,11 +1235,9 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
 
 fn render_meal_details(html: &mut String, meal: &ExpenseReportTransactionLinesItemMealDetails, path: &str) {
     field_card_text(html, "Venue", &meal.venue_name, &format!("{path}.venue_name"), |s: &String| s.clone());
-    // pre_tax_amount + tax_amount re-added after the Stage 9c
-    // revert; the meal extractor is now split-call so the schema
-    // fits under Vertex's ceiling. check_tip_under_cap uses these
-    // as the precise base when present, falling back to total math
-    // when either is missing.
+    // pre_tax_amount + tax_amount feed the precise 20% tip cap
+    // when present; the validator falls back to total math when
+    // either is missing.
     field_card_optional_money(html, "Subtotal (pre-tax)", &meal.pre_tax_amount, &format!("{path}.pre_tax_amount"));
     field_card_optional_money(html, "Tax", &meal.tax_amount, &format!("{path}.tax_amount"));
     field_card_optional_money(html, "Tip", &meal.tip_amount, &format!("{path}.tip_amount"));
@@ -1599,7 +1597,7 @@ fn field_card_original_amount(
     // icon points at the field whose value we're actually displaying.
     // Foreign receipts: cite the printed foreign-currency total.
     // Domestic receipts: cite the printed USD total (line_amount_usd's
-    // evidence). Phase 6 robustness audit (B-r2) — previously bare,
+    // evidence). Previously bare,
     // dropped metadata entirely.
     let (value, currency, meta): (Option<f64>, Option<&str>, &FieldMetadata) =
         match original_amount.value {
@@ -1675,7 +1673,7 @@ fn field_card_inner(html: &mut String, label: &str, path: &str, value: &str, met
     });
     let spotcheck_icon = match spotcheck_evidence {
         Some(e) => {
-            // Phase 6 Stage B: if Document AI grounding produced bboxes
+            // If Document AI grounding produced bboxes
             // for this evidence quote, emit them as a JSON-encoded
             // data-bboxes attribute. The JS reads it and draws an amber
             // halo at the right spot. Absent attribute => no halo (cached

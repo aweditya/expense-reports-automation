@@ -135,7 +135,7 @@ RECEIPTS = [
         },
     },
 
-    # ─── Ground transport (Phase 2 Stage 1b) ──────────────────────────────
+    # ─── Ground transport (an earlier stage) ──────────────────────────────
     # Three Lyft "Ride Report" PDFs and three Uber receipt PDFs. All
     # six are US-domestic. Expected values were eyeballed from the
     # original PDFs directly. Predicates (lambdas) are used where the
@@ -245,7 +245,7 @@ RECEIPTS = [
         },
     },
 
-    # ─── Lodging (Phase 3 Stage 1) ────────────────────────────────────────
+    # ─── Lodging (an earlier stage) ────────────────────────────────────────
     # English-only US hotel folios for v1. Multilingual (the German/French/
     # Japanese folios in the corpus) is a v2 follow-up per the FA's request
     # to keep the first cut simple. Predicates use loose `contains` matches
@@ -336,7 +336,7 @@ RECEIPTS = [
         },
     },
 
-    # ─── Airfare (Phase 4 Stage 2) ────────────────────────────────────────
+    # ─── Airfare (an earlier stage) ────────────────────────────────────────
     # Four real-corpus tickets: Egencia/United (round-trip, Stanford
     # workflow), Air India (one-way international, INR currency triggers
     # the FX mock in reduction), Gmail-saved United e-ticket (round-trip
@@ -522,7 +522,7 @@ def main() -> int:
             total_failures += 1
             continue
         line = data[0]
-        # The expense_kind discriminator was dropped (Phase 1 Pair B):
+        # The expense_kind discriminator was dropped (an earlier rework):
         # the per-kind extractor router knows the kind from the FA's
         # upload-form choice. The presence of the matching detail block
         # is the structural signal that the extractor emitted the right

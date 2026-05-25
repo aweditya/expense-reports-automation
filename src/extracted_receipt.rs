@@ -108,7 +108,7 @@ pub struct Segment {
     pub departure_datetime: String,
 }
 
-/// Phase 5: per-document shape for supporting conference documents
+/// per-document shape for supporting conference documents
 /// (program PDF, paper schedule, conference papers, etc.). NOT an
 /// expense — has no `common` block, no transaction line, doesn't appear
 /// in `ExpenseReport.transaction_lines`. Sibling type to
@@ -162,7 +162,7 @@ pub struct PaperListing {
     pub authors_string: String,
 }
 
-/// Phase 5: T4 synthesis output. Produced by the
+/// T4 synthesis output. Produced by the
 /// `synthesize_conference_bundle.py` orchestrator from all
 /// `conference_registration_*` and `supporting_conference_doc_*`
 /// per-doc JSONs in an upload. Narrow by design — only fuzzy fields

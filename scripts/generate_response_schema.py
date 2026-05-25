@@ -115,7 +115,7 @@ def meta_block_schema() -> dict:
                         "page": {"type": "integer", "nullable": True},
                         "quote": {"type": "string", "nullable": True},
                         "origin": {"type": "string", "nullable": True},
-                        # Leapfrog L.1 (docs/leapfrog-plan.md §7): when
+                        #  (docs/leapfrog-plan.md §7): when
                         # the extractor's prompt includes a numbered
                         # Document AI token list, the model returns the
                         # integer IDs of the tokens it grounded against.
@@ -164,7 +164,7 @@ def common_block_schema(expense_type_values: list[str]) -> dict:
             # tickets (origin: needs_fx_conversion) for reduction's
             # mock_usd_rate to fill — without it, the model is forced to
             # emit a sentinel like 0 which apply_mock_fx then mistakes
-            # for "already set." See Phase 4 Stage 4 verification notes.
+            # for "already set." See an earlier stage verification notes.
             "line_amount_usd": leaf({"type": "number", "nullable": True}),
             "original_currency": leaf(
                 {"type": "string", "nullable": True, "description": "ISO 4217 code or null if USD"}
@@ -742,7 +742,7 @@ def transaction_line_schema(
     include_nightly_rates=True` (lodging) or `include_segments=True`
     (airfare).
 
-    The expense_kind discriminator was dropped (Phase 1 Pair B): the
+    The expense_kind discriminator was dropped (an earlier rework): the
     per-kind extractor router (`scripts/extract_<kind>.py`) knows the
     kind from the FA's upload-form choice — it doesn't need to be
     repeated inside the per-document JSON. The detail block (when
@@ -964,7 +964,7 @@ def main() -> int:
         out_path.write_text(json.dumps(response_schema, indent=2) + "\n")
         print(f"wrote {out_path.relative_to(REPO_ROOT)}")
 
-    # Non-transaction-line schemas (Phase 5): supporting conference docs
+    # Non-transaction-line schemas: supporting conference docs
     # (no `common` block — they're context, not expenses) and the
     # cross-document synthesis output.
     for filename, factory in (

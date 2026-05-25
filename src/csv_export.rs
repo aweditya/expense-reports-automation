@@ -328,7 +328,7 @@ fn map_expense_type_domestic(line: &ExpenseReportTransactionLinesItem) -> &'stat
         ExpenseType::LodgingDomestic | ExpenseType::LodgingForeign => "Lodging",
         ExpenseType::MembershipDues => "Membership Dues",
         ExpenseType::OtherBusinessExpense => "Miscellaneous",
-        // B2: best-guess label. Stanford's actual dropdown string for
+        // Best-guess label. Stanford's actual dropdown string for
         // mileage should be confirmed against the ERS portal once an
         // FA submits a personal-mileage line for the first time.
         ExpenseType::PersonalMileage => "Personal Mileage",
@@ -372,7 +372,7 @@ fn map_expense_type_foreign(line: &ExpenseReportTransactionLinesItem) -> &'stati
         | ExpenseType::LodgingForeign => "Lodging - Foreign and Domestic",
         ExpenseType::MembershipDues => "Membership Dues - Foreign",
         ExpenseType::OtherBusinessExpense => "Miscellaneous - Foreign",
-        // B2: personal mileage on foreign trips is uncommon (IRS rate
+        // Personal mileage on foreign trips is uncommon (IRS rate
         // is US-specific) but the mapper needs an arm. Best-guess
         // label; verify against Stanford's foreign-CSV template.
         ExpenseType::PersonalMileage => "Personal Mileage - Foreign",

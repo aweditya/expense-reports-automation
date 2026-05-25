@@ -1,4 +1,4 @@
-"""Structured JSON log helper (Stage 22).
+"""Structured JSON log helper.
 
 Cloud Logging on GCP auto-parses JSON from stdout into structured
 fields — severity, message, timestamp, and any custom payload keys

@@ -56,7 +56,7 @@ def ocr_document(doc_path: pathlib.Path):
     """Single Document AI call. Returns documentai.Document, or None for
     unsupported mime types.
 
-    Public since Leapfrog L.2 — extractors call this directly so they
+    Public since extractors call this directly so they
     can both inline the token list into Gemini's prompt AND pass the
     same Document into populate_bboxes for token_id resolution. Use
     instead of calling populate_bboxes' internal OCR (which does the
@@ -252,7 +252,7 @@ def populate_bboxes(record: dict, doc_path: pathlib.Path, doc=None) -> dict:
     for each `document_span` entry. Mutates record in place AND
     returns it (convenient for chaining).
 
-    Two grounding paths (Leapfrog L.2, docs/leapfrog-plan.md §7):
+    Two grounding paths (, docs/leapfrog-plan.md §7):
       1. `token_ids` present on the evidence entry (from a leapfrog-
          aware extractor): resolve via dict lookup against DocAI's
          tokens. Verifier compares the concatenated token text to
