@@ -2,5 +2,6 @@ flask
 gunicorn
 google-genai
 google-cloud-documentai
+google-cloud-firestore
 pyyaml
 pillow-heif

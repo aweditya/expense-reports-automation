@@ -139,13 +139,26 @@ class PipelineError(RuntimeError):
 #     "current":  int,   # index into files of the currently-extracting file
 #     "error":    str,   # populated only when phase == "error"
 #   }
+#
+# Durable-store Phase 1 (2026-05-25): when USE_FIRESTORE_JOBS=1 is set
+# (production), reads/writes go to Firestore via firestore_jobs.py
+# instead of this dict. The local fallback is preserved for dev
+# environments without ADC + tests. Flipping the env var is the rollback.
 JOBS: dict[str, dict] = {}
 JOBS_LOCK = threading.Lock()
+USE_FIRESTORE_JOBS = os.environ.get("USE_FIRESTORE_JOBS", "0") == "1"
 
 
 def _set_job(upload_id: str, **updates) -> None:
     """Thread-safe partial update of a JOBS entry. Creates the entry if
-    it doesn't exist (defensive — callers should init first)."""
+    it doesn't exist (defensive — callers should init first).
+
+    Dispatches to Firestore when USE_FIRESTORE_JOBS=1 (durable-store
+    Phase 1); falls through to the in-memory dict otherwise."""
+    if USE_FIRESTORE_JOBS:
+        from firestore_jobs import set_job as _fs_set
+        _fs_set(upload_id, **updates)
+        return
     with JOBS_LOCK:
         if upload_id not in JOBS:
             JOBS[upload_id] = {}
@@ -154,7 +167,12 @@ def _set_job(upload_id: str, **updates) -> None:
 
 def _get_job(upload_id: str) -> dict:
     """Thread-safe snapshot read. Returns a shallow copy so the SSE
-    serializer can JSON-encode without holding the lock."""
+    serializer can JSON-encode without holding the lock.
+
+    Dispatches to Firestore when USE_FIRESTORE_JOBS=1."""
+    if USE_FIRESTORE_JOBS:
+        from firestore_jobs import get_job as _fs_get
+        return _fs_get(upload_id)
     with JOBS_LOCK:
         return dict(JOBS.get(upload_id, {}))
 
