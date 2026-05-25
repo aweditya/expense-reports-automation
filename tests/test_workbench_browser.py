@@ -19,6 +19,7 @@ Setup:
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import unittest
@@ -550,7 +551,15 @@ class TestUploadFormBrowser(unittest.TestCase):
         self.context.close()
 
     def test_upload_form_loads_with_all_fa_fields(self):
-        """Every named FA field renders + the form POSTs to /upload."""
+        """Every named FA field renders, form POSTs to /upload, and
+        loading the page produces zero console errors. The console
+        check guards against the class of bug where an HTML5 pattern
+        attribute (or similar) is invalid under Chromium's /v parser
+        and silently disables client-side validation."""
+        errs: list[str] = []
+        self.page.on("console", lambda msg: (
+            errs.append(msg.text) if msg.type == "error" else None))
+        self.page.on("pageerror", lambda exc: errs.append(f"PAGEERROR: {exc}"))
         self.page.goto(self.HOME_URL, wait_until="domcontentloaded")
         for name in [
             "fa_payee_name", "fa_payee_sunet", "fa_payee_affiliation",
@@ -563,6 +572,8 @@ class TestUploadFormBrowser(unittest.TestCase):
             self.assertIsNotNone(el, f"form field [name={name}] missing")
         form = self.page.query_selector('form[action="/upload"]')
         self.assertIsNotNone(form, "form should POST to /upload")
+        self.assertEqual(errs, [],
+                         f"unexpected console/page errors on form load: {errs}")
 
     def test_text_fields_persist_across_reload(self):
         """Typed text values restore after a page reload via localStorage."""
@@ -833,6 +844,220 @@ class TestWorkbenchBrowserB2(unittest.TestCase):
         self.assertGreaterEqual(amount_occurrences, 2,
                                 f"expected $22.40 in both line + hero; "
                                 f"found {amount_occurrences} occurrence(s)")
+
+
+PROD_URL = "https://expense-reports-wgnivgelea-uw.a.run.app"
+
+
+def _prod_e2e_enabled() -> bool:
+    """E2E against prod costs real money + time. Opt-in via env var."""
+    return os.environ.get("RUN_PROD_E2E") == "1"
+
+
+def _gcloud_id_token() -> str | None:
+    """IAP bearer token for prod. Skip if gcloud isn't set up."""
+    try:
+        out = subprocess.run(
+            ["gcloud", "auth", "print-identity-token"],
+            capture_output=True, check=True, timeout=10,
+        )
+        return out.stdout.decode().strip()
+    except Exception:
+        return None
+
+
+@unittest.skipUnless(PLAYWRIGHT_AVAILABLE,
+                     "playwright not installed")
+@unittest.skipUnless(_prod_e2e_enabled(),
+                     "set RUN_PROD_E2E=1 to run the prod E2E flow")
+@unittest.skipUnless(_gcloud_id_token() is not None,
+                     "gcloud identity token unavailable")
+class TestProdFullFAJourney(unittest.TestCase):
+    """End-to-end FA flow against deployed prod: form fill, file
+    upload, SSE progress, workbench interaction, CSV download.
+    Single test method walks the entire journey with screenshots at
+    each milestone. ~$0.50 in Vertex + Document AI, ~5min wallclock.
+    """
+
+    RECEIPTS = [
+        ("meal", "meal_2026-04-04_original-mels-san-leandro.jpeg"),
+        ("transport", "transport_2023-01-08_lyft-dtw-to-novi.pdf"),
+        ("lodging", "lodging_2023-01-09_warren-hotel-v2.pdf"),
+        ("airfare", "airfare_2026-03-21_egencia-united-sfo-pit-roundtrip.pdf"),
+        ("membership", "membership_2026-01-29_acm-student-renewal.png"),
+    ]
+    FA_FIELDS = {
+        "fa_payee_name": "E2E Test Payee",
+        "fa_payee_sunet": "e2etest",
+        "fa_payee_affiliation": "stanford_faculty",
+        "fa_event_name": "E2E Journey Test",
+        "fa_payment_method": "electronic",
+        "fa_rush_processing": "no",
+        "fa_authorized_by": "advisor@stanford.edu",
+        "fa_bp_who": "E2E Test",
+        "fa_bp_what": "End-to-end FA journey verification",
+        "fa_bp_when_from": "2026-03-21",
+        "fa_bp_when_to": "2026-04-04",
+        "fa_bp_where": "Pittsburgh, PA",
+        "fa_bp_why": "Verify the FA journey doesn't crash",
+    }
+    SHOTS_DIR = REPO_ROOT / ".scratch" / "e2e-fa-journey"
+
+    def setUp(self):
+        self._playwright = sync_playwright().start()
+        self._browser = self._playwright.chromium.launch(headless=True)
+        self._token = _gcloud_id_token()
+        self.context = self._browser.new_context(
+            viewport={"width": 1400, "height": 1800},
+            extra_http_headers={"Authorization": f"Bearer {self._token}"},
+        )
+        self.page = self.context.new_page()
+        self._console_errors: list[str] = []
+        self.page.on("console", lambda msg: (
+            self._console_errors.append(msg.text)
+            if msg.type == "error" else None
+        ))
+        self.SHOTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    def tearDown(self):
+        self._browser.close()
+        self._playwright.stop()
+
+    def _snap(self, name: str):
+        self.page.screenshot(path=str(self.SHOTS_DIR / f"{name}.png"),
+                             full_page=True)
+
+    def test_full_fa_journey(self):
+        """Form fill → upload → SSE → workbench → edit → CSV download."""
+        # 1. Form load
+        self.page.goto(PROD_URL + "/", wait_until="domcontentloaded")
+        self.assertIsNotNone(self.page.query_selector('form[action="/upload"]'))
+        self._snap("01-form-blank")
+
+        # 2. Fill required fields
+        for name, value in self.FA_FIELDS.items():
+            el = self.page.query_selector(f'[name="{name}"]')
+            if el is None:
+                continue
+            tag = el.evaluate("e => e.tagName")
+            if tag == "SELECT":
+                self.page.select_option(f'[name="{name}"]', value)
+            else:
+                self.page.fill(f'[name="{name}"]', value)
+
+        # 3. Add additional file rows
+        for _ in range(len(self.RECEIPTS) - 1):
+            self.page.click('button:has-text("+ Add another file")')
+
+        # 4. Set files + kinds
+        for i, (kind, filename) in enumerate(self.RECEIPTS):
+            receipt_path = REPO_ROOT / "receipts" / filename
+            self.assertTrue(receipt_path.exists(),
+                            f"missing receipt: {receipt_path}")
+            self.page.set_input_files(f'[name="file_{i}"]', str(receipt_path))
+            self.page.select_option(f'[name="kind_{i}"]', kind)
+        self._snap("02-form-filled")
+
+        # 5. Submit + capture upload_id from the progress URL
+        with self.page.expect_navigation(wait_until="domcontentloaded",
+                                         timeout=60_000):
+            self.page.click('button[type="submit"]')
+        upload_id = self.page.url.rstrip("/").split("/")[-1]
+        self.assertTrue(upload_id, "no upload_id in progress URL")
+
+        # 6. Mid-extract screenshot after a beat
+        self.page.wait_for_timeout(20_000)
+        self._snap("03-progress-mid")
+
+        # 7. Wait for the JS to redirect to workbench (allow generous time)
+        self.page.wait_for_url("**/workbench.html", timeout=900_000)
+        self.page.wait_for_load_state("networkidle", timeout=30_000)
+        self._snap("04-workbench-loaded")
+
+        # 8. Workbench sanity: N line cards
+        line_cards = self.page.query_selector_all("details.line-card")
+        self.assertEqual(len(line_cards), len(self.RECEIPTS),
+                         f"expected {len(self.RECEIPTS)} line cards, "
+                         f"got {len(line_cards)}")
+
+        # 9. Evidence toggle round-trip
+        self.page.click("#evidence-toggle")
+        self.assertTrue(self.page.evaluate(
+            "() => document.body.classList.contains('show-evidence')"))
+        self.page.click("#evidence-toggle")
+        self.assertFalse(self.page.evaluate(
+            "() => document.body.classList.contains('show-evidence')"))
+
+        # 10. Edit a field end-to-end
+        edit_url = f"{PROD_URL}/uploads/{upload_id}/edit"
+        cards_with_value = self.page.query_selector_all(
+            "[data-path] .field-value")
+        self.assertGreater(len(cards_with_value), 10)
+        # Pick the first venue_name card (meal) which is reliably present
+        venue_card = self.page.query_selector(
+            '[data-path$="meal_details.venue_name"]')
+        if venue_card is not None:
+            venue_card.query_selector(".field-value").click()
+            input_el = venue_card.query_selector("input.inline-edit-input")
+            self.assertIsNotNone(input_el)
+            input_el.fill("E2E Edited Venue Name")
+            with self.page.expect_response(
+                lambda r: "/edit" in r.url and r.request.method == "POST",
+                timeout=10_000,
+            ):
+                input_el.press("Enter")
+            # Wait for the value to land in the DOM rather than reading
+            # page.content() (which can race the JS-driven reload that
+            # follows the /edit POST).
+            self.page.wait_for_function(
+                "() => document.body.innerText.includes("
+                "'E2E Edited Venue Name')",
+                timeout=15_000,
+            )
+        self._snap("05-after-edit")
+
+        # 11. Issues rail jump
+        jumps = self.page.query_selector_all("a.issue-jump")
+        if jumps:
+            jumps[0].click()
+            self.page.wait_for_function(
+                "() => document.querySelectorAll('.field-card.active').length === 1",
+                timeout=2000,
+            )
+
+        # 12. CSV download links resolve to real CSV bodies
+        links = self.page.query_selector_all('a.download-link[href$=".csv"]')
+        self.assertGreater(len(links), 0)
+        for link in links:
+            href = link.get_attribute("href")
+            full_url = urllib.parse.urljoin(self.page.url, href)
+            req = urllib.request.Request(
+                full_url,
+                headers={"Authorization": f"Bearer {self._token}"},
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                self.assertEqual(resp.status, 200,
+                                 f"CSV link {href} returned {resp.status}")
+                body = resp.read().decode()
+                self.assertIn(",", body.split("\n")[0],
+                              f"CSV at {href} looks empty: {body[:100]!r}")
+
+        # 13. Refresh-on-workbench does not re-POST /upload
+        posts: list[str] = []
+        self.page.on("request", lambda req: (
+            posts.append(req.url)
+            if req.method == "POST" and "/upload" in req.url
+            else None
+        ))
+        self.page.reload(wait_until="domcontentloaded")
+        self.assertEqual(posts, [], "refresh re-POSTed /upload")
+        self._snap("06-final")
+
+        # 14. No unexpected console errors during the journey
+        unexpected = [e for e in self._console_errors
+                      if "undo-available" not in e]
+        self.assertEqual(unexpected, [],
+                         f"unexpected console errors during journey: {unexpected}")
 
 
 if __name__ == "__main__":

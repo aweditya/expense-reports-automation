@@ -1068,3 +1068,40 @@ or similar — a regression-catching test that LIVES, not a one-shot.
 operation" anymore. The threshold is "any multi-line python with
 imports". `python -c 'print(2+2)'` is fine. Anything with `import`
 or `with` is a script.
+
+### 2026-05-25 — shipped a Chromium-/v-regex fix that was still broken
+
+**What happened:** Earlier today the ui-batch Playwright suite
+caught `pattern="[A-Za-z0-9_-]{2,16}"` on `fa_payee_sunet` failing
+to parse under Chromium's strict `/v` regex flag. I shipped a
+"fix" reordering to `[-A-Za-z0-9_]{2,16}` (hyphen at start),
+verified locally that typing into the field worked, and
+considered it done.
+
+Then ran the broader concurrent-stress test, which captured a
+console error on EVERY FA session: the new pattern was ALSO
+invalid. Per the ECMAScript `/v` spec, `ClassAtom` explicitly
+excludes `-` — it must either be escaped (`\-`) or appear inside
+a range (`A-Z`). Position at start/end of the class doesn't help.
+The correct fix is `[A-Za-z0-9_\-]{2,16}`.
+
+**Why the first fix's verification missed it:** I tested by
+filling the field and reloading — neither of which actually
+exercises HTML5 pattern parsing. The error fires when the page
+HTML is parsed by the browser, NOT when the user interacts.
+Loading the page in Playwright and asserting on console errors
+is the only way to catch this. The original ui-batch test did
+catch it; my "local verify" did not because it was the wrong
+shape of check.
+
+**Fix:** changed pattern to `[A-Za-z0-9_\-]{2,16}` (escape). Added
+a console-error assertion to `test_upload_form_loads_with_all_fa_fields`
+so any future page-parse error on the form is a unit-test failure,
+not just visible in a concurrent stress run.
+
+**Rule going forward:** any HTML5 validation attribute change
+(`pattern=`, `min=`, `max=`, `step=`, etc.) requires a Playwright
+load + console-error eyeball. Typing into the field is NOT a
+substitute. The test_upload_form_loads test now enforces this
+automatically.
+

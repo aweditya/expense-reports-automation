@@ -467,6 +467,159 @@ def cmd_ui_batch(args: argparse.Namespace, token: str | None) -> int:
     return 0 if ok else 1
 
 
+# ─── Mode: ui-parallel ────────────────────────────────────────────────────
+
+def cmd_ui_parallel(args: argparse.Namespace, token: str | None) -> int:
+    """N concurrent Playwright sessions, each running an upload flow.
+
+    Stress-tests Cloud Run's gunicorn thread pool + Firestore-backed
+    JOBS for cross-session isolation + multi-FA SSE streams. Each
+    session uses a fresh browser context so cookies + localStorage
+    are isolated.
+
+    Cost: ~$0.10/receipt across all sessions combined. Default 3 FAs
+    with 2 receipts each = $0.60.
+    """
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("error: playwright not installed; run "
+              "./.venv/bin/pip install -r dev-requirements.txt && "
+              "./.venv/bin/playwright install chromium", file=sys.stderr)
+        return 3
+
+    n_fas = args.n
+    per_fa_pool = [
+        ("airfare", "airfare_2026-03-21_egencia-united-sfo-pit-roundtrip.pdf"),
+        ("meal", "meal_2026-03-21_southern-tier-pittsburgh.pdf"),
+        ("transport", "transport_2023-01-08_lyft-dtw-to-novi.pdf"),
+        ("lodging", "lodging_2023-01-09_warren-hotel-v2.pdf"),
+        ("membership", "membership_2026-01-29_acm-student-renewal.png"),
+        ("meal", "meal_2026-04-04_original-mels-san-leandro.jpeg"),
+    ]
+    for _kind, name in per_fa_pool:
+        path = RECEIPTS_DIR / name
+        if not path.exists():
+            print(f"error: receipt not found: {path}", file=sys.stderr)
+            return 2
+
+    out_root = REPO_ROOT / ".scratch" / f"ui-parallel-N{n_fas}"
+    out_root.mkdir(parents=True, exist_ok=True)
+    print(f"# ui-parallel: {n_fas} concurrent browser sessions, "
+          f"2 receipts each, against {args.base_url}")
+    print(f"# screenshots + logs → {out_root}")
+
+    extra_headers = {"Authorization": f"Bearer {token}"} if token else {}
+
+    results: list[dict] = []
+    results_lock = threading.Lock()
+
+    def run_one_fa(idx: int) -> None:
+        """One FA's flow. Picks 2 receipts from the pool, offset by idx
+        so concurrent FAs use different files."""
+        label = f"fa{idx}"
+        out_dir = out_root / label
+        out_dir.mkdir(parents=True, exist_ok=True)
+        start = time.time()
+        picks = [
+            per_fa_pool[(idx * 2 + i) % len(per_fa_pool)]
+            for i in range(2)
+        ]
+        try:
+            with sync_playwright() as pw:
+                browser = pw.chromium.launch(headless=True)
+                ctx = browser.new_context(
+                    viewport={"width": 1200, "height": 1600},
+                    extra_http_headers=extra_headers,
+                )
+                page = ctx.new_page()
+                console_errors: list[str] = []
+                page.on("console", lambda msg: (
+                    console_errors.append(msg.text)
+                    if msg.type == "error" else None))
+
+                page.goto(args.base_url + "/", wait_until="domcontentloaded")
+                for name, value in DEFAULT_FA_FIELDS.items():
+                    el = page.query_selector(f'[name="{name}"]')
+                    if el is None:
+                        continue
+                    tag = el.evaluate("e => e.tagName")
+                    if tag == "SELECT":
+                        page.select_option(f'[name="{name}"]', value)
+                    else:
+                        page.fill(f'[name="{name}"]', value)
+                # Add second file row
+                page.click('button:has-text("+ Add another file")')
+                for i, (kind, fname) in enumerate(picks):
+                    receipt_path = RECEIPTS_DIR / fname
+                    page.set_input_files(f'[name="file_{i}"]',
+                                         str(receipt_path))
+                    page.select_option(f'[name="kind_{i}"]', kind)
+                page.screenshot(path=str(out_dir / "01-filled.png"))
+
+                with page.expect_navigation(wait_until="domcontentloaded",
+                                            timeout=60_000):
+                    page.click('button[type="submit"]')
+                upload_id = page.url.rstrip("/").split("/")[-1]
+
+                page.wait_for_url("**/workbench.html", timeout=900_000)
+                page.wait_for_load_state("networkidle", timeout=30_000)
+                page.screenshot(path=str(out_dir / "02-workbench.png"),
+                                full_page=True)
+                lines = page.query_selector_all("details.line-card")
+                wallclock = time.time() - start
+                ok = (len(lines) == len(picks)
+                      and not any(
+                          "undo-available" not in e for e in console_errors))
+                with results_lock:
+                    results.append({
+                        "label": label,
+                        "upload_id": upload_id,
+                        "lines": len(lines),
+                        "expected": len(picks),
+                        "console_errors": console_errors,
+                        "elapsed_s": wallclock,
+                        "ok": ok,
+                    })
+                browser.close()
+        except Exception as exc:
+            with results_lock:
+                results.append({
+                    "label": label,
+                    "ok": False,
+                    "error": str(exc),
+                    "elapsed_s": time.time() - start,
+                })
+
+    start_all = time.time()
+    threads = [threading.Thread(target=run_one_fa, args=(i,))
+               for i in range(n_fas)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    total_wall = time.time() - start_all
+
+    print(f"\n# WALLCLOCK: {total_wall:.1f}s")
+    failures = 0
+    for r in sorted(results, key=lambda x: x.get("label", "")):
+        if r.get("ok"):
+            print(f"  OK   {r['label']}  upload_id={r.get('upload_id')}  "
+                  f"lines={r.get('lines')}/{r.get('expected')}  "
+                  f"elapsed={r['elapsed_s']:.1f}s")
+        else:
+            print(f"  FAIL {r['label']}  "
+                  f"lines={r.get('lines')}/{r.get('expected')}  "
+                  f"elapsed={r['elapsed_s']:.1f}s")
+            if r.get("error"):
+                print(f"       exception: {r['error']}")
+            errs = r.get("console_errors") or []
+            for e in errs[:5]:
+                print(f"       console: {e}")
+            failures += 1
+    return 1 if failures else 0
+
+
 # ─── CLI ──────────────────────────────────────────────────────────────────
 
 def main() -> int:
@@ -502,6 +655,12 @@ def main() -> int:
     p_ui.add_argument("--receipt", action="append",
                       help="kind:path pairs (overrides UI_BATCH_DEFAULT)")
 
+    p_up = subs.add_parser(
+        "ui-parallel",
+        help="N concurrent Playwright sessions, each uploading 2 files")
+    p_up.add_argument("--n", type=int, default=3,
+                      help="Number of concurrent FA sessions (default: 3)")
+
     args = parser.parse_args()
 
     token = None
@@ -517,6 +676,8 @@ def main() -> int:
         return cmd_watch(args, token)
     if args.mode == "ui-batch":
         return cmd_ui_batch(args, token)
+    if args.mode == "ui-parallel":
+        return cmd_ui_parallel(args, token)
     return 2
 
 
