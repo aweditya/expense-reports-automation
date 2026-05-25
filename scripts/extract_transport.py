@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Per-receipt Gemini extractor for the ground-transport expense kind.
 
-B1: split into two parallel Gemini calls (was single-call until B1)
-because Stage 9c needed `tip_amount` + `pre_tax_amount` + `tax_amount`
+split into two parallel Gemini calls (was single-call until B1)
+because needed `tip_amount` + `pre_tax_amount` + `tax_amount`
 in `ground_transport_details` for the precise 20% tip-cap validation,
 and adding them to the single-call schema busted Vertex's property-
 count ceiling (see docs/redesign-regrets.md 2026-05-22). Pattern
@@ -53,7 +53,7 @@ META_CONVENTION = """# _meta convention
   and tokens; verbose reasons crowd everything else out.
 - `evidence` for present values: `kind: document_span` with `filename`,
   `page`, an exact `quote` from the receipt, AND `token_ids: [N, N, ...]`
-  (Leapfrog L.4). `token_ids` are integer indices from the numbered
+ . `token_ids` are integer indices from the numbered
   Document AI token list appended at the bottom of this prompt — pick
   the IDs of the tokens whose printed text covers your `quote`. The
   concatenated text of those tokens should match (or closely paraphrase)

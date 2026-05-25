@@ -251,7 +251,7 @@ fn check_tip_under_cap(report: &ExpenseReport, issues: &mut Vec<ValidationIssue>
     for (idx, line) in lines.iter().enumerate() {
         let total = line.common.line_amount_usd.value;
         // ─── Meal path ─────────────────────────────────────────────
-        // B1: meal extractor is now split-call, so pre_tax_amount +
+        // meal extractor is now split-call, so pre_tax_amount +
         // tax_amount are extracted again and the precise cap is used
         // when both are present. Falls back to total-math when either
         // is missing (older receipts, faded scans, take-out without
@@ -278,7 +278,7 @@ fn check_tip_under_cap(report: &ExpenseReport, issues: &mut Vec<ValidationIssue>
             }
         }
         // ─── Ground transport path ─────────────────────────────────
-        // B1: transport extractor is now split-call (was disabled
+        // transport extractor is now split-call (was disabled
         // until 9c.2). pre_tax_amount + tax_amount + tip_amount all
         // ride in ground_transport_details; same cap, same fallback.
         if let Some(transport) = line.ground_transport_details.as_ref() {
@@ -340,7 +340,7 @@ fn walk_business_purpose(
     base: &str,
     issues: &mut Vec<ValidationIssue>,
 ) {
-    // Phase 5 re-tier: business_purpose sub-fields moved from T1
+    //: business_purpose sub-fields moved from T1
     // (Option<String>) to T2/T4 (Wrapped<String>). Walk via check_wrapped
     // so the per-field meta (synthesis confidence, derivation origin)
     // gets surfaced. T1 fallback when no conference docs is just
@@ -487,7 +487,7 @@ fn walk_lodging_details(
     check_wrapped(&join(base, "personal_nights_excluded"), &lodging.personal_nights_excluded, issues);
 }
 
-// B2: personal_mileage detail-block walk. distance_miles + origin +
+// personal_mileage detail-block walk. distance_miles + origin +
 // destination + trip_date are all T3-required so check_wrapped will
 // emit MissingRequiredField when null. vehicle_class is T1 optional
 // (FA picks; defaults to personal_car) — bare Option, check_optional.
@@ -1177,7 +1177,7 @@ mod tests {
 
     #[test]
     fn category_country_consistency_foreign_with_non_usd_currency_clean() {
-        // Production scenario from Phase 4 Stage 7: Air India BOM→SFO
+        // Production scenario from Phase 4 Air India BOM→SFO
         // ticket has country_of_activity="United States" (per the airfare
         // prompt: "country of FURTHEST destination") but original_currency
         // ="INR" — the report IS legitimately foreign by currency. The
@@ -1384,7 +1384,7 @@ mod tests {
         r
     }
 
-    // B1: meal + transport are now split-call. pre_tax_amount + tax_amount
+    // meal + transport are now split-call. pre_tax_amount + tax_amount
     // are extracted again, so the validator uses the precise cap
     // `tip ≤ 0.20 × (pre_tax + tax)` when both are present and falls
     // back to `tip ≤ 0.20 × (total − tip)` when either is missing

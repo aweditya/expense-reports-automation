@@ -92,7 +92,7 @@ META_CONVENTION = """# _meta convention
   - For `medium` and `low`: ≤15 words. Explain the ambiguity.
 - `evidence` for present values: `kind: document_span` with `filename`,
   `page`, an exact `quote` from the ticket, AND `token_ids: [N, N, ...]`
-  (Leapfrog L.5). `token_ids` are integer indices from the numbered
+ . `token_ids` are integer indices from the numbered
   Document AI token list appended at the bottom of this prompt — pick
   the IDs of the tokens whose printed text covers your `quote`. The
   concatenated text of those tokens should match (or closely paraphrase)
@@ -383,7 +383,7 @@ def main() -> int:
     image_bytes = args.image.read_bytes()
     mime = detect_mime_type(args.image)
 
-    # Leapfrog L.5: Document AI runs ONCE per receipt, BEFORE the
+    #: Document AI runs ONCE per receipt, BEFORE the
     # parallel Gemini calls. Its tokens get appended to ALL THREE
     # prompts so every parallel call cites the same global token-id
     # range. Failure here is non-fatal — extraction proceeds without

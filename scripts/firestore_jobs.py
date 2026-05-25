@@ -1,4 +1,4 @@
-"""Firestore-backed JOBS storage (Durable-store Phase 1).
+"""Firestore-backed JOBS storage.
 
 Replaces the in-memory `JOBS` dict in `scripts/local_app_simple.py`
 with a Firestore collection `jobs/{upload_id}`. The selection is
@@ -25,7 +25,7 @@ Cost shape (free tier covers our load):
 TTL: documents expire 7 days after creation via the `ttl` field
 (set by `set_job`). Requires a one-time TTL policy in the GCP
 console for collection `jobs` field `ttl` — see docs/durable-
-store-plan.md §6 Phase 1 setup. Without the policy, documents
+store-plan.md. Without the policy, documents
 just linger; cost is still trivial (<1MB total).
 
 ADC: works on Cloud Run via the metadata server, and locally

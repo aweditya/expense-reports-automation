@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Per-receipt Gemini extractor for the personal_mileage expense kind (B2).
+"""Per-receipt Gemini extractor for the personal_mileage expense kind.
 
 Single-call: mileage_details has 4 T3 leaves which is well under
 Vertex's schema-property ceiling, so we use the simple run_extraction
@@ -121,7 +121,7 @@ is enforced by the response schema — fill the values from the receipt.
   Keep it ONE line per leaf.
 - `evidence` for present values: `kind: document_span` with `filename`,
   `page`, an exact `quote` from the receipt, AND `token_ids: [N, N, ...]`
-  (Leapfrog L.3). `token_ids` are integer indices from the numbered
+ . `token_ids` are integer indices from the numbered
   Document AI token list appended at the bottom of this prompt — pick
   the IDs of the tokens whose printed text covers your `quote`. If you
   can't identify them, omit `token_ids` and the post-pass will fall

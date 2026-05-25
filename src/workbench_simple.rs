@@ -88,7 +88,7 @@ pub fn render_workbench_html(
     // handler toggles `.visible` on copy and clears it after 1.5s.
     html.push_str("<div id=\"copy-toast\" class=\"copy-toast\" role=\"status\" aria-live=\"polite\"></div>\n");
 
-    // Spotcheck side panel (Phase 6 Stage A). Hidden by default; the
+    // Spotcheck side panel. Hidden by default; the
     // spotcheck JS toggles `.hidden` and populates the content area
     // when the FA clicks a "view source" button on a field card.
     html.push_str(
@@ -435,7 +435,7 @@ document.addEventListener('click', function(e) {
   });
 })();
 
-// Stage 23: delete-line button on each transaction-line card +
+// delete-line button on each transaction-line card +
 // undo button in the hero. Both reuse the upload_id extraction
 // pattern from setupClickToEdit (window.pathname split, no regex).
 (function setupDeleteLine() {
@@ -595,7 +595,7 @@ fn render_hero(html: &mut String, report: &ExpenseReport, validation: &Validatio
          </label>\
          </p>\n",
     );
-    // Stage 23: undo button. Hidden by default; setupUndoButton JS in
+    // undo button. Hidden by default; setupUndoButton JS in
     // the workbench script polls /uploads/<id>/undo-available on load
     // and reveals it (with the last-edit tooltip) when history is
     // non-empty. Click → POST /uploads/<id>/undo + reload.
@@ -1026,7 +1026,7 @@ fn render_general_information(html: &mut String, gi: &ExpenseReportGeneralInform
     field_card_optional_enum(html, "Rush Processing", &gi.rush_processing, "expense_report.general_information.rush_processing", |r: &crate::expense_report_model::ExpenseReportGeneralInformationRushProcessingEnum| r.as_str().to_owned());
     field_card_text(html, "Payment Method", &gi.payment_method, "expense_report.general_information.payment_method", |s: &String| s.clone());
 
-    // business_purpose: Phase 5 re-tier moved sub-fields from T1
+    // business_purpose: moved sub-fields from T1
     // (Option<String>) to T2/T4 (Wrapped<String>). Render via
     // field_card_text so synthesis-derived values surface their
     // confidence + provenance (e.g. "synthesize.conference.event_name"
@@ -1164,7 +1164,7 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
     // INR). Currency context appended when known so "0.0120 USD/INR"
     // reads as a rate rather than a bare decimal. Domestic lines have
     // value=None and render as "—" — not flagged as missing because the
-    // schema's per-line conditional (Stage 4.5A) only requires this
+    // schema's per-line conditional only requires this
     // field on foreign-typed lines.
     let original_currency_for_rate = line.common.original_currency.value.as_deref();
     field_card_text(
@@ -1235,7 +1235,7 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
 
 fn render_meal_details(html: &mut String, meal: &ExpenseReportTransactionLinesItemMealDetails, path: &str) {
     field_card_text(html, "Venue", &meal.venue_name, &format!("{path}.venue_name"), |s: &String| s.clone());
-    // B1: pre_tax_amount + tax_amount re-added after the Stage 9c
+    // pre_tax_amount + tax_amount re-added after the Stage 9c
     // revert; the meal extractor is now split-call so the schema
     // fits under Vertex's ceiling. check_tip_under_cap uses these
     // as the precise base when present, falling back to total math
@@ -1273,7 +1273,7 @@ fn render_ground_transport_details(
     field_card_text(html, "Service Provider", &gt.service_provider, &format!("{path}.service_provider"), |s: &String| s.clone());
     field_card_text(html, "Origin", &gt.origin, &format!("{path}.origin"), |s: &String| s.clone());
     field_card_text(html, "Destination", &gt.destination, &format!("{path}.destination"), |s: &String| s.clone());
-    // B1: tip/pre_tax/tax re-added after the Stage 9c revert; the
+    // tip/pre_tax/tax re-added after a revert; the
     // transport extractor is now split-call so the schema fits under
     // Vertex's ceiling. check_tip_under_cap fires a warning when
     // driver tip > 20% of (pre_tax + tax), with fallback to total
@@ -1283,7 +1283,7 @@ fn render_ground_transport_details(
     field_card_optional_money(html, "Driver Tip", &gt.tip_amount, &format!("{path}.tip_amount"));
 }
 
-// B2: personal mileage. The FA-facing amount (`line_amount_usd` in
+// personal mileage. The FA-facing amount (`line_amount_usd` in
 // common) is COMPUTED by reduction from distance_miles × IRS rate
 // — the rate doesn't appear in this card because it's not per-line
 // data (one rate per trip year). Use vehicle_class only to flag
@@ -1386,7 +1386,7 @@ fn render_source_documents(html: &mut String, receipts: &[ExtractedReceipt]) {
 
 // ─── Display assembly: expense_type + alcohol → FA-facing string ──────────
 //
-// The schema collapsed the alcohol-suffix enum variants (Phase 1 Pair A);
+// The schema collapsed the alcohol-suffix enum variants;
 // alcohol presence lives on `meal_details.has_alcohol_on_receipt`. The
 // workbench reassembles the FA-facing string here so what the FA sees in
 // the workbench matches what they'd pick from the Stanford portal's
@@ -1551,7 +1551,7 @@ fn field_card_optional_string(html: &mut String, label: &str, value: Option<&str
 /// (confidence dot, evidence quote, reason, spotcheck icon) — same
 /// treatment every other `field_card_text` field gets. Previously used
 /// `field_card_bare` which dropped metadata, leaving Amount/Tip/Alcohol
-/// cards as label+value only (Phase 6 robustness audit, B-r2).
+/// cards as label+value only.
 fn field_card_optional_money(html: &mut String, label: &str, wrapped: &Wrapped<f64>, path: &str) {
     let v = wrapped.value.map(|t| format!("${:.2}", t));
     field_card_inner(html, label, path, v.as_deref().unwrap_or("—"), &wrapped.meta);
@@ -1662,7 +1662,7 @@ fn field_card_inner(html: &mut String, label: &str, path: &str, value: &str, met
         _ => String::new(),
     };
 
-    // Spotcheck (Phase 6 Stage A): if the card has document_span
+    // Spotcheck: if the card has document_span
     // evidence with filename + page + quote, render a small ↗ icon at
     // the card's top-right that opens the source-document panel.
     // System-generated and quote-less evidence don't qualify — nothing
@@ -1731,7 +1731,7 @@ fn field_card_inner(html: &mut String, label: &str, path: &str, value: &str, met
         _ => String::new(),
     };
 
-    // friday Stage 7: editable cards drop click-to-copy. Same click
+    // friday editable cards drop click-to-copy. Same click
     // target can't do two things; FA confirmed (2026-05-21) that
     // edit-only is cleaner. Copy stays on the hero summary cards +
     // the Combined-for-Stanford-portal card (different render fns).

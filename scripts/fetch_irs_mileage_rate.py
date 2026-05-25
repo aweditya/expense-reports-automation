@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fetch the IRS standard mileage rates table → generated/irs_mileage_rates.json.
 
-Manual codegen-style fetch (B2): run this script once per year (or
+Manual codegen-style fetch: run this script once per year (or
 whenever you see a news article about IRS rate changes) to refresh
 the rates the pipeline uses for personal mileage reimbursements.
 The output JSON is committed to git so:
@@ -45,7 +45,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUT = REPO_ROOT / "generated" / "irs_mileage_rates.json"
 SOURCE_URL = "https://www.irs.gov/tax-professionals/standard-mileage-rates"
 
-# Same UA pattern Stage 9b uses for Frankfurter (some CDNs reject the
+# Same UA pattern fx_lookup uses for Frankfurter (some CDNs reject the
 # default Python-urllib UA). IRS doesn't seem to block urllib today,
 # but explicit UA is safer + identifies us in their logs.
 USER_AGENT = (

@@ -243,7 +243,7 @@ pub fn reduce_transaction_lines(
             if line.lodging_details.is_some() {
                 derive_lodging_fields(&mut line, &r.extras);
             }
-            // B2: mileage-specific. distance × IRS rate (looked up by
+            // mileage-specific. distance × IRS rate (looked up by
             // trip year) → line_amount_usd. The extractor produces
             // distance + addresses + date; reduction owns the
             // dollar amount.
@@ -255,7 +255,7 @@ pub fn reduce_transaction_lines(
         .collect()
 }
 
-// B2: IRS Standard Mileage Rate (business use) embedded at compile
+// IRS Standard Mileage Rate (business use) embedded at compile
 // time from generated/irs_mileage_rates.json. Refresh by running
 // scripts/fetch_irs_mileage_rate.py and committing the result.
 // No runtime I/O — the rate flows through on rebuild.
@@ -433,7 +433,7 @@ pub fn reduce_to_expense_report(receipts: &[ExtractedReceipt]) -> ExpenseReport 
     let mut report = ExpenseReport::default();
 
     let lines = reduce_transaction_lines(receipts);
-    // B2: sum from the DERIVED lines, not the raw receipts. For
+    // sum from the DERIVED lines, not the raw receipts. For
     // kinds like personal_mileage where the extractor defers
     // line_amount_usd to reduction (computed from distance × IRS rate),
     // summing from `receipts` would skip the null and produce a
@@ -856,7 +856,7 @@ mod tests {
         assert_eq!(lodging.daily_rate.value, None);
     }
 
-    // ─── B2: derive_mileage_line_amount ────────────────────────────────
+    // ─── derive_mileage_line_amount ────────────────────────────────
 
     fn make_mileage_line(distance: f64, trip_date: &str)
         -> ExpenseReportTransactionLinesItem

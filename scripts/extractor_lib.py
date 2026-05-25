@@ -52,7 +52,7 @@ DEFAULT_MODEL = "gemini-3-flash-preview"
 DEFAULT_LOCATION = "global"
 DEFAULT_MAX_OUTPUT_TOKENS = 65536
 
-# Stage 21: retry transient Vertex failures (rate limit, 5xx, network
+# retry transient Vertex failures (rate limit, 5xx, network
 # blips) with exponential backoff. Don't retry permanent failures (400
 # INVALID_ARGUMENT means our schema is wrong; 403 means auth is wrong;
 # retrying won't help and just wastes time + quota). 3 attempts means
@@ -354,7 +354,7 @@ def single_call(
 
     response_schema = _load_response_schema(response_schema_path)
 
-    # Stage 21: wrap the generate_content call in retry logic to survive
+    # wrap the generate_content call in retry logic to survive
     # transient Vertex flakiness (rate limit / 5xx / network blip). The
     # JSON-decode path BELOW the call is not retried — truncation +
     # malformed output are model issues, not transient.
@@ -456,7 +456,7 @@ def run_extraction(
     image_bytes = args.image.read_bytes()
     mime = detect_mime_type(args.image)
 
-    # Leapfrog L.3: call Document AI BEFORE Gemini so we can inline the
+    #: call Document AI BEFORE Gemini so we can inline the
     # numbered token list into the prompt. Gemini cites token_ids; we
     # resolve those (instead of doing post-hoc text matching) for
     # geometrically-exact bbox grounding. Failure here is non-fatal —
@@ -499,7 +499,7 @@ def run_extraction(
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
     # Inject source_filename + populate bboxes. populate_bboxes is
-    # dual-path (Leapfrog L.2): token_id resolution when the evidence
+    # dual-path: token_id resolution when the evidence
     # entry carries token_ids (set by Gemini per the augmented prompt),
     # text-matching fallback otherwise. We pass the already-OCR'd `doc`
     # so we don't pay for a second DocAI call per receipt.

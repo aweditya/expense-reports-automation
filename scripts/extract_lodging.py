@@ -60,7 +60,7 @@ META_CONVENTION = """# _meta convention
       low: "Folio scan blurry around room rate; best-effort read."
 - `evidence` for present values: `kind: document_span` with `filename`,
   `page`, an exact `quote` from the folio, AND `token_ids: [N, N, ...]`
-  (Leapfrog L.5). `token_ids` are integer indices from the numbered
+ . `token_ids` are integer indices from the numbered
   Document AI token list appended at the bottom of this prompt — pick
   the IDs of the tokens whose printed text covers your `quote`. The
   concatenated text of those tokens should match (or closely paraphrase)
