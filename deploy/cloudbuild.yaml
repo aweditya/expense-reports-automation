@@ -69,7 +69,10 @@ steps:
       # auto-set $GOOGLE_CLOUD_PROJECT (despite some docs implying it
       # does — that's App Engine / Cloud Functions). $PROJECT_ID below
       # is the Cloud Build built-in for the build's project.
-      - '--set-env-vars=VERTEX_PROJECT_ID=$PROJECT_ID'
+      # USE_FIRESTORE_JOBS=1 routes JOBS reads/writes through
+      # Firestore (durable-store Phase 1; 2026-05-25). Survives
+      # container recycle; unsets back to in-memory dict if removed.
+      - '--set-env-vars=VERTEX_PROJECT_ID=$PROJECT_ID,USE_FIRESTORE_JOBS=1'
     id: 'deploy'
     waitFor: ['docker-push']
 

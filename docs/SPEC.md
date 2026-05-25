@@ -309,7 +309,8 @@ graph LR
 Notes:
 
 - The container runs **gunicorn**, not `flask run`. `--workers=1` matches `--max-instances=1` (single instance, single worker, threads handle concurrency).
-- Storage under `/app/.scratch/uploads/` is **ephemeral** — destroyed when the container restarts. Production-acceptable today because the FA workflow is "upload → review immediately"; long-term retention would need GCS.
+- Storage under `/app/.scratch/uploads/` is **ephemeral** — destroyed when the container restarts. Production-acceptable today because the FA workflow is "upload → review immediately"; long-term retention would need GCS (durable-store Phase 2).
+- **JOBS (live upload progress) is durable** as of 2026-05-25 (durable-store Phase 1). When `USE_FIRESTORE_JOBS=1` is set in the runtime env (default in `deploy/cloudbuild.yaml`), `_set_job` / `_get_job` in `scripts/local_app_simple.py` dispatch to `scripts/firestore_jobs.py`, which reads/writes `jobs/{upload_id}` in the project's default Firestore database. A container recycle mid-upload no longer wipes the SSE stream — the FA can reload, switch tabs, or reconnect from another device. Falls back to the in-memory dict when the env var is unset (dev path). Documents auto-expire after 7 days via a TTL field. See `docs/durable-store-plan.md`.
 - **Auth**: the public URL is fronted by IAP, which gates on SSO. Cloud Run itself is `--no-allow-unauthenticated`. Vertex calls from inside the container use the runtime service account via ADC (no key file).
 - Deploy gesture: `git push origin main`. The trigger is **regional (us-west1)** — see `deploy-cheatsheet.md`.
 
