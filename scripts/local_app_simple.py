@@ -79,7 +79,7 @@ def rust_bin(name: str) -> list[str]:
 
 app = Flask(__name__)
 
-# Stage 21: hard caps on what we accept from the upload form.
+# Hard caps on what we accept from the upload form.
 #
 # MAX_CONTENT_LENGTH: Flask returns 413 if the entire multipart body
 # exceeds this. 64 MiB covers ~8-12 typical receipt PDFs/JPEGs plus
@@ -123,7 +123,7 @@ class PipelineError(RuntimeError):
         super().__init__(f"{step} failed: {detail[:200]}")
 
 
-# ─── Async job state (friday Stage 5) ──────────────────────────────────────
+# ─── Async job state ──────────────────────────────────────
 #
 # JOBS holds per-upload progress so the SSE endpoint can stream it to the
 # browser while the extract → reduce → render pipeline runs in a worker
@@ -140,7 +140,7 @@ class PipelineError(RuntimeError):
 #     "error":    str,   # populated only when phase == "error"
 #   }
 #
-# Durable-store Phase 1 (2026-05-25): when USE_FIRESTORE_JOBS=1 is set
+# When USE_FIRESTORE_JOBS=1 is set
 # (production), reads/writes go to Firestore via firestore_jobs.py
 # instead of this dict. The local fallback is preserved for dev
 # environments without ADC + tests. Flipping the env var is the rollback.
@@ -153,8 +153,8 @@ def _set_job(upload_id: str, **updates) -> None:
     """Thread-safe partial update of a JOBS entry. Creates the entry if
     it doesn't exist (defensive — callers should init first).
 
-    Dispatches to Firestore when USE_FIRESTORE_JOBS=1 (durable-store
-    Phase 1); falls through to the in-memory dict otherwise."""
+    Dispatches to Firestore when USE_FIRESTORE_JOBS=1; falls back to
+    the in-memory dict otherwise."""
     if USE_FIRESTORE_JOBS:
         from firestore_jobs import set_job as _fs_set
         _fs_set(upload_id, **updates)
@@ -178,7 +178,7 @@ def _get_job(upload_id: str) -> dict:
 
 
 # Single source of truth for the browser localStorage key the form-
-# persistence JS uses (Stage 11b). Referenced by both the upload form
+# persistence JS uses. Referenced by both the upload form
 # (writes drafts on input) and the progress page (clears the draft on
 # phase=done after a successful upload). Both templates use the
 # `__FORM_DRAFT_KEY__` placeholder which gets string-replaced at render
@@ -215,7 +215,7 @@ def upload():
         if kind not in EXTRACTORS:
             return (f"Unknown kind {kind!r} for file {f.filename!r} "
                     f"(known: {sorted(EXTRACTORS)}).", 400)
-        # Stage 21: extension whitelist. Catch unsupported formats up
+        # Extension whitelist. Catch unsupported formats up
         # front rather than letting them fail deep in the extractor with
         # an opaque DocAI / Pillow error.
         ext = Path(f.filename).suffix.lower()
@@ -227,14 +227,14 @@ def upload():
     if not pairs:
         return ("No files uploaded.", 400)
 
-    # Stage 9a: event_name is FA-compulsory (form has `required`, but a
+    # event_name is FA-compulsory (form has `required`, but a
     # programmatic POST or a JS-disabled browser can bypass that — so
     # re-check server-side). Validator also fires MissingRequiredField
     # if it somehow lands in the report blank, as a third defense.
     if not request.form.get("fa_event_name", "").strip():
         return ("Missing required field: Event name. Use the browser's "
                 "back button to return to the form.", 400)
-    # Stage 8c.1: SUNet is required by Stanford's foreign-page Airfare row.
+    # SUNet is required by Stanford's foreign-page Airfare row.
     # Form has required + pattern; re-check server-side for non-browser POSTs.
     if not request.form.get("fa_payee_sunet", "").strip():
         return ("Missing required field: Payee SUNet ID. Use the browser's "
@@ -256,7 +256,7 @@ def upload():
 
     saved = save_uploaded_files(pairs, files_dir)
 
-    # Stage 5 async: initialize the per-upload JOBS entry with the
+    # Initialize the per-upload JOBS entry with the
     # file list, spawn a background thread to run extract → reduce →
     # render, and return the progress page immediately. The page's
     # EventSource subscribes to /upload/progress/<id> and the FA sees
@@ -369,7 +369,7 @@ def handle_pipeline_error(err: PipelineError):
     message."""
     file_phrase = f" (file: {err.filename})" if err.filename else ""
     detail_excerpt = err.detail[:2000]  # cap so we don't dump megabytes
-    # Stage 18d: __PLACEHOLDER__ pattern (same as upload form + progress
+    # __PLACEHOLDER__ pattern (same as upload form + progress
     # page) so error.html's CSS doesn't need brace-doubling for str.format
     # escapes.
     page = (ERROR_PAGE_HTML
@@ -472,7 +472,7 @@ def _fa_edit_meta() -> dict:
     serializes (confidence + evidence with kind=user_input + the
     origin string). Used when the walker auto-creates a previously-
     skip-serialized Wrapped, and could also be used to mark in-place
-    edits (not done yet — Stage 7 doesn't mark edited cards visually
+    edits (not done yet — edits aren't marked visually
     in the UI; deferred polish)."""
     return {
         "confidence": "high",
@@ -722,7 +722,7 @@ def _recompute_summary(report: dict) -> None:
     the original reducer pass. Keeping the cascade tight: only the
     two summary fields the hero displays. Other derived fields (per-
     line USD if FA edits currency + amount, lodging totals, etc.) are
-    NOT cascaded — out of scope for Stage 7 MVP.
+    NOT cascaded — out of scope.
     """
     lines = report.get("transaction_lines") or []
     if not lines:
@@ -746,7 +746,7 @@ def _recompute_summary(report: dict) -> None:
         date_block["value"] = min(dates)  # ISO date strings sort lexicographically
 
 
-# ─── Stage 23: per-upload edit history (separate JSON file) ────────────────
+# ─── Per-upload edit history (separate JSON file) ────────────────
 #
 # Persisted in `<upload_dir>/edit_history.json` rather than inside
 # report.json — keeps the Rust ExpenseReport struct unchanged (it
@@ -809,7 +809,7 @@ def _clear_history(upload_dir: Path) -> None:
 
 @app.post("/uploads/<upload_id>/edit")
 def edit_field(upload_id: str):
-    """Stage 7: FA-side edit-in-place. Frontend POSTs `{path, value}`;
+    """FA-side edit-in-place. Frontend POSTs `{path, value}`;
     we walk the path into reduced/report.json, mutate the leaf Wrapped
     object's `value` field, write back, re-render workbench.html so
     the next page load shows the edit.
@@ -857,7 +857,7 @@ def edit_field(upload_id: str):
     if enum_err is not None:
         return ({"error": enum_err}, 400)
 
-    # Stage 23: record the edit BEFORE applying so the FA can undo.
+    # Record the edit BEFORE applying so the FA can undo.
     # `existing` was captured by _walk_to_leaf above; pass it through
     # str() to avoid serializing a Wrapped-shaped dict accidentally.
     _append_history(upload_dir, path, existing, coerced)
@@ -891,7 +891,7 @@ def edit_field(upload_id: str):
 
 @app.post("/uploads/<upload_id>/delete-line/<int:idx>")
 def delete_transaction_line(upload_id: str, idx: int):
-    """Stage 23: remove `transaction_lines[idx]` from the report. The
+    """Remove `transaction_lines[idx]` from the report. The
     delete is destructive (no undo) because the remaining lines'
     indexes shift — keeping edit history pointing at old indexes
     would silently corrupt subsequent undos. We clear history on
@@ -927,7 +927,7 @@ def delete_transaction_line(upload_id: str, idx: int):
 
 @app.post("/uploads/<upload_id>/undo")
 def undo_last_edit(upload_id: str):
-    """Stage 23: revert the most recent edit from the FA's per-upload
+    """Revert the most recent edit from the FA's per-upload
     history. No-op if history is empty (returns 200 with
     {"undone": null}). Pops the last entry, walks path, sets value
     back to old_value, re-renders. Concurrent edits race the history
@@ -969,7 +969,7 @@ def undo_last_edit(upload_id: str):
 
 @app.get("/uploads/<upload_id>/undo-available")
 def undo_available(upload_id: str):
-    """Stage 23: tiny JSON endpoint the workbench JS polls on load to
+    """Tiny JSON endpoint the workbench JS polls on load to
     decide whether to show the Undo button + tooltip. Returns the
     most recent history entry's path + a friendly summary, or 200
     with {"available": false} when history is empty."""
@@ -1147,16 +1147,16 @@ def extract_all(
     on_file_done: callable | None = None,
     on_file_fail: callable | None = None,
 ) -> list[Path]:
-    """Phase 1: per-file extraction (parallelized via ThreadPoolExecutor).
+    """Per-file extraction (parallelized via ThreadPoolExecutor).
     Each file routes to the extractor matching its FA-supplied kind
     (meal, transport, …) and is spawned in its own subprocess so they
     can run truly in parallel (subprocess.run releases the GIL during
     its wait + each child is a fresh Python interpreter with its own
     Vertex SDK client).
 
-    **Stage 17 (2026-05-23):** the loop used to be sequential and a
+    ****Parallelization:** the loop used to be sequential and a
     6-receipt batch took ~12 min wallclock (~121s/receipt). Per the
-    Stage 20 investigation, the bottleneck appeared to be the
+    the bottleneck appeared to be the
     sequential loop itself, not Vertex-side queueing. With this
     change, the SAME 6-receipt batch should drop to ~max(per-file
     times) ≈ 2 min — assuming Vertex's per-project quota
@@ -1421,7 +1421,7 @@ def dedupe(name: str, seen: set[str]) -> str:
 
 
 # ─── HTML templates ────────────────────────────────────────────────────────
-# Stage 18d (2026-05-22 cleanup): the three template strings used to live
+# The three template strings used to live
 # inline here (~735 LOC of HTML/CSS/JS); moved to templates/{upload_form,
 # progress,error}.html and loaded once at module import. No per-request
 # I/O cost. Editors get HTML syntax highlighting; diffs only touch
