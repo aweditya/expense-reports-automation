@@ -1,18 +1,12 @@
-//! M7.d.1 — typed validator that walks `ExpenseReport` directly.
+//! Schema-typed validation: walk the typed `ExpenseReport`, look up each
+//! leaf's `FieldRule`, emit `ValidationIssue`s for violations.
 //!
-//! The existing `src/validator.rs` operates on `ReportValue` (untyped tree)
-//! because it was written for the pre-redesign pipeline. This module reads
-//! the typed `ExpenseReport` directly: walk the tree, look up the matching
-//! `FieldRule` by path at each leaf, emit `ValidationIssue`s for violations.
-//!
-//! The minimal expression evaluator handles the two patterns that appear in
-//! the current 22 conditional rules:
-//!   <path> == <value>
-//!   <path> in [<v1>, <v2>, ...]
-//! One rule (`Must fall within trip date window`) is a free-text validation
-//! description rather than a mechanical expression; it's implemented as a
-//! hand-written pass (`check_dates_within_trip_window`) that compares each
-//! transaction line's date against the FA-entered `business_purpose.when`.
+//! The expression evaluator handles `<path> == <value>` and
+//! `<path> in [<v1>, ...]` patterns from the conditional rules table.
+//! `check_dates_within_trip_window` is a hand-written pass for the one
+//! rule whose condition is free-text (date-window membership).
+
+use serde::{Deserialize, Serialize};
 
 use crate::expense_report_model::{
     ExpenseReport, ExpenseReportGeneralInformation, ExpenseReportGeneralInformationBusinessPurpose,
@@ -26,9 +20,55 @@ use crate::meta::Wrapped;
 use crate::validation_rules::{
     field_rule, ConditionalRule, ConditionalRuleType, FieldRule, CONDITIONAL_RULES,
 };
-use crate::validator::{
-    ValidationIssue, ValidationIssueKind, ValidationReport, ValidationSeverity,
-};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ValidationSeverity {
+    Error,
+    Warning,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ValidationIssueKind {
+    MissingRequiredField,
+    TypeMismatch,
+    InvalidEnumValue,
+    MissingDependency,
+    MissingFieldMetadata,
+    MissingEvidenceReference,
+    OrphanFieldMetadata,
+    LowConfidenceWithoutReview,
+    InvalidEvidenceReference,
+    UnsupportedExpression,
+    UnresolvedExpressionReference,
+    ManualReviewRequired,
+    InternalSchemaError,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ValidationIssue {
+    pub severity: ValidationSeverity,
+    pub kind: ValidationIssueKind,
+    pub path: String,
+    pub schema_path: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ValidationReport {
+    pub issues: Vec<ValidationIssue>,
+}
+
+impl ValidationReport {
+    pub fn has_errors(&self) -> bool {
+        self.issues.iter().any(|i| i.severity == ValidationSeverity::Error)
+    }
+
+    pub fn has_warnings(&self) -> bool {
+        self.issues.iter().any(|i| i.severity == ValidationSeverity::Warning)
+    }
+}
 
 // ─── Public entry point ────────────────────────────────────────────────────
 

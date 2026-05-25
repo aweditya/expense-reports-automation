@@ -19,7 +19,7 @@ use crate::expense_report_model::{
 use crate::csv_export::line_counts;
 use crate::extracted_receipt::ExtractedReceipt;
 use crate::meta::{ConfidenceLevel, EvidenceKind, FieldMetadata, Wrapped};
-use crate::validator::{ValidationIssue, ValidationIssueKind, ValidationReport, ValidationSeverity};
+use crate::validator_typed::{ValidationIssue, ValidationIssueKind, ValidationReport, ValidationSeverity};
 
 const CSS: &str = include_str!("workbench_simple.css");
 const SPOTCHECK_CSS: &str = include_str!("workbench_spotcheck.css");
@@ -1840,7 +1840,7 @@ mod tests {
     use crate::expense_report_model::IsoDate;
     use crate::extracted_receipt::Extras;
     use crate::reduce::reduce_to_expense_report;
-    use crate::validator::ValidationReport;
+    use crate::validator_typed::ValidationReport;
 
     fn sample_receipt(filename: &str, date: &str, amount: f64, venue: &str) -> ExtractedReceipt {
         let mut line = ExpenseReportTransactionLinesItem::default();
@@ -1911,7 +1911,7 @@ mod tests {
             &ValidationReport {
                 issues: vec![ValidationIssue {
                     severity: ValidationSeverity::Error,
-                    kind: crate::validator::ValidationIssueKind::MissingRequiredField,
+                    kind: crate::validator_typed::ValidationIssueKind::MissingRequiredField,
                     path: "expense_report.general_information.payee.name".to_owned(),
                     schema_path: "expense_report.general_information.payee.name".to_owned(),
                     message: "Required field is missing".to_owned(),
@@ -2047,7 +2047,7 @@ mod tests {
 
     #[test]
     fn issue_category_buckets() {
-        use crate::validator::ValidationIssueKind::*;
+        use crate::validator_typed::ValidationIssueKind::*;
         assert_eq!(issue_category(MissingRequiredField), IssueCategory::MissingFields);
         assert_eq!(issue_category(MissingDependency), IssueCategory::MissingFields);
         assert_eq!(issue_category(ManualReviewRequired), IssueCategory::NeedsReview);
