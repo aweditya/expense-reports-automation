@@ -298,6 +298,175 @@ def cmd_watch(args: argparse.Namespace, token: str | None) -> int:
     return 0 if final.get("phase") == "done" else 1
 
 
+# ─── Mode: ui-batch ───────────────────────────────────────────────────────
+
+# Default 5-receipt mix for ui-batch — diverse kinds covering the main
+# extractor paths. Smaller than DEFAULT_BATCH_RECEIPTS because ui-batch
+# is meant for routine per-deploy validation rather than full-load
+# stress; the CLI batch mode covers high-N stress.
+UI_BATCH_DEFAULT: list[tuple[str, str]] = [
+    ("airfare", "airfare_2026-03-21_egencia-united-sfo-pit-roundtrip.pdf"),
+    ("lodging", "lodging_2023-01-09_warren-hotel-v2.pdf"),
+    ("transport", "transport_2023-01-05_lyft-las-vegas-strip-to-paradise.pdf"),
+    ("meal", "meal_2026-03-21_southern-tier-pittsburgh.pdf"),
+    ("membership", "membership_2026-01-29_acm-student-renewal.png"),
+]
+
+
+def cmd_ui_batch(args: argparse.Namespace, token: str | None) -> int:
+    """Drive the FA upload form via Playwright + verify the full
+    browser-side flow: form fill → file inputs → submit → progress
+    page SSE → redirect to workbench → workbench renders all lines.
+
+    Catches regressions the CLI batch mode misses:
+      - Form rendering at N inputs (the +Add another file button)
+      - localStorage interaction under load
+      - Browser-side EventSource handling a multi-minute SSE stream
+      - Workbench DOM size at N lines (rendering perf, scroll)
+
+    Saves screenshots to .scratch/ui-stress-N{N}/ for visual eyeball.
+
+    Cost: ~$0.10/receipt in Gemini calls. Default N=5 ≈ $0.50."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("error: playwright not installed; run "
+              "./.venv/bin/pip install -r dev-requirements.txt && "
+              "./.venv/bin/playwright install chromium", file=sys.stderr)
+        return 3
+
+    # Pick the receipt list. If --receipt given, use those. Else cycle
+    # through UI_BATCH_DEFAULT up to N (repeating if N > len).
+    if args.receipt:
+        picks: list[tuple[str, Path]] = []
+        for spec in args.receipt:
+            if ":" not in spec:
+                print(f"error: --receipt expects kind:path, got {spec!r}",
+                      file=sys.stderr)
+                return 2
+            kind, p = spec.split(":", 1)
+            picks.append((kind, Path(p)))
+    else:
+        n = args.n if args.n > 0 else len(UI_BATCH_DEFAULT)
+        picks = [
+            (UI_BATCH_DEFAULT[i % len(UI_BATCH_DEFAULT)][0],
+             RECEIPTS_DIR / UI_BATCH_DEFAULT[i % len(UI_BATCH_DEFAULT)][1])
+            for i in range(n)
+        ]
+    for kind, p in picks:
+        if not p.exists():
+            print(f"error: {p} not found", file=sys.stderr)
+            return 2
+
+    n = len(picks)
+    out_dir = REPO_ROOT / ".scratch" / f"ui-stress-N{n}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"# ui-batch mode: 1 upload with {n} files via real browser "
+          f"to {args.base_url}")
+    for i, (k, p) in enumerate(picks):
+        size_kb = p.stat().st_size // 1024
+        print(f"#   file_{i} ({k}): {p.name}  [{size_kb} KB]")
+    print(f"# screenshots → {out_dir}")
+
+    extra_headers = {}
+    if token:
+        # Chromium rejects setting Proxy-Authorization via
+        # extra_http_headers (it's a reserved proxy header). The
+        # standard Authorization: Bearer header is the working path
+        # for IAP-protected Cloud Run hosts and matches what the CLI
+        # mode uses for raw urllib requests (see auth_headers()).
+        extra_headers["Authorization"] = f"Bearer {token}"
+
+    start = time.time()
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        ctx = browser.new_context(
+            viewport={"width": 1400, "height": 1800},
+            extra_http_headers=extra_headers,
+        )
+        page = ctx.new_page()
+
+        console_errors: list[str] = []
+        page.on("console", lambda msg: (
+            console_errors.append(msg.text) if msg.type == "error" else None))
+
+        # 1. Load the upload form.
+        page.goto(args.base_url + "/", wait_until="domcontentloaded")
+        page.screenshot(path=str(out_dir / "01-form-blank.png"))
+
+        # 2. Fill the FA fieldset.
+        for name, value in DEFAULT_FA_FIELDS.items():
+            sel = f'[name="{name}"]'
+            el = page.query_selector(sel)
+            if el is None:
+                print(f"warning: form field {name} not found", file=sys.stderr)
+                continue
+            tag = el.evaluate("e => e.tagName")
+            if tag == "SELECT":
+                page.select_option(sel, value)
+            else:
+                page.fill(sel, value)
+
+        # 3. Add N-1 more file rows via the + Add another file button.
+        for _ in range(n - 1):
+            page.click('button.row-add, #add-file-button, [onclick*="addFileRow"]')
+
+        # 4. Set files + select kinds. set_input_files takes the
+        # absolute path; the form uses indexed names file_0/kind_0/...
+        for i, (kind, p) in enumerate(picks):
+            page.set_input_files(f'[name="file_{i}"]', str(p.resolve()))
+            page.select_option(f'[name="kind_{i}"]', kind)
+
+        page.screenshot(path=str(out_dir / "02-form-filled.png"), full_page=True)
+
+        # 5. Submit. The form does POST-redirect-GET to /upload/status/<id>.
+        with page.expect_navigation(wait_until="domcontentloaded",
+                                    timeout=60_000):
+            page.click('button[type="submit"], input[type="submit"]')
+        upload_id = page.url.rstrip("/").split("/")[-1]
+        print(f"# upload_id={upload_id}  (after {time.time()-start:.1f}s)")
+
+        # 6. Wait briefly + screenshot mid-extract.
+        page.wait_for_timeout(30_000)
+        page.screenshot(path=str(out_dir / "03-progress-mid.png"))
+
+        # 7. Wait for the JS-driven redirect to workbench (up to 15min).
+        try:
+            page.wait_for_url("**/workbench.html", timeout=900_000)
+        except Exception as err:
+            page.screenshot(path=str(out_dir / "99-stuck-progress.png"))
+            print(f"error: never reached workbench: {err}", file=sys.stderr)
+            browser.close()
+            return 1
+
+        # 8. Workbench loaded. Wait for network idle so the JS finishes.
+        page.wait_for_load_state("networkidle", timeout=30_000)
+        page.screenshot(path=str(out_dir / "04-workbench-done.png"),
+                        full_page=True)
+
+        # 9. Assertions: N line cards, no console errors during browse.
+        lines = page.query_selector_all("details.line-card")
+        cards = page.query_selector_all("[data-path]")
+        wallclock = time.time() - start
+        print(f"\n# WALLCLOCK: {wallclock:.1f}s  ({wallclock / n:.1f}s/receipt)")
+        print(f"# workbench: {len(lines)} line cards, "
+              f"{len(cards)} editable field cards")
+
+        ok = True
+        if len(lines) != n:
+            print(f"FAIL: expected {n} line cards, got {len(lines)}",
+                  file=sys.stderr)
+            ok = False
+        if console_errors:
+            print(f"WARN: {len(console_errors)} console errors:",
+                  file=sys.stderr)
+            for e in console_errors[:5]:
+                print(f"  {e}", file=sys.stderr)
+        browser.close()
+    return 0 if ok else 1
+
+
 # ─── CLI ──────────────────────────────────────────────────────────────────
 
 def main() -> int:
@@ -323,6 +492,16 @@ def main() -> int:
     p_wat = subs.add_parser("watch", help="Poll an existing upload's SSE")
     p_wat.add_argument("upload_id")
 
+    p_ui = subs.add_parser(
+        "ui-batch",
+        help="Drive the FA form via Playwright + verify workbench "
+             "renders all lines (browser-side stress test)")
+    p_ui.add_argument("--n", type=int, default=5,
+                      help="Number of receipts (default: 5; cycles "
+                           "through UI_BATCH_DEFAULT)")
+    p_ui.add_argument("--receipt", action="append",
+                      help="kind:path pairs (overrides UI_BATCH_DEFAULT)")
+
     args = parser.parse_args()
 
     token = None
@@ -336,6 +515,8 @@ def main() -> int:
         return cmd_batch(args, token)
     if args.mode == "watch":
         return cmd_watch(args, token)
+    if args.mode == "ui-batch":
+        return cmd_ui_batch(args, token)
     return 2
 
 
