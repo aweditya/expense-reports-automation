@@ -651,6 +651,81 @@ class TestUploadFormBrowser(unittest.TestCase):
             f"workbench URL should return 200; saw {response_status}",
         )
 
+    def test_add_file_button_creates_new_input_row(self):
+        """Clicking '+ Add another file' inserts file_N + kind_N inputs."""
+        self.page.goto(self.HOME_URL, wait_until="domcontentloaded")
+        for _ in range(3):
+            self.page.click('button:has-text("+ Add another file")')
+        for i in range(4):  # 1 baseline + 3 added
+            self.assertIsNotNone(
+                self.page.query_selector(f'[name="file_{i}"]'),
+                f"file_{i} input missing after +Add",
+            )
+            self.assertIsNotNone(
+                self.page.query_selector(f'[name="kind_{i}"]'),
+                f"kind_{i} input missing after +Add",
+            )
+
+    def test_kind_dropdown_lists_every_extractor(self):
+        """The kind dropdown enumerates every registered extractor kind."""
+        self.page.goto(self.HOME_URL, wait_until="domcontentloaded")
+        values = self.page.eval_on_selector_all(
+            '[name="kind_0"] option',
+            "els => els.map(e => e.value)",
+        )
+        for kind in ("meal", "transport", "lodging", "airfare",
+                     "miscellaneous", "membership", "mileage"):
+            self.assertIn(kind, values,
+                          f"kind '{kind}' missing from upload dropdown")
+
+    def test_required_field_blocks_submit(self):
+        """Empty required field makes the form fail HTML5 validation."""
+        self.page.goto(self.HOME_URL, wait_until="domcontentloaded")
+        self.page.fill('[name="fa_payee_name"]', "")
+        is_valid = self.page.evaluate(
+            '() => document.querySelector("form[action=\\"/upload\\"]")'
+            '.checkValidity()'
+        )
+        self.assertFalse(is_valid,
+                         "form should fail validation with empty required field")
+
+    def test_docx_upload_returns_friendly_400(self):
+        """Posting an unsupported file extension returns the 400 page."""
+        boundary = "----testboundary"
+        body = (
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="fa_payee_name"\r\n\r\n'
+            "Test\r\n"
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="fa_payee_sunet"\r\n\r\n'
+            "test\r\n"
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="fa_event_name"\r\n\r\n'
+            "Test\r\n"
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="file_0"; filename="x.docx"\r\n'
+            'Content-Type: application/octet-stream\r\n\r\n'
+            "fake content\r\n"
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="kind_0"\r\n\r\n'
+            "meal\r\n"
+            f"--{boundary}--\r\n"
+        ).encode()
+        req = urllib.request.Request(
+            f"{B1_FLASK_URL}/upload",
+            data=body,
+            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+            method="POST",
+        )
+        try:
+            urllib.request.urlopen(req, timeout=10)
+            self.fail("expected HTTP 400 for .docx upload")
+        except urllib.error.HTTPError as e:
+            self.assertEqual(e.code, 400, "expected 400 for .docx")
+            body_text = e.read().decode()
+            self.assertIn("Unsupported file type", body_text,
+                          "expected friendly extension-reject message")
+
 
 @unittest.skipUnless(PLAYWRIGHT_AVAILABLE,
                      "playwright not installed")
