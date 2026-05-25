@@ -1318,29 +1318,27 @@ def _run_pipeline_in_background(
     to JOBS so the progress page can surface a friendly error instead
     of the thread silently dying.
     """
-    def file_start(idx: int, _name: str) -> None:
+    def _update_file(idx: int, **field_updates) -> None:
+        # Read-modify-write through the dispatcher so updates flow to
+        # whichever backing store the gate selects. JOBS_LOCK serializes
+        # concurrent extraction callbacks against each other.
         with JOBS_LOCK:
-            job = JOBS.setdefault(upload_id, {})
-            files = job.setdefault("files", [])
+            files = _get_job(upload_id).get("files", [])
             if idx < len(files):
-                files[idx]["status"] = "extracting"
-            job["current"] = idx
+                files[idx].update(field_updates)
+            _set_job(upload_id, files=files)
+
+    def file_start(idx: int, _name: str) -> None:
+        _update_file(idx, status="extracting")
+        _set_job(upload_id, current=idx)
 
     def file_done(idx: int, _name: str) -> None:
-        with JOBS_LOCK:
-            files = JOBS.setdefault(upload_id, {}).setdefault("files", [])
-            if idx < len(files):
-                files[idx]["status"] = "done"
+        _update_file(idx, status="done")
 
     def file_fail(idx: int, _name: str, detail: str) -> None:
-        # Per-file failure (Stage 11c): keep processing the rest of the
-        # batch but mark this file as failed + carry a short error
-        # message so the progress page can surface it per-file.
-        with JOBS_LOCK:
-            files = JOBS.setdefault(upload_id, {}).setdefault("files", [])
-            if idx < len(files):
-                files[idx]["status"] = "failed"
-                files[idx]["error"] = detail[:200]
+        # Per-file failure surfaces in the progress page without
+        # blocking other files in the batch.
+        _update_file(idx, status="failed", error=detail[:200])
 
     try:
         _set_job(upload_id, phase="extract")
