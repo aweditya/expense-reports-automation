@@ -3,5 +3,6 @@ gunicorn
 google-genai
 google-cloud-documentai
 google-cloud-firestore
+google-cloud-storage
 pyyaml
 pillow-heif

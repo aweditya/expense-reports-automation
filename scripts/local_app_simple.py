@@ -152,6 +152,11 @@ USE_FIRESTORE_JOBS = os.environ.get("USE_FIRESTORE_JOBS", "0") == "1"
 # add the re-render-from-Firestore fallback). Flip the gate off to
 # revert to disk-only writes.
 USE_FIRESTORE_REPORTS = os.environ.get("USE_FIRESTORE_REPORTS", "0") == "1"
+# Durable-store Phase 2b: dual-write source PDFs + extraction JSONs
+# to GCS. Read path stays on disk; Stage 2c adds the
+# rehydrate-from-GCS fallback that lets a recycled container serve
+# an existing workbench URL.
+USE_GCS_ARTIFACTS = os.environ.get("USE_GCS_ARTIFACTS", "0") == "1"
 
 
 def _set_job(upload_id: str, **updates) -> None:
@@ -211,6 +216,27 @@ def _save_report_state(upload_id: str, upload_dir: Path) -> None:
     except Exception as err:  # noqa: BLE001 — never break the FA's edit
         log_error("firestore_reports.save_failed",
                   upload_id=upload_id, error=repr(err)[:200])
+
+
+def _upload_artifact_to_gcs(upload_id: str, category: str,
+                            local_path: Path) -> None:
+    """Durable-store Phase 2b dual-write. After a source file lands
+    on disk (upload) or an extraction JSON is written by Gemini,
+    mirror it to GCS so a container recycle doesn't lose the binary.
+    No-op when the gate is off. Best-effort: a GCS failure logs but
+    does NOT abort the pipeline — disk is still the source of truth
+    until Stage 2c flips the read path."""
+    if not USE_GCS_ARTIFACTS:
+        return
+    if not local_path.exists():
+        return
+    try:
+        from gcs_artifacts import upload_artifact
+        upload_artifact(upload_id, category, local_path)
+    except Exception as err:  # noqa: BLE001 — never break the FA's upload
+        log_error("gcs_artifacts.upload_failed",
+                  upload_id=upload_id, category=category,
+                  filename=local_path.name, error=repr(err)[:200])
 
 
 # Single source of truth for the browser localStorage key the form-
@@ -291,6 +317,10 @@ def upload():
     write_fa_input(request.form, fa_input_path)
 
     saved = save_uploaded_files(pairs, files_dir)
+    # Phase 2b: durable copy of every source file to GCS so a
+    # container recycle doesn't lose the binary. Best-effort.
+    for src_path, _kind in saved:
+        _upload_artifact_to_gcs(upload_id, "files", src_path)
 
     # Initialize the per-upload JOBS entry with the
     # file list, spawn a background thread to run extract → reduce →
@@ -1371,8 +1401,11 @@ def _run_pipeline_in_background(
         _update_file(idx, status="extracting")
         _set_job(upload_id, current=idx)
 
-    def file_done(idx: int, _name: str) -> None:
+    def file_done(idx: int, name: str) -> None:
         _update_file(idx, status="done")
+        # Phase 2b: durable copy of the per-receipt extraction JSON.
+        extraction_path = extractions_dir / f"{Path(name).stem}.json"
+        _upload_artifact_to_gcs(upload_id, "extractions", extraction_path)
 
     def file_fail(idx: int, _name: str, detail: str) -> None:
         # Per-file failure surfaces in the progress page without

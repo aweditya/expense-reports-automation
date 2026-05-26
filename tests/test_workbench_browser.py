@@ -1203,6 +1203,31 @@ class TestProdFailureModes(unittest.TestCase):
         ctx1.close()
         ctx2.close()
 
+    def test_gcs_artifacts_land_after_upload(self):
+        """Durable-store Phase 2b. After upload, the source PDF +
+        the per-receipt extraction JSON are in GCS. Dual-write is
+        firing in prod."""
+        try:
+            from gcs_artifacts import list_artifacts
+        except ImportError:
+            self.skipTest("gcs_artifacts module not importable")
+
+        ctx = self._new_context()
+        page = ctx.new_page()
+        receipt = REPO_ROOT / "receipts" / self.RECEIPT[1]
+        upload_id = self._submit_one(page, receipt, self.RECEIPT[0])
+        page.wait_for_url("**/workbench.html", timeout=600_000)
+        ctx.close()
+
+        files = list_artifacts(upload_id, "files")
+        extractions = list_artifacts(upload_id, "extractions")
+        self.assertIn(self.RECEIPT[1], files,
+                      f"source file missing from GCS — got {files}")
+        # The extraction JSON is named after the source's stem.
+        stem = Path(self.RECEIPT[1]).stem
+        self.assertIn(f"{stem}.json", extractions,
+                      f"extraction JSON missing from GCS — got {extractions}")
+
     def test_firestore_report_persists_after_upload(self):
         """Durable-store Phase 2a. After an upload completes, the
         reports/{upload_id} Firestore doc exists with the report

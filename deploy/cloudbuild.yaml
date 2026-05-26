@@ -74,9 +74,11 @@ steps:
       # container recycle; unsets back to in-memory dict if removed.
       # USE_FIRESTORE_REPORTS=1 dual-writes the reduced report +
       # fa_input + edit history to Firestore on every save (Phase 2a).
-      # Best-effort: Firestore failure logs but doesn't break the FA.
-      # Read path stays on disk until Phase 2c.
-      - '--set-env-vars=VERTEX_PROJECT_ID=$PROJECT_ID,USE_FIRESTORE_JOBS=1,USE_FIRESTORE_REPORTS=1'
+      # USE_GCS_ARTIFACTS=1 dual-writes source PDFs + per-receipt
+      # extraction JSONs to gs://soe-agile-agents-expense-reports-state/
+      # (Phase 2b). All best-effort: failures log but don't break the
+      # FA. Read paths still go through local disk until Phase 2c.
+      - '--set-env-vars=VERTEX_PROJECT_ID=$PROJECT_ID,USE_FIRESTORE_JOBS=1,USE_FIRESTORE_REPORTS=1,USE_GCS_ARTIFACTS=1'
     id: 'deploy'
     waitFor: ['docker-push']
 
