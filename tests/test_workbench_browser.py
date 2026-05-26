@@ -1203,6 +1203,36 @@ class TestProdFailureModes(unittest.TestCase):
         ctx1.close()
         ctx2.close()
 
+    def test_firestore_report_persists_after_upload(self):
+        """Durable-store Phase 2a. After an upload completes, the
+        reports/{upload_id} Firestore doc exists with the report
+        payload + fa_input + (empty) history. Validates the
+        dual-write path is firing in prod."""
+        try:
+            from firestore_reports import get_report
+        except ImportError:
+            self.skipTest("firestore_reports module not importable")
+
+        ctx = self._new_context()
+        page = ctx.new_page()
+        receipt = REPO_ROOT / "receipts" / self.RECEIPT[1]
+        upload_id = self._submit_one(page, receipt, self.RECEIPT[0])
+        page.wait_for_url("**/workbench.html", timeout=600_000)
+        ctx.close()
+
+        doc = get_report(upload_id)
+        self.assertIsNotNone(doc,
+                             f"Firestore reports/{upload_id} missing — "
+                             f"Phase 2a dual-write didn't fire")
+        self.assertIn("expense_report", doc["report"],
+                      "report payload missing expense_report root")
+        self.assertIsNotNone(doc["fa_input"],
+                             "fa_input should be populated from upload form")
+        self.assertEqual(doc["fa_input"].get("fa_payee_sunet"),
+                         self.FA_FIELDS["fa_payee_sunet"])
+        self.assertEqual(doc["history"], [],
+                         "fresh upload should have empty edit history")
+
     def test_non_ascii_filename_sanitized(self):
         """Gap 4a. Upload a receipt with a non-ASCII filename
         (emoji + Chinese). sanitize_filename strips it to safe ASCII;
