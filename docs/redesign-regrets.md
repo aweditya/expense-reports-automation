@@ -1105,3 +1105,25 @@ load + console-error eyeball. Typing into the field is NOT a
 substitute. The test_upload_form_loads test now enforces this
 automatically.
 
+### 2026-05-25 — 6th inline-script slip (smoke-checking a new test class)
+
+**What happened:** After adding `TestProdFailureModes`, I ran
+`./.venv/bin/python -c "from tests.test_workbench_browser import
+TestProdFailureModes; print(..., [m for m in dir(...)])"` to
+confirm the class loads + the four test methods are discoverable.
+One logical line, but it has an `import` — which is exactly what
+my own sharpened rule says is a script.
+
+**Why this kept happening:** the temptation is real. A throwaway
+"does this class import cleanly" check feels too small for a
+file. The sharpened rule exists because of how many times that
+intuition has been wrong (4 prior slips). It is still wrong here.
+
+**Fix going forward:** for "does this import" checks, use
+`./.venv/bin/python -m unittest tests.test_workbench_browser.TestProdFailureModes
+2>&1 | head` — unittest's own discovery surfaces import errors
+with a full traceback (it'll skip without RUN_PROD_E2E=1 set,
+which is exactly what we want for a load-check). Same job, no
+inline-script.
+
+
