@@ -1224,8 +1224,11 @@ class TestProdFailureModes(unittest.TestCase):
         self.assertIsNotNone(doc,
                              f"Firestore reports/{upload_id} missing — "
                              f"Phase 2a dual-write didn't fire")
-        self.assertIn("expense_report", doc["report"],
-                      "report payload missing expense_report root")
+        report = doc["report"]
+        self.assertIn("transaction_lines", report,
+                      "report payload missing transaction_lines root key")
+        self.assertGreaterEqual(len(report["transaction_lines"]), 1,
+                                "uploaded receipt should produce ≥1 line")
         self.assertIsNotNone(doc["fa_input"],
                              "fa_input should be populated from upload form")
         self.assertEqual(doc["fa_input"].get("fa_payee_sunet"),
