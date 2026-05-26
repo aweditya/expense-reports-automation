@@ -1126,4 +1126,31 @@ with a full traceback (it'll skip without RUN_PROD_E2E=1 set,
 which is exactly what we want for a load-check). Same job, no
 inline-script.
 
+### 2026-05-25 — Phase 2a Firestore write failed because fixtures didn't carry real data
+
+**What happened:** Shipped Phase 2a (dual-write reports to Firestore)
+with 8 unit tests that all passed against real Firestore. First
+prod run failed: `InvalidArgument('Property report contains an
+invalid nested entity.')` — Firestore disallows arrays-of-arrays
+as a directly-nested value, and our reports carry bbox arrays
+from OCR token-id grounding (e.g. `[[x1,y1],[x2,y2]]`).
+
+The unit tests used hand-rolled trivial fixtures like
+`{"expense_report": {"total_usd": {"value": 42.0}}}` — no nested
+arrays. Real reports look very different. Tests said OK; prod
+said no.
+
+**Fix:** JSON-encode the `report` field as a single string
+(`report_json`) in the wire format. `get_report` decodes it back
+to a dict transparently. Sidesteps every Firestore shape
+constraint at the cost of losing internal queryability on the
+report (we don't need that until Phase 4 hypothetical analytics).
+
+**Rule going forward:** for serialization tests where the wire
+format has constraints (Firestore, Protobuf, anything strict),
+ALWAYS include a fixture that mirrors a real production payload's
+shape — not just a minimal hand-rolled dict. Added
+`test_report_with_nested_arrays_round_trips` as the regression
+guard.
+
 

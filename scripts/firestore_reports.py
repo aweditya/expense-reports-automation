@@ -43,6 +43,7 @@ ADC: same as firestore_jobs.py — Cloud Run metadata server, or
 from __future__ import annotations
 
 import datetime as dt
+import json
 import os
 import threading
 from typing import Any
@@ -76,15 +77,23 @@ def set_report(upload_id: str, *, report: dict,
     """Full-merge upsert of reports/{upload_id}. Pass the full report
     + (optionally) fa_input + history; the caller owns assembly.
 
+    The report payload is JSON-encoded into a single string field
+    (`report_json`) because Firestore rejects arrays-of-arrays as
+    "invalid nested entity" — and our report carries bbox coordinate
+    arrays from the OCR-grounding layer. JSON-string wire format
+    sidesteps every Firestore shape constraint at zero practical cost
+    (~50 KB string is well under the 1 MB doc limit). fa_input +
+    history are flat structures and pass through natively.
+
     Sets `updated_at` on every write. Sets `created_at` + `ttl` on
-    first write only. History is capped at HISTORY_CAP entries (oldest
-    dropped) — keeps doc size bounded and matches FA usage patterns
-    (no realistic session generates >50 edits).
+    first write only. History is capped at HISTORY_CAP entries
+    (oldest dropped) — keeps doc size bounded and matches FA usage
+    patterns (no realistic session generates >50 edits).
     """
     now = dt.datetime.now(dt.timezone.utc)
     capped_history = (history or [])[-HISTORY_CAP:]
     payload: dict[str, Any] = {
-        "report": report,
+        "report_json": json.dumps(report, ensure_ascii=False),
         "fa_input": fa_input,
         "history": capped_history,
         "updated_at": now,
@@ -98,9 +107,11 @@ def set_report(upload_id: str, *, report: dict,
 
 
 def get_report(upload_id: str) -> dict | None:
-    """Snapshot read. Returns the full doc (stripped of bookkeeping
-    fields) or None if no document exists. Caller checks for None
-    before falling back to the disk cache."""
+    """Snapshot read. Returns the full doc with `report` decoded back
+    to a dict (the wire format stores `report_json` as a string —
+    callers see the same dict shape they passed to set_report).
+    Returns None if no document exists; caller falls back to the disk
+    cache."""
     doc_ref = _get_client().collection(COLLECTION).document(upload_id)
     snap = doc_ref.get()
     if not snap.exists:
@@ -108,6 +119,8 @@ def get_report(upload_id: str) -> dict | None:
     data = snap.to_dict() or {}
     for f in ("created_at", "updated_at", "ttl"):
         data.pop(f, None)
+    if "report_json" in data:
+        data["report"] = json.loads(data.pop("report_json"))
     return data
 
 

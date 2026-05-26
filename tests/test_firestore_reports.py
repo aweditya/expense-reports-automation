@@ -68,6 +68,23 @@ class TestFirestoreReports(unittest.TestCase):
         self.assertNotIn("updated_at", got)
         self.assertNotIn("ttl", got)
 
+    def test_report_with_nested_arrays_round_trips(self):
+        """Regression: Firestore rejects arrays-of-arrays as "invalid
+        nested entity". Real reports carry bbox coordinate arrays
+        from OCR-grounding (e.g. [[x1,y1],[x2,y2]]). The wire format
+        JSON-encodes the report field so this round-trips cleanly."""
+        report = {
+            "expense_report": {
+                "transaction_lines": [
+                    {"bbox": [[100, 200], [150, 220]],
+                     "token_ids": [[1, 2, 3], [4, 5]]},
+                ],
+            },
+        }
+        self.set_report(self.upload_id, report=report)
+        got = self.get_report(self.upload_id)
+        self.assertEqual(got["report"], report)
+
     def test_set_with_history(self):
         report = {"expense_report": {}}
         history = [
