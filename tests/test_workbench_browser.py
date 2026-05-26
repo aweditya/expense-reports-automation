@@ -1060,5 +1060,171 @@ class TestProdFullFAJourney(unittest.TestCase):
                          f"unexpected console errors during journey: {unexpected}")
 
 
+@unittest.skipUnless(PLAYWRIGHT_AVAILABLE,
+                     "playwright not installed")
+@unittest.skipUnless(_prod_e2e_enabled(),
+                     "set RUN_PROD_E2E=1 to run prod failure-mode tests")
+@unittest.skipUnless(_gcloud_id_token() is not None,
+                     "gcloud identity token unavailable")
+class TestProdFailureModes(unittest.TestCase):
+    """Failure-mode coverage against prod: returning FA, concurrent
+    tabs, non-ASCII filenames. Each test uses one cheap receipt
+    (membership PNG) to keep cost low. ~$0.10 + ~4min per test."""
+
+    RECEIPT = ("membership",
+               "membership_2026-01-29_acm-student-renewal.png")
+    FA_FIELDS = {
+        "fa_payee_name": "Failure Mode Test",
+        "fa_payee_sunet": "fmtest",
+        "fa_payee_affiliation": "stanford_faculty",
+        "fa_event_name": "Failure Mode Coverage",
+        "fa_payment_method": "electronic",
+        "fa_rush_processing": "no",
+        "fa_authorized_by": "advisor@stanford.edu",
+        "fa_bp_who": "Failure Mode Test",
+        "fa_bp_what": "Coverage of FA-returns / concurrent-tab / unicode-filename",
+        "fa_bp_when_from": "2026-01-29",
+        "fa_bp_when_to": "2026-01-29",
+        "fa_bp_where": "Stanford, CA",
+        "fa_bp_why": "Confirm system handles real-world edge cases",
+    }
+    SHOTS_DIR = REPO_ROOT / ".scratch" / "e2e-failure-modes"
+
+    @classmethod
+    def setUpClass(cls):
+        cls._playwright = sync_playwright().start()
+        cls._browser = cls._playwright.chromium.launch(headless=True)
+        cls._token = _gcloud_id_token()
+        cls.SHOTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._browser.close()
+        cls._playwright.stop()
+
+    def _new_context(self):
+        return self._browser.new_context(
+            viewport={"width": 1400, "height": 1800},
+            extra_http_headers={"Authorization": f"Bearer {self._token}"},
+        )
+
+    def _submit_one(self, page, file_path: Path, kind: str) -> str:
+        """Fill form, attach one receipt, submit, return upload_id."""
+        page.goto(PROD_URL + "/", wait_until="domcontentloaded")
+        for name, value in self.FA_FIELDS.items():
+            el = page.query_selector(f'[name="{name}"]')
+            if el is None:
+                continue
+            tag = el.evaluate("e => e.tagName")
+            if tag == "SELECT":
+                page.select_option(f'[name="{name}"]', value)
+            else:
+                page.fill(f'[name="{name}"]', value)
+        page.set_input_files('[name="file_0"]', str(file_path))
+        page.select_option('[name="kind_0"]', kind)
+        with page.expect_navigation(wait_until="domcontentloaded",
+                                    timeout=60_000):
+            page.click('button[type="submit"]')
+        return page.url.rstrip("/").split("/")[-1]
+
+    def test_returning_fa_to_completed_workbench(self):
+        """Gap 1a. After upload completes, an FA returning later in a
+        FRESH browser context (no localStorage, no cookies, no warm
+        page state) can still load the workbench at
+        /uploads/<id>/workbench.html. Validates the static-file path
+        survives container restart / Firestore-only JOBS state."""
+        ctx_a = self._new_context()
+        page_a = ctx_a.new_page()
+        receipt = REPO_ROOT / "receipts" / self.RECEIPT[1]
+        upload_id = self._submit_one(page_a, receipt, self.RECEIPT[0])
+        page_a.wait_for_url("**/workbench.html", timeout=600_000)
+        ctx_a.close()
+
+        ctx_b = self._new_context()
+        page_b = ctx_b.new_page()
+        page_b.goto(f"{PROD_URL}/uploads/{upload_id}/workbench.html",
+                    wait_until="networkidle", timeout=60_000)
+        line_cards = page_b.query_selector_all("details.line-card")
+        self.assertGreaterEqual(len(line_cards), 1,
+                                "returning FA sees no line cards on workbench")
+        page_b.screenshot(path=str(self.SHOTS_DIR / "1a-returning-fa.png"),
+                          full_page=True)
+        ctx_b.close()
+
+    def test_returning_fa_reconnects_to_in_flight_progress(self):
+        """Gap 1b. FA closes laptop mid-upload, opens later. New
+        context revisits /upload/status/<id>; SSE picks up current
+        phase from Firestore and the page completes (redirects to
+        workbench). Validates Firestore-backed JOBS survives session
+        boundary."""
+        ctx_a = self._new_context()
+        page_a = ctx_a.new_page()
+        receipt = REPO_ROOT / "receipts" / self.RECEIPT[1]
+        upload_id = self._submit_one(page_a, receipt, self.RECEIPT[0])
+        status_url = f"{PROD_URL}/upload/status/{upload_id}"
+        # Beat to let the pipeline tick into extract phase, then walk
+        # away.
+        page_a.wait_for_timeout(8_000)
+        ctx_a.close()
+
+        ctx_b = self._new_context()
+        page_b = ctx_b.new_page()
+        page_b.goto(status_url, wait_until="domcontentloaded",
+                    timeout=30_000)
+        page_b.wait_for_url("**/workbench.html", timeout=600_000)
+        line_cards = page_b.query_selector_all("details.line-card")
+        self.assertGreaterEqual(len(line_cards), 1,
+                                "reconnected FA sees no line cards")
+        page_b.screenshot(path=str(self.SHOTS_DIR / "1b-reconnect.png"),
+                          full_page=True)
+        ctx_b.close()
+
+    def test_two_concurrent_tabs_same_fa(self):
+        """Gap 3. Same FA opens two browser tabs, submits two distinct
+        uploads near-simultaneously. Both must reach workbench
+        cleanly without JOBS cross-contamination."""
+        ctx1 = self._new_context()
+        ctx2 = self._new_context()
+        page1 = ctx1.new_page()
+        page2 = ctx2.new_page()
+        receipt = REPO_ROOT / "receipts" / self.RECEIPT[1]
+        id1 = self._submit_one(page1, receipt, self.RECEIPT[0])
+        id2 = self._submit_one(page2, receipt, self.RECEIPT[0])
+        self.assertNotEqual(id1, id2,
+                            "server generated identical upload_ids")
+        page1.wait_for_url("**/workbench.html", timeout=600_000)
+        page2.wait_for_url("**/workbench.html", timeout=600_000)
+        self.assertIn(id1, page1.url)
+        self.assertIn(id2, page2.url)
+        self.assertGreaterEqual(
+            len(page1.query_selector_all("details.line-card")), 1)
+        self.assertGreaterEqual(
+            len(page2.query_selector_all("details.line-card")), 1)
+        ctx1.close()
+        ctx2.close()
+
+    def test_non_ascii_filename_sanitized(self):
+        """Gap 4a. Upload a receipt with a non-ASCII filename
+        (emoji + Chinese). sanitize_filename strips it to safe ASCII;
+        the upload must still complete and the workbench must render."""
+        import shutil
+        src = REPO_ROOT / "receipts" / self.RECEIPT[1]
+        scratch = REPO_ROOT / ".scratch" / "e2e-failure-modes"
+        scratch.mkdir(parents=True, exist_ok=True)
+        unicode_path = scratch / "receipt_2026年度_测试_✈.png"
+        shutil.copy(src, unicode_path)
+
+        ctx = self._new_context()
+        page = ctx.new_page()
+        upload_id = self._submit_one(page, unicode_path, self.RECEIPT[0])
+        page.wait_for_url("**/workbench.html", timeout=600_000)
+        line_cards = page.query_selector_all("details.line-card")
+        self.assertGreaterEqual(len(line_cards), 1,
+                                "unicode-filename upload produced no line cards")
+        page.screenshot(path=str(self.SHOTS_DIR / "4a-unicode.png"),
+                        full_page=True)
+        ctx.close()
+
+
 if __name__ == "__main__":
     unittest.main()
