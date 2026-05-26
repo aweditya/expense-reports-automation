@@ -277,6 +277,8 @@ graph LR
         Vertex["Vertex AI<br/>Gemini 3 Flash"]
         DocAI3["Document AI<br/>OCR_PROCESSOR<br/>(us multi-region)"]
         Registry["Artifact Registry<br/>gcr.io/soe-agile-agents/expense-reports"]
+        Firestore["Firestore (default db)<br/>jobs/{upload_id} (Phase 1)<br/>reports/{upload_id} (Phase 2a)"]
+        GCS["Cloud Storage<br/>soe-agile-agents-expense-reports-state<br/>uploads/{id}/files + extractions (Phase 2b)"]
 
         subgraph CB["Cloud Build (us-west1)"]
             Trigger["Trigger: deploy-on-push<br/>fires on push to main"]
@@ -299,6 +301,8 @@ graph LR
     RustBin --> Scratch
     PyExt -->|ADC + grpc| Vertex
     PyExt -->|ADC + grpc<br/>via evidence_bbox.py| DocAI3
+    Flask2 -->|dual-write +<br/>rehydrate on cache miss| Firestore
+    Flask2 -->|dual-write +<br/>rehydrate on cache miss| GCS
 
     GH -->|git push main| Trigger
     Trigger --> BuildSteps
@@ -309,8 +313,13 @@ graph LR
 Notes:
 
 - The container runs **gunicorn**, not `flask run`. `--workers=1` matches `--max-instances=1` (single instance, single worker, threads handle concurrency).
-- Storage under `/app/.scratch/uploads/` is **ephemeral** — destroyed when the container restarts. Production-acceptable today because the FA workflow is "upload → review immediately"; long-term retention would need GCS (durable-store Phase 2).
-- **JOBS (live upload progress) is durable** as of 2026-05-25 (durable-store Phase 1). When `USE_FIRESTORE_JOBS=1` is set in the runtime env (default in `deploy/cloudbuild.yaml`), `_set_job` / `_get_job` in `scripts/local_app_simple.py` dispatch to `scripts/firestore_jobs.py`, which reads/writes `jobs/{upload_id}` in the project's default Firestore database. A container recycle mid-upload no longer wipes the SSE stream — the FA can reload, switch tabs, or reconnect from another device. Falls back to the in-memory dict when the env var is unset (dev path). Documents auto-expire after 7 days via a TTL field. See `docs/durable-store-plan.md`.
+- Storage under `/app/.scratch/uploads/` is a **disk cache**, not authoritative. A container recycle wipes it, but the durable tier (Firestore + GCS) survives — Phase 2c rehydrates the cache on the next request. The "upload → review immediately" workflow remains the common case; the rehydrate path makes 24-hour-old URLs work after a recycle.
+- **Durable store (2026-05-25 → 2026-05-26)**, gated by three independent env vars set in `deploy/cloudbuild.yaml`:
+  - **`USE_FIRESTORE_JOBS=1`** (Phase 1) — `_set_job` / `_get_job` in `scripts/local_app_simple.py` dispatch to `scripts/firestore_jobs.py` (`jobs/{upload_id}`, 7-day TTL). Container recycle mid-upload no longer wipes the SSE stream.
+  - **`USE_FIRESTORE_REPORTS=1`** (Phase 2a) — every pipeline completion + every edit/delete/undo dual-writes to `scripts/firestore_reports.py` (`reports/{upload_id}`, 90-day TTL). Stores `{report_json, fa_input, history}`. Report payload is JSON-encoded as a string to dodge Firestore's "invalid nested entity" rejection of arrays-of-arrays (bbox coordinates).
+  - **`USE_GCS_ARTIFACTS=1`** (Phase 2b) — source PDFs + per-receipt extraction JSONs dual-write via `scripts/gcs_artifacts.py` to `gs://soe-agile-agents-expense-reports-state/uploads/{id}/{files,extractions}/`.
+  All three writes are **best-effort**: failures log via `log_error` but never break the FA flow; disk remains authoritative for in-flight reads.
+- **Rehydrate-on-cache-miss (Phase 2c)** — `_rehydrate_upload` in `scripts/local_app_simple.py` is called from the `/uploads/<id>/<filename>` route when the upload directory is absent. Pulls report + fa_input + history from Firestore, downloads source PDFs + extractions from GCS, re-runs the `render_workbench_from_report` binary, then serves the now-materialized file. Returns false (→ 404) when Firestore has no record. This is what makes 24-hour-old URLs survive container recycles. See `docs/durable-store-plan.md`.
 - **Auth**: the public URL is fronted by IAP, which gates on SSO. Cloud Run itself is `--no-allow-unauthenticated`. Vertex calls from inside the container use the runtime service account via ADC (no key file).
 - Deploy gesture: `git push origin main`. The trigger is **regional (us-west1)** — see `deploy-cheatsheet.md`.
 
@@ -406,6 +415,7 @@ A cheat-sheet for "which file does X belong in?"
 | Add a business rule (e.g. "X required when Y") | `schema.yaml` (`required:` clause, regenerates `validation_rules.rs`) and/or hand-coded in `src/validator_typed.rs` | Validation |
 | Change how a field looks on the workbench | `src/workbench_simple.rs` + `src/workbench_simple.css` | Display |
 | Future: emit a Stanford-portal payload | new `src/submit.rs` (does not exist yet) | Submission |
+| Persist JOBS / reports / source artifacts across container recycle | `scripts/firestore_jobs.py` (Phase 1) + `scripts/firestore_reports.py` (Phase 2a) + `scripts/gcs_artifacts.py` (Phase 2b) + `_rehydrate_upload` in `scripts/local_app_simple.py` (Phase 2c) | Durable store |
 | Add a new expense kind (hotel/cab/airfare/conference) | (1) per-kind detail block already in `schema.yaml`; (2) `scripts/generate_response_schema.py` — add the kind to `KIND_EXPENSE_TYPES` + a detail-block factory + an entry in `SCHEMAS_TO_GENERATE`; (3) new `scripts/extract_<kind>.py` (~30 lines using `run_extraction` from `extractor_lib`); (4) new dropdown option + dispatcher entry in `scripts/local_app_simple.py`; (5a) **add `render_<kind>_details(html, <kind>, path)` in `src/workbench_simple.rs` mirroring `render_lodging_details` / `render_airfare_details`**; (5b) **add the corresponding `if let Some(<kind>) = &line.<kind>_details` branch in `render_transaction_line`**; (5c) extend `line_summary_headline` with a per-kind headline; (5d) walk the new detail block in `src/validator_typed.rs`; (6) acceptance harness entries in `scripts/acceptance_check.py` (`EXTRACTORS` + `DETAIL_BLOCK_BY_KIND` + per-receipt fixtures with predicates). The Dockerfile globs `generated/response_schema_*.json`, so no Dockerfile change. Mental check: upload a {kind} receipt — does the FA see all the {kind}-specific fields on the workbench? If no, step (5) isn't done. **If the detail block has more than ~5 T2/T3 leaves** (Vertex's schema property-count ceiling), it needs the multi-call pattern: emit multiple schemas from `SCHEMAS_TO_GENERATE` (with `include_common`/`include_detail`/`include_extras` knobs) and orchestrate parallel `single_call` invocations + merge in the extractor — see `scripts/extract_lodging.py` (2-call) or `scripts/extract_airfare.py` (3-call when the detail block is too big to fit in one main call). | Extraction + Display + Validation |
 
 ---
