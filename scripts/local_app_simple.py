@@ -1113,6 +1113,81 @@ def undo_available(upload_id: str):
     }, 200)
 
 
+@app.post("/uploads/<upload_id>/add-receipts")
+def add_receipts(upload_id: str):
+    """Append more receipts to an existing report. Re-runs the
+    pipeline on the union of existing + new extractions; clears
+    edit history because new lines may shift indices that existing
+    history entries pointed at (same reasoning as delete-line).
+
+    Mirrors POST /upload's parsing + validation. JOBS resets to
+    show ONLY the new files for clean progress; the workbench will
+    show the combined report after render."""
+    safe_id = sanitize_id(upload_id)
+    upload_dir = UPLOADS_ROOT / safe_id
+    if not upload_dir.is_dir():
+        if not _rehydrate_upload(safe_id, upload_dir):
+            abort(404)
+
+    pairs: list[tuple] = []
+    for key in sorted(request.files):
+        if not key.startswith("file_"):
+            continue
+        idx = key[len("file_"):]
+        f = request.files[key]
+        if not f or not f.filename:
+            continue
+        kind = request.form.get(f"kind_{idx}", "").strip()
+        if not kind:
+            return (f"Missing kind for file {f.filename!r}.", 400)
+        if kind not in EXTRACTORS:
+            return (f"Unknown kind {kind!r} for file {f.filename!r}.", 400)
+        ext = Path(f.filename).suffix.lower()
+        if ext not in ALLOWED_UPLOAD_EXTENSIONS:
+            return (f"Unsupported file type {ext!r} for {f.filename!r}.", 400)
+        pairs.append((f, kind))
+
+    if not pairs:
+        return ("No files uploaded.", 400)
+
+    files_dir = upload_dir / "files"
+    extractions_dir = upload_dir / "extractions"
+    reduced_path = upload_dir / "reduced" / "report.json"
+    workbench_path = upload_dir / "workbench.html"
+    fa_input_path = upload_dir / "fa_input.json"
+
+    files_dir.mkdir(parents=True, exist_ok=True)
+    extractions_dir.mkdir(parents=True, exist_ok=True)
+
+    saved = save_uploaded_files(pairs, files_dir)
+    for src_path, _kind in saved:
+        _upload_artifact_to_gcs(safe_id, "files", src_path)
+
+    _set_job(
+        safe_id,
+        phase="initializing",
+        current=0,
+        files=[
+            {"name": s.name, "kind": k, "status": "pending"}
+            for s, k in saved
+        ],
+        error="",
+    )
+    _clear_history(upload_dir)
+
+    log_event("add_receipts.start", upload_id=safe_id,
+              new_count=len(saved))
+    threading.Thread(
+        target=_run_pipeline_in_background,
+        args=(safe_id, saved, extractions_dir, reduced_path,
+              workbench_path, fa_input_path),
+        name=f"add-receipts-{safe_id}",
+        daemon=True,
+    ).start()
+
+    return redirect(f"/upload/status/{safe_id}", code=303)
+
+
 @app.get("/uploads/<upload_id>/<path:filename>")
 def serve_upload_file(upload_id: str, filename: str):
     """Static-file route for everything under a per-upload directory:

@@ -31,6 +31,29 @@ const SPOTCHECK_JS: &str = include_str!("workbench_spotcheck.js");
 /// re-eyeballing the spot-check panel on a representative document.
 const PDFJS_CDN_SCRIPT: &str = r#"<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>"#;
 
+const ADD_RECEIPTS_MODAL_HTML: &str = r##"
+<div id="add-receipts-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="add-receipts-title">
+  <div class="add-receipts-content">
+    <header>
+      <h3 id="add-receipts-title">Add more receipts</h3>
+      <button type="button" id="add-receipts-close" aria-label="Close">×</button>
+    </header>
+    <form id="add-receipts-form" enctype="multipart/form-data">
+      <div id="add-receipts-rows"></div>
+      <button type="button" id="add-receipts-add-row" class="secondary">+ Add another file</button>
+      <p class="add-receipts-note">New receipts append to this report.
+        Your prior edits stay, but the undo stack resets because line
+        numbers may shift.</p>
+      <div class="add-receipts-actions">
+        <button type="button" id="add-receipts-cancel">Cancel</button>
+        <button type="submit" id="add-receipts-submit">Process</button>
+      </div>
+      <p id="add-receipts-error" class="add-receipts-error" hidden></p>
+    </form>
+  </div>
+</div>
+"##;
+
 /// Render the full HTML page. `receipts` is the per-receipt extraction
 /// list (used for the source-documents panel); `report` is the reduced
 /// typed report; `validation` is the Pass-2 result.
@@ -100,6 +123,12 @@ pub fn render_workbench_html(
            <div id=\"spotcheck-content\"></div>\n\
          </div>\n",
     );
+
+    // Add-receipts modal. Hidden until the hero button is clicked;
+    // submits multipart form-data to POST /uploads/<id>/add-receipts.
+    // Kind list mirrors templates/upload_form.html (keep them in
+    // lock-step when adding a new extractor — both bake the list).
+    html.push_str(ADD_RECEIPTS_MODAL_HTML);
 
     // Tiny in-view-aware jump handler + click-to-copy handler — see
     // JUMP_SCRIPT below for the in-script comments.
@@ -533,6 +562,121 @@ document.addEventListener('click', function(e) {
     });
   }
 });
+
+// Add-receipts modal. Bind button → open modal with one fresh row.
+// On submit, multipart POST to /uploads/<id>/add-receipts and let
+// the server redirect to the progress page.
+(function setupAddReceiptsModal() {
+  const segs = window.location.pathname.split('/');
+  if (segs.length < 3 || segs[1] !== 'uploads') return;
+  const uploadId = segs[2];
+  const btn = document.getElementById('add-receipts-button');
+  const modal = document.getElementById('add-receipts-modal');
+  const form = document.getElementById('add-receipts-form');
+  const rowsHost = document.getElementById('add-receipts-rows');
+  const addRowBtn = document.getElementById('add-receipts-add-row');
+  const closeBtn = document.getElementById('add-receipts-close');
+  const cancelBtn = document.getElementById('add-receipts-cancel');
+  const submitBtn = document.getElementById('add-receipts-submit');
+  const errEl = document.getElementById('add-receipts-error');
+  if (!btn || !modal || !form || !rowsHost) return;
+
+  const KINDS = [
+    ['meal', 'Meal Receipt'],
+    ['transport', 'Ground Transport'],
+    ['lodging', 'Lodging Folio'],
+    ['airfare', 'Airfare / Flight Ticket'],
+    ['miscellaneous', 'Miscellaneous (posters, printing, etc.)'],
+    ['membership', 'Membership Dues (ACM, IEEE, …)'],
+    ['mileage', 'Personal Mileage (Google Maps screenshot)'],
+  ];
+
+  let rowCount = 0;
+  function appendRow() {
+    const idx = rowCount++;
+    const row = document.createElement('div');
+    row.className = 'add-receipts-row';
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.name = 'file_' + idx;
+    fileInput.required = true;
+    const sel = document.createElement('select');
+    sel.name = 'kind_' + idx;
+    sel.required = true;
+    for (const [v, label] of KINDS) {
+      const opt = document.createElement('option');
+      opt.value = v;
+      opt.textContent = label;
+      sel.appendChild(opt);
+    }
+    const rm = document.createElement('button');
+    rm.type = 'button';
+    rm.textContent = '✕';
+    rm.title = 'Remove this row';
+    rm.addEventListener('click', function() {
+      // Don't let the FA remove the last row — they need at least one
+      // file to submit.
+      if (rowsHost.querySelectorAll('.add-receipts-row').length > 1) {
+        row.remove();
+      }
+    });
+    row.appendChild(fileInput);
+    row.appendChild(sel);
+    row.appendChild(rm);
+    rowsHost.appendChild(row);
+  }
+
+  function openModal() {
+    rowsHost.innerHTML = '';
+    rowCount = 0;
+    appendRow();
+    errEl.hidden = true;
+    errEl.textContent = '';
+    modal.classList.remove('hidden');
+  }
+  function closeModal() {
+    modal.classList.add('hidden');
+    submitBtn.disabled = false;
+  }
+
+  btn.addEventListener('click', openModal);
+  closeBtn.addEventListener('click', closeModal);
+  cancelBtn.addEventListener('click', closeModal);
+  addRowBtn.addEventListener('click', appendRow);
+  modal.addEventListener('click', function(e) {
+    // Click outside the inner content dismisses.
+    if (e.target === modal) closeModal();
+  });
+
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    submitBtn.disabled = true;
+    errEl.hidden = true;
+    const fd = new FormData(form);
+    fetch('/uploads/' + uploadId + '/add-receipts', {
+      method: 'POST',
+      body: fd,
+      redirect: 'follow',
+    }).then(function(r) {
+      if (r.redirected) {
+        // Server 303'd us to /upload/status/<id> — go there.
+        window.location.href = r.url;
+        return;
+      }
+      if (!r.ok) {
+        return r.text().then(function(t) {
+          throw new Error(t || ('HTTP ' + r.status));
+        });
+      }
+      // No redirect, no error — fall back to a workbench reload.
+      window.location.reload();
+    }).catch(function(err) {
+      submitBtn.disabled = false;
+      errEl.textContent = 'Upload failed: ' + err.message;
+      errEl.hidden = false;
+    });
+  });
+})();
 </script>
 "##;
 
@@ -602,7 +746,10 @@ fn render_hero(html: &mut String, report: &ExpenseReport, validation: &Validatio
     html.push_str(
         "<p class=\"hero-undo\"><button type=\"button\" id=\"undo-button\" \
          class=\"undo-btn\" hidden title=\"Revert your most recent edit\">\
-         ↶ Undo last edit</button></p>\n",
+         ↶ Undo last edit</button>\
+         <button type=\"button\" id=\"add-receipts-button\" \
+         class=\"add-receipts-btn\" title=\"Add more receipts to this expense report\">\
+         + Add more receipts</button></p>\n",
     );
     html.push_str("</header>\n");
 }

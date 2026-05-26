@@ -1265,6 +1265,63 @@ class TestProdFailureModes(unittest.TestCase):
         self.assertEqual(doc["history"], [],
                          "fresh upload should have empty edit history")
 
+    def test_add_receipts_appends_to_existing_report(self):
+        """Full add-receipts UI flow against prod. Upload 1 receipt,
+        click '+ Add more receipts' on the workbench, attach another
+        receipt of a different kind, submit, wait for the redirect
+        back to the (now combined) workbench, assert both lines are
+        present. Also asserts Firestore + GCS picked up the new
+        artifacts. Walks the entire return-tomorrow FA workflow."""
+        ctx = self._new_context()
+        page = ctx.new_page()
+        first = REPO_ROOT / "receipts" / self.RECEIPT[1]
+        upload_id = self._submit_one(page, first, self.RECEIPT[0])
+        page.wait_for_url("**/workbench.html", timeout=600_000)
+        self.assertEqual(
+            len(page.query_selector_all("details.line-card")), 1,
+            "should start with one line from the first upload")
+
+        # Open the add-receipts modal + add a different-kind receipt.
+        page.click("#add-receipts-button")
+        page.wait_for_selector("#add-receipts-modal:not(.hidden)",
+                               timeout=5000)
+        second = REPO_ROOT / "receipts" / "airfare_2026-03-21_egencia-united-sfo-pit-roundtrip.pdf"
+        self.assertTrue(second.exists(), f"missing second receipt: {second}")
+        page.set_input_files('[name="file_0"]', str(second))
+        page.select_option('[name="kind_0"]', "airfare")
+        page.click("#add-receipts-submit")
+
+        # Server 303s the fetch to /upload/status/<id>; the JS sets
+        # window.location.href and the status page eventually redirects
+        # to the rebuilt workbench.
+        page.wait_for_url("**/upload/status/**", timeout=30_000)
+        page.wait_for_url("**/workbench.html", timeout=900_000)
+        line_cards = page.query_selector_all("details.line-card")
+        self.assertEqual(len(line_cards), 2,
+                         f"after add-receipts should see 2 lines; "
+                         f"got {len(line_cards)}")
+        page.screenshot(path=str(self.SHOTS_DIR / "add-receipts-combined.png"),
+                        full_page=True)
+        ctx.close()
+
+        # Durable proof: Firestore + GCS picked up both.
+        try:
+            from firestore_reports import get_report
+            from gcs_artifacts import list_artifacts
+            doc = get_report(upload_id)
+            self.assertIsNotNone(doc)
+            self.assertEqual(
+                len(doc["report"].get("transaction_lines", [])), 2)
+            self.assertEqual(doc["history"], [],
+                             "edit history should be cleared after add")
+            files = list_artifacts(upload_id, "files")
+            self.assertEqual(len(files), 2,
+                             f"both source files should be in GCS; got {files}")
+            extractions = list_artifacts(upload_id, "extractions")
+            self.assertEqual(len(extractions), 2)
+        except ImportError:
+            pass  # SDK absent; UI assertions stand alone
+
     def test_edits_persist_across_browser_sessions(self):
         """Phase 2a end-to-end persistence proof. Edit a field in
         context A, close it, open a FRESH context B (no cookies,
