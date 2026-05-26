@@ -26,6 +26,7 @@ import unittest
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -1284,6 +1285,133 @@ class TestProdFailureModes(unittest.TestCase):
                                 "unicode-filename upload produced no line cards")
         page.screenshot(path=str(self.SHOTS_DIR / "4a-unicode.png"),
                         full_page=True)
+        ctx.close()
+
+
+_STAGE2C_FIXTURE = (REPO_ROOT / ".scratch" / "uploads"
+                     / "2026-05-23_00-11-46_14f50398")
+
+
+def _stage2c_reachable() -> bool:
+    """Stage 2c local test needs Firestore + GCS reachable + a real
+    fixture upload to mirror into them + Playwright + the render
+    binary. Each pre-req gates the suite cleanly."""
+    if not PLAYWRIGHT_AVAILABLE:
+        return False
+    if not _STAGE2C_FIXTURE.exists():
+        return False
+    if not (REPO_ROOT / "target" / "debug"
+            / "render_workbench_from_report").exists():
+        return False
+    if not os.environ.get("VERTEX_PROJECT_ID"):
+        return False
+    try:
+        from firestore_reports import _get_client as _fs
+        from gcs_artifacts import _get_client as _gcs, BUCKET_NAME
+        _fs()
+        return _gcs().bucket(BUCKET_NAME).exists()
+    except Exception:
+        return False
+
+
+@unittest.skipUnless(_stage2c_reachable(),
+                     "Stage 2c local test needs Playwright, the render "
+                     "binary, the existing local fixture, and live "
+                     "Firestore + GCS via ADC")
+class TestStage2cRehydrate(unittest.TestCase):
+    """Stage 2c. Verifies _rehydrate_upload + the on-cache-miss route:
+    pre-stage Firestore + GCS for a synthetic upload_id using an
+    existing local fixture, blow away the local dir, call rehydrate,
+    then load workbench.html in Chromium and assert it parses + has
+    line cards + zero console errors.
+
+    Mirrors what happens in prod when a container recycle wipes
+    /scratch/uploads/<id>/ but the durable state survives."""
+
+    @classmethod
+    def setUpClass(cls):
+        import sys as _sys
+        _sys.path.insert(0, str(REPO_ROOT / "scripts"))
+        from firestore_reports import set_report  # noqa: E402
+        from gcs_artifacts import upload_artifact  # noqa: E402
+
+        cls.upload_id = f"test_2c_{uuid.uuid4().hex[:10]}"
+        report = json.loads(
+            (_STAGE2C_FIXTURE / "reduced" / "report.json").read_text())
+        set_report(cls.upload_id, report=report)
+        for f in (_STAGE2C_FIXTURE / "files").iterdir():
+            upload_artifact(cls.upload_id, "files", f)
+        for f in (_STAGE2C_FIXTURE / "extractions").iterdir():
+            upload_artifact(cls.upload_id, "extractions", f)
+
+        cls._playwright = sync_playwright().start()
+        cls._browser = cls._playwright.chromium.launch(headless=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        try:
+            cls._browser.close()
+            cls._playwright.stop()
+        except Exception:
+            pass
+        try:
+            from firestore_reports import delete_report
+            from gcs_artifacts import delete_artifacts
+            delete_report(cls.upload_id)
+            delete_artifacts(cls.upload_id)
+        except Exception:
+            pass
+        import shutil
+        shutil.rmtree(REPO_ROOT / ".scratch" / "uploads" / cls.upload_id,
+                      ignore_errors=True)
+
+    def test_rehydrate_rebuilds_disk_then_workbench_loads_in_chromium(self):
+        import importlib
+        import sys as _sys
+        _sys.path.insert(0, str(REPO_ROOT / "scripts"))
+        local_app_simple = importlib.import_module("local_app_simple")
+        # Flip the gates at runtime — module-level constants were
+        # read at import time before env was set.
+        local_app_simple.USE_FIRESTORE_REPORTS = True
+        local_app_simple.USE_GCS_ARTIFACTS = True
+
+        upload_dir = (REPO_ROOT / ".scratch" / "uploads" / self.upload_id)
+        import shutil
+        shutil.rmtree(upload_dir, ignore_errors=True)
+        self.assertFalse(upload_dir.exists(),
+                         "local upload_dir should be absent before rehydrate")
+
+        ok = local_app_simple._rehydrate_upload(self.upload_id, upload_dir)
+        self.assertTrue(ok, "rehydrate must succeed when Firestore has the doc")
+
+        # Disk shape — every artifact the workbench JS depends on.
+        self.assertTrue((upload_dir / "reduced" / "report.json").exists())
+        self.assertTrue((upload_dir / "workbench.html").exists())
+        files = sorted(p.name for p in (upload_dir / "files").iterdir())
+        extractions = sorted(p.name for p in (upload_dir / "extractions").iterdir())
+        self.assertGreater(len(files), 0,
+                           "source files should have been pulled from GCS")
+        self.assertGreater(len(extractions), 0,
+                           "extraction JSONs should have been pulled from GCS")
+
+        # Browser eyeball: the rehydrated workbench must actually load
+        # cleanly. Catches malformed HTML / missing JS bundles / etc.
+        ctx = self._browser.new_context()
+        page = ctx.new_page()
+        console_errors: list[str] = []
+        page.on("console", lambda msg: (
+            console_errors.append(msg.text)
+            if msg.type == "error" else None))
+        workbench_url = (upload_dir / "workbench.html").as_uri()
+        page.goto(workbench_url, wait_until="networkidle")
+        line_cards = page.query_selector_all("details.line-card")
+        self.assertGreater(len(line_cards), 0,
+                           "rehydrated workbench should render line cards")
+        unexpected = [e for e in console_errors
+                      if "undo-available" not in e
+                      and "favicon" not in e]
+        self.assertEqual(unexpected, [],
+                         f"console errors on rehydrated workbench: {unexpected}")
         ctx.close()
 
 

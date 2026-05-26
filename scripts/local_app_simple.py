@@ -218,6 +218,61 @@ def _save_report_state(upload_id: str, upload_dir: Path) -> None:
                   upload_id=upload_id, error=repr(err)[:200])
 
 
+def _rehydrate_upload(upload_id: str, upload_dir: Path) -> bool:
+    """Durable-store Phase 2c: rebuild the per-upload disk layout
+    from Firestore (report + fa_input + history) and GCS (source
+    PDFs + extraction JSONs), then re-run render_workbench so the
+    next GET hits the materialized cache.
+
+    Returns True iff rehydration succeeded; False if Firestore has
+    no record for this upload_id (true 404). On any error mid-flight
+    we wipe the partial dir so a retry sees a clean slate.
+
+    Gated by USE_FIRESTORE_REPORTS — without the durable write path
+    we'd have nothing to rehydrate from. USE_GCS_ARTIFACTS gates
+    only the binary tier; without it we get the report + workbench
+    but no PDF panel or evidence side panel.
+    """
+    if not USE_FIRESTORE_REPORTS:
+        return False
+    try:
+        from firestore_reports import get_report
+        doc = get_report(upload_id)
+        if doc is None:
+            return False
+        files_dir = upload_dir / "files"
+        extractions_dir = upload_dir / "extractions"
+        reduced_dir = upload_dir / "reduced"
+        for d in (files_dir, extractions_dir, reduced_dir):
+            d.mkdir(parents=True, exist_ok=True)
+        report_path = reduced_dir / "report.json"
+        report_path.write_text(json.dumps(doc["report"], indent=2,
+                                          ensure_ascii=False))
+        if doc.get("fa_input") is not None:
+            (upload_dir / "fa_input.json").write_text(
+                json.dumps(doc["fa_input"], indent=2, ensure_ascii=False))
+        if doc.get("history"):
+            _write_history(upload_dir, doc["history"])
+        if USE_GCS_ARTIFACTS:
+            from gcs_artifacts import list_artifacts, download_artifact
+            for fn in list_artifacts(upload_id, "files"):
+                download_artifact(upload_id, "files", fn,
+                                  files_dir / fn)
+            for fn in list_artifacts(upload_id, "extractions"):
+                download_artifact(upload_id, "extractions", fn,
+                                  extractions_dir / fn)
+        workbench_path = upload_dir / "workbench.html"
+        render_workbench(report_path, extractions_dir, workbench_path)
+        log_event("rehydrate.success", upload_id=upload_id)
+        return True
+    except Exception as err:  # noqa: BLE001
+        log_error("rehydrate.failed",
+                  upload_id=upload_id, error=repr(err)[:300])
+        import shutil
+        shutil.rmtree(upload_dir, ignore_errors=True)
+        return False
+
+
 def _upload_artifact_to_gcs(upload_id: str, category: str,
                             local_path: Path) -> None:
     """Durable-store Phase 2b dual-write. After a source file lands
@@ -1062,11 +1117,16 @@ def undo_available(upload_id: str):
 def serve_upload_file(upload_id: str, filename: str):
     """Static-file route for everything under a per-upload directory:
     workbench.html, extractions/<name>.json, files/<name>, reduced/report.json,
-    etc. The renderer emits relative URLs that resolve against this prefix."""
+    etc. The renderer emits relative URLs that resolve against this prefix.
+
+    Stage 2c: on local cache miss, attempt rehydration from Firestore
+    + GCS before 404. Makes 24-hour-old workbench URLs survive
+    container recycles."""
     safe_id = sanitize_id(upload_id)
     upload_dir = UPLOADS_ROOT / safe_id
     if not upload_dir.is_dir():
-        abort(404)
+        if not _rehydrate_upload(safe_id, upload_dir):
+            abort(404)
     return send_from_directory(upload_dir, filename)
 
 
