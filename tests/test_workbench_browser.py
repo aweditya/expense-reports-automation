@@ -1231,8 +1231,11 @@ class TestProdFailureModes(unittest.TestCase):
                                 "uploaded receipt should produce ≥1 line")
         self.assertIsNotNone(doc["fa_input"],
                              "fa_input should be populated from upload form")
-        self.assertEqual(doc["fa_input"].get("fa_payee_sunet"),
-                         self.FA_FIELDS["fa_payee_sunet"])
+        self.assertEqual(doc["fa_input"].get("payee_sunet"),
+                         self.FA_FIELDS["fa_payee_sunet"],
+                         "fa_input JSON uses stripped keys "
+                         "(payee_sunet, not fa_payee_sunet) "
+                         "per write_fa_input mapping")
         self.assertEqual(doc["history"], [],
                          "fresh upload should have empty edit history")
 
