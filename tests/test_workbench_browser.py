@@ -1128,6 +1128,37 @@ class TestProdFailureModes(unittest.TestCase):
             page.click('button[type="submit"]')
         return page.url.rstrip("/").split("/")[-1]
 
+    def test_refresh_during_progress_page_recovers(self):
+        """Stage 11 claim: refreshing the progress page mid-extract
+        does NOT crash the website. The page re-renders (it's a plain
+        idempotent GET) and the EventSource reconnects to current
+        phase. Test: start an upload, wait for the status URL, sleep
+        a beat to land inside extract phase, reload, then keep
+        waiting for the workbench redirect."""
+        ctx = self._new_context()
+        page = ctx.new_page()
+        receipt = REPO_ROOT / "receipts" / self.RECEIPT[1]
+        upload_id = self._submit_one(page, receipt, self.RECEIPT[0])
+        # We should now be on /upload/status/<id>. Wait a beat so the
+        # pipeline ticks into extract phase, then refresh.
+        self.assertIn(f"/upload/status/{upload_id}", page.url,
+                      f"unexpected url after submit: {page.url}")
+        page.wait_for_timeout(5_000)
+        page.reload(wait_until="domcontentloaded")
+        # After reload we should STILL be on the status page (or have
+        # already advanced to workbench if extract was fast).
+        self.assertTrue(
+            f"/upload/status/{upload_id}" in page.url
+            or "workbench.html" in page.url,
+            f"refresh landed somewhere unexpected: {page.url}")
+        # Confirm the page reconnected — it should redirect to the
+        # workbench when extraction completes, not hang.
+        page.wait_for_url("**/workbench.html", timeout=600_000)
+        line_cards = page.query_selector_all("details.line-card")
+        self.assertGreaterEqual(len(line_cards), 1,
+                                "post-refresh workbench shows no lines")
+        ctx.close()
+
     def test_returning_fa_to_completed_workbench(self):
         """Gap 1a. After upload completes, an FA returning later in a
         FRESH browser context (no localStorage, no cookies, no warm
