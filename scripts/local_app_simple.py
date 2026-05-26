@@ -147,6 +147,11 @@ class PipelineError(RuntimeError):
 JOBS: dict[str, dict] = {}
 JOBS_LOCK = threading.Lock()
 USE_FIRESTORE_JOBS = os.environ.get("USE_FIRESTORE_JOBS", "0") == "1"
+# Durable-store Phase 2a: dual-write reports to Firestore alongside
+# the existing disk write. Read path stays on disk (Phase 2c will
+# add the re-render-from-Firestore fallback). Flip the gate off to
+# revert to disk-only writes.
+USE_FIRESTORE_REPORTS = os.environ.get("USE_FIRESTORE_REPORTS", "0") == "1"
 
 
 def _set_job(upload_id: str, **updates) -> None:
@@ -175,6 +180,37 @@ def _get_job(upload_id: str) -> dict:
         return _fs_get(upload_id)
     with JOBS_LOCK:
         return dict(JOBS.get(upload_id, {}))
+
+
+def _save_report_state(upload_id: str, upload_dir: Path) -> None:
+    """Durable-store Phase 2a dual-write. After any successful disk
+    write of report.json / fa_input.json / edit_history.json, mirror
+    the state to Firestore so a container recycle doesn't lose the
+    FA's edits. No-op when the gate is off.
+
+    Best-effort: a Firestore failure logs but does NOT abort the
+    request — the disk write is still authoritative until Phase 2c
+    flips the read path. Operator sees the failure in Cloud Logging.
+    """
+    if not USE_FIRESTORE_REPORTS:
+        return
+    report_path = upload_dir / "reduced" / "report.json"
+    if not report_path.exists():
+        return
+    fa_input_path = upload_dir / "fa_input.json"
+    history_path = upload_dir / "edit_history.json"
+    try:
+        report = json.loads(report_path.read_text())
+        fa_input = (json.loads(fa_input_path.read_text())
+                    if fa_input_path.exists() else None)
+        history = (json.loads(history_path.read_text())
+                   if history_path.exists() else [])
+        from firestore_reports import set_report as _fs_set_report
+        _fs_set_report(upload_id, report=report,
+                       fa_input=fa_input, history=history)
+    except Exception as err:  # noqa: BLE001 — never break the FA's edit
+        log_error("firestore_reports.save_failed",
+                  upload_id=upload_id, error=repr(err)[:200])
 
 
 # Single source of truth for the browser localStorage key the form-
@@ -886,6 +922,7 @@ def edit_field(upload_id: str):
             if prefix:
                 detail = detail.replace(prefix, "…")
         return ({"error": f"render failed: {detail[:200]}"}, 500)
+    _save_report_state(safe_id, upload_dir)
     return ({"ok": True}, 200)
 
 
@@ -922,6 +959,7 @@ def delete_transaction_line(upload_id: str, idx: int):
         render_workbench(report_path, extractions_dir, workbench_path)
     except PipelineError as err:
         return ({"error": f"render failed: {err.detail[:200]}"}, 500)
+    _save_report_state(safe_id, upload_dir)
     return ({"ok": True, "remaining_lines": len(lines)}, 200)
 
 
@@ -964,6 +1002,7 @@ def undo_last_edit(upload_id: str):
         render_workbench(report_path, extractions_dir, workbench_path)
     except PipelineError as err:
         return ({"error": f"render failed: {err.detail[:200]}"}, 500)
+    _save_report_state(safe_id, upload_dir)
     return ({"ok": True, "undone": entry}, 200)
 
 
@@ -1354,6 +1393,7 @@ def _run_pipeline_in_background(
         fx_enrich(reduced_path)
         _set_job(upload_id, phase="render")
         render_workbench(reduced_path, extractions_dir, workbench_path)
+        _save_report_state(upload_id, reduced_path.parent.parent)
         _set_job(upload_id, phase="done")
     except PipelineError as err:
         _set_job(upload_id, phase="error",

@@ -72,7 +72,11 @@ steps:
       # USE_FIRESTORE_JOBS=1 routes JOBS reads/writes through
       # Firestore (durable-store Phase 1; 2026-05-25). Survives
       # container recycle; unsets back to in-memory dict if removed.
-      - '--set-env-vars=VERTEX_PROJECT_ID=$PROJECT_ID,USE_FIRESTORE_JOBS=1'
+      # USE_FIRESTORE_REPORTS=1 dual-writes the reduced report +
+      # fa_input + edit history to Firestore on every save (Phase 2a).
+      # Best-effort: Firestore failure logs but doesn't break the FA.
+      # Read path stays on disk until Phase 2c.
+      - '--set-env-vars=VERTEX_PROJECT_ID=$PROJECT_ID,USE_FIRESTORE_JOBS=1,USE_FIRESTORE_REPORTS=1'
     id: 'deploy'
     waitFor: ['docker-push']
 
