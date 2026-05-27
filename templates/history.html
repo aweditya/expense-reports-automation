@@ -16,6 +16,8 @@
   header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 22px; }
   h1 { margin: 0; font-size: 26px; }
   .dashboard-eyebrow { margin: 0 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; font-weight: 600; }
+  .signed-in-as { margin: 4px 0 0; font-size: 11px; color: #9ca3af; }
+  .signed-in-as:empty { display: none; }
   .new-report-btn {
     background: #2563eb;
     color: white;
@@ -60,9 +62,10 @@
   <header>
     <div>
       <p class="dashboard-eyebrow">Stanford Expense Reports</p>
-      <h1>Dashboard __SCOPE_LABEL__</h1>
+      <h1>Dashboard</h1>
+      <p class="signed-in-as">__SCOPE_LABEL__</p>
     </div>
-    <a class="new-report-btn" href="/new">+ File a new expense report</a>
+    <a class="new-report-btn" href="/new">+ New report</a>
   </header>
 
   __TABLE_HTML__

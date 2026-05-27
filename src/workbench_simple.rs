@@ -35,7 +35,7 @@ const ADD_RECEIPTS_MODAL_HTML: &str = r##"
 <div id="add-receipts-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="add-receipts-title">
   <div class="add-receipts-content">
     <header>
-      <h3 id="add-receipts-title">Add more receipts</h3>
+      <h3 id="add-receipts-title">Add receipts to this report</h3>
       <button type="button" id="add-receipts-close" aria-label="Close">×</button>
     </header>
     <form id="add-receipts-form" enctype="multipart/form-data">
@@ -700,11 +700,7 @@ fn render_hero(html: &mut String, report: &ExpenseReport, validation: &Validatio
     let event = leaf_text(&report.general_information.event_name).unwrap_or("(event not yet set)");
 
     html.push_str("<header class=\"hero\">\n");
-    html.push_str("<p class=\"eyebrow\">Stanford Expense Report</p>\n");
-    html.push_str(&format!(
-        "<h1>Review &amp; File <span class=\"hero-line-count\">({line_count} {})</span></h1>\n",
-        if line_count == 1 { "line" } else { "lines" }
-    ));
+    html.push_str("<h1>Review &amp; File</h1>\n");
     html.push_str(&format!(
         "<p class=\"hero-status\"><span class=\"pill {status_class}\">{}</span></p>\n",
         escape(&status_label)
@@ -752,7 +748,7 @@ fn render_hero(html: &mut String, report: &ExpenseReport, validation: &Validatio
          ↶ Undo last edit</button>\
          <button type=\"button\" id=\"add-receipts-button\" \
          class=\"add-receipts-btn\" title=\"Add more receipts to this expense report\">\
-         + Add more receipts</button></p>\n",
+         + Add receipts</button></p>\n",
     );
     html.push_str("</header>\n");
 }

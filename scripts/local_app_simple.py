@@ -1199,7 +1199,7 @@ def render_history_page(reports: list[dict], sunet: str,
     SUNet (empty string when not signed in or in dev). `reports` is
     the already-scoped list."""
     from html import escape as _esc
-    scope_label = f"— signed in as {_esc(sunet)}" if sunet else ""
+    scope_label = f"signed in as {_esc(sunet)}" if sunet else ""
     if fetch_error:
         table_html = (f'<div class="empty"><p>{_esc(fetch_error)}</p></div>')
         count_note = ""
