@@ -701,7 +701,10 @@ fn render_hero(html: &mut String, report: &ExpenseReport, validation: &Validatio
 
     html.push_str("<header class=\"hero\">\n");
     html.push_str("<p class=\"eyebrow\">Stanford Expense Report</p>\n");
-    html.push_str("<h1>Review &amp; File</h1>\n");
+    html.push_str(&format!(
+        "<h1>Review &amp; File <span class=\"hero-line-count\">({line_count} {})</span></h1>\n",
+        if line_count == 1 { "line" } else { "lines" }
+    ));
     html.push_str(&format!(
         "<p class=\"hero-status\"><span class=\"pill {status_class}\">{}</span></p>\n",
         escape(&status_label)

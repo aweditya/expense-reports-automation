@@ -817,6 +817,7 @@ body.show-evidence .field-evidence { display: block; }
   margin-left: 8px;
 }
 .add-receipts-btn:hover { background: #1d4ed8; }
+.hero-line-count { color: #6b7280; font-weight: 400; font-size: 0.7em; }
 
 #add-receipts-modal {
   position: fixed;
