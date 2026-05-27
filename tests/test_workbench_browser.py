@@ -1592,7 +1592,7 @@ class TestProdForeignReceipts(unittest.TestCase):
         "fa_bp_when_to": "2026-12-31",
         "fa_bp_where": "International",
         "fa_bp_why": "Confirm Gemini handles non-English text + Frankfurter FX",
-        "fa_foreign_activity_type": "conferences",
+        "fa_foreign_activity_type": "conference",
     }
     SHOTS_DIR = REPO_ROOT / ".scratch" / "e2e-foreign"
 
