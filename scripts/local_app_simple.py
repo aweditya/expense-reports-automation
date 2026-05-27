@@ -187,11 +187,18 @@ def _get_job(upload_id: str) -> dict:
         return dict(JOBS.get(upload_id, {}))
 
 
-def _save_report_state(upload_id: str, upload_dir: Path) -> None:
+def _save_report_state(upload_id: str, upload_dir: Path,
+                       filed_by_sunet: str | None = None) -> None:
     """Durable-store Phase 2a dual-write. After any successful disk
     write of report.json / fa_input.json / edit_history.json, mirror
     the state to Firestore so a container recycle doesn't lose the
     FA's edits. No-op when the gate is off.
+
+    `filed_by_sunet` is set on initial upload + add-receipts and
+    omitted on edit/delete/undo. Firestore's merge=True preserves
+    the existing value when we pass None, so the original filer
+    sticks even as other FAs edit. This is what the dashboard
+    scopes on.
 
     Best-effort: a Firestore failure logs but does NOT abort the
     request — the disk write is still authoritative until Phase 2c
@@ -212,10 +219,40 @@ def _save_report_state(upload_id: str, upload_dir: Path) -> None:
                    if history_path.exists() else [])
         from firestore_reports import set_report as _fs_set_report
         _fs_set_report(upload_id, report=report,
-                       fa_input=fa_input, history=history)
+                       fa_input=fa_input, history=history,
+                       filed_by_sunet=filed_by_sunet)
     except Exception as err:  # noqa: BLE001 — never break the FA's edit
         log_error("firestore_reports.save_failed",
                   upload_id=upload_id, error=repr(err)[:200])
+
+
+def _iap_signed_in_sunet() -> str | None:
+    """Parse IAP-injected user email → Stanford SUNet.
+
+    IAP sets `X-Goog-Authenticated-User-Email: <provider>:<email>`
+    on every request after a successful SSO. We strip the provider
+    prefix, split on '@', return the local part if it's
+    sunet-shaped. Returns None when the header is absent (local
+    dev, direct Cloud Run hit) or when the email doesn't parse to
+    a valid SUNet.
+
+    Security note: the production HTTPS LB → IAP path overrides
+    these headers; an FA can't fake them. Direct Cloud Run access
+    is gated by --no-allow-unauthenticated, so only IAM principals
+    (devs + the runtime SA) can reach it; they don't need to fake
+    headers to see everything anyway.
+    """
+    raw = request.headers.get("X-Goog-Authenticated-User-Email", "")
+    if not raw:
+        return None
+    _, _, email = raw.partition(":")
+    if "@" not in email:
+        return None
+    local, _, _ = email.partition("@")
+    sunet = local.strip().lower()
+    if not _is_sunet_shaped(sunet):
+        return None
+    return sunet
 
 
 def _rehydrate_upload(upload_id: str, upload_dir: Path) -> bool:
@@ -403,10 +440,11 @@ def upload():
         ],
         error="",
     )
+    filer_sunet = _iap_signed_in_sunet()
     threading.Thread(
         target=_run_pipeline_in_background,
         args=(upload_id, saved, extractions_dir, reduced_path,
-              workbench_path, fa_input_path),
+              workbench_path, fa_input_path, filer_sunet),
         name=f"pipeline-{upload_id}",
         daemon=True,
     ).start()
@@ -1125,25 +1163,28 @@ def undo_available(upload_id: str):
 
 @app.get("/history")
 def history_page():
-    """List past expense reports persisted in Firestore. Optionally
-    filtered by ?sunet=<payee_sunet>. Returns 200 even when
-    Firestore is unreachable / the gate is off; renders a friendly
-    empty state instead of 500."""
-    sunet = (request.args.get("sunet", "") or "").strip()
-    safe_sunet = sunet if _is_sunet_shaped(sunet) else ""
+    """Dashboard list of past reports the signed-in FA filed.
+    Scoping is automatic via the IAP-injected user email — there
+    is no user-controllable filter, so an FA can never see another
+    FA's reports. In dev (no IAP header) we show a friendly
+    "sign in" empty state."""
+    filer_sunet = _iap_signed_in_sunet()
     reports: list[dict] = []
     fetch_error: str | None = None
-    if USE_FIRESTORE_REPORTS:
+    if not USE_FIRESTORE_REPORTS:
+        fetch_error = ("Report history is unavailable in this "
+                       "environment (USE_FIRESTORE_REPORTS not set).")
+    elif filer_sunet is None:
+        fetch_error = ("Sign in via Stanford SSO to see your reports. "
+                       "(No IAP identity header on this request.)")
+    else:
         try:
             from firestore_reports import list_reports
-            reports = list_reports(payee_sunet=safe_sunet or None)
+            reports = list_reports(filed_by_sunet=filer_sunet)
         except Exception as err:  # noqa: BLE001
             log_error("history.fetch_failed", error=repr(err)[:200])
             fetch_error = "Couldn't reach the report store."
-    else:
-        fetch_error = ("Report history is unavailable in this "
-                       "environment (USE_FIRESTORE_REPORTS not set).")
-    return render_history_page(reports, safe_sunet, fetch_error)
+    return render_history_page(reports, filer_sunet or "", fetch_error)
 
 
 def _is_sunet_shaped(s: str) -> bool:
@@ -1154,17 +1195,16 @@ def _is_sunet_shaped(s: str) -> bool:
 
 def render_history_page(reports: list[dict], sunet: str,
                          fetch_error: str | None) -> str:
-    """Render the history template by substituting the four
-    placeholder slots (scope label, sunet filter value, table body,
-    count note)."""
+    """Render the dashboard template. `sunet` is the signed-in FA's
+    SUNet (empty string when not signed in or in dev). `reports` is
+    the already-scoped list."""
     from html import escape as _esc
-    scope_label = f"for {_esc(sunet)}" if sunet else "(all)"
+    scope_label = f"— signed in as {_esc(sunet)}" if sunet else ""
     if fetch_error:
         table_html = (f'<div class="empty"><p>{_esc(fetch_error)}</p></div>')
         count_note = ""
     elif not reports:
-        empty_msg = ("No reports for that SUNet yet." if sunet
-                     else "No reports filed yet.")
+        empty_msg = "No reports yet — click + File a new expense report above."
         table_html = f'<div class="empty"><p>{_esc(empty_msg)}</p></div>'
         count_note = ""
     else:
@@ -1203,7 +1243,6 @@ def render_history_page(reports: list[dict], sunet: str,
         count_note = f"{len(reports)} report(s) shown."
     return (HISTORY_PAGE_HTML
             .replace("__SCOPE_LABEL__", scope_label)
-            .replace("__SUNET__", _esc(sunet))
             .replace("__TABLE_HTML__", table_html)
             .replace("__COUNT_NOTE__", _esc(count_note)))
 
@@ -1272,10 +1311,11 @@ def add_receipts(upload_id: str):
 
     log_event("add_receipts.start", upload_id=safe_id,
               new_count=len(saved))
+    filer_sunet = _iap_signed_in_sunet()
     threading.Thread(
         target=_run_pipeline_in_background,
         args=(safe_id, saved, extractions_dir, reduced_path,
-              workbench_path, fa_input_path),
+              workbench_path, fa_input_path, filer_sunet),
         name=f"add-receipts-{safe_id}",
         daemon=True,
     ).start()
@@ -1610,6 +1650,7 @@ def _run_pipeline_in_background(
     reduced_path: Path,
     workbench_path: Path,
     fa_input_path: Path,
+    filed_by_sunet: str | None = None,
 ) -> None:
     """Worker-thread entry point. Runs extract → reduce → render while
     updating JOBS[upload_id] so the SSE endpoint can stream phase +
@@ -1656,7 +1697,8 @@ def _run_pipeline_in_background(
         fx_enrich(reduced_path)
         _set_job(upload_id, phase="render")
         render_workbench(reduced_path, extractions_dir, workbench_path)
-        _save_report_state(upload_id, reduced_path.parent.parent)
+        _save_report_state(upload_id, reduced_path.parent.parent,
+                           filed_by_sunet=filed_by_sunet)
         _set_job(upload_id, phase="done")
     except PipelineError as err:
         _set_job(upload_id, phase="error",

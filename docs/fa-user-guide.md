@@ -28,16 +28,20 @@ yourself.
 Visit the deployed URL (ask the engineering contact — it's behind
 Stanford SSO).
 
-After SSO, you land on the **dashboard**: a list of past expense
-reports plus a big **+ File a new expense report** button at the
-top-right.
+After SSO, you land on the **dashboard**: a list of expense
+reports **you've filed** (scoped automatically from your Stanford
+sign-in — you'll never see another FA's reports) plus a big
+**+ File a new expense report** button at the top-right.
 
+- The header reads "Dashboard — signed in as {your-sunet}" so you
+  know which identity is in effect.
 - Click the button to start a fresh report (you'll go to the upload
   form at `/new`).
 - Click a row in the table to open a previously-filed report's
   workbench.
-- Use the **Filter by payee SUNet** box to narrow the table to one
-  person's reports.
+- The dashboard only shows reports you've personally filed since
+  the scoping feature landed (older reports without a recorded
+  filer don't appear).
 
 If you see a Google "this resource is not accessible" page instead of
 the dashboard, your account hasn't been granted IAP access yet —

@@ -124,6 +124,31 @@ class TestFirestoreReports(unittest.TestCase):
         self.assertIsNone(got["fa_input"],
                           "second set's None fa_input must overwrite first's")
 
+    def test_filed_by_sunet_round_trips_and_lists_scope(self):
+        """filed_by_sunet stores on set_report + scopes list_reports."""
+        from firestore_reports import list_reports
+        scoped = f"scope_{uuid.uuid4().hex[:8]}"
+        # Two docs with the scoping value, one without
+        ids = [f"test_{uuid.uuid4().hex[:8]}" for _ in range(3)]
+        try:
+            self.set_report(ids[0], report={"expense_report": {}},
+                            filed_by_sunet=scoped)
+            self.set_report(ids[1], report={"expense_report": {}},
+                            filed_by_sunet=scoped)
+            self.set_report(ids[2], report={"expense_report": {}})
+            scoped_listed = [r for r in list_reports(filed_by_sunet=scoped)
+                             if r["upload_id"] in ids]
+            self.assertEqual(len(scoped_listed), 2,
+                             "list_reports should match exactly the scoped IDs")
+            self.assertTrue(
+                all(r["filed_by_sunet"] == scoped for r in scoped_listed))
+        finally:
+            for i in ids:
+                try:
+                    self.delete_report(i)
+                except Exception:
+                    pass
+
     def test_delete_removes_document(self):
         self.set_report(self.upload_id, report={"expense_report": {}})
         self.assertIsNotNone(self.get_report(self.upload_id))

@@ -73,7 +73,8 @@ HISTORY_CAP = 50
 
 def set_report(upload_id: str, *, report: dict,
                fa_input: dict | None = None,
-               history: list | None = None) -> None:
+               history: list | None = None,
+               filed_by_sunet: str | None = None) -> None:
     """Full-merge upsert of reports/{upload_id}. Pass the full report
     + (optionally) fa_input + history; the caller owns assembly.
 
@@ -98,6 +99,8 @@ def set_report(upload_id: str, *, report: dict,
         "history": capped_history,
         "updated_at": now,
     }
+    if filed_by_sunet:
+        payload["filed_by_sunet"] = filed_by_sunet
     doc_ref = _get_client().collection(COLLECTION).document(upload_id)
     snap = doc_ref.get(field_paths=["created_at"])
     if not snap.exists or "created_at" not in (snap.to_dict() or {}):
@@ -130,24 +133,27 @@ def delete_report(upload_id: str) -> None:
     _get_client().collection(COLLECTION).document(upload_id).delete()
 
 
-def list_reports(payee_sunet: str | None = None,
+def list_reports(filed_by_sunet: str | None = None,
                  limit: int = 100) -> list[dict]:
-    """List per-upload summaries for the history page. Returns dicts
-    with upload_id, updated_at, fa_input, line_count, total_usd —
-    enough to render a one-row-per-report table without re-fetching
-    the full payload for each entry.
+    """List per-upload summaries for the dashboard. Returns dicts with
+    upload_id, updated_at, fa_input, filed_by_sunet, line_count,
+    total_usd — enough to render a one-row-per-report table without
+    re-fetching the full payload for each entry.
 
-    If `payee_sunet` is set, filters to only that payee's reports
-    (Firestore single-field equality, no composite index needed).
-    Otherwise returns the most recent `limit` reports across all
-    payees. Always sorted by updated_at descending (client-side; at
-    our scale of a few hundred docs this is cheaper than a composite
-    index)."""
+    If `filed_by_sunet` is set, filters to only that filer's reports
+    (Firestore single-field equality, no composite index needed) —
+    this is the dashboard scoping path. Pre-IAP reports without a
+    filed_by_sunet field are EXCLUDED from any scoped query (you only
+    see reports you filed after the scoping landed). Pass None to
+    fetch the most recent `limit` reports across all filers
+    (admin-only path; the dashboard never does this for real FAs).
+    Always sorted by updated_at descending (client-side; at our scale
+    of a few hundred docs this is cheaper than a composite index)."""
     import json as _json
     coll = _get_client().collection(COLLECTION)
-    if payee_sunet:
-        query = coll.where(filter=_filter_eq("fa_input.payee_sunet",
-                                              payee_sunet))
+    if filed_by_sunet:
+        query = coll.where(filter=_filter_eq("filed_by_sunet",
+                                              filed_by_sunet))
     else:
         query = coll
     results: list[dict] = []
@@ -164,6 +170,7 @@ def list_reports(payee_sunet: str | None = None,
             "upload_id": snap.id,
             "updated_at": data.get("updated_at"),
             "fa_input": data.get("fa_input") or {},
+            "filed_by_sunet": data.get("filed_by_sunet"),
             "line_count": len(lines),
             "total_usd": total_node.get("value"),
         })

@@ -1103,10 +1103,25 @@ class TestProdFailureModes(unittest.TestCase):
         cls._browser.close()
         cls._playwright.stop()
 
+    # Simulated IAP identity. Real prod traffic comes through the
+    # external HTTPS LB → IAP, which injects this header and strips
+    # any client-supplied value. Direct Cloud Run hits (what the
+    # tests use) don't get an IAP header, so we manually inject one
+    # to exercise the dashboard scoping path. Cloud Run is
+    # --no-allow-unauthenticated so only IAM principals can hit it
+    # directly — the same principals can read Firestore anyway, so
+    # this isn't a privilege escalation.
+    IAP_TEST_EMAIL = "fxtest@stanford.edu"
+    IAP_TEST_SUNET = "fxtest"
+
     def _new_context(self):
         return self._browser.new_context(
             viewport={"width": 1400, "height": 1800},
-            extra_http_headers={"Authorization": f"Bearer {self._token}"},
+            extra_http_headers={
+                "Authorization": f"Bearer {self._token}",
+                "X-Goog-Authenticated-User-Email":
+                    f"accounts.google.com:{self.IAP_TEST_EMAIL}",
+            },
         )
 
     def _submit_one(self, page, file_path: Path, kind: str) -> str:
@@ -1129,76 +1144,68 @@ class TestProdFailureModes(unittest.TestCase):
         return page.url.rstrip("/").split("/")[-1]
 
     def test_dashboard_is_landing_with_new_button(self):
-        """Visiting / lands on the dashboard, NOT the upload form.
-        Asserts the page has the dashboard heading + a prominently
-        styled '+ File a new expense report' button that points at
-        /new. Catches regressions where someone accidentally re-routes
-        / back to the form."""
+        """Visiting / lands on the dashboard. Asserts the page has
+        the dashboard heading scoped to the signed-in SUNet, a
+        prominently styled '+ File a new expense report' button that
+        points at /new, and that /new still serves the form."""
         ctx = self._new_context()
         page = ctx.new_page()
         page.goto(PROD_URL + "/", wait_until="networkidle", timeout=30_000)
         body = page.evaluate("() => document.body.innerText")
         self.assertIn("Dashboard", body,
                       "/ should render the dashboard heading")
+        self.assertIn(f"signed in as {self.IAP_TEST_SUNET}", body,
+                      "/ should show the IAP-derived signed-in indicator")
         btn = page.query_selector('a.new-report-btn[href="/new"]')
-        self.assertIsNotNone(btn,
-                             "/ should expose the New Report button "
-                             "linking to /new")
-        btn_text = btn.evaluate("e => e.textContent.trim()")
-        self.assertIn("File a new expense report", btn_text)
-        # And /new should still serve the form for direct visitors.
+        self.assertIsNotNone(btn, "/ must expose the New Report button")
+        self.assertIn("File a new expense report",
+                      btn.evaluate("e => e.textContent.trim()"))
         page.goto(PROD_URL + "/new", wait_until="domcontentloaded",
                   timeout=30_000)
         self.assertIsNotNone(page.query_selector('form[action="/upload"]'),
                              "/new should still render the upload form")
         ctx.close()
 
+    def test_dashboard_without_iap_shows_signin_message(self):
+        """Without an IAP header, the dashboard refuses to leak
+        anyone else's reports. Catches regressions where the scoping
+        gate fails open."""
+        # Context with NO IAP header — but still bearer-token authed
+        # so Cloud Run lets us in.
+        ctx = self._browser.new_context(
+            viewport={"width": 1400, "height": 1800},
+            extra_http_headers={"Authorization": f"Bearer {self._token}"},
+        )
+        page = ctx.new_page()
+        page.goto(PROD_URL + "/", wait_until="networkidle", timeout=30_000)
+        body = page.evaluate("() => document.body.innerText")
+        self.assertIn("Sign in", body,
+                      "no-IAP dashboard must surface a sign-in nudge")
+        # Should NOT show any rows from anyone else's reports.
+        self.assertEqual(0, len(page.query_selector_all("table tbody tr")),
+                         "no-IAP dashboard must not render report rows")
+        ctx.close()
+
     def test_history_listing_shows_recent_upload(self):
-        """FA past-reports listing (#114). Upload one receipt with
-        a unique payee_sunet so the filter has unambiguous signal,
-        then hit /history?sunet=<that> and confirm the new upload's
-        row is present with the right link, line count, and (rough)
-        total. Also confirms the empty-state path for a non-existent
-        sunet."""
-        unique_sunet = f"hist{uuid.uuid4().hex[:8]}"
+        """FA past-reports listing (#114) under IAP scoping. Upload
+        with the test IAP identity, then hit / and confirm the new
+        upload's row + workbench link appear. Scoping is automatic
+        via X-Goog-Authenticated-User-Email — no ?sunet= filter."""
         ctx = self._new_context()
         page = ctx.new_page()
-        # Override the default payee_sunet for this one upload.
-        page.goto(PROD_URL + "/new", wait_until="domcontentloaded")
-        for name, value in self.FA_FIELDS.items():
-            if name == "fa_payee_sunet":
-                value = unique_sunet
-            el = page.query_selector(f'[name="{name}"]')
-            if el is None:
-                continue
-            tag = el.evaluate("e => e.tagName")
-            if tag == "SELECT":
-                page.select_option(f'[name="{name}"]', value)
-            else:
-                page.fill(f'[name="{name}"]', value)
         receipt = REPO_ROOT / "receipts" / self.RECEIPT[1]
-        page.set_input_files('[name="file_0"]', str(receipt))
-        page.select_option('[name="kind_0"]', self.RECEIPT[0])
-        with page.expect_navigation(wait_until="domcontentloaded",
-                                    timeout=60_000):
-            page.click('button[type="submit"]')
-        upload_id = page.url.rstrip("/").split("/")[-1]
+        upload_id = self._submit_one(page, receipt, self.RECEIPT[0])
         page.wait_for_url("**/workbench.html", timeout=600_000)
 
-        page.goto(f"{PROD_URL}/history?sunet={unique_sunet}",
-                  wait_until="networkidle", timeout=30_000)
+        page.goto(PROD_URL + "/", wait_until="networkidle",
+                  timeout=30_000)
         body = page.evaluate("() => document.body.innerText")
-        self.assertIn(unique_sunet, body,
-                      f"history page should show scope for {unique_sunet}")
-        link = page.query_selector(f'a[href$="/uploads/{upload_id}/workbench.html"]')
-        self.assertIsNotNone(link,
-                             f"history table missing link to {upload_id}")
-
-        page.goto(f"{PROD_URL}/history?sunet=nope-{uuid.uuid4().hex[:6]}",
-                  wait_until="networkidle", timeout=30_000)
-        body = page.evaluate("() => document.body.innerText")
-        self.assertIn("No reports for that SUNet yet", body,
-                      "empty-state message missing for unknown sunet")
+        self.assertIn(f"signed in as {self.IAP_TEST_SUNET}", body,
+                      "dashboard scope-label missing for signed-in user")
+        link = page.query_selector(
+            f'a[href$="/uploads/{upload_id}/workbench.html"]')
+        self.assertIsNotNone(
+            link, f"dashboard missing link to just-uploaded {upload_id}")
         ctx.close()
 
     def test_refresh_during_progress_page_recovers(self):
