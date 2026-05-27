@@ -236,18 +236,80 @@ receipt. Costs apply (Vertex + DocAI per upload).
 ### 5.2 Service-account JSON (for anyone without personal IAM)
 
 Use this when you don't have a personal IAM binding on the project
-but the project admin has issued you a service-account key.
+but the project admin has issued you a service-account key. This is
+the "run the website without Kayvon's gcloud" path.
+
+#### Issuing a key (project admin, one-time per recipient)
 
 ```bash
-export GOOGLE_APPLICATION_CREDENTIALS=/path/to/sa-key.json
-PORT=8088 VERTEX_PROJECT_ID=soe-agile-agents \
-  USE_FIRESTORE_JOBS=1 USE_FIRESTORE_REPORTS=1 USE_GCS_ARTIFACTS=1 \
+PROJECT=soe-agile-agents
+
+# Create a scoped SA for the recipient
+gcloud iam service-accounts create expense-reports-runner-<alice> \
+  --display-name="Expense reports runner — alice" \
+  --project=$PROJECT
+SA="expense-reports-runner-<alice>@$PROJECT.iam.gserviceaccount.com"
+
+# Grant the runtime roles (least-privilege; same set as §2.9)
+for role in \
+    roles/aiplatform.user \
+    roles/documentai.apiUser \
+    roles/datastore.user; do
+  gcloud projects add-iam-policy-binding $PROJECT \
+    --member="serviceAccount:$SA" --role="$role"
+done
+
+# Bucket-scoped storage access (don't grant project-wide storageAdmin)
+gcloud storage buckets add-iam-policy-binding \
+  gs://soe-agile-agents-expense-reports-state/ \
+  --member="serviceAccount:$SA" --role="roles/storage.objectAdmin"
+
+# Issue a key — DO NOT commit this file
+gcloud iam service-accounts keys create \
+  ./alice-runner-key.json \
+  --iam-account="$SA"
+```
+
+Hand the JSON to the recipient out-of-band (1Password share, secure
+Drive folder, USB stick at a Stanford coffee). **Never** paste it in
+Slack, email, or commit it to a repo.
+
+Rotation: keys are long-lived. Set a calendar reminder to rotate
+every 90 days. To rotate: create a new key, distribute, then delete
+the old one with `gcloud iam service-accounts keys delete <old-key-id>`.
+
+#### Using a key (recipient)
+
+```bash
+# One time — save the JSON somewhere your shell can read it
+mkdir -p ~/.config/expense-reports
+mv ~/Downloads/alice-runner-key.json ~/.config/expense-reports/
+chmod 600 ~/.config/expense-reports/alice-runner-key.json
+
+# Each shell session — point the SDK at the key
+export GOOGLE_APPLICATION_CREDENTIALS=~/.config/expense-reports/alice-runner-key.json
+export VERTEX_PROJECT_ID=soe-agile-agents
+
+# Start the server
+PORT=8088 USE_FIRESTORE_JOBS=1 USE_FIRESTORE_REPORTS=1 USE_GCS_ARTIFACTS=1 \
   ./.venv/bin/python scripts/local_app_simple.py
 ```
 
-The SA needs the same roles listed in §2.9. **Treat the JSON file
-like a password**: don't commit it, don't paste it in chat, rotate
-every ~90 days, prefer Workload Identity / WIF where possible.
+The SDK picks up the key automatically from `GOOGLE_APPLICATION_CREDENTIALS`
+and proves identity to GCP without any `gcloud auth login` step.
+
+#### Security checklist
+
+- **Never** commit the JSON. Add `*-runner-key.json` to `.gitignore`
+  if you keep it in the repo root.
+- **Never** paste the JSON into chat / email / a screenshot.
+- The key has API write access to Firestore + the GCS bucket. A
+  leaked key = an attacker can corrupt or read every FA's reports.
+- Rotate every ~90 days. Delete old keys after rotation.
+- Prefer Workload Identity Federation (WIF) if you can — it
+  replaces long-lived keys with short-lived OIDC tokens from your
+  CI provider. Worth the effort if you're running this in CI; less
+  worth it for an FA's laptop.
 
 ### 5.3 Tests
 
