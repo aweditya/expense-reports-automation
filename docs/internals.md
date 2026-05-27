@@ -64,12 +64,12 @@ The single hard rule: **schema.yaml is the source of truth.** Every
 other artifact in `generated/` exists because some tool regenerates
 it from `schema.yaml`. Never edit `generated/*` by hand.
 
-### 1.1 Where the data lives
+### 1.1 Per-upload data locations
 
-Per-upload state lives in three tiers. Disk is a cache; Firestore +
-GCS are the durable record. After a container recycle, the cache is
-empty and rehydrate (§8) repopulates it from the durable tier on
-the next request.
+Per-upload state lives in three tiers. Container disk is a cache.
+Firestore and GCS are the durable record. After a container
+recycle the disk cache is empty; rehydrate (§8) repopulates it
+from the durable tier on the next request.
 
 ```mermaid
 graph LR
@@ -100,14 +100,14 @@ graph LR
     D8 -.dual-write.-> F2
 ```
 
-Key cross-references — when you're debugging:
+Debugging table:
 
-| If you see | Look in |
+| Symptom | Inspect |
 |---|---|
-| Workbench shows nothing | `.scratch/uploads/<id>/reduced/report.json` |
+| Workbench renders nothing | `.scratch/uploads/<id>/reduced/report.json` |
 | Wrong extracted value | `.scratch/uploads/<id>/extractions/<file>.json` |
-| Edit "lost" after a deploy | `reports/<id>` in Firestore (it's there; disk was wiped) |
-| `phase=lost` mid-upload | `jobs/<id>` in Firestore (was the writer thread alive?) |
+| Edit absent after recycle | `reports/<id>` in Firestore. Disk was wiped; the durable record holds the edit. |
+| `phase=lost` mid-upload | `jobs/<id>` in Firestore. Confirm the writer thread is alive. |
 | Source PDF 404 | `gs://...-state/uploads/<id>/files/` |
 
 ---
@@ -242,8 +242,8 @@ flowchart LR
 ```
 
 Both calls fire in parallel via a 2-worker thread pool. The merge
-guards against overlapping keys at runtime (the schema split is
-designed so neither side carries the same field; mismatch = bug).
+asserts no overlapping keys. The schema split must partition fields
+between sides; an overlap indicates a generator bug.
 
 Pattern (see `scripts/extract_lodging.py` for canonical 2-call):
 
@@ -451,7 +451,7 @@ Read path (after container recycle):
 - Re-runs `render_workbench` → materializes workbench.html + CSVs
 - Subsequent requests hit the now-warm disk cache
 
-This is what makes 24-hour-old URLs work after a deploy or recycle.
+Result: workbench URLs survive container recycle and deploy.
 
 ```mermaid
 sequenceDiagram
@@ -461,11 +461,11 @@ sequenceDiagram
     participant GCS as GCS bucket
     participant R as Rust render binary
 
-    FA->>CR: GET /uploads/&lt;id&gt;/workbench.html
+    FA->>CR: GET /uploads/{id}/workbench.html
     CR->>CR: serve_upload_file:<br/>upload_dir.is_dir() = False
     CR->>CR: _rehydrate_upload(id)
     CR->>FS: get_report(id)
-    FS-->>CR: {report_json, fa_input, history}
+    FS-->>CR: report_json + fa_input + history
     CR->>CR: write report.json + fa_input.json<br/>+ edit_history.json to disk
     CR->>GCS: list + download files/*
     GCS-->>CR: source PDFs
@@ -609,37 +609,36 @@ RUN_PROD_E2E=1 VERTEX_PROJECT_ID=soe-agile-agents \
 
 ## 10b. Refresh resilience
 
-A property worth documenting because it's load-bearing and easy to
-break in a refactor. The FA must be able to:
+Required runtime behavior. Three mechanisms enforce it; removing
+any one re-opens the regression Stage 11 fixed.
 
-1. **Refresh the progress page mid-extraction** without crashing
-   the upload.
-2. **Close the browser tab mid-extraction**, reopen the URL
-   later, and resume from the current phase.
-3. **Refresh the workbench** any time — no spurious POST replays,
-   no lost edits.
-4. **Bookmark the workbench URL** and come back days later (works
-   as long as the report hasn't TTL'd out of Firestore).
+Required behaviors:
 
-Three mechanisms make this true. If you break one, you re-open the
-bug the FA called "refresh crashes the website."
+1. Refreshing the progress page mid-extraction does not crash the
+   upload.
+2. Closing the browser tab mid-extraction and revisiting the URL
+   later resumes from the current phase.
+3. Refreshing the workbench produces no POST replay and no lost
+   edits.
+4. The workbench URL is bookmarkable; revisits work until the
+   report TTLs out of Firestore.
 
-### POST-redirect-GET on upload
+### Mechanism 1: POST-redirect-GET on upload
 
 `POST /upload` ends with `return redirect(f"/upload/status/{id}",
 code=303)`. The browser follows the redirect; subsequent refreshes
-hit the GET URL, not the POST. Without this, browser refresh would
-re-POST the form + spawn a duplicate upload.
+hit the GET URL, not the POST. Without this, refresh re-POSTs the
+form and spawns a duplicate upload.
 
-### Idempotent GET on the progress page
+### Mechanism 2: idempotent GET on the progress page
 
-`GET /upload/status/<id>` renders the same HTML every time. The
-page's `EventSource` reconnects to `/upload/progress/<id>` on
-load — so refreshing just spawns a new SSE connection that picks up
-the current phase from Firestore JOBS (Phase 1). State is in the
-durable tier; the page is stateless.
+`GET /upload/status/<id>` renders identical HTML on every request.
+The page's `EventSource` reconnects to `/upload/progress/<id>` on
+load. Refresh spawns a new SSE connection that reads current phase
+from Firestore JOBS (Phase 1). State lives in the durable tier;
+the page is stateless.
 
-### Bounded "initializing" grace + lost/not_found terminal states
+### Mechanism 3: bounded initializing grace + lost/not_found terminals
 
 ```mermaid
 flowchart TD
@@ -659,24 +658,23 @@ flowchart TD
   term -->|Yes| close([Close stream])
 ```
 
-The 10-second grace handles the race where the page opens before
-the pipeline thread has written its first JOBS state. After that,
-`lost` is a clean terminal state — the FA sees a "Back to upload"
-link instead of a spinner that never resolves. `not_found` covers
-typo'd URLs / stale bookmarks.
+The 10-second grace covers the race where the SSE opens before
+the pipeline thread has written its first JOBS entry. `lost` is
+a terminal state; the FA receives a "Back to upload" link instead
+of an indefinite spinner. `not_found` covers typo'd URLs and
+stale bookmarks.
 
-### Why no client-side polling fallback?
+### Design note: no client-side polling fallback
 
-EventSource auto-reconnects on network blip. If we layered a
-poll-fallback on top, we'd double-count Firestore reads + have to
-de-dupe events on the client. The SSE-only path is simpler + at
-0.5s tick × 30 readers it's <$0.01/month in reads.
+EventSource auto-reconnects on network blip. A poll fallback
+layered on top would double-count Firestore reads and require
+client-side event de-duplication. The SSE-only path costs
+under USD 0.01 per month at 0.5s tick × 30 concurrent readers.
 
-### Regression catch
+### Regression test
 
 `TestProdFailureModes.test_refresh_during_progress_page_recovers`
-exercises this. Don't remove it — it's the only thing standing
-between us and accidentally re-opening Stage 11's pain.
+guards this property. Do not remove it.
 
 ---
 

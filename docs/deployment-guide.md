@@ -381,10 +381,10 @@ FA mid-session.
 
 ---
 
-## 6.5 Cloud Build broke — debug runbook
+## 6.5 Cloud Build failure runbook
 
-`git push origin main` finished but the site is broken / no new
-revision deployed. Walk this flow:
+Symptom: `git push origin main` returned, the site is broken
+or no new revision deployed. Diagnostic flow:
 
 ```mermaid
 flowchart TD
@@ -416,7 +416,7 @@ flowchart TD
 | `Service account ... does not have permission` in deploy | Runtime SA missing one of {aiplatform.user, documentai.apiUser, datastore.user, storage.objectAdmin} | See §2.9 for the role list |
 | `Image not found` in deploy | `docker-push` step partially failed; image isn't in registry | Re-run the build; if persistent, check Artifact Registry quotas |
 
-### Useful one-liners
+### Diagnostic commands
 
 ```bash
 # Tail the most recent build's log
@@ -438,20 +438,20 @@ gcloud logging read 'severity>=ERROR AND protoPayload.authenticationInfo.princip
   --project=soe-agile-agents --limit=10
 ```
 
-### When the trigger silently stops firing
+### Trigger no longer fires
 
-Rare but happened once. Symptoms: push goes through, no build
-fires. Check:
+Symptom: push completes, no Cloud Build run appears. Verify:
 
-1. `gcloud builds triggers list --region=us-west1` — is the
-   trigger still there + enabled?
-2. GitHub repo → Settings → Webhooks → look for failing deliveries
-   to Cloud Build's webhook URL
-3. The Cloud Build → GitHub App connection in the GCP console may
-   have lost auth — re-link it
+1. `gcloud builds triggers list --region=us-west1` — trigger
+   exists and is enabled.
+2. GitHub repo → Settings → Webhooks — Cloud Build webhook
+   deliveries are not failing.
+3. Cloud Build → GitHub App connection in the GCP console
+   retains auth. Re-link if not.
 
-If nothing else works, fall back to `scripts/deploy.sh` (manual
-`gcloud builds submit`) to unblock while you debug the trigger.
+Manual fallback: `scripts/deploy.sh` invokes
+`gcloud builds submit` directly. Use to unblock while debugging
+the trigger.
 
 ---
 

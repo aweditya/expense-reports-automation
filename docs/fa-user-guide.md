@@ -1,258 +1,207 @@
 # FA user guide
 
-How to use the expense-report extraction tool. Audience: a Stanford
-CS/EE Faculty Administrator who's never seen the code. No developer
-experience needed.
+Operating manual for the deployed expense-report tool. Audience:
+Stanford CS/EE Faculty Administrators. No engineering background
+assumed.
 
-If you hit something this guide doesn't cover, ping the engineering
-contact listed in the deployment guide.
+For questions not covered, contact the engineering owner listed in
+the deployment guide.
 
----
+## Purpose
 
-## What this is
+The tool extracts structured fields from uploaded receipt PDFs and
+images, validates them against Stanford expense-portal rules, and
+produces two downloadable CSVs (one per portal page). The CSVs
+pre-fill the same fields entered manually into Stanford's portal.
 
-You upload receipts (PDFs, photos, screenshots). The tool reads them,
-extracts the fields you'd normally type into Stanford's expense
-report portal, and gives you two downloadable CSVs (one per portal
-page). You spot-check the values on the way through and fix anything
-that's wrong, then upload the CSVs to the Stanford portal as usual.
+This is a data-entry aid. It does not submit to Stanford on the
+FA's behalf.
 
-It is *not* a replacement for the Stanford portal. It is a
-data-entry aid that pre-fills the same fields you'd otherwise type
-yourself.
+## 1. Sign in
 
----
+Open the deployed URL (request from the engineering contact;
+Stanford SSO required).
 
-## 1. Open the tool
+After SSO, the landing page is the **dashboard**: a list of
+expense reports filed under the signed-in SUNet, plus a
+**+ New report** button.
 
-Visit the deployed URL (ask the engineering contact — it's behind
-Stanford SSO).
+- Click the button to start a new report.
+- Click a row to open a previously-filed report's workbench.
+- Scope is automatic from SSO. The dashboard never shows another
+  FA's reports.
 
-After SSO, you land on the **dashboard**: a list of expense
-reports **you've filed** (scoped automatically from your Stanford
-sign-in — you'll never see another FA's reports) plus a big
-**+ File a new expense report** button at the top-right.
+A Google "resource not accessible" page indicates the account is
+not in the IAP allowlist. Contact the engineering owner.
 
-- The header reads "Dashboard — signed in as {your-sunet}" so you
-  know which identity is in effect.
-- Click the button to start a fresh report (you'll go to the upload
-  form at `/new`).
-- Click a row in the table to open a previously-filed report's
-  workbench.
-- The dashboard only shows reports you've personally filed since
-  the scoping feature landed (older reports without a recorded
-  filer don't appear).
+## 2. Upload form (`/new`)
 
-If you see a Google "this resource is not accessible" page instead of
-the dashboard, your account hasn't been granted IAP access yet —
-flag this to the engineering contact.
-
----
-
-## 2. Fill the form
-
-The form has two parts: **fieldset** (info that applies to the whole
-report) and **file rows** (one per receipt).
+Two regions: **report-wide fieldset** and **per-receipt file
+rows**.
 
 ### Required fields
 
-These are starred on the form and the upload won't submit without
-them:
+| Field | Constraint |
+|---|---|
+| Payee SUNet ID | 2–16 chars, alphanumeric + underscore + hyphen |
+| Event name | Short trip or event label |
+| Business purpose: Who, What, When, Where, Why | Each required |
 
-- **Payee SUNet ID** — the SUNet of the person being reimbursed
-  (2–16 chars, letters/digits/underscore/hyphen)
-- **Event name** — short trip / event label (e.g. "ASPLOS 2026")
-- **Business purpose** — Who / What / When / Where / Why
-
-The remaining fieldset values (payee full name, affiliation,
-authorized-by, payment method, foreign activity type if any) are
-optional but most of them help downstream; fill what you know.
+Other fieldset values (payee full name, affiliation, authorized
+by, payment method, foreign activity type) are optional but
+recommended.
 
 ### File rows
 
-Each row is one receipt: a file input + a **kind** dropdown that
-tells the tool what type of receipt it is.
+Each row is one receipt: file input + **kind** dropdown.
 
-Kinds:
-
-| Kind | What to pick it for |
+| Kind | Use for |
 |---|---|
-| **Meal Receipt** | Restaurant bill, food order |
-| **Ground Transport** | Uber, Lyft, taxi, train, bus, MVG card, parking |
-| **Lodging Folio** | Hotel itemized bill / Airbnb invoice |
-| **Airfare / Flight Ticket** | Flight booking confirmation (Egencia, Kiwi, airline direct) |
-| **Miscellaneous** | Posters, printing, conference dinner per-person bills |
-| **Membership Dues** | ACM, IEEE, USENIX membership renewals |
-| **Personal Mileage** | Screenshot of Google Maps driving distance (we apply IRS rate) |
+| Meal Receipt | Restaurant bill, food order |
+| Ground Transport | Uber, Lyft, taxi, train, bus, transit card, parking |
+| Lodging Folio | Hotel itemized bill, Airbnb invoice |
+| Airfare / Flight Ticket | Flight booking confirmation |
+| Miscellaneous | Posters, printing, conference dinner per-person |
+| Membership Dues | ACM, IEEE, USENIX renewals |
+| Personal Mileage | Google Maps screenshot of driving distance |
 
-Click **+ Add another file** to get more rows. Drag-drop or click the
-file inputs to attach the actual files. Allowed file types: PDF, PNG,
-JPG, HEIC, WebP.
+Click **+ Add another file** for additional rows. Allowed file
+types: PDF, PNG, JPG, HEIC, WebP.
 
-If you upload a HEIC photo from an iPhone, the tool converts it
-automatically — you don't need to do anything special.
+HEIC photos from iPhone are converted automatically.
 
-### Hit submit
+Submit fails if a required field is empty. The browser highlights
+the offending field.
 
-The form will refuse to submit if a required field is missing
-(browser highlights the blank field).
+## 3. Progress page
 
----
+Submission redirects to the progress page. Updates stream live
+per phase: extract → reduce → fx → render → done.
 
-## 3. Watch the progress page
+- Refresh is safe. The page re-renders and reconnects to the
+  event stream.
+- Closing the tab does not lose state. The pipeline continues
+  server-side; revisit the URL to resume.
+- On completion, the page auto-redirects to the workbench.
 
-After submit, you'll land on a progress page that streams updates as
-the tool processes each file. You'll see:
+If one receipt fails extraction, others continue. The failed
+receipt appears as a line in the workbench with the error
+detail.
 
-- A blue progress bar that fills up phase-by-phase (extract → reduce
-  → fx → render → done)
-- A per-file list showing which file is currently being processed
-- A "done" chime when everything finishes (1-second delay, then
-  auto-redirect to the workbench)
+Typical wallclock: ~30 seconds per receipt. A 5-receipt batch
+takes approximately 3 minutes.
 
-**You can stay on this page** — it auto-redirects when done.
-**Refreshing is safe** if you need to.
-**You can close the tab** — your work isn't lost. When you come back
-to the URL, the progress page reconnects and shows the current state.
+## 4. Workbench
 
-If one receipt fails to extract, the others keep going. The failed
-one shows up in the workbench as a line that needs your attention
-(usually a friendly error like "couldn't read the image — try a
-clearer photo").
+Three regions: hero, issues rail (left), main column.
 
-Total time: roughly 30 seconds per receipt. A 5-receipt batch
-takes ~3 minutes.
+### Hero
 
----
+- Title: "Review & File"
+- Status pill: line count + count of unresolved validation issues
+- Payee + event subtitle
+- CSV download buttons (one per Stanford portal page that has
+  data)
+- Provenance toggle
+- Undo button (visible only when edit history is non-empty)
+- **+ Add receipts** button (appends to this report)
 
-## 4. Review the workbench
+### Issues rail
 
-The workbench is where you spot-check what the tool extracted, fix
-mistakes, and grab the CSVs. The page has three regions:
+Validation rules that fired. Each issue links to the field it
+references. Dismiss acknowledges the issue for the current page
+load only; refresh clears dismissals.
 
-### Hero (top)
+Examples:
 
-- **Title** with line count: e.g. "Review & File (5 lines)"
-- **Status pill**: "5 lines · 2 to review" — turns green when zero
-  issues remain
-- **Payee + event subtitle** so you remember which report you're on
-- **Download buttons**: one CSV per Stanford portal page (Domestic
-  and/or Foreign — only the ones with data appear)
-- **Show extraction provenance** checkbox (see Provenance below)
-- **Undo last edit** button (only visible when you've made edits)
-- **+ Add more receipts** button (opens a modal — see §6)
+- Tip exceeds 20% of pre-tax + tax (meal, transport)
+- Date falls outside the FA-entered trip window
+- Required field missing
 
-### Left rail — Issues
+### Line cards
 
-Validation rules that fired. Each issue is a card you can click to
-jump to the field it's about. Examples:
+One per extracted receipt.
 
-- "Tip exceeds 20% of pre-tax + tax" (meal)
-- "Date falls outside trip window" (trip window was your business
-  purpose When/From–To)
-- "Missing required field: X"
+Edit:
 
-You can dismiss an issue card after reviewing it (no persistence —
-refresh wipes dismissals; treat them as acknowledgements, not data).
+1. Click the value text.
+2. Edit in place.
+3. Press Enter to save (Escape cancels).
 
-### Main column — line cards
+The edit persists to disk and Firestore on save.
 
-Each line card is one extracted receipt with its fields.
+Delete a line: trash icon on the card. Confirms before deleting.
+Edit history is cleared on delete because line indices shift.
 
-- **Edit a value**: click the value text → it turns into an input →
-  edit → Enter to save (Escape to cancel). The edit hits the server
-  immediately + persists to durable storage.
-- **Delete a line**: click the trash icon on a card. Confirms before
-  deleting because indices shift (your undo history is cleared on
-  delete).
-- **Undo your last edit**: click the **Undo last edit** button in
-  the hero. Reverts the most recent edit. History up to 20 edits
-  back.
+Undo last edit: hero button. Reverts the most recent edit. History
+retains up to 20 edits.
 
-### Provenance ("Show extraction provenance" toggle)
+### Provenance and spot-check
 
-Each value the tool extracted has an evidence trail: which receipt,
-which page, what verbatim text it pulled from. Toggle the checkbox
-in the hero to reveal it.
+The **Show extraction provenance** toggle reveals the source
+quote behind every extracted value.
 
-Click the **eye** icon on any field card to open the **spot-check
-panel** — a side panel that shows the source PDF/image with the
-extracted region highlighted (a yellow halo around the relevant
-text). Lets you verify "is the tool reading the right number?" in
-two clicks.
+The eye icon on a field card opens the spot-check panel: the
+source PDF or image with the extracted region highlighted.
 
----
-
-## 5. Download the CSVs
+## 5. CSV downloads
 
 Two CSVs, one per Stanford portal page:
 
-- **`lines-domestic.csv`** — Domestic Expense Lines page (7 columns,
-  plain expense-type strings)
-- **`lines-foreign.csv`** — Foreign Expense Lines page (20 columns
-  including airfare/lodging detail blocks)
+| File | Stanford page | Columns |
+|---|---|---|
+| `lines-domestic.csv` | Domestic Expense Lines | 7 |
+| `lines-foreign.csv` | Foreign Expense Lines | 20 |
 
-The hero only shows the download button for whichever CSVs have data
-rows. If your trip was domestic-only, you'll just see the domestic
-download.
+The hero shows only the downloads with data rows. Domestic-only
+trips produce one CSV.
 
-Open the relevant Stanford portal page, click **Browse**, pick the
-CSV, click **Load**. The portal validates the file; if everything
-checks out, **Import** appears and you proceed.
+Upload procedure: open the Stanford portal page, click Browse,
+select the CSV, click Load. The portal validates; on success,
+click Import.
 
----
+## 6. Add receipts later
 
-## 6. Add more receipts later
+To extend an existing report:
 
-You uploaded 3 today and realize 2 more belong on the same report?
+1. Open the workbench URL (from the dashboard or a bookmark).
+2. Click **+ Add receipts** in the hero.
+3. Attach the new files in the modal; pick kinds; click Process.
+4. The progress page shows extraction of only the new files. On
+   completion, the workbench refreshes with the combined report.
 
-1. Open the workbench URL (bookmarked or from the past-reports
-   listing — see §7).
-2. Click **+ Add more receipts** in the hero.
-3. A modal opens. Pick the new files + kinds, click **Process**.
-4. The progress page shows the NEW files' extraction (the existing
-   ones stay as-is). When done, the workbench refreshes with the
-   combined report.
+Prior edits to existing lines are preserved. The undo stack
+resets because line indices shift.
 
-Your prior edits to existing line values are preserved. The undo
-stack resets (line numbers may have shifted).
+## 7. Returning later
 
----
+Workbench URLs are bookmarkable. Reports persist for 90 days
+after last edit (Firestore TTL).
 
-## 7. Come back later
+The dashboard at `/` lists past reports filed under the signed-in
+SUNet.
 
-The workbench URL is **bookmarkable**. Save it. Come back tomorrow,
-next week, three months from now — it still works, as long as it's
-been less than 90 days since the report was created (after that, our
-durable storage cleans it up automatically).
+## 8. Troubleshooting
 
-(Past-reports listing UI is coming. Until it ships, save your URLs.)
-
----
-
-## 8. What to do if something looks wrong
-
-| Symptom | What to do |
+| Symptom | Action |
 |---|---|
-| Tool extracted a wrong number | Click the value → edit → Enter. The edit persists; downstream CSVs reflect the change immediately. |
-| Tool extracted a wrong currency / expense type | Same as above — click + edit. Dropdowns show valid options. |
-| A whole receipt didn't get parsed (line card missing) | Check the progress page or the file's per-file status. If extraction failed, the issue card will explain why (e.g. "image too blurry"). Re-take the photo + add it via §6. |
-| You uploaded the wrong kind for a receipt | Today you can't change the kind in-place — delete the line and re-add the receipt with the correct kind. |
-| Validation issue you disagree with | The rule is FA-tunable; flag it to engineering with the upload_id + line number. The rules table is `schema.yaml` + `src/validator_typed.rs`. |
-| The page is loading forever | Refresh — it's safe. If still stuck, the URL might be from a deploy that wiped state; flag to engineering with the upload_id. |
-| You see a Google "Forbidden" page | Your IAP grant lapsed or your SSO session expired. Re-sign-in usually fixes it. |
-
----
+| Tool extracted a wrong number | Click the value, edit, press Enter. Edit persists immediately. |
+| Tool extracted a wrong currency or expense type | Click and edit. Dropdowns show valid options. |
+| A receipt did not produce a line card | Check the progress page or the workbench issues rail for the failure reason. Re-take the photo if extraction failed. Add via §6. |
+| Wrong kind for a receipt | Delete the line and re-upload with the correct kind. Kind cannot be changed in place today. |
+| Disagree with a validation rule | Edit the value to bypass, or report the rule to engineering. |
+| Page loads indefinitely | Refresh. If still stuck, the URL may predate a deploy that wiped state; report the upload_id to engineering. |
+| Google "Forbidden" page | IAP grant expired or SSO session timed out. Re-sign-in. |
 
 ## Glossary
 
-| Term | Meaning |
+| Term | Definition |
 |---|---|
-| **Workbench** | The HTML page you review after extraction completes. |
-| **Line card** | One transaction line on the workbench (typically one per receipt). |
-| **Kind** | Which extractor we run on a file (meal / transport / lodging / airfare / miscellaneous / membership / mileage). |
-| **Issue** | A validation rule the report fails. Left-rail panel. Non-blocking; you decide what to do. |
-| **Provenance / evidence** | The verbatim source text we used to extract a value. |
-| **CSV** | The two downloadable files you upload to Stanford's portal pages. |
-| **upload_id** | The unique ID in your workbench URL. Stable; bookmarkable. |
-| **IAP** | Google's Identity-Aware Proxy — what gates access via SSO. |
+| Workbench | The HTML page reviewed after extraction. |
+| Line card | One transaction line on the workbench, typically one per receipt. |
+| Kind | Per-file extractor identifier (meal, transport, lodging, airfare, miscellaneous, membership, mileage). |
+| Issue | Validation rule the report fails. Non-blocking. |
+| Provenance | Source text the tool used to extract a value. |
+| CSV | Downloadable file uploaded to Stanford's portal pages. |
+| upload_id | Unique ID in the workbench URL. Bookmarkable. |
+| IAP | Identity-Aware Proxy. Google's SSO gate for the deployed service. |
