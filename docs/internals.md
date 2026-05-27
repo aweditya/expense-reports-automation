@@ -24,9 +24,9 @@ scripts/
 ├── extractor_lib.py               # Shared Gemini call + retry + multi-call helper
 ├── evidence_bbox.py               # Document AI OCR + token-id grounding → bbox
 ├── fx_enrich.py / fx_lookup.py    # Frankfurter FX rate lookups
-├── firestore_jobs.py              # Live-progress JOBS dict (Phase 1 durable store)
-├── firestore_reports.py           # Reduced reports + edits (Phase 2a)
-├── gcs_artifacts.py               # Source PDFs + extraction JSONs (Phase 2b)
+├── firestore_jobs.py              # Live-progress JOBS dict (durable store)
+├── firestore_reports.py           # Reduced reports + edits 
+├── gcs_artifacts.py               # Source PDFs + extraction JSONs 
 ├── generate_schema_artifacts.py   # schema.yaml → generated/expense_report_model.rs + validation_rules.rs
 └── generate_response_schema.py    # schema.yaml → generated/response_schema_<kind>_<call>.json (one per Gemini call)
 
@@ -88,7 +88,7 @@ graph LR
       F2[reports/&lt;id&gt;<br/>report + fa_input + history + 90d TTL]
     end
 
-    subgraph GCS["GCS — durable, binary artifacts<br/>gs://soe-agile-agents-expense-reports-state/"]
+    subgraph GCS["GCS — durable, binary artifacts<br/>gs://<bucket-name>/"]
       G1[uploads/&lt;id&gt;/files/&lt;name&gt;]
       G2[uploads/&lt;id&gt;/extractions/&lt;basename&gt;.json]
     end
@@ -118,9 +118,9 @@ Debugging table:
 FA submits form
   └─ POST /upload (scripts/local_app_simple.py)
      ├─ save_uploaded_files()  ← writes to .scratch/uploads/<id>/files/
-     ├─ Phase 2b: mirror each file to gs://.../uploads/<id>/files/
+     ├─ mirror each file to gs://.../uploads/<id>/files/
      ├─ write_fa_input() → fa_input.json
-     ├─ _set_job(phase="initializing")  ← Phase 1: Firestore jobs/{id}
+     ├─ _set_job(phase="initializing")  ← Firestore jobs/{id}
      └─ spawn background thread → _run_pipeline_in_background()
 
 _run_pipeline_in_background:
@@ -129,7 +129,7 @@ _run_pipeline_in_background:
      ├─ per file: extract_<kind>.py subprocess
      │           → Document AI OCR → Gemini structured call → JSON
      │           → writes .scratch/uploads/<id>/extractions/<basename>.json
-     └─ Phase 2b: mirror each extraction.json to GCS
+     └─ mirror each extraction.json to GCS
   2. reduce(...)                               ← phase="reduce"
      └─ reduce_extractions binary reads all extractions/*.json
         + fa_input.json → writes reduced/report.json
@@ -139,13 +139,13 @@ _run_pipeline_in_background:
   4. render_workbench(...)                     ← phase="render"
      └─ render_workbench_from_report binary →
         workbench.html + lines-domestic.csv + lines-foreign.csv
-  5. _save_report_state(...)                   ← Phase 2a dual-write to Firestore
+  5. _save_report_state(...)                   ← dual-write to Firestore
   6. _set_job(phase="done")                    ← FA's SSE picks this up,
                                                  JS redirects to workbench
 ```
 
 Total wallclock: ~30s per receipt (mostly waiting on Gemini).
-Per-file isolation (Stage 11c) means one failed extract doesn't
+Per-file isolation (per-file isolation) means one failed extract doesn't
 block the others.
 
 ---
@@ -176,13 +176,13 @@ change.
 There's a pre-push gate for any change to a per-kind detail block:
 
 ```bash
-VERTEX_PROJECT_ID=soe-agile-agents \
+VERTEX_PROJECT_ID=<gcp-project> \
   ./.venv/bin/python scripts/probe_response_schemas.py
 ```
 
 This sends one minimal live `generate_content` per schema (~$0.01
 each, <2s per file) — catches Vertex's property-count ceiling
-rejections that local SDK validation misses. Stage 9c shipped
+rejections that local SDK validation misses. the tip-cap shipped
 without running this and broke prod for the FA; the regrets log
 captures it. Known-broken schemas are allowlisted in
 `probe_response_schemas.py::KNOWN_BROKEN` so the gate still passes
@@ -351,7 +351,7 @@ call:
 
 If all retries exhaust, the subprocess returns non-zero, the
 per-file isolation marks it failed, the other files in the batch
-keep going (Stage 11c).
+keep going (per-file isolation).
 
 ### 6.4 Why no async/await?
 
@@ -398,8 +398,8 @@ Some rules are too complex for the declarative form:
 - `check_dates_within_trip_window`: warn when a transaction line's
   date falls outside the FA's `business_purpose.when` window
 - `check_tip_within_cap`: tip ≤ 20% × (pre_tax + tax) for meals +
-  transport (Stage 9c)
-- `check_car_rental_daily_mileage`: ≤ 350 mi/day cap (Stage 15)
+  transport
+- `check_car_rental_daily_mileage`: ≤ 350 mi/day cap
 
 Each hand-written pass takes `&ExpenseReport` and pushes to a
 shared `Vec<Issue>`. They live in `validator_typed.rs`; adding one
@@ -428,7 +428,7 @@ Each receipt produces one extraction JSON. Three places it lives:
 | Tier | Where | Lifetime |
 |---|---|---|
 | **Disk cache** | `.scratch/uploads/<id>/extractions/<basename>.json` | Container-local. Wiped on recycle. |
-| **GCS** | `gs://soe-agile-agents-expense-reports-state/uploads/<id>/extractions/<basename>.json` | 90 days (TTL on the bucket — set in console) |
+| **GCS** | `gs://<bucket-name>/uploads/<id>/extractions/<basename>.json` | 90 days (TTL on the bucket — set in console) |
 | **Firestore** | (not persisted here) | — |
 
 The reduced `report.json` is also disk + Firestore (`reports/{id}`).
@@ -540,7 +540,7 @@ queries the **global** region and doesn't show trigger-fired builds.
 Always pass `--region=us-west1`:
 
 ```bash
-gcloud builds list --region=us-west1 --project=soe-agile-agents --limit=5
+gcloud builds list --region=us-west1 --project=<gcp-project> --limit=5
 gcloud builds log <build-id> --region=us-west1
 ```
 
@@ -573,7 +573,7 @@ the trigger is broken or you need to deploy a non-main branch.
 # Once per machine — auth
 gcloud auth login
 gcloud auth application-default login
-gcloud config set project soe-agile-agents
+gcloud config set project <gcp-project>
 
 # Setup
 ./.venv/bin/pip install -r deploy/requirements.txt
@@ -582,7 +582,7 @@ gcloud config set project soe-agile-agents
 cargo build
 
 # Run Flask locally with the full durable store
-PORT=8088 VERTEX_PROJECT_ID=soe-agile-agents \
+PORT=8088 VERTEX_PROJECT_ID=<gcp-project> \
   USE_FIRESTORE_JOBS=1 USE_FIRESTORE_REPORTS=1 USE_GCS_ARTIFACTS=1 \
   ./.venv/bin/python scripts/local_app_simple.py
 
@@ -591,7 +591,7 @@ cargo test
 ./.venv/bin/python -m unittest discover -s tests -p "test_*.py"
 
 # Test against deployed prod (real API costs ~$3 for full suite)
-RUN_PROD_E2E=1 VERTEX_PROJECT_ID=soe-agile-agents \
+RUN_PROD_E2E=1 VERTEX_PROJECT_ID=<gcp-project> \
   ./.venv/bin/python -m unittest tests.test_workbench_browser.TestProdFailureModes -v
 ```
 
@@ -610,7 +610,7 @@ RUN_PROD_E2E=1 VERTEX_PROJECT_ID=soe-agile-agents \
 ## 10b. Refresh resilience
 
 Required runtime behavior. Three mechanisms enforce it; removing
-any one re-opens the regression Stage 11 fixed.
+any one re-opens the regression the refresh-resilience fix landed.
 
 Required behaviors:
 
@@ -635,7 +635,7 @@ form and spawns a duplicate upload.
 `GET /upload/status/<id>` renders identical HTML on every request.
 The page's `EventSource` reconnects to `/upload/progress/<id>` on
 load. Refresh spawns a new SSE connection that reads current phase
-from Firestore JOBS (Phase 1). State lives in the durable tier;
+from Firestore JOBS (). State lives in the durable tier;
 the page is stateless.
 
 ### Mechanism 3: bounded initializing grace + lost/not_found terminals
@@ -700,8 +700,7 @@ gate before claiming a major feature works.
 - Operational facts (URLs, region, IAM) → `deploy-cheatsheet.md`
 - Stand-up from scratch → `deployment-guide.md`
 - FA usage → `fa-user-guide.md`
-- Why-we-did-it-this-way history → `redesign-plan.md` +
-  `redesign-regrets.md`
-- Durable store rationale → `durable-store-plan.md`
+- Why-we-did-it-this-way history → 
+
 - Per-kind extractor pattern → `scripts/extract_meal.py` (single-call)
   + `scripts/extract_lodging.py` (multi-call)

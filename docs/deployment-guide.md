@@ -215,7 +215,7 @@ Two paths: use your personal ADC, or use a service-account JSON.
 ```bash
 gcloud auth login                       # for gcloud CLI commands
 gcloud auth application-default login   # ADC for the SDKs
-gcloud config set project soe-agile-agents
+gcloud config set project <gcp-project>
 ```
 
 Then:
@@ -225,7 +225,7 @@ Then:
 ./.venv/bin/pip install playwright
 ./.venv/bin/playwright install chromium
 cargo build
-PORT=8088 VERTEX_PROJECT_ID=soe-agile-agents \
+PORT=8088 VERTEX_PROJECT_ID=<gcp-project> \
   USE_FIRESTORE_JOBS=1 USE_FIRESTORE_REPORTS=1 USE_GCS_ARTIFACTS=1 \
   ./.venv/bin/python scripts/local_app_simple.py
 ```
@@ -242,7 +242,7 @@ the "run the website without Kayvon's gcloud" path.
 #### Issuing a key (project admin, one-time per recipient)
 
 ```bash
-PROJECT=soe-agile-agents
+PROJECT=<gcp-project>
 
 # Create a scoped SA for the recipient
 gcloud iam service-accounts create expense-reports-runner-<alice> \
@@ -261,7 +261,7 @@ done
 
 # Bucket-scoped storage access (don't grant project-wide storageAdmin)
 gcloud storage buckets add-iam-policy-binding \
-  gs://soe-agile-agents-expense-reports-state/ \
+  gs://<bucket-name>/ \
   --member="serviceAccount:$SA" --role="roles/storage.objectAdmin"
 
 # Issue a key — DO NOT commit this file
@@ -288,7 +288,7 @@ chmod 600 ~/.config/expense-reports/alice-runner-key.json
 
 # Each shell session — point the SDK at the key
 export GOOGLE_APPLICATION_CREDENTIALS=~/.config/expense-reports/alice-runner-key.json
-export VERTEX_PROJECT_ID=soe-agile-agents
+export VERTEX_PROJECT_ID=<gcp-project>
 
 # Start the server
 PORT=8088 USE_FIRESTORE_JOBS=1 USE_FIRESTORE_REPORTS=1 USE_GCS_ARTIFACTS=1 \
@@ -321,7 +321,7 @@ cargo test                                                  # Rust (~127 tests)
 Prod E2E tests (cost real API calls, ~$3 for the full suite):
 
 ```bash
-RUN_PROD_E2E=1 VERTEX_PROJECT_ID=soe-agile-agents \
+RUN_PROD_E2E=1 VERTEX_PROJECT_ID=<gcp-project> \
   ./.venv/bin/python -m unittest tests.test_workbench_browser.TestProdFailureModes -v
 ```
 
@@ -435,7 +435,7 @@ gcloud run services describe expense-reports --region=us-west1 \
 # Has the runtime SA recently failed to call Vertex / Firestore /
 # GCS? (catches IAM regressions)
 gcloud logging read 'severity>=ERROR AND protoPayload.authenticationInfo.principalEmail=~"compute@developer"' \
-  --project=soe-agile-agents --limit=10
+  --project=<gcp-project> --limit=10
 ```
 
 ### Trigger no longer fires
@@ -482,7 +482,7 @@ linearly with upload volume; the durable-store tier stays trivial.
 | Build fails on `cargo test` | Rust code change broke a test | Read the failure, fix locally with `cargo test`, push again |
 | Build fails on Docker push | Container Registry permission issue | Confirm Cloud Build SA has `roles/storage.admin` |
 
-See `docs/redesign-regrets.md` for the historical "what we learned
+
 when X broke" log.
 
 ---

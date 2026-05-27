@@ -45,7 +45,7 @@ update this file.
 Called once per receipt at extract time to produce word-level bboxes
 that the workbench uses for the spot-check halo. PDFs and images both
 go through the same processor. Consumer is `scripts/evidence_bbox.py`
-(Phase 6 Stage B.2 onward); result populates `_meta.evidence[].bboxes`
+; result populates `_meta.evidence[].bboxes`
 in the typed JSON.
 
 Return format: normalized polygon vertices (0-1 range, top-left
@@ -110,7 +110,7 @@ browser — IAP handles auth via the SSO session.
 - Workbench HTML loads, transaction summary totals are non-zero, and
   the "Download JSON" link 200s with a parseable report.
 
-## Common mistakes (see also: `redesign-regrets.md`)
+## Common mistakes
 
 - `_PROJECT_ID` is **not** a substitution to pass — `$PROJECT_ID` in
   cloudbuild.yaml is Cloud Build's built-in. Only pass `COMMIT_SHA`.
