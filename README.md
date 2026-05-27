@@ -23,10 +23,18 @@ rest of the docs in the correct order.
 | Ops | [`docs/deployment-guide.md`](docs/deployment-guide.md) | Stand-up runbook, service-account JSON setup, Cloud Build debug |
 | Ops (fast) | [`docs/deploy-cheatsheet.md`](docs/deploy-cheatsheet.md) | One-page operational facts |
 | FA end user | [`docs/fa-user-guide.md`](docs/fa-user-guide.md) | Website usage |
-| Maintainer | [`docs/redesign-regrets.md`](docs/redesign-regrets.md) | Incident log — read before changes near flagged areas |
 
-Pre-redesign design docs remain in `docs/` for historical context.
-The docs above reflect the system as it stands.
+## Layout
+
+- `scripts/` — Python: Flask app, per-kind extractors, codegen, Firestore + GCS clients
+- `src/` — Rust: reduce, validate, render, CSV export; binaries in `src/bin/`
+- `generated/` — codegen output from `schema.yaml`. Do not edit.
+- `templates/` — Flask HTML templates
+- `deploy/` — Dockerfile + cloudbuild.yaml + requirements.txt
+- `tests/` — Python tests (Rust tests live in `src/`)
+- `reference/` — Stanford-supplied ERS templates + portal screenshots
+- `receipts/` — fixture receipts for local + prod tests
+- `visualizer/` — standalone React app for browsing the schema graph (`cd visualizer && npm install && npm run dev`)
 
 ## Quick start
 

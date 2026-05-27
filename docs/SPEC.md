@@ -463,8 +463,7 @@ A cheat-sheet for "which file does X belong in?"
 | Container | `deploy/Dockerfile` |
 | Runtime deps | `deploy/requirements.txt` |
 
-If a file isn't on this list, it shouldn't exist in the active
-codebase. The non-active files are docs (`docs/*.md`), the test fixture
-(`tests/test_deploy_config.py`), the unrelated `visualizer/` Vite app,
-domain reference PDFs in `reference/`, and the receipts corpus in
-`receipts/`.
+Non-active files: docs (`docs/*.md`), the test fixture
+(`tests/test_deploy_config.py`), the standalone schema visualizer
+(`visualizer/`), domain reference PDFs in `reference/`, and the
+receipts corpus in `receipts/`.
