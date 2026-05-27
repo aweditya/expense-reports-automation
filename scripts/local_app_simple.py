@@ -1617,6 +1617,7 @@ def render_workbench(
     # there. The workbench hero hides empty downloads.
     csv_domestic = workbench_path.parent / "lines-domestic.csv"
     csv_foreign = workbench_path.parent / "lines-foreign.csv"
+    csv_ofweb = workbench_path.parent / "lines-ofweb.csv"
     run_subprocess(
         rust_bin("render_workbench_from_report") + [
             "--report", str(reduced_path),
@@ -1624,6 +1625,7 @@ def render_workbench(
             "--out", str(workbench_path),
             "--csv-domestic-out", str(csv_domestic),
             "--csv-foreign-out", str(csv_foreign),
+            "--csv-ofweb-out", str(csv_ofweb),
         ],
         label="render",
     )

@@ -32,7 +32,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use expense_report_schema::csv_export::{report_to_domestic_csv, report_to_foreign_csv};
+use expense_report_schema::csv_export::{
+    report_to_domestic_csv, report_to_foreign_csv, report_to_ofweb_csv,
+};
 use expense_report_schema::expense_report_model::ExpenseReport;
 use expense_report_schema::extracted_receipt::ExtractedReceipt;
 use expense_report_schema::validator_typed::validate_typed;
@@ -45,6 +47,7 @@ struct Args {
     source_docs_url_prefix: String,
     csv_domestic_out: Option<PathBuf>,
     csv_foreign_out: Option<PathBuf>,
+    csv_ofweb_out: Option<PathBuf>,
 }
 
 fn parse_args() -> Args {
@@ -55,6 +58,7 @@ fn parse_args() -> Args {
         source_docs_url_prefix: String::from("files/"),
         csv_domestic_out: None,
         csv_foreign_out: None,
+        csv_ofweb_out: None,
     };
 
     let argv: Vec<String> = std::env::args().skip(1).collect();
@@ -79,6 +83,10 @@ fn parse_args() -> Args {
             "--csv-foreign-out" => {
                 args.csv_foreign_out =
                     Some(PathBuf::from(iter.next().expect("--csv-foreign-out needs path")))
+            }
+            "--csv-ofweb-out" => {
+                args.csv_ofweb_out =
+                    Some(PathBuf::from(iter.next().expect("--csv-ofweb-out needs path")))
             }
             other => {
                 eprintln!("unknown argument: {other}");
@@ -180,6 +188,12 @@ fn main() -> ExitCode {
     if let Some(path) = &args.csv_foreign_out {
         let csv = report_to_foreign_csv(&report);
         if let Err(code) = write_aux(path, &csv, "csv-foreign") {
+            return code;
+        }
+    }
+    if let Some(path) = &args.csv_ofweb_out {
+        let csv = report_to_ofweb_csv(&report);
+        if let Err(code) = write_aux(path, &csv, "csv-ofweb") {
             return code;
         }
     }

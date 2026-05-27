@@ -253,6 +253,47 @@ pub fn report_to_foreign_csv(report: &ExpenseReport) -> String {
     out
 }
 
+/// Render the OFWEB-tab CSV (6 columns) for the Travel Reimbursement
+/// Form template. Includes all transaction lines (no domestic/foreign
+/// routing). Column order matches the spreadsheet's "Auto filled"
+/// tab: Date, Currency, Expense Amount, Currency Amount, Expense Type,
+/// Remarks. "Currency Amount" is the USD-equivalent.
+pub fn report_to_ofweb_csv(report: &ExpenseReport) -> String {
+    let mut out = String::from(
+        "Date,Currency,Expense Amount,Currency Amount,Expense Type,Remarks\n",
+    );
+    let Some(lines) = report.transaction_lines.as_ref() else { return out; };
+    for line in lines {
+        let date = line.common.date.value.as_ref()
+            .map(|d| format_portal_date(&d.0))
+            .unwrap_or_default();
+        let (currency, expense_amount) =
+            if let Some(code) = line.common.original_currency.value.as_deref() {
+                let amt = line.common.original_amount.value
+                    .map(|v| format!("{v:.2}")).unwrap_or_default();
+                (code.to_string(), amt)
+            } else {
+                let amt = line.common.line_amount_usd.value
+                    .map(|v| format!("{v:.2}")).unwrap_or_default();
+                ("USD".to_string(), amt)
+            };
+        let usd_amount = line.common.line_amount_usd.value
+            .map(|v| format!("{v:.2}")).unwrap_or_default();
+        let expense_type = map_expense_type_domestic(line);
+        let remarks = line.common.remarks.value.as_deref().unwrap_or("");
+        out.push_str(&format!(
+            "{},{},{},{},{},{}\n",
+            csv_field(&date),
+            csv_field(&currency),
+            csv_field(&expense_amount),
+            csv_field(&usd_amount),
+            csv_field(expense_type),
+            csv_field(remarks),
+        ));
+    }
+    out
+}
+
 /// Count how many lines route to each CSV. Used by the workbench hero to
 /// hide an empty-CSV download link.
 pub fn line_counts(report: &ExpenseReport) -> (usize, usize) {

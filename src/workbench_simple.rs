@@ -710,27 +710,39 @@ fn render_hero(html: &mut String, report: &ExpenseReport, validation: &Validatio
         escape(payee),
         escape(event)
     ));
-    // Stanford has two upload pages (domestic + foreign) with different
-    // column layouts. render_workbench_from_report writes both CSVs
-    // alongside workbench.html (--csv-domestic-out / --csv-foreign-out);
-    // the static-file route under /uploads/<id>/ serves them. We hide
-    // the link for whichever CSV has zero data rows so a purely-domestic
-    // report only shows the domestic download (and vice versa).
+    // Render the workbench's three CSV output options as a single
+    // dropdown rather than a row of buttons. Each menu entry hides
+    // when its CSV has zero data rows so the dropdown stays clean
+    // for purely-domestic or single-tab reports.
     let (domestic_lines, foreign_lines) = line_counts(report);
+    let combined_lines = domestic_lines + foreign_lines;
     html.push_str("<p class=\"hero-downloads\">");
-    if domestic_lines > 0 {
+    if combined_lines > 0 {
+        html.push_str(
+            "<details class=\"download-menu\">\
+             <summary class=\"download-link\">⬇ Download CSV</summary>\
+             <ul>",
+        );
+        if domestic_lines > 0 {
+            html.push_str(&format!(
+                "<li><a href=\"lines-domestic.csv\" download \
+                 title=\"Stanford ERS Expense Lines (Domestic)\">\
+                 Stanford ERS — Domestic ({domestic_lines})</a></li>"
+            ));
+        }
+        if foreign_lines > 0 {
+            html.push_str(&format!(
+                "<li><a href=\"lines-foreign.csv\" download \
+                 title=\"Stanford ERS Expense Lines (Foreign)\">\
+                 Stanford ERS — Foreign ({foreign_lines})</a></li>"
+            ));
+        }
         html.push_str(&format!(
-            "<a class=\"download-link\" href=\"lines-domestic.csv\" download \
-             title=\"Upload at Stanford's Expense Lines (Domestic) page\">\
-             ⬇ Download CSV — Domestic ({domestic_lines})</a>"
+            "<li><a href=\"lines-ofweb.csv\" download \
+             title=\"Travel Reimbursement Form OFWEB tab — combined\">\
+             OFWEB — combined ({combined_lines})</a></li>"
         ));
-    }
-    if foreign_lines > 0 {
-        html.push_str(&format!(
-            "<a class=\"download-link\" href=\"lines-foreign.csv\" download \
-             title=\"Upload at Stanford's Expense Lines (Foreign) page\">\
-             ⬇ Download CSV — Foreign ({foreign_lines})</a>"
-        ));
+        html.push_str("</ul></details>");
     }
     html.push_str(
         "<label class=\"evidence-toggle\" title=\"Show the verbatim text the extractor used to ground each value\">\
