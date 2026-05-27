@@ -1562,5 +1562,152 @@ class TestStage2cRehydrate(unittest.TestCase):
         ctx.close()
 
 
+@unittest.skipUnless(PLAYWRIGHT_AVAILABLE,
+                     "playwright not installed")
+@unittest.skipUnless(_prod_e2e_enabled(),
+                     "set RUN_PROD_E2E=1 to run prod foreign-receipt tests")
+@unittest.skipUnless(_gcloud_id_token() is not None,
+                     "gcloud identity token unavailable")
+class TestProdForeignReceipts(unittest.TestCase):
+    """Multilingual + FX end-to-end in prod. Each test uploads ONE
+    real foreign-language receipt and asserts the extracted line has
+    a non-USD original currency, a populated USD amount (Frankfurter
+    FX landed), and a data row in lines-foreign.csv. Catches
+    multilingual extraction regressions AND silent FX failures —
+    neither was previously covered by an automated prod test.
+
+    ~$0.20 + ~4 min per test."""
+
+    FA_FIELDS = {
+        "fa_payee_name": "Foreign Receipt Test",
+        "fa_payee_sunet": "fxtest",
+        "fa_payee_affiliation": "stanford_faculty",
+        "fa_event_name": "Foreign Receipt Coverage",
+        "fa_payment_method": "personal_card",
+        "fa_rush_processing": "no",
+        "fa_authorized_by": "advisor@stanford.edu",
+        "fa_bp_who": "Foreign Receipt Test",
+        "fa_bp_what": "Multilingual + FX end-to-end verification",
+        "fa_bp_when_from": "2022-01-01",
+        "fa_bp_when_to": "2026-12-31",
+        "fa_bp_where": "International",
+        "fa_bp_why": "Confirm Gemini handles non-English text + Frankfurter FX",
+        "fa_foreign_activity_type": "conferences",
+    }
+    SHOTS_DIR = REPO_ROOT / ".scratch" / "e2e-foreign"
+
+    @classmethod
+    def setUpClass(cls):
+        cls._playwright = sync_playwright().start()
+        cls._browser = cls._playwright.chromium.launch(headless=True)
+        cls._token = _gcloud_id_token()
+        cls.SHOTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._browser.close()
+        cls._playwright.stop()
+
+    def _new_context(self):
+        return self._browser.new_context(
+            viewport={"width": 1400, "height": 1800},
+            extra_http_headers={"Authorization": f"Bearer {self._token}"},
+        )
+
+    def _submit_one(self, page, file_path: Path, kind: str) -> str:
+        page.goto(PROD_URL + "/", wait_until="domcontentloaded")
+        for name, value in self.FA_FIELDS.items():
+            el = page.query_selector(f'[name="{name}"]')
+            if el is None:
+                continue
+            tag = el.evaluate("e => e.tagName")
+            if tag == "SELECT":
+                page.select_option(f'[name="{name}"]', value)
+            else:
+                page.fill(f'[name="{name}"]', value)
+        page.set_input_files('[name="file_0"]', str(file_path))
+        page.select_option('[name="kind_0"]', kind)
+        with page.expect_navigation(wait_until="domcontentloaded",
+                                    timeout=60_000):
+            page.click('button[type="submit"]')
+        return page.url.rstrip("/").split("/")[-1]
+
+    def _fetch_authed(self, path: str) -> bytes:
+        req = urllib.request.Request(
+            f"{PROD_URL}{path}",
+            headers={"Authorization": f"Bearer {self._token}"},
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return resp.read()
+
+    def _check_foreign_receipt(self, *, filename: str, region_tag: str,
+                                expected_non_usd_currencies: set[str]):
+        """Common assertion path: upload → workbench → assert foreign-
+        currency line in report.json + corresponding row in
+        lines-foreign.csv."""
+        ctx = self._new_context()
+        page = ctx.new_page()
+        receipt = REPO_ROOT / "receipts" / filename
+        self.assertTrue(receipt.exists(), f"missing fixture: {receipt}")
+        upload_id = self._submit_one(page, receipt, "lodging")
+        page.wait_for_url("**/workbench.html", timeout=900_000)
+        line_cards = page.query_selector_all("details.line-card")
+        self.assertGreaterEqual(len(line_cards), 1,
+                                f"{region_tag}: extraction produced no lines")
+        page.screenshot(path=str(self.SHOTS_DIR / f"{region_tag}.png"),
+                        full_page=True)
+        ctx.close()
+
+        # Inspect the actual report to confirm FX landed.
+        body = self._fetch_authed(f"/uploads/{upload_id}/reduced/report.json")
+        report = json.loads(body.decode())
+        lines = report.get("transaction_lines") or []
+        self.assertGreaterEqual(len(lines), 1)
+        line = lines[0]
+        common = line.get("common", {})
+        original_currency = (common.get("original_currency") or {}).get("value")
+        line_amount_usd = (common.get("line_amount_usd") or {}).get("value")
+        original_amount = (common.get("original_amount") or {}).get("value")
+        self.assertIn(original_currency, expected_non_usd_currencies,
+                      f"{region_tag}: expected one of "
+                      f"{expected_non_usd_currencies}, got {original_currency!r}")
+        self.assertIsNotNone(line_amount_usd,
+                             f"{region_tag}: line_amount_usd not populated "
+                             f"— FX conversion may have failed")
+        self.assertGreater(line_amount_usd, 0,
+                           f"{region_tag}: line_amount_usd should be > 0")
+        self.assertIsNotNone(original_amount,
+                             f"{region_tag}: original_amount missing")
+
+        # Confirm the line routed to the foreign CSV.
+        foreign_csv = self._fetch_authed(
+            f"/uploads/{upload_id}/lines-foreign.csv").decode()
+        non_header_rows = [
+            r for r in foreign_csv.splitlines()[1:] if r.strip()]
+        self.assertGreaterEqual(len(non_header_rows), 1,
+                                f"{region_tag}: lines-foreign.csv has no data rows")
+
+    def test_french_eur_receipt(self):
+        """French ibis Toulouse PDF. Expect EUR, real Frankfurter rate."""
+        self._check_foreign_receipt(
+            filename="lodging_2023-05-30_ibis-toulouse-universite.pdf",
+            region_tag="france-eur",
+            expected_non_usd_currencies={"EUR"})
+
+    def test_japanese_jpy_receipt(self):
+        """Tokyo TokyuStay JPEG. Expect JPY, kanji + kana in source."""
+        self._check_foreign_receipt(
+            filename="lodging_2022-10-09_tokyustay-nihombashi.jpeg",
+            region_tag="japan-jpy",
+            expected_non_usd_currencies={"JPY"})
+
+    def test_indian_inr_receipt(self):
+        """Bangalore Velvette JPG. Expect INR (rupee symbol on receipt)."""
+        self._check_foreign_receipt(
+            filename="lodging_2022-07-12_velvette-bangalore.jpg",
+            region_tag="india-inr",
+            expected_non_usd_currencies={"INR"})
+
+
 if __name__ == "__main__":
     unittest.main()
