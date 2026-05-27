@@ -243,7 +243,7 @@
     } else if (snap.phase === 'error') {
       barEl.classList.add('error');
       errEl.textContent = snap.error || 'Unknown error';
-      errEl.innerHTML += ' &nbsp;<a class="retry-link" href="/">Try again →</a>';
+      errEl.innerHTML += ' &nbsp;<a class="retry-link" href="/new">Try again →</a>';
       errEl.hidden = false;
       es.close();
     } else if (snap.phase === 'not_found' || snap.phase === 'lost') {
@@ -253,7 +253,7 @@
       // the FA called "refresh crashes the website").
       barEl.classList.add('error');
       errEl.innerHTML = statusFor(snap) +
-        ' &nbsp;<a class="retry-link" href="/">Back to upload →</a>';
+        ' &nbsp;<a class="retry-link" href="/new">Back to upload →</a>';
       errEl.hidden = false;
       es.close();
     }

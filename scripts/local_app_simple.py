@@ -102,7 +102,7 @@ def too_large(_err):
         "<h1>Upload too large</h1>"
         f"<p>Total upload exceeded the {app.config['MAX_CONTENT_LENGTH'] // (1024*1024)} MiB cap. "
         "Try uploading fewer receipts at a time, or split the batch.</p>"
-        '<p><a href="/">Back to upload</a></p>',
+        '<p><a href="/new">Back to upload</a> &middot; <a href="/">Dashboard</a></p>',
         413,
     )
 
@@ -308,8 +308,18 @@ FORM_DRAFT_KEY = "stanford-expense-form-draft-v1"
 # ─── Routes ────────────────────────────────────────────────────────────────
 
 @app.get("/")
+def dashboard():
+    """Landing page: the FA's past-reports dashboard, with a prominent
+    button to start a new report. Renders the same data /history does
+    (unfiltered)."""
+    return history_page()
+
+
+@app.get("/new")
 def upload_form() -> str:
-    """Tiny upload form. Inline-styled — no external CSS dependency."""
+    """The upload form. Reached from the dashboard's "+ File new"
+    button or directly by FAs who bookmarked the old `/` URL — Flask
+    serves the same content from either route."""
     return UPLOAD_FORM_HTML.replace("__FORM_DRAFT_KEY__", FORM_DRAFT_KEY)
 
 

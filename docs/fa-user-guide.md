@@ -28,12 +28,20 @@ yourself.
 Visit the deployed URL (ask the engineering contact — it's behind
 Stanford SSO).
 
-You'll be prompted to sign in with your Stanford account. After SSO,
-you land on the upload form.
+After SSO, you land on the **dashboard**: a list of past expense
+reports plus a big **+ File a new expense report** button at the
+top-right.
+
+- Click the button to start a fresh report (you'll go to the upload
+  form at `/new`).
+- Click a row in the table to open a previously-filed report's
+  workbench.
+- Use the **Filter by payee SUNet** box to narrow the table to one
+  person's reports.
 
 If you see a Google "this resource is not accessible" page instead of
-the form, your account hasn't been granted IAP access yet — flag this
-to the engineering contact.
+the dashboard, your account hasn't been granted IAP access yet —
+flag this to the engineering contact.
 
 ---
 

@@ -530,7 +530,7 @@ class TestUploadFormBrowser(unittest.TestCase):
     and refresh resilience. Each test runs in a fresh context so
     localStorage starts empty."""
 
-    HOME_URL = f"{B1_FLASK_URL}/"
+    HOME_URL = f"{B1_FLASK_URL}/new"
     WORKBENCH_URL = f"{B1_FLASK_URL}/uploads/b1-eye/workbench.html"
     STORAGE_KEY = FORM_DRAFT_KEY
 
@@ -931,7 +931,7 @@ class TestProdFullFAJourney(unittest.TestCase):
     def test_full_fa_journey(self):
         """Form fill → upload → SSE → workbench → edit → CSV download."""
         # 1. Form load
-        self.page.goto(PROD_URL + "/", wait_until="domcontentloaded")
+        self.page.goto(PROD_URL + "/new", wait_until="domcontentloaded")
         self.assertIsNotNone(self.page.query_selector('form[action="/upload"]'))
         self._snap("01-form-blank")
 
@@ -1111,7 +1111,7 @@ class TestProdFailureModes(unittest.TestCase):
 
     def _submit_one(self, page, file_path: Path, kind: str) -> str:
         """Fill form, attach one receipt, submit, return upload_id."""
-        page.goto(PROD_URL + "/", wait_until="domcontentloaded")
+        page.goto(PROD_URL + "/new", wait_until="domcontentloaded")
         for name, value in self.FA_FIELDS.items():
             el = page.query_selector(f'[name="{name}"]')
             if el is None:
@@ -1128,6 +1128,31 @@ class TestProdFailureModes(unittest.TestCase):
             page.click('button[type="submit"]')
         return page.url.rstrip("/").split("/")[-1]
 
+    def test_dashboard_is_landing_with_new_button(self):
+        """Visiting / lands on the dashboard, NOT the upload form.
+        Asserts the page has the dashboard heading + a prominently
+        styled '+ File a new expense report' button that points at
+        /new. Catches regressions where someone accidentally re-routes
+        / back to the form."""
+        ctx = self._new_context()
+        page = ctx.new_page()
+        page.goto(PROD_URL + "/", wait_until="networkidle", timeout=30_000)
+        body = page.evaluate("() => document.body.innerText")
+        self.assertIn("Dashboard", body,
+                      "/ should render the dashboard heading")
+        btn = page.query_selector('a.new-report-btn[href="/new"]')
+        self.assertIsNotNone(btn,
+                             "/ should expose the New Report button "
+                             "linking to /new")
+        btn_text = btn.evaluate("e => e.textContent.trim()")
+        self.assertIn("File a new expense report", btn_text)
+        # And /new should still serve the form for direct visitors.
+        page.goto(PROD_URL + "/new", wait_until="domcontentloaded",
+                  timeout=30_000)
+        self.assertIsNotNone(page.query_selector('form[action="/upload"]'),
+                             "/new should still render the upload form")
+        ctx.close()
+
     def test_history_listing_shows_recent_upload(self):
         """FA past-reports listing (#114). Upload one receipt with
         a unique payee_sunet so the filter has unambiguous signal,
@@ -1139,7 +1164,7 @@ class TestProdFailureModes(unittest.TestCase):
         ctx = self._new_context()
         page = ctx.new_page()
         # Override the default payee_sunet for this one upload.
-        page.goto(PROD_URL + "/", wait_until="domcontentloaded")
+        page.goto(PROD_URL + "/new", wait_until="domcontentloaded")
         for name, value in self.FA_FIELDS.items():
             if name == "fa_payee_sunet":
                 value = unique_sunet
@@ -1663,7 +1688,7 @@ class TestProdForeignReceipts(unittest.TestCase):
         )
 
     def _submit_one(self, page, file_path: Path, kind: str) -> str:
-        page.goto(PROD_URL + "/", wait_until="domcontentloaded")
+        page.goto(PROD_URL + "/new", wait_until="domcontentloaded")
         for name, value in self.FA_FIELDS.items():
             el = page.query_selector(f'[name="{name}"]')
             if el is None:
