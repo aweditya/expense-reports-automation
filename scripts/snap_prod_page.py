@@ -5,8 +5,7 @@ Usage:
     ./.venv/bin/python scripts/snap_prod_page.py <path> <out.png>
     ./.venv/bin/python scripts/snap_prod_page.py /          .scratch/dashboard.png
 
-Avoids inline-script shortcuts (regrets log: 7+ slips on python -c
-imports). Drop a real script in scripts/ instead.
+Use this rather than inline `python -c` invocations.
 """
 import subprocess
 import sys

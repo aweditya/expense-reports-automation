@@ -247,10 +247,9 @@
       errEl.hidden = false;
       es.close();
     } else if (snap.phase === 'not_found' || snap.phase === 'lost') {
-      // Stale URL / typo / container restart wiped JOBS. Surface a
-      // clean message + a back-to-form link instead of looping the
-      // EventSource forever (which is what the old code did and what
-      // the FA called "refresh crashes the website").
+      // Stale URL, typo, or container restart wiped JOBS. Surface
+      // a clean terminal message and a back-to-form link rather
+      // than looping the EventSource indefinitely.
       barEl.classList.add('error');
       errEl.innerHTML = statusFor(snap) +
         ' &nbsp;<a class="retry-link" href="/new">Back to upload →</a>';
