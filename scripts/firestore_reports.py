@@ -128,3 +128,53 @@ def delete_report(upload_id: str) -> None:
     """Explicit deletion. Not used by the live pipeline (TTL handles
     cleanup) but handy for tests + cleanup tooling."""
     _get_client().collection(COLLECTION).document(upload_id).delete()
+
+
+def list_reports(payee_sunet: str | None = None,
+                 limit: int = 100) -> list[dict]:
+    """List per-upload summaries for the history page. Returns dicts
+    with upload_id, updated_at, fa_input, line_count, total_usd —
+    enough to render a one-row-per-report table without re-fetching
+    the full payload for each entry.
+
+    If `payee_sunet` is set, filters to only that payee's reports
+    (Firestore single-field equality, no composite index needed).
+    Otherwise returns the most recent `limit` reports across all
+    payees. Always sorted by updated_at descending (client-side; at
+    our scale of a few hundred docs this is cheaper than a composite
+    index)."""
+    import json as _json
+    coll = _get_client().collection(COLLECTION)
+    if payee_sunet:
+        query = coll.where(filter=_filter_eq("fa_input.payee_sunet",
+                                              payee_sunet))
+    else:
+        query = coll
+    results: list[dict] = []
+    for snap in query.stream():
+        data = snap.to_dict() or {}
+        try:
+            report = _json.loads(data.get("report_json") or "{}")
+        except (ValueError, TypeError):
+            report = {}
+        lines = report.get("transaction_lines") or []
+        summary = (report.get("transaction_summary") or {})
+        total_node = summary.get("total_usd") or {}
+        results.append({
+            "upload_id": snap.id,
+            "updated_at": data.get("updated_at"),
+            "fa_input": data.get("fa_input") or {},
+            "line_count": len(lines),
+            "total_usd": total_node.get("value"),
+        })
+    results.sort(key=lambda r: (r["updated_at"] or 0), reverse=True)
+    return results[:limit]
+
+
+def _filter_eq(field_path: str, value):
+    """Build a Firestore FieldFilter for `field == value`. The SDK
+    deprecated positional .where() in favor of the FieldFilter object;
+    isolating it here keeps callers tidy + makes future API drift a
+    one-line change."""
+    from google.cloud.firestore_v1.base_query import FieldFilter
+    return FieldFilter(field_path, "==", value)

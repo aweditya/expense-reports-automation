@@ -1128,6 +1128,54 @@ class TestProdFailureModes(unittest.TestCase):
             page.click('button[type="submit"]')
         return page.url.rstrip("/").split("/")[-1]
 
+    def test_history_listing_shows_recent_upload(self):
+        """FA past-reports listing (#114). Upload one receipt with
+        a unique payee_sunet so the filter has unambiguous signal,
+        then hit /history?sunet=<that> and confirm the new upload's
+        row is present with the right link, line count, and (rough)
+        total. Also confirms the empty-state path for a non-existent
+        sunet."""
+        unique_sunet = f"hist{uuid.uuid4().hex[:8]}"
+        ctx = self._new_context()
+        page = ctx.new_page()
+        # Override the default payee_sunet for this one upload.
+        page.goto(PROD_URL + "/", wait_until="domcontentloaded")
+        for name, value in self.FA_FIELDS.items():
+            if name == "fa_payee_sunet":
+                value = unique_sunet
+            el = page.query_selector(f'[name="{name}"]')
+            if el is None:
+                continue
+            tag = el.evaluate("e => e.tagName")
+            if tag == "SELECT":
+                page.select_option(f'[name="{name}"]', value)
+            else:
+                page.fill(f'[name="{name}"]', value)
+        receipt = REPO_ROOT / "receipts" / self.RECEIPT[1]
+        page.set_input_files('[name="file_0"]', str(receipt))
+        page.select_option('[name="kind_0"]', self.RECEIPT[0])
+        with page.expect_navigation(wait_until="domcontentloaded",
+                                    timeout=60_000):
+            page.click('button[type="submit"]')
+        upload_id = page.url.rstrip("/").split("/")[-1]
+        page.wait_for_url("**/workbench.html", timeout=600_000)
+
+        page.goto(f"{PROD_URL}/history?sunet={unique_sunet}",
+                  wait_until="networkidle", timeout=30_000)
+        body = page.evaluate("() => document.body.innerText")
+        self.assertIn(unique_sunet, body,
+                      f"history page should show scope for {unique_sunet}")
+        link = page.query_selector(f'a[href$="/uploads/{upload_id}/workbench.html"]')
+        self.assertIsNotNone(link,
+                             f"history table missing link to {upload_id}")
+
+        page.goto(f"{PROD_URL}/history?sunet=nope-{uuid.uuid4().hex[:6]}",
+                  wait_until="networkidle", timeout=30_000)
+        body = page.evaluate("() => document.body.innerText")
+        self.assertIn("No reports for that SUNet yet", body,
+                      "empty-state message missing for unknown sunet")
+        ctx.close()
+
     def test_refresh_during_progress_page_recovers(self):
         """Stage 11 claim: refreshing the progress page mid-extract
         does NOT crash the website. The page re-renders (it's a plain

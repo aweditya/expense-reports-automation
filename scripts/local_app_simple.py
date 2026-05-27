@@ -1113,6 +1113,91 @@ def undo_available(upload_id: str):
     }, 200)
 
 
+@app.get("/history")
+def history_page():
+    """List past expense reports persisted in Firestore. Optionally
+    filtered by ?sunet=<payee_sunet>. Returns 200 even when
+    Firestore is unreachable / the gate is off; renders a friendly
+    empty state instead of 500."""
+    sunet = (request.args.get("sunet", "") or "").strip()
+    safe_sunet = sunet if _is_sunet_shaped(sunet) else ""
+    reports: list[dict] = []
+    fetch_error: str | None = None
+    if USE_FIRESTORE_REPORTS:
+        try:
+            from firestore_reports import list_reports
+            reports = list_reports(payee_sunet=safe_sunet or None)
+        except Exception as err:  # noqa: BLE001
+            log_error("history.fetch_failed", error=repr(err)[:200])
+            fetch_error = "Couldn't reach the report store."
+    else:
+        fetch_error = ("Report history is unavailable in this "
+                       "environment (USE_FIRESTORE_REPORTS not set).")
+    return render_history_page(reports, safe_sunet, fetch_error)
+
+
+def _is_sunet_shaped(s: str) -> bool:
+    """Cheap allowlist matching the upload form's pattern attr."""
+    import re
+    return bool(re.fullmatch(r"[A-Za-z0-9_\-]{2,16}", s))
+
+
+def render_history_page(reports: list[dict], sunet: str,
+                         fetch_error: str | None) -> str:
+    """Render the history template by substituting the four
+    placeholder slots (scope label, sunet filter value, table body,
+    count note)."""
+    from html import escape as _esc
+    scope_label = f"for {_esc(sunet)}" if sunet else "(all)"
+    if fetch_error:
+        table_html = (f'<div class="empty"><p>{_esc(fetch_error)}</p></div>')
+        count_note = ""
+    elif not reports:
+        empty_msg = ("No reports for that SUNet yet." if sunet
+                     else "No reports filed yet.")
+        table_html = f'<div class="empty"><p>{_esc(empty_msg)}</p></div>'
+        count_note = ""
+    else:
+        rows = []
+        for r in reports:
+            ts = r.get("updated_at")
+            date_str = (ts.strftime("%Y-%m-%d %H:%M")
+                        if hasattr(ts, "strftime") else "")
+            fa = r.get("fa_input") or {}
+            payee_name = fa.get("payee_name") or fa.get("payee_sunet") or "—"
+            event = fa.get("event_name") or "—"
+            total = r.get("total_usd")
+            total_str = f"${total:,.2f}" if isinstance(total, (int, float)) else "—"
+            uid = r["upload_id"]
+            rows.append(
+                "<tr>"
+                f"<td>{_esc(date_str)}</td>"
+                f"<td>{_esc(payee_name)}</td>"
+                f"<td>{_esc(event)}</td>"
+                f"<td class=\"right\">{r['line_count']}</td>"
+                f"<td class=\"right\">{_esc(total_str)}</td>"
+                f"<td><a href=\"/uploads/{_esc(uid)}/workbench.html\">"
+                f"{_esc(uid)}</a></td>"
+                "</tr>"
+            )
+        table_html = (
+            "<table>"
+            "<thead><tr>"
+            "<th>Last updated</th><th>Payee</th><th>Event</th>"
+            "<th class=\"right\">Lines</th>"
+            "<th class=\"right\">Total USD</th>"
+            "<th>Workbench</th>"
+            "</tr></thead>"
+            "<tbody>" + "".join(rows) + "</tbody></table>"
+        )
+        count_note = f"{len(reports)} report(s) shown."
+    return (HISTORY_PAGE_HTML
+            .replace("__SCOPE_LABEL__", scope_label)
+            .replace("__SUNET__", _esc(sunet))
+            .replace("__TABLE_HTML__", table_html)
+            .replace("__COUNT_NOTE__", _esc(count_note)))
+
+
 @app.post("/uploads/<upload_id>/add-receipts")
 def add_receipts(upload_id: str):
     """Append more receipts to an existing report. Re-runs the
@@ -1639,6 +1724,7 @@ _TEMPLATES_DIR = REPO_ROOT / "templates"
 UPLOAD_FORM_HTML = (_TEMPLATES_DIR / "upload_form.html").read_text(encoding="utf-8")
 PROGRESS_PAGE_HTML = (_TEMPLATES_DIR / "progress.html").read_text(encoding="utf-8")
 ERROR_PAGE_HTML = (_TEMPLATES_DIR / "error.html").read_text(encoding="utf-8")
+HISTORY_PAGE_HTML = (_TEMPLATES_DIR / "history.html").read_text(encoding="utf-8")
 
 
 # ─── Entry point ───────────────────────────────────────────────────────────
