@@ -1,6 +1,6 @@
 //! Per-receipt deserialization target.
 //!
-//! Architecture B (see docs/redesign-plan.md): the per-receipt JSON the
+//! the per-receipt JSON the
 //! extractor writes carries both schema-shaped fields AND an `extras` block.
 //! The schema-shaped fields flow into `ExpenseReport`; extras live only at
 //! this layer and feed reduction (e.g. FX, foreign-vs-domestic decisions).
@@ -77,7 +77,7 @@ pub struct Extras {
 
 /// One night of a lodging stay. The `date`, `rate`, and `taxes_and_fees`
 /// are bare values (no per-leaf `_meta`) — keeping per-night cost
-/// compact in the output budget (Stage 6 regret: per-leaf `_meta` blocks
+/// compact in the output budget (per-leaf `_meta` blocks add overhead;
 /// across a multi-night folio truncated the model's output).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct NightlyRate {

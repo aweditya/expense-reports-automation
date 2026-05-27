@@ -1,4 +1,4 @@
-"""Real-Firestore tests for scripts/firestore_reports.py (Phase 2a).
+"""Real-Firestore tests for scripts/firestore_reports.py.
 
 Mirror of test_firestore_jobs.py. Each test uses a unique
 test_<uuid> id, then cleans up. Same skip conditions.

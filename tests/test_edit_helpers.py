@@ -1,4 +1,4 @@
-"""Robustness tests for the Stage 7 edit-in-place helpers.
+"""Robustness tests for the edit-in-place helpers.
 
 These cover the logic the FA's click-to-edit relies on:
   - _walk_to_leaf: path → (existing, setter) for Wrapped/bare/missing
@@ -211,7 +211,7 @@ class TestEnumValidation(unittest.TestCase):
 
 
 class TestCodegenArtifactShape(unittest.TestCase):
-    """Guards against schema drift breaking the Stage 7 edit contract.
+    """Guards against schema drift breaking the edit contract.
 
     If a schema change adds new enum values or new field types, these
     assertions stay green as long as the codegen + Python loader are

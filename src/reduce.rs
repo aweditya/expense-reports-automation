@@ -39,7 +39,7 @@ pub fn reduce_earliest_date(receipts: &[ExtractedReceipt]) -> Option<IsoDate> {
 
 /// Returns `ExpensesForeign` if any receipt has a printed_currency that
 /// isn't USD. Null printed_currency is treated as USD-by-default. This
-/// matches the locked decision in docs/redesign-plan.md ("null → USD").
+/// matches the locked decision inthe documented "null → USD" rule.
 pub fn reduce_inferred_category(
     receipts: &[ExtractedReceipt],
 ) -> ExpenseReportGeneralInformationCategoryEnum {

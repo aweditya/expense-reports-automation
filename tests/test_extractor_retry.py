@@ -1,4 +1,4 @@
-"""Unit tests for scripts/extractor_lib.py's retry helper (Stage 21).
+"""Unit tests for scripts/extractor_lib.py's retry helper.
 
 Validates the retry classification + backoff timing without making
 real Gemini calls. Runs in <5 seconds total.
@@ -42,7 +42,7 @@ class TestIsRetryable(unittest.TestCase):
             self.assertTrue(_is_retryable(_err_with_code(code)))
 
     def test_4xx_not_retryable(self):
-        # 400 INVALID_ARGUMENT (the Stage 9c regression class) MUST NOT
+        # 400 INVALID_ARGUMENT (the invalid-argument class) MUST NOT
         # retry — retrying gives the same answer and wastes quota.
         for code in (400, 401, 403, 404):
             self.assertFalse(_is_retryable(_err_with_code(code)),

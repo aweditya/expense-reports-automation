@@ -15,33 +15,22 @@ Three parallel Gemini calls per ticket:
                   reduction uses to derive segment count + total
                   flight time.
 
-All three calls see the **full ticket**; they differ only in their
-response schema. Three calls (not two like lodging) because the
-airfare detail block has 9 leaves where lodging had 6 — the empirical
-Vertex schema property-count ceiling sits between common+6 (lodging
-main, passes) and common+9 (airfare with single detail block, fails;
-see `docs/redesign-regrets.md` 2026-05-13).
+All three calls receive the full ticket; only the response schema
+differs. The split is forced by Vertex's empirical schema
+property-count ceiling: the airfare detail block has too many
+leaves for a single call.
 
-After all three calls return, results are merged via a 1-deep dict
-union: top-level keys from all three are combined, and the
-`airfare_details` dicts from the main and aux calls are themselves
-unioned so the per-doc JSON has a single complete `airfare_details`
-object — same shape a hypothetical single-call would have produced.
-Reduction (Rust) sees no difference from the single-call kinds.
+Results merge via a 1-deep dict union. Top-level keys from all
+three calls combine; the `airfare_details` dicts from the main and
+aux calls are unioned. The merged per-doc JSON matches the
+single-call shape; reduction sees no difference.
 
-FX handling: for non-USD tickets, this extractor leaves
-`common.line_amount_usd` as null (origin: `needs_fx_conversion`) and
-populates `airfare_details.ticket_amount` + `common.original_currency`
-+ `common.original_amount` with the printed values. Reduction's
-`mock_usd_rate()` (Stage 3 of the airfare phase) does the actual
-conversion. The model is never asked to do FX itself.
+FX handling: for non-USD tickets, `common.line_amount_usd` is left
+null (origin: `needs_fx_conversion`). `airfare_details.ticket_amount`,
+`common.original_currency`, and `common.original_amount` carry the
+printed values. Reduction applies the FX rate.
 
-Phase 4 v1 covers the 4 airfare folios in the receipts/ corpus
-(Egencia/United, Air India/INR, Gmail-saved United, Southwest).
-Multilingual + booking-confirmation-vs-eticket coverage is a v2
-follow-up.
-
-Dispatched by `local_app_simple.py` based on the FA's per-file kind
+Dispatched by `local_app_simple.py` based on the per-file kind
 choice in the upload form.
 """
 

@@ -1209,7 +1209,7 @@ class TestProdFailureModes(unittest.TestCase):
         ctx.close()
 
     def test_refresh_during_progress_page_recovers(self):
-        """Stage 11 claim: refreshing the progress page mid-extract
+        """Required behavior: refreshing the progress page mid-extract
         does NOT crash the website. The page re-renders (it's a plain
         idempotent GET) and the EventSource reconnects to current
         phase. Test: start an upload, wait for the status URL, sleep
@@ -1316,7 +1316,7 @@ class TestProdFailureModes(unittest.TestCase):
         ctx2.close()
 
     def test_gcs_artifacts_land_after_upload(self):
-        """Durable-store Phase 2b. After upload, the source PDF +
+        """Dual-write check. After upload, the source PDF +
         the per-receipt extraction JSON are in GCS. Dual-write is
         firing in prod."""
         try:
@@ -1341,7 +1341,7 @@ class TestProdFailureModes(unittest.TestCase):
                       f"extraction JSON missing from GCS — got {extractions}")
 
     def test_firestore_report_persists_after_upload(self):
-        """Durable-store Phase 2a. After an upload completes, the
+        """Dual-write check. After an upload completes, the
         reports/{upload_id} Firestore doc exists with the report
         payload + fa_input + (empty) history. Validates the
         dual-write path is firing in prod."""
@@ -1360,7 +1360,7 @@ class TestProdFailureModes(unittest.TestCase):
         doc = get_report(upload_id)
         self.assertIsNotNone(doc,
                              f"Firestore reports/{upload_id} missing — "
-                             f"Phase 2a dual-write didn't fire")
+                             f"dual-write didn't fire")
         report = doc["report"]
         self.assertIn("transaction_lines", report,
                       "report payload missing transaction_lines root key")
@@ -1434,11 +1434,11 @@ class TestProdFailureModes(unittest.TestCase):
             pass  # SDK absent; UI assertions stand alone
 
     def test_edits_persist_across_browser_sessions(self):
-        """Phase 2a end-to-end persistence proof. Edit a field in
+        """End-to-end persistence proof. Edit a field in
         context A, close it, open a FRESH context B (no cookies,
         no localStorage), reload the same workbench URL, assert
         the edit is visible. Proves the edit flowed through Firestore
-        (Stage 2a dual-write) AND survives across browser sessions."""
+        (dual-write) AND survives across browser sessions."""
         ctx_a = self._new_context()
         page_a = ctx_a.new_page()
         receipt = REPO_ROOT / "receipts" / self.RECEIPT[1]
@@ -1520,7 +1520,7 @@ _STAGE2C_FIXTURE = (REPO_ROOT / ".scratch" / "uploads"
 
 
 def _stage2c_reachable() -> bool:
-    """Stage 2c local test needs Firestore + GCS reachable + a real
+    """Rehydrate local test needs Firestore + GCS reachable + a real
     fixture upload to mirror into them + Playwright + the render
     binary. Each pre-req gates the suite cleanly."""
     if not PLAYWRIGHT_AVAILABLE:
@@ -1542,11 +1542,11 @@ def _stage2c_reachable() -> bool:
 
 
 @unittest.skipUnless(_stage2c_reachable(),
-                     "Stage 2c local test needs Playwright, the render "
+                     "Rehydrate local test needs Playwright, the render "
                      "binary, the existing local fixture, and live "
                      "Firestore + GCS via ADC")
 class TestStage2cRehydrate(unittest.TestCase):
-    """Stage 2c. Verifies _rehydrate_upload + the on-cache-miss route:
+    """Rehydrate path. Verifies _rehydrate_upload + the on-cache-miss route:
     pre-stage Firestore + GCS for a synthetic upload_id using an
     existing local fixture, blow away the local dir, call rehydrate,
     then load workbench.html in Chromium and assert it parses + has

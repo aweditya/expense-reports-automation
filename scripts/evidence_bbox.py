@@ -252,7 +252,7 @@ def populate_bboxes(record: dict, doc_path: pathlib.Path, doc=None) -> dict:
     for each `document_span` entry. Mutates record in place AND
     returns it (convenient for chaining).
 
-    Two grounding paths (, docs/leapfrog-plan.md §7):
+    Two grounding paths ():
       1. `token_ids` present on the evidence entry (from a leapfrog-
          aware extractor): resolve via dict lookup against DocAI's
          tokens. Verifier compares the concatenated token text to

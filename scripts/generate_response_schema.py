@@ -5,17 +5,16 @@ Reads `schema.yaml` and emits one or more
 `generated/response_schema_<name>.json` files. Multi-call kinds (the
 ones whose typed detail block pushes past Vertex's schema property-
 count ceiling) split into `<kind>_main` + `<kind>_extras` schema
-files that get merged in `scripts/extract_<kind>.py`. As of B1 the
+files that get merged in `scripts/extract_<kind>.py`. Today, 
 split applies to meal, transport, lodging (which also includes the
 per-night-rate breakdown in its extras) and airfare (which uses a
 3-call split: main + aux + extras). Single-call kinds — miscellaneous,
 membership, conference_registration — emit one file each.
 
-The split-call pattern was introduced for lodging on 2026-05-13 and
-extended to meal+transport in B1; see `docs/redesign-regrets.md`
-for the schema-ceiling history. The orchestration of the parallel
-calls lives in each `scripts/extract_<kind>.py`; this file just
-produces the schemas.
+The split-call pattern is forced by Vertex's response-schema
+property-count ceiling. The orchestration of parallel calls lives
+in each `scripts/extract_<kind>.py`; this file produces only the
+schemas.
 
 Each schema:
 - restricts `expense_type` (when `common` is included) to only the
@@ -75,7 +74,7 @@ KIND_EXPENSE_TYPES: dict[str, list[str]] = {
     # Foreign" on the foreign CSV. No kind-specific detail block — the
     # receipt typically only carries org name + amount + date.
     "membership": ["membership_dues"],
-    # B2: personal mileage reimbursement at IRS Standard Mileage Rate
+    # Personal mileage reimbursement at IRS Standard Mileage Rate
     # (business use). The FA attaches a Google Maps screenshot / driving
     # log showing the route + distance; reduction multiplies by the
     # current IRS rate (generated/irs_mileage_rates.json) to get the
@@ -115,14 +114,12 @@ def meta_block_schema() -> dict:
                         "page": {"type": "integer", "nullable": True},
                         "quote": {"type": "string", "nullable": True},
                         "origin": {"type": "string", "nullable": True},
-                        #  (docs/leapfrog-plan.md §7): when
-                        # the extractor's prompt includes a numbered
-                        # Document AI token list, the model returns the
-                        # integer IDs of the tokens it grounded against.
-                        # Extractor then resolves IDs -> bboxes via
-                        # evidence_bbox.populate_bboxes. Omitting this
-                        # field is fine; it just falls back to the
-                        # text-matching path. Optional everywhere.
+                        # When the extractor prompt includes a
+                        # numbered Document AI token list, the model
+                        # returns the integer IDs of the tokens it
+                        # grounded against. evidence_bbox.populate_bboxes
+                        # resolves IDs to bboxes. Omitting falls back
+                        # to text-matching. Optional everywhere.
                         "token_ids": {
                             "type": "array",
                             "items": {"type": "integer"},
@@ -164,7 +161,7 @@ def common_block_schema(expense_type_values: list[str]) -> dict:
             # tickets (origin: needs_fx_conversion) for reduction's
             # mock_usd_rate to fill — without it, the model is forced to
             # emit a sentinel like 0 which apply_mock_fx then mistakes
-            # for "already set." See an earlier stage verification notes.
+            # for "already set." 
             "line_amount_usd": leaf({"type": "number", "nullable": True}),
             "original_currency": leaf(
                 {"type": "string", "nullable": True, "description": "ISO 4217 code or null if USD"}
@@ -183,7 +180,7 @@ def common_block_schema(expense_type_values: list[str]) -> dict:
             # source_document is intentionally NOT in the per-receipt
             # schema — the FA gave us the file (we already know its name and
             # type). Reduction populates source_document from the input
-            # context. See Architecture B in docs/redesign-plan.md.
+            # context. See the multi-call architecture in docs/internals.md §5.
         },
         "required": [
             "date",
@@ -199,7 +196,7 @@ def common_block_schema(expense_type_values: list[str]) -> dict:
 
 
 def meal_details_block_schema() -> dict:
-    # B1: pre_tax_amount + tax_amount added back after the Stage 9c
+    # pre_tax_amount + tax_amount added back after the tip-cap
     # revert. The block fits now because the meal schema is split into
     # meal_main + meal_extras (extras moved to its own call), freeing
     # property budget under Vertex's ceiling.
@@ -209,7 +206,7 @@ def meal_details_block_schema() -> dict:
             "venue_name": leaf({"type": "string"}),
             # attendees and meal_purpose are intentionally NOT in the
             # per-receipt schema — both are T1 (FA fills later). See
-            # Architecture B in docs/redesign-plan.md.
+            # the multi-call architecture in docs/internals.md §5.
             "alcohol_amount": leaf({"type": "number", "nullable": True}),
             "tip_amount": leaf({"type": "number", "nullable": True}),
             "has_alcohol_on_receipt": leaf({"type": "boolean"}),
@@ -228,7 +225,7 @@ def meal_details_block_schema() -> dict:
 
 
 def mileage_details_block_schema() -> dict:
-    # B2: personal mileage. Small detail block — single-call extractor.
+    # Personal mileage. Small detail block, single-call extractor.
     # vehicle_class is T1 (FA picks, defaults to personal_car), so it's
     # NOT in the response schema. trip_date is T3 here because typical
     # Google Maps screenshots / driving logs have the date visible.
@@ -247,8 +244,8 @@ def mileage_details_block_schema() -> dict:
 
 
 def ground_transport_details_block_schema() -> dict:
-    # B1: tip_amount + pre_tax_amount + tax_amount added back after the
-    # Stage 9c revert. The block fits now because the transport schema
+    # tip_amount + pre_tax_amount + tax_amount added back after the
+    # tip-cap revert. The block fits because the transport schema
     # is split into transport_main + transport_extras.
     return {
         "type": "object",
@@ -683,7 +680,7 @@ def extras_block_schema(
     the FA portal. Reduction reads these to derive schema fields the model
     can't know in isolation (foreign vs domestic, original currency, FX,
     daily_rate average for lodging, segment count for airfare).
-    See Architecture B in docs/redesign-plan.md.
+    See the multi-call architecture in docs/internals.md §5.
 
     `include_nightly_rates`: only the lodging kind needs the per-night
     breakdown — meal and transport pass through with the merchant_address
@@ -777,10 +774,10 @@ def transaction_line_schema(
 # the calls lives in `scripts/extract_<kind>.py`; this list just owns
 # the schema files that get generated.
 SCHEMAS_TO_GENERATE: list[tuple[str, dict]] = [
-    # Meal: 2-call split (was single-call until B1). Stage 9c added
+    # Meal: 2-call split. The tip-cap added
     # pre_tax_amount + tax_amount to meal_details and Vertex rejected
     # the schema with 400 INVALID_ARGUMENT (property-count ceiling).
-    # B1 splits meal the same way lodging is split: main carries
+    # Meal splits the same way lodging is split: main carries
     # common + meal_details (now expanded with the tax pair); extras
     # carries the extras block alone. The two calls run in parallel
     # in extract_meal.py and the dicts are merged before the per-doc
@@ -801,11 +798,11 @@ SCHEMAS_TO_GENERATE: list[tuple[str, dict]] = [
             include_detail=False,
         ),
     ),
-    # Transport: 2-call split (was single-call until B1). Same reason
-    # as meal — Stage 9c added tip_amount + pre_tax_amount + tax_amount
-    # to ground_transport_details and Vertex rejected the schema. B1
-    # splits transport on the lodging pattern; the new tax/tip fields
-    # ride in transport_main.
+    # Transport: 2-call split, same reason as meal. The tip-cap
+    # added tip_amount + pre_tax_amount + tax_amount to
+    # ground_transport_details, pushing past the property-count
+    # ceiling. Split follows the lodging pattern; the tax/tip
+    # fields ride in transport_main.
     (
         "response_schema_transport_main.json",
         dict(
@@ -823,10 +820,10 @@ SCHEMAS_TO_GENERATE: list[tuple[str, dict]] = [
         ),
     ),
     # Lodging is split across two parallel Gemini calls (see
-    # extract_lodging.py and docs/redesign-regrets.md 2026-05-13). Each
-    # call's schema must fit under Vertex's property-count ceiling
-    # (~5 detail-block leaves with inlined _meta is the practical
-    # limit). The "main" call extracts common + lodging_details; the
+    # extract_lodging.py). Each call's schema must fit under
+    # Vertex's property-count ceiling (~5 detail-block leaves with
+    # inlined _meta in practice). The "main" call extracts
+    # common + lodging_details; the
     # "extras" call extracts the extras block with the per-night rate
     # breakdown. The dicts are merged in extract_lodging.py to produce
     # the same per-doc JSON shape a single call would have produced.
@@ -919,9 +916,9 @@ SCHEMAS_TO_GENERATE: list[tuple[str, dict]] = [
             include_detail=False,
         ),
     ),
-    # B2: personal mileage. Single-call — mileage_details has only 4
-    # T3 leaves which is well under Vertex's schema-property ceiling.
-    # extras block still included (merchant_address null for mileage,
+    # Personal mileage. Single-call: mileage_details has only 4
+    # T3 leaves, well under the property-count ceiling. Extras
+    # block included (merchant_address null for mileage,
     # printed_currency null since IRS rate is USD-denominated).
     (
         "response_schema_mileage.json",

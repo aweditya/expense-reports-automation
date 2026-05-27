@@ -88,7 +88,7 @@ body {
   border-color: #60a5fa;
   text-decoration: none;
 }
-/* friday Stage 6: the global "Show extraction provenance" toggle —
+/* the global "Show extraction provenance" toggle —
    lives in the hero alongside the download link. Unchecked by
    default (matches the FA's 'hide things that are not important'). */
 .evidence-toggle {
@@ -484,7 +484,7 @@ body {
   align-items: center;
   gap: 6px;
 }
-/* friday Stage 3: multi-line value (e.g. the combined business-purpose
+/* multi-line value (e.g. the combined business-purpose
    card). Need block layout instead of flex+center so \n in the text
    actually renders as line breaks, and pre-line so consecutive spaces
    collapse but newlines stay. */
@@ -531,8 +531,8 @@ body {
 }
 .line-summary {
   display: grid;
-  /* chev | kind icon | index | headline | date | amount | delete (Stage 23)
-     (Stage 6 follow-up: dropped the verbose "kind text" column —
+  /* chev | kind icon | index | headline | date | amount | delete
+     (dropped the verbose "kind text" column:
      the left-side icon already conveys the kind, the text was just
      duplication.) */
   grid-template-columns: 14px 22px 32px 1fr auto auto auto;
@@ -546,7 +546,7 @@ body {
   background: #f3f4f6;
   border-bottom: 1px solid transparent;
 }
-/* Stage 23: × delete button on each transaction-line card. Subdued
+/* × delete button on each transaction-line card. Subdued
    until hover so the FA's eye doesn't catch on it during review. */
 .line-delete {
   background: transparent;
@@ -564,7 +564,7 @@ body {
   color: #dc2626;
   border-color: #fecaca;
 }
-/* Stage 23: undo button in the hero. Hidden by default; the
+/* undo button in the hero. Hidden by default; the
    setupUndoButton JS reveals it via [hidden] removal after polling
    /uploads/<id>/undo-available. */
 .hero-undo { margin: 8px 0 0; }
@@ -622,7 +622,7 @@ body {
   border-top: 1px solid #f3f4f6;
   padding-top: 14px;
 }
-/* friday Stage 6: nested <details> per transaction line that holds the
+/* nested <details> per transaction line that holds the
    secondary fields (original currency / amount / exchange rate /
    country). Closed by default — FA expands only when they need to
    verify FX conversion. Styled subtly so it doesn't compete with
@@ -654,7 +654,7 @@ body {
 
 /* Inline evidence quote (always visible, no hover) ────────────────────── */
 .field-evidence {
-  /* friday Stage 6: hidden by default per FA feedback ('hide things
+  /* hidden by default per FA feedback ('hide things
      that are not important'). The hero's "Show extraction provenance"
      checkbox sets body.show-evidence to reveal them on demand —
      spot-check ↗ button works regardless. */
@@ -667,7 +667,7 @@ body {
 }
 body.show-evidence .field-evidence { display: block; }
 
-/* friday Stage 7: inline-edit input that replaces the value text
+/* inline-edit input that replaces the value text
    when the FA clicks a .field-value. Matches the surrounding
    field-value typography so the FA's input visually IS the value.
    Wrap holds (input + cancel-button) side-by-side; the hint
@@ -734,7 +734,7 @@ body.show-evidence .field-evidence { display: block; }
 .field-value:has(.inline-edit-wrap) {
   display: block;
 }
-/* friday Stage 7: editable cards drop click-to-copy but keep the
+/* editable cards drop click-to-copy but keep the
    click-cursor hint so the FA knows the value is interactive. */
 .field-card--editable .field-value { cursor: text; }
 .field-card--editable:hover { background: #f3f4f6; }

@@ -57,8 +57,8 @@ DEFAULT_MAX_OUTPUT_TOKENS = 65536
 # INVALID_ARGUMENT means our schema is wrong; 403 means auth is wrong;
 # retrying won't help and just wastes time + quota). 3 attempts means
 # we tolerate up to ~7s of transient flakiness (1+2+4 backoff) before
-# bubbling the failure up to the per-file PipelineError path, which
-# Stage 11c isolates from the rest of the batch.
+# bubbling the failure up to the per-file PipelineError path,
+# which is isolated from the rest of the batch.
 RETRYABLE_HTTP_STATUSES = {408, 429, 500, 502, 503, 504}
 RETRY_MAX_ATTEMPTS = 3
 RETRY_BACKOFF_BASE_SEC = 1.0
@@ -368,12 +368,9 @@ def single_call(
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=response_schema,
-                # Gemini 3 includes "thinking" tokens in this budget. Tamarine
-                # spent 7860 thinking tokens at 8192 = too small. After Stage 6
-                # added confidence_reason on every leaf the output volume grew
-                # again — uber1.pdf blew past 32768 mid-JSON. 65536 leaves
-                # headroom for multi-page PDFs (Uber receipts are 2 pages,
-                # hotel folios can be longer).
+                # Gemini 3 includes "thinking" tokens in this budget.
+                # 65536 leaves headroom for multi-page PDFs and the
+                # per-leaf confidence_reason payload.
                 max_output_tokens=DEFAULT_MAX_OUTPUT_TOKENS,
                 temperature=0.0,
             ),

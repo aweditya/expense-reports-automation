@@ -1,4 +1,4 @@
-"""Real-GCS tests for scripts/gcs_artifacts.py (Phase 2b).
+"""Real-GCS tests for scripts/gcs_artifacts.py.
 
 Each test uses a unique test_<uuid> upload_id, then cleans up.
 Same skip conditions as test_firestore_reports.py.

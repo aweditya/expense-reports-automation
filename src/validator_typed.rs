@@ -402,7 +402,7 @@ fn walk_transaction_lines(report: &ExpenseReport, issues: &mut Vec<ValidationIss
         }
         // Remaining detail blocks (airfare / car_rental /
         // conference_registration / gift / human_subject) intentionally
-        // not walked yet — phases beyond Phase 3 add them when we have
+        // not walked yet — future kinds add them when we have
         // real receipts to ground the schema in.
     }
 }
@@ -1177,7 +1177,7 @@ mod tests {
 
     #[test]
     fn category_country_consistency_foreign_with_non_usd_currency_clean() {
-        // Production scenario from Phase 4 Air India BOM→SFO
+        // Production scenario from the Air India BOM→SFO
         // ticket has country_of_activity="United States" (per the airfare
         // prompt: "country of FURTHEST destination") but original_currency
         // ="INR" — the report IS legitimately foreign by currency. The

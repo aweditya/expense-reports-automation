@@ -5,7 +5,7 @@ split into two parallel Gemini calls (was single-call until B1)
 because needed `pre_tax_amount` + `tax_amount` in
 `meal_details` for the precise 20% tip-cap validation, and adding
 them to the single-call schema busted Vertex's property-count
-ceiling (see docs/redesign-regrets.md 2026-05-22). Pattern mirrors
+ceiling (). Pattern mirrors
 `extract_lodging.py`:
 
 - "main" call:    extracts `common` + `meal_details` (the receipt-

@@ -9,23 +9,15 @@ Two parallel Gemini calls per folio:
                   printed currency, and the per-night rate breakdown
                   that reduction averages into `lodging_details.daily_rate`.
 
-Both calls see the **full folio**; they differ only in their response
-schema. The multi-call pattern is necessary because Vertex's Schema
-validator rejects schemas that have > ~5 detail-block leaves with
-inlined `_meta` — see `docs/redesign-regrets.md` 2026-05-13. Meal and
-transport stay single-call because their detail blocks are smaller.
+Both calls receive the full folio; only the response schema
+differs. The split is forced by Vertex's Schema validator
+rejecting schemas with too many detail-block leaves wrapped in
+inlined `_meta`.
 
-After both calls return, their single-element output arrays' first
-dicts are merged into the same `{common, lodging_details, extras}`
-shape a single call would have produced. Reduction (Rust) sees no
-difference from the single-call kinds.
+Results merge into the `{common, lodging_details, extras}` shape
+a single call would have produced. Reduction sees no difference.
 
-Phase 3 v1 focuses on English-language folios — clean PDFs from US
-hotel chains (Hilton/Hampton/Hyatt/Sheraton/Homewood/Hyatt Place) that
-are the bulk of the corpus the FA submits today. Multilingual support
-(French/German/Japanese folios) is a v2 follow-up.
-
-Dispatched by `local_app_simple.py` based on the FA's per-file kind
+Dispatched by `local_app_simple.py` based on the per-file kind
 choice in the upload form.
 """
 

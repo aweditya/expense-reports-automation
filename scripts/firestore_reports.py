@@ -12,10 +12,9 @@ The container-local disk is wiped on every Cloud Run restart, so a
 24-hour-old workbench URL just 404s. Firestore-backed reports
 survive container recycle — the FA can come back tomorrow.
 
-Stage 2a (this module) lands the WRITE side: every upload + every
-edit dual-writes Firestore alongside the existing disk write.
-Stage 2c will land the READ side: when the disk cache is missing,
-re-hydrate from Firestore and re-render the workbench.
+Every upload and every edit dual-writes the report state here
+alongside the disk write. On a cache miss, `_rehydrate_upload`
+in local_app_simple.py pulls the doc back and re-renders.
 
 Gated by env var `USE_FIRESTORE_REPORTS` so the write can be
 shipped dark + rolled back by flipping the gate.

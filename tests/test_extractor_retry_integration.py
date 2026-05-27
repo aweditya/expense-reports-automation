@@ -1,4 +1,4 @@
-"""Integration test for the Stage 21 retry around single_call().
+"""Integration test for the the retry helper around single_call().
 
 The existing tests/test_extractor_retry.py exercises _is_retryable +
 _retry_with_backoff in isolation. This file asserts the wrapper is
@@ -124,7 +124,7 @@ class TestSingleCallRetryIntegration(unittest.TestCase):
         self.assertIn('"severity": "WARNING"', stdout)
 
     def test_400_does_not_retry(self):
-        """400 INVALID_ARGUMENT (e.g. schema-too-large, Stage 9c
+        """400 INVALID_ARGUMENT (e.g. schema-too-large, tip-cap revert
         regression class) must bubble out after exactly one attempt
         — retrying gives the same answer and wastes quota."""
         client = self._make_client([_http_error(400)])
@@ -142,7 +142,7 @@ class TestSingleCallRetryIntegration(unittest.TestCase):
 
     def test_three_503s_exhausts_and_raises(self):
         """All attempts fail with 503 → single_call re-raises the last
-        exception (so the per-file PipelineError path in Stage 11c can
+        exception (so the per-file PipelineError path in per-file isolation can
         isolate this receipt from the batch). Should log twice (after
         attempt 1 + 2; no log after the final attempt since there's
         no retry-in-sec to announce)."""

@@ -9,7 +9,7 @@ Three modes:
             release-readiness gate after any Flask threading / JOBS edit.
 
   batch     1 upload with N files. Tests the FA's typical multi-receipt
-            batch flow (Stage 11c per-file isolation, total wallclock,
+            batch flow (per-file isolation, total wallclock,
             extract phase progression).
 
   watch     Subscribe to an existing /upload/progress/<id> stream and

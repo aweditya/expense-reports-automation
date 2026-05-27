@@ -1,4 +1,4 @@
-"""Unit tests for the per-upload edit history helpers (Stage 23).
+"""Unit tests for the per-upload edit history helpers.
 
 Covers the four primitives in scripts/local_app_simple.py:
   _read_history / _write_history / _append_history /

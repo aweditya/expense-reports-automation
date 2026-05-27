@@ -1,6 +1,6 @@
 """Covers `write_fa_input` from scripts/local_app_simple.py.
 
-This is the Python side of the FA-input wiring (Stage S.2): the helper
+The Python side of the FA-input wiring: the helper
 that takes the Flask form payload and writes `fa_input.json` in the
 shape the Rust `FaInput` struct expects. The Rust side has its own
 serde round-trip tests in src/fa_input.rs."""

@@ -1,4 +1,4 @@
-"""Unit tests for scripts/log_event.py (Stage 22).
+"""Unit tests for scripts/log_event.py.
 
 Asserts the emitted lines are valid JSON, carry the expected fields,
 and route to the right stream (INFO/WARNING → stdout, ERROR → stderr).

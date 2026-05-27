@@ -35,10 +35,9 @@ GENERATED_DIR = REPO_ROOT / "generated"
 
 # Auto-discover every generated response_schema. Previously a hand-
 # maintained list — drift between this list and SCHEMAS_TO_GENERATE
-# in generate_response_schema.py meant new schemas (e.g. Stage 13's
-# miscellaneous + Stage 14's membership) wouldn't get probed unless
-# we remembered to add them here. Globbing closes that gap so every
-# future schema is gated automatically.
+# in generate_response_schema.py meant newly-added schemas would
+# not get probed unless explicitly listed. Globbing closes that gap
+# so every future schema is gated automatically.
 def discover_schema_files() -> list[str]:
     return sorted(p.name for p in GENERATED_DIR.glob("response_schema_*.json"))
 

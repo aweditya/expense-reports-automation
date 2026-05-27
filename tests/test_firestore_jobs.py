@@ -1,4 +1,4 @@
-"""Real-Firestore tests for scripts/firestore_jobs.py (Phase 1).
+"""Real-Firestore tests for scripts/firestore_jobs.py.
 
 These tests exercise the actual Firestore database (the default in
 soe-agile-agents, created 2026-05-25). Each test writes + reads a

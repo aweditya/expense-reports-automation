@@ -5,7 +5,7 @@ re-running Gemini (~3 min, costs API quota).
 
 The cached spike JSONs were extracted before bboxes existed. This script
 adds bboxes to every document_span evidence entry so the workbench will
-render halos as if Stage B.3 had run the extractors fresh.
+render halos as if the production grounding path had run the extractors fresh.
 
 Costs one Document AI page-call per receipt. ~20 receipts in the corpus
 at present, so cents total.

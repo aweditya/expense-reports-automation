@@ -147,15 +147,11 @@ class PipelineError(RuntimeError):
 JOBS: dict[str, dict] = {}
 JOBS_LOCK = threading.Lock()
 USE_FIRESTORE_JOBS = os.environ.get("USE_FIRESTORE_JOBS", "0") == "1"
-# Durable-store Phase 2a: dual-write reports to Firestore alongside
-# the existing disk write. Read path stays on disk (Phase 2c will
-# add the re-render-from-Firestore fallback). Flip the gate off to
-# revert to disk-only writes.
+# Dual-write reports to Firestore alongside the disk write.
+# Flip the gate off to revert to disk-only writes.
 USE_FIRESTORE_REPORTS = os.environ.get("USE_FIRESTORE_REPORTS", "0") == "1"
-# Durable-store Phase 2b: dual-write source PDFs + extraction JSONs
-# to GCS. Read path stays on disk; Stage 2c adds the
-# rehydrate-from-GCS fallback that lets a recycled container serve
-# an existing workbench URL.
+# Dual-write source PDFs + extraction JSONs to GCS. Rehydrate
+# pulls from here when the disk cache is cold.
 USE_GCS_ARTIFACTS = os.environ.get("USE_GCS_ARTIFACTS", "0") == "1"
 
 
@@ -189,20 +185,18 @@ def _get_job(upload_id: str) -> dict:
 
 def _save_report_state(upload_id: str, upload_dir: Path,
                        filed_by_sunet: str | None = None) -> None:
-    """Durable-store Phase 2a dual-write. After any successful disk
-    write of report.json / fa_input.json / edit_history.json, mirror
-    the state to Firestore so a container recycle doesn't lose the
-    FA's edits. No-op when the gate is off.
+    """Mirror report.json + fa_input.json + edit_history.json to
+    Firestore after each disk write. No-op when USE_FIRESTORE_REPORTS
+    is off.
 
-    `filed_by_sunet` is set on initial upload + add-receipts and
-    omitted on edit/delete/undo. Firestore's merge=True preserves
-    the existing value when we pass None, so the original filer
-    sticks even as other FAs edit. This is what the dashboard
-    scopes on.
+    `filed_by_sunet` is recorded only on initial upload and
+    add-receipts. Firestore merge=True preserves the existing value
+    when this argument is None, so edits by other FAs do not
+    overwrite the original filer. The dashboard scopes on this field.
 
-    Best-effort: a Firestore failure logs but does NOT abort the
-    request — the disk write is still authoritative until Phase 2c
-    flips the read path. Operator sees the failure in Cloud Logging.
+    Best-effort: a Firestore failure is logged via log_error and
+    swallowed. Disk remains authoritative; rehydrate covers the
+    cache-miss path on recycle.
     """
     if not USE_FIRESTORE_REPORTS:
         return
@@ -256,10 +250,10 @@ def _iap_signed_in_sunet() -> str | None:
 
 
 def _rehydrate_upload(upload_id: str, upload_dir: Path) -> bool:
-    """Durable-store Phase 2c: rebuild the per-upload disk layout
-    from Firestore (report + fa_input + history) and GCS (source
-    PDFs + extraction JSONs), then re-run render_workbench so the
-    next GET hits the materialized cache.
+    """Rebuild the per-upload disk layout from Firestore (report
+    + fa_input + history) and GCS (source PDFs + extraction JSONs),
+    then re-run render_workbench so the next GET hits the
+    materialized cache.
 
     Returns True iff rehydration succeeded; False if Firestore has
     no record for this upload_id (true 404). On any error mid-flight
@@ -312,12 +306,10 @@ def _rehydrate_upload(upload_id: str, upload_dir: Path) -> bool:
 
 def _upload_artifact_to_gcs(upload_id: str, category: str,
                             local_path: Path) -> None:
-    """Durable-store Phase 2b dual-write. After a source file lands
-    on disk (upload) or an extraction JSON is written by Gemini,
-    mirror it to GCS so a container recycle doesn't lose the binary.
-    No-op when the gate is off. Best-effort: a GCS failure logs but
-    does NOT abort the pipeline — disk is still the source of truth
-    until Stage 2c flips the read path."""
+    """Mirror a source file or extraction JSON to GCS after it lands
+    on disk. No-op when USE_GCS_ARTIFACTS is off. Best-effort: a
+    GCS failure is logged and swallowed; disk remains authoritative
+    until rehydrate fires on a cold cache."""
     if not USE_GCS_ARTIFACTS:
         return
     if not local_path.exists():
@@ -419,8 +411,7 @@ def upload():
     write_fa_input(request.form, fa_input_path)
 
     saved = save_uploaded_files(pairs, files_dir)
-    # Phase 2b: durable copy of every source file to GCS so a
-    # container recycle doesn't lose the binary. Best-effort.
+    # Durable copy of every source file to GCS. Best-effort.
     for src_path, _kind in saved:
         _upload_artifact_to_gcs(upload_id, "files", src_path)
 
@@ -1329,9 +1320,8 @@ def serve_upload_file(upload_id: str, filename: str):
     workbench.html, extractions/<name>.json, files/<name>, reduced/report.json,
     etc. The renderer emits relative URLs that resolve against this prefix.
 
-    Stage 2c: on local cache miss, attempt rehydration from Firestore
-    + GCS before 404. Makes 24-hour-old workbench URLs survive
-    container recycles."""
+    On local cache miss, attempts rehydration from Firestore + GCS
+    before 404. Workbench URLs survive container recycle."""
     safe_id = sanitize_id(upload_id)
     upload_dir = UPLOADS_ROOT / safe_id
     if not upload_dir.is_dir():
@@ -1344,16 +1334,12 @@ def serve_upload_file(upload_id: str, filename: str):
 
 def write_fa_input(form, out_path: Path) -> None:
     """Collect FA-input fields from the upload form and write them as
-    `fa_input.json`. Field names match the HTML `name=` attributes
-    (`fa_<key>`); the JSON keys match `FaInput`'s field names in
-    `src/fa_input.rs` so the Rust side parses them with serde.
+    `fa_input.json`. Form keys are `fa_<key>`; JSON keys match the
+    `FaInput` struct in `src/fa_input.rs` (parsed via serde).
 
-    All fields are optional in the JSON. Blank inputs become `None`
-    rather than empty strings — keeps the FA's intent ("I didn't fill
-    this") distinct from "I typed an empty string." If NO `fa_*` fields
-    appear in the form (e.g. a programmatic POST that bypasses the
-    fieldset), no file is written and the reducer falls back to the
-    no-FA-input flow (S.3 makes --fa-input optional).
+    Blank inputs serialize as None to distinguish "not filled" from
+    "empty string." If no `fa_*` fields appear in the form, no file
+    is written; the reducer treats --fa-input as optional.
     """
     mapping = {
         "fa_payee_name": "payee_name",
@@ -1393,12 +1379,12 @@ def save_uploaded_files(pairs, dest_dir: Path) -> list[tuple[Path, str]]:
     Threads each file's kind through unchanged — the dispatcher (extract_all)
     needs it to pick the right extractor.
 
-    Pre-flight: content-sniff every upload's bytes. If they're HEIC/HEIF
-    (iPhone format, often mis-extensioned as .png/.jpg by iOS export), transcode
-    to JPEG before writing. Document AI strictly enforces declared MIME vs
-    actual bytes and 400s on the mismatch; this normalizes the input so the
-    downstream extractors see a real JPEG. See docs/redesign-regrets.md
-    2026-05-18 'trusted the file extension; tamarine was HEIC bytes'.
+    Content-sniffs every upload's bytes. HEIC/HEIF bytes
+    (iPhone format, often mis-extensioned as .png/.jpg by iOS
+    export) are transcoded to JPEG before writing. Document AI
+    enforces declared MIME against actual bytes and returns 400
+    on mismatch; this normalizes the input so downstream extractors
+    see a real JPEG.
     """
     seen: set[str] = set()
     out: list[tuple[Path, str]] = []
@@ -1674,7 +1660,7 @@ def _run_pipeline_in_background(
 
     def file_done(idx: int, name: str) -> None:
         _update_file(idx, status="done")
-        # Phase 2b: durable copy of the per-receipt extraction JSON.
+        # Durable copy of the per-receipt extraction JSON.
         extraction_path = extractions_dir / f"{Path(name).stem}.json"
         _upload_artifact_to_gcs(upload_id, "extractions", extraction_path)
 

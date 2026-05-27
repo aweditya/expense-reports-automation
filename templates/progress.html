@@ -116,7 +116,7 @@
       item.textContent = f.status === 'done' ? '✓' :
                          f.status === 'extracting' ? '…' :
                          f.status === 'failed' ? '✗' : '•';
-      // Per-file error message (Stage 11c) — only failed files have it.
+      // Per-file error message — only failed files have it.
       const errLine = listEl.querySelector('[data-idx="' + i + '"] [data-error]');
       if (errLine) {
         if (f.status === 'failed' && f.error) {

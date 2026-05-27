@@ -5,18 +5,16 @@ Firestore can't hold cheaply:
   - per-receipt extraction JSONs produced by Gemini (structured but
     too many small objects to fit one Firestore doc)
 
-Phase 2b of the durable-store plan. Mirror of `firestore_reports.py`
-for the artifact tier.
+Mirror of `firestore_reports.py` for the artifact tier.
 
 Layout:
     gs://<bucket>/uploads/<upload_id>/files/<sanitized-filename>
     gs://<bucket>/uploads/<upload_id>/extractions/<basename>.json
 
-Caller's responsibility to call upload_artifact AFTER the file
-exists on local disk (we don't write to disk ourselves). The dual-
-write pattern keeps disk authoritative for in-flight reads while
-GCS becomes the recovery source for container-recycle survival
-(Stage 2c will land the read fallback).
+Callers must invoke `upload_artifact` after the file is written
+to local disk; this module does not write to disk. Disk remains
+authoritative for in-flight reads; GCS is the recovery source on
+container recycle.
 
 Gated by env var `USE_GCS_ARTIFACTS` in the caller — this module
 itself does no gating, just operations.

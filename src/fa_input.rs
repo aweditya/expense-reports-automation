@@ -1,4 +1,4 @@
-//! FA-entered values from the upload-form fieldset (FA Input — Phase 5
+//! FA-entered values from the upload-form fieldset 
 //! scope completion; see docs/fa-input-plan.md).
 //!
 //! The Flask app writes `fa_input.json` alongside each upload's files;
