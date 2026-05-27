@@ -1,243 +1,90 @@
-# Expense Reports Automation
+# Stanford Expense Reports
 
-This repo builds the data spine for a robust expense-report automation system:
+AI-assisted expense-report extraction for Stanford CS/EE Faculty
+Administrators. FAs upload receipt PDFs/images; we extract
+structured fields with Gemini + Document AI, validate against
+Stanford's portal rules, and emit two CSVs the FA uploads to file
+the report.
 
-- OCR / transcription into markdown
-- typed document-fact extraction
-- bundle synthesis into a canonical report
-- schema projection and validation
-- FA review packet and workbench generation
-- feedback capture and versioned review/submission ledger
+Deployed at <https://34.160.32.50.nip.io> (Stanford SSO required).
 
-The current validated live OCR path is `Gemini 3` on Vertex AI through the official Google Gen AI SDK, exposed via the `vertex-gemini-sdk` ingestion engine.
+---
 
-That OCR path now applies a small deterministic markdown normalization pass after model output so downstream extraction does not churn on heading spacing or wrapped pipe-row continuations.
+## Start here
 
-## Repo Map
+**New to this codebase?** Read [`docs/onboarding.md`](docs/onboarding.md)
+first. It's the only entry point you need — it'll route you to
+the rest of the docs in the right order.
 
-- [docs/README.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/README.md:1): documentation index
-- [docs/getting-up-to-speed.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/getting-up-to-speed.md:1): onboarding guide for new readers
-- [docs/demo-playbook.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/demo-playbook.md:1): runnable demo instructions for each completed deliverable
-- [docs/system-architecture.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/system-architecture.md:1): full system design
-- [docs/real-document-ingestion.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/real-document-ingestion.md:1): OCR and ingestion CLI details
-- [docs/ingestion-workspace.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/ingestion-workspace.md:1): managed bundle workspace and rerunnable upload flow
-- [docs/local-app.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/local-app.md:1): tiny local upload app for FA review
-- [docs/document-facts.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/document-facts.md:1): typed per-document extraction contract
-- [docs/bundle-synthesis.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/bundle-synthesis.md:1): cross-document synthesis and draft projection
-- [docs/review-workbench.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/review-workbench.md:1): FA-facing output surface
-- [docs/ui-workbench-redesign.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/ui-workbench-redesign.md:1): current redesign plan for the interactive review UI
-- [docs/review-submission-ledger.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/review-submission-ledger.md:1): versioned review and submission tracking
-- [reference/README.md](/Users/adityasriram/Labs/stanford/research/expense-reports/reference/README.md:1): reference artifacts and non-code assets
+5-minute orientation, 30-minute walkthrough, 2-hour deep dive.
 
-## Prerequisites
+---
 
-- Rust with `cargo`
-- Python 3
-- `pdftotext` for builtin PDF transcription
-- A Google Cloud service-account JSON key with Vertex AI access for live Gemini OCR
+## Docs map
 
-For live Gemini OCR, the helper script uses the Google Gen AI SDK. A local venv like this is the simplest setup:
+| Audience | Doc | What's in it |
+|---|---|---|
+| New maintainer (you) | [`docs/onboarding.md`](docs/onboarding.md) | Reading-order index + first-day cheat sheet + gotchas |
+| Anyone | [`docs/SPEC.md`](docs/SPEC.md) | Architecture spec with mermaid diagrams |
+| Engineer | [`docs/internals.md`](docs/internals.md) | Code-mechanism deep dives (extraction, validation, persistence, concurrency, CI/CD, refresh resilience) |
+| Ops engineer | [`docs/deployment-guide.md`](docs/deployment-guide.md) | Stand-up-from-scratch + service-account JSON + Cloud Build debug runbook |
+| Ops engineer (fast) | [`docs/deploy-cheatsheet.md`](docs/deploy-cheatsheet.md) | One-pager of operational facts (URLs, IAM, region, gotchas) |
+| FA (end user) | [`docs/fa-user-guide.md`](docs/fa-user-guide.md) | How to use the deployed website |
+| Future-you | [`docs/redesign-regrets.md`](docs/redesign-regrets.md) | "What hurt when we shipped X" log — read before making changes near a flagged area |
 
-```bash
-python3 -m venv .venv
-.venv/bin/pip install google-genai google-auth pillow
-```
+Historical design docs (pre-redesign, kept for context, not
+current): `docs/redesign-plan.md`, `docs/leapfrog-plan.md`,
+`docs/durable-store-plan.md`, `docs/fa-input-plan.md`, etc. The
+current docs above reflect the system as it stands today.
 
-The OCR helper scripts accept `--sdk-python .venv/bin/python`, and the checked-in wrappers in `scripts/` assume a repo-local `.venv` by default.
+---
 
-## Quick Start
-
-Run the Rust test suite:
+## Quick start
 
 ```bash
-cargo test
+# Auth (once per machine)
+gcloud auth login
+gcloud auth application-default login
+gcloud config set project soe-agile-agents
+
+# Setup
+./.venv/bin/pip install -r deploy/requirements.txt
+./.venv/bin/playwright install chromium
+cargo build
+
+# Run locally with the full durable store
+PORT=8088 VERTEX_PROJECT_ID=soe-agile-agents \
+  USE_FIRESTORE_JOBS=1 USE_FIRESTORE_REPORTS=1 USE_GCS_ARTIFACTS=1 \
+  ./.venv/bin/python scripts/local_app_simple.py
+
+# Open http://127.0.0.1:8088
 ```
 
-Run the Python evaluator tests:
+## Tests
 
 ```bash
-python3 -m unittest discover -s tests
+cargo test                                                       # Rust (~127)
+./.venv/bin/python -m unittest discover -s tests -p "test_*.py"  # Python (~168, ~50 skipped without RUN_PROD_E2E)
 ```
 
-Run the tiny local upload app:
+Prod E2E (~$3, ~25 min):
 
 ```bash
-python3 scripts/local_app.py \
-  --workspace-root /tmp/expense_local_app_workspace \
-  --default-engine vertex-gemini-sdk \
-  --default-service-account-key /abs/path/to/service-account.json \
-  --default-sdk-python ./.venv/bin/python \
-  --port 8765
+RUN_PROD_E2E=1 VERTEX_PROJECT_ID=soe-agile-agents \
+  ./.venv/bin/python -m unittest tests.test_workbench_browser -v
 ```
 
-Then open `http://127.0.0.1:8765` in a browser. The app stages uploads into the managed workspace, runs the pipeline, and opens bundles directly in the editable FA workbench.
-The file picker can be reopened multiple times before submit. Technical ingestion settings are hidden by default and can be re-exposed with `--show-advanced-config` if you need engineering overrides.
-
-Generate a synthetic corpus for inspection:
+## Deploy
 
 ```bash
-cargo run --bin generate_synthetic_corpus -- --output-dir /tmp/expense_corpus --packets 8
+git push origin main    # Cloud Build trigger fires, deploys to prod
 ```
 
-Validate a minimal schema-shaped report:
+That's the entire interface. See [`docs/deployment-guide.md`](docs/deployment-guide.md)
+§6.5 if it breaks.
 
-```bash
-cargo run --bin validate_report -- \
-  examples/minimal_report.yaml
-```
+## Project conventions
 
-For realistic end-to-end document ingestion, use synthetic documents or OCR-rendered files as shown below.
-
-## OCR and Ingestion
-
-Transcribe a single PNG or PDF through Gemini 3:
-
-```bash
-cargo run --bin transcribe_document -- \
-  --engine vertex-gemini-sdk \
-  --service-account-key /abs/path/to/service-account.json \
-  --location global \
-  --model gemini-3-flash-preview \
-  receipt.png
-```
-
-Run the checked-in Gemini smoke wrapper:
-
-```bash
-bash scripts/run_gemini_smoke_test.sh --packets 2
-```
-
-Run end-to-end ingestion on a packet of rendered source documents:
-
-```bash
-cargo run --bin ingest_expense_documents -- \
-  --output-dir /tmp/expense_ingest_live \
-  --fx demo \
-  --engine vertex-gemini-sdk \
-  --service-account-key /abs/path/to/service-account.json \
-  --location global \
-  --model gemini-3-flash-preview \
-  itinerary.png hotel_folio.pdf receipt.png
-```
-
-This writes:
-
-- `transcriptions/*.transcribed.json`
-- `facts/*.facts.json`
-- `bundle.json`
-- `draft.yaml`
-- `validation.json`
-- `readiness.json`
-- `review_packet.json`
-- `review_workbench.html`
-- `ledger.json`
-- `manifest.json`
-
-Run the managed bundle-workspace flow so raw uploads, normalized artifacts, and processing runs are stored together:
-
-```bash
-cargo run --bin ingest_bundle_workspace -- \
-  stage-and-run \
-  --workspace-root /tmp/expense_workspace \
-  --bundle-id live_demo \
-  --user-id aditya \
-  --run-id gemini_flash \
-  --fx demo \
-  --engine vertex-gemini-sdk \
-  --service-account-key /abs/path/to/service-account.json \
-  --location global \
-  itinerary.png hotel_folio.pdf receipt.png
-```
-
-That creates a stable bundle directory with:
-
-- `uploads/`
-- `normalized/`
-- `runs/<run_id>/artifacts/`
-- `bundle_manifest.json`
-
-The same workflow is also available through the local browser app in [scripts/local_app.py](/Users/adityasriram/Labs/stanford/research/expense-reports/scripts/local_app.py:1), documented in [docs/local-app.md](/Users/adityasriram/Labs/stanford/research/expense-reports/docs/local-app.md:1).
-
-## Synthetic OCR Evaluation
-
-The main regression harness for live OCR is [scripts/evaluate_synthetic_ocr_corpus.py](/Users/adityasriram/Labs/stanford/research/expense-reports/scripts/evaluate_synthetic_ocr_corpus.py:1). It:
-
-- generates a synthetic packet corpus
-- renders markdown into OCR-style PNG/PDF documents
-- runs end-to-end ingestion with Gemini 3
-- compares OCR markdown against the source markdown
-- reports filing/readiness outcomes per model
-
-By default it compares:
-
-- `gemini-3-flash-preview`
-- `gemini-3-pro-preview`
-
-If your project lacks access to one of the requested models, the evaluator does not abort. It records that model as unavailable in the comparison output and still keeps the successful model results.
-
-Example:
-
-```bash
-python3 scripts/evaluate_synthetic_ocr_corpus.py \
-  --service-account-key /abs/path/to/service-account.json \
-  --location global \
-  --output-dir /tmp/expense_ocr_eval \
-  --packets 4
-```
-
-Outputs include:
-
-- `ocr_comparison.json`
-- `ocr_comparison.md`
-- `ocr_evaluation_gemini_3_flash_preview.json`
-- `ocr_evaluation_gemini_3_flash_preview.md`
-- `ocr_evaluation_gemini_3_pro_preview.json`
-- `ocr_evaluation_gemini_3_pro_preview.md`
-
-If you only pass one `--model`, the script also writes:
-
-- `ocr_evaluation.json`
-- `ocr_evaluation.md`
-
-For managed-workspace stress testing, use [scripts/evaluate_workspace_pipeline.py](/Users/adityasriram/Labs/stanford/research/expense-reports/scripts/evaluate_workspace_pipeline.py:1). It exercises the persistent `bundle_id` workflow instead of the one-shot ingestion CLI.
-
-Large builtin workspace stress run:
-
-```bash
-python3 scripts/evaluate_workspace_pipeline.py \
-  --output-dir /tmp/workspace_builtin_stress \
-  --engine builtin \
-  --packets 128
-```
-
-Live Gemini workspace stress run:
-
-```bash
-python3 scripts/evaluate_workspace_pipeline.py \
-  --output-dir /tmp/workspace_gemini_stress \
-  --engine vertex-gemini-sdk \
-  --service-account-key /abs/path/to/service-account.json \
-  --location global \
-  --model gemini-3-flash-preview \
-  --packets 12
-```
-
-## Testing Surface
-
-Current automated coverage includes:
-
-- Rust unit and regression tests for schema generation, validation, extraction, bundle synthesis, review packet/workbench, feedback, ledger, and ingestion
-- mocked Vertex REST tests
-- mocked SDK-backed OCR ingestion tests
-- live synthetic OCR evaluation against Gemini 3
-- Python unit tests for the OCR comparison harness
-- Python unit tests for the local upload app, including multipart parsing, command construction, handler routing, and upload redirects
-
-## Current Limits
-
-- The current synthetic live OCR evaluation is clean at larger scale: Gemini 3 Flash matched `96/96` documents exactly on a 32-packet synthetic stress test.
-- Document extraction coverage is strongest for:
-  - flight itineraries
-  - hotel folios
-  - restaurant-style receipts
-- Stanford accepted expense report PDFs now live under [reference/README.md](/Users/adityasriram/Labs/stanford/research/expense-reports/reference/README.md:1). They are reference material, not the intended OCR input set for extractor evaluation.
+See [`CLAUDE.md`](CLAUDE.md) for the non-negotiable workflow rules
+this codebase has accumulated. They exist because of expensive
+lessons; follow them.

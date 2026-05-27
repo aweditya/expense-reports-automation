@@ -64,6 +64,52 @@ The single hard rule: **schema.yaml is the source of truth.** Every
 other artifact in `generated/` exists because some tool regenerates
 it from `schema.yaml`. Never edit `generated/*` by hand.
 
+### 1.1 Where the data lives
+
+Per-upload state lives in three tiers. Disk is a cache; Firestore +
+GCS are the durable record. After a container recycle, the cache is
+empty and rehydrate (§8) repopulates it from the durable tier on
+the next request.
+
+```mermaid
+graph LR
+    subgraph Disk["Container disk — ephemeral cache<br/>/app/.scratch/uploads/&lt;id&gt;/"]
+      D1[files/&lt;sanitized-name&gt;] --> D2[extractions/&lt;basename&gt;.json]
+      D2 --> D3[reduced/report.json]
+      D3 --> D4[workbench.html]
+      D3 --> D5[lines-domestic.csv]
+      D3 --> D6[lines-foreign.csv]
+      D7[fa_input.json]
+      D8[edit_history.json]
+    end
+
+    subgraph Firestore["Firestore — durable, queryable"]
+      F1[jobs/&lt;id&gt;<br/>live progress + 7d TTL]
+      F2[reports/&lt;id&gt;<br/>report + fa_input + history + 90d TTL]
+    end
+
+    subgraph GCS["GCS — durable, binary artifacts<br/>gs://soe-agile-agents-expense-reports-state/"]
+      G1[uploads/&lt;id&gt;/files/&lt;name&gt;]
+      G2[uploads/&lt;id&gt;/extractions/&lt;basename&gt;.json]
+    end
+
+    D1 -.dual-write.-> G1
+    D2 -.dual-write.-> G2
+    D3 -.dual-write.-> F2
+    D7 -.dual-write.-> F2
+    D8 -.dual-write.-> F2
+```
+
+Key cross-references — when you're debugging:
+
+| If you see | Look in |
+|---|---|
+| Workbench shows nothing | `.scratch/uploads/<id>/reduced/report.json` |
+| Wrong extracted value | `.scratch/uploads/<id>/extractions/<file>.json` |
+| Edit "lost" after a deploy | `reports/<id>` in Firestore (it's there; disk was wiped) |
+| `phase=lost` mid-upload | `jobs/<id>` in Firestore (was the writer thread alive?) |
+| Source PDF 404 | `gs://...-state/uploads/<id>/files/` |
+
 ---
 
 ## 2. Pipeline flow — one upload, end-to-end
@@ -184,6 +230,20 @@ multiplying the effective property count by ~5x.
 For small kinds (membership, miscellaneous, mileage) one call fits.
 For the rest, we **split the schema across multiple parallel calls**
 and merge the results.
+
+```mermaid
+flowchart LR
+  Receipt[Lodging receipt<br/>PDF / image]
+  Receipt --> Main[Gemini call #1<br/>main schema<br/>~25 fields]
+  Receipt --> Extras[Gemini call #2<br/>extras schema<br/>~10 fields]
+  Main --> Merge
+  Extras --> Merge[merge_two_call_lines]
+  Merge --> Out[one merged JSON<br/>~35 fields, same shape as<br/>single-call kinds]
+```
+
+Both calls fire in parallel via a 2-worker thread pool. The merge
+guards against overlapping keys at runtime (the schema split is
+designed so neither side carries the same field; mismatch = bug).
 
 Pattern (see `scripts/extract_lodging.py` for canonical 2-call):
 
@@ -393,6 +453,30 @@ Read path (after container recycle):
 
 This is what makes 24-hour-old URLs work after a deploy or recycle.
 
+```mermaid
+sequenceDiagram
+    participant FA as FA browser
+    participant CR as Cloud Run<br/>(new container, empty disk)
+    participant FS as Firestore
+    participant GCS as GCS bucket
+    participant R as Rust render binary
+
+    FA->>CR: GET /uploads/&lt;id&gt;/workbench.html
+    CR->>CR: serve_upload_file:<br/>upload_dir.is_dir() = False
+    CR->>CR: _rehydrate_upload(id)
+    CR->>FS: get_report(id)
+    FS-->>CR: {report_json, fa_input, history}
+    CR->>CR: write report.json + fa_input.json<br/>+ edit_history.json to disk
+    CR->>GCS: list + download files/*
+    GCS-->>CR: source PDFs
+    CR->>GCS: list + download extractions/*.json
+    GCS-->>CR: per-receipt JSONs
+    CR->>R: render_workbench(report, extractions, out)
+    R-->>CR: workbench.html + CSVs on disk
+    CR-->>FA: 200 + workbench HTML
+    Note over CR: Disk cache now warm.<br/>Subsequent requests hit it directly.
+```
+
 **Why JSON-encode `report` in Firestore?** Firestore rejects
 arrays-of-arrays as "invalid nested entity," and our reports carry
 bbox coordinate arrays from OCR token-id grounding. So the
@@ -520,6 +604,79 @@ RUN_PROD_E2E=1 VERTEX_PROJECT_ID=soe-agile-agents \
 - After adding a Rust source file: nothing — `cargo` picks it up.
 - After adding a Python script: nothing — Flask picks it up on
   restart.
+
+---
+
+## 10b. Refresh resilience
+
+A property worth documenting because it's load-bearing and easy to
+break in a refactor. The FA must be able to:
+
+1. **Refresh the progress page mid-extraction** without crashing
+   the upload.
+2. **Close the browser tab mid-extraction**, reopen the URL
+   later, and resume from the current phase.
+3. **Refresh the workbench** any time — no spurious POST replays,
+   no lost edits.
+4. **Bookmark the workbench URL** and come back days later (works
+   as long as the report hasn't TTL'd out of Firestore).
+
+Three mechanisms make this true. If you break one, you re-open the
+bug the FA called "refresh crashes the website."
+
+### POST-redirect-GET on upload
+
+`POST /upload` ends with `return redirect(f"/upload/status/{id}",
+code=303)`. The browser follows the redirect; subsequent refreshes
+hit the GET URL, not the POST. Without this, browser refresh would
+re-POST the form + spawn a duplicate upload.
+
+### Idempotent GET on the progress page
+
+`GET /upload/status/<id>` renders the same HTML every time. The
+page's `EventSource` reconnects to `/upload/progress/<id>` on
+load — so refreshing just spawns a new SSE connection that picks up
+the current phase from Firestore JOBS (Phase 1). State is in the
+durable tier; the page is stateless.
+
+### Bounded "initializing" grace + lost/not_found terminal states
+
+```mermaid
+flowchart TD
+  start([SSE opens])
+  start --> read[Read jobs/&lt;id&gt; from Firestore]
+  read --> has{Doc exists?}
+  has -->|Yes| emit[Emit phase snapshot to client]
+  has -->|No| dir{upload_dir<br/>exists?}
+  dir -->|No| nf[Emit phase=not_found,<br/>close stream]
+  dir -->|Yes| grace[Wait 0.5s,<br/>decrement init_ticks]
+  grace --> ticks{ticks &gt; 0?}
+  ticks -->|Yes| read
+  ticks -->|No| lost[Emit phase=lost,<br/>close stream]
+  emit --> term{phase in<br/>done/error?}
+  term -->|No| sleep[Wait 0.5s]
+  sleep --> read
+  term -->|Yes| close([Close stream])
+```
+
+The 10-second grace handles the race where the page opens before
+the pipeline thread has written its first JOBS state. After that,
+`lost` is a clean terminal state — the FA sees a "Back to upload"
+link instead of a spinner that never resolves. `not_found` covers
+typo'd URLs / stale bookmarks.
+
+### Why no client-side polling fallback?
+
+EventSource auto-reconnects on network blip. If we layered a
+poll-fallback on top, we'd double-count Firestore reads + have to
+de-dupe events on the client. The SSE-only path is simpler + at
+0.5s tick × 30 readers it's <$0.01/month in reads.
+
+### Regression catch
+
+`TestProdFailureModes.test_refresh_during_progress_page_recovers`
+exercises this. Don't remove it — it's the only thing standing
+between us and accidentally re-opening Stage 11's pain.
 
 ---
 

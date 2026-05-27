@@ -381,6 +381,80 @@ FA mid-session.
 
 ---
 
+## 6.5 Cloud Build broke — debug runbook
+
+`git push origin main` finished but the site is broken / no new
+revision deployed. Walk this flow:
+
+```mermaid
+flowchart TD
+  push([git push origin main])
+  push --> trigger{Did Cloud Build<br/>fire a build?}
+  trigger -->|No| t1[Check trigger config:<br/>region us-west1, branch ^main$,<br/>github connection healthy]
+  trigger -->|Yes| status[gcloud builds list<br/>--region=us-west1 --limit=5]
+  status --> result{Build status?}
+  result -->|SUCCESS| revcheck[Did Cloud Run<br/>roll out new revision?]
+  result -->|FAILURE| step{Which step failed?}
+  step -->|rust-test| rs[Local cargo test +<br/>git push the fix]
+  step -->|python-test| py[Local unittest discover +<br/>git push the fix]
+  step -->|docker-build| db[Check Dockerfile +<br/>requirements.txt for typos]
+  step -->|docker-push| dp[Cloud Build SA needs<br/>roles/storage.admin]
+  step -->|deploy| dep[Cloud Run SA missing<br/>aiplatform.user / datastore.user /<br/>storage.objectAdmin?]
+  result -->|TIMEOUT| to[Pipeline took &gt;1800s.<br/>Check for hung test or<br/>slow Vertex probe]
+  revcheck -->|No| revprob[gcloud run services describe ...<br/>look at latestReadyRevisionName]
+  revcheck -->|Yes| live[Hit prod URL,<br/>read Cloud Logging]
+```
+
+### Common failure patterns
+
+| Symptom in build log | Cause | Fix |
+|---|---|---|
+| `error: parse ...unknown variant '<x>'` in rust-test | Schema enum changed but a fixture / generated file is stale | Re-run `scripts/generate_schema_artifacts.py`, commit `generated/` |
+| `ImportError: No module named 'google.cloud.<x>'` in python-test | New SDK used but `deploy/requirements.txt` not updated | Add the package to requirements.txt |
+| `error: failed to build` in docker-build (Rust stage) | Cargo.toml change not committed, or `src/` file referenced but missing | `cargo build --release` locally + commit missing file |
+| `permission denied` writing to `gcr.io/...` in docker-push | Cloud Build SA missing `roles/storage.admin` | Add binding via `gcloud projects add-iam-policy-binding` |
+| `Service account ... does not have permission` in deploy | Runtime SA missing one of {aiplatform.user, documentai.apiUser, datastore.user, storage.objectAdmin} | See §2.9 for the role list |
+| `Image not found` in deploy | `docker-push` step partially failed; image isn't in registry | Re-run the build; if persistent, check Artifact Registry quotas |
+
+### Useful one-liners
+
+```bash
+# Tail the most recent build's log
+LATEST=$(gcloud builds list --region=us-west1 --limit=1 --format='value(id)')
+gcloud builds log "$LATEST" --region=us-west1
+
+# What revision is currently serving traffic?
+gcloud run services describe expense-reports --region=us-west1 \
+  --format='value(status.traffic[0].revisionName)'
+
+# What env vars does the live revision have? (catches "I deployed
+# but forgot to add the new env var" bugs)
+gcloud run services describe expense-reports --region=us-west1 \
+  --format='value(spec.template.spec.containers[0].env)'
+
+# Has the runtime SA recently failed to call Vertex / Firestore /
+# GCS? (catches IAM regressions)
+gcloud logging read 'severity>=ERROR AND protoPayload.authenticationInfo.principalEmail=~"compute@developer"' \
+  --project=soe-agile-agents --limit=10
+```
+
+### When the trigger silently stops firing
+
+Rare but happened once. Symptoms: push goes through, no build
+fires. Check:
+
+1. `gcloud builds triggers list --region=us-west1` — is the
+   trigger still there + enabled?
+2. GitHub repo → Settings → Webhooks → look for failing deliveries
+   to Cloud Build's webhook URL
+3. The Cloud Build → GitHub App connection in the GCP console may
+   have lost auth — re-link it
+
+If nothing else works, fall back to `scripts/deploy.sh` (manual
+`gcloud builds submit`) to unblock while you debug the trigger.
+
+---
+
 ## 7. Cost shape
 
 At ~10 uploads/day (current load):
