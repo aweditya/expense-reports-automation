@@ -38,6 +38,9 @@ TEST_SUNET_PATTERNS = (
     re.compile(r"^e2etest$"),
     re.compile(r"^scope_[0-9a-f]+$"),
     re.compile(r"^hist[0-9a-f]+$"),
+    # scripts/test_pipeline.py uploads use this SUNet (DEFAULT_FA_FIELDS);
+    # the optional numeric suffix covers its parallel-mode variants.
+    re.compile(r"^pipelinetest[0-9]*$"),
 )
 
 
