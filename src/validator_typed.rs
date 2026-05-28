@@ -400,10 +400,16 @@ fn walk_transaction_lines(report: &ExpenseReport, issues: &mut Vec<ValidationIss
         if let Some(mileage) = &line.mileage_details {
             walk_mileage_details(mileage, &join(&base, "mileage_details"), issues);
         }
-        // Remaining detail blocks (airfare / car_rental /
-        // conference_registration / gift / human_subject) intentionally
-        // not walked yet — future kinds add them when we have
-        // real receipts to ground the schema in.
+        if let Some(cr) = &line.conference_registration_details {
+            walk_conference_details(
+                cr,
+                &join(&base, "conference_registration_details"),
+                issues,
+            );
+        }
+        // Remaining detail blocks (airfare / car_rental / gift /
+        // human_subject) intentionally not walked yet — future kinds add
+        // them when we have real receipts to ground the schema in.
     }
 }
 
@@ -501,6 +507,26 @@ fn walk_mileage_details(
     check_wrapped(&join(base, "destination"), &m.destination, issues);
     check_wrapped(&join(base, "trip_date"), &m.trip_date, issues);
     check_optional(&join(base, "vehicle_class"), &m.vehicle_class, issues);
+}
+
+// Conference registration. The 5 T3 leaves are all required and
+// extracted from the receipt, so check_wrapped flags any the model
+// failed to read. conference_start_date / conference_end_date (T2) and
+// meals_included (T1) are intentionally NOT walked: the registration
+// receipt doesn't carry them (dates come from supporting-doc
+// aggregation, meals from the FA), and flagging them missing on every
+// conference line before that path exists would be pre-FA-validation
+// noise, not a real defect.
+fn walk_conference_details(
+    cr: &crate::expense_report_model::ExpenseReportTransactionLinesItemConferenceRegistrationDetails,
+    base: &str,
+    issues: &mut Vec<ValidationIssue>,
+) {
+    check_wrapped(&join(base, "conference_name"), &cr.conference_name, issues);
+    check_wrapped(&join(base, "order_number"), &cr.order_number, issues);
+    check_wrapped(&join(base, "ticket_type"), &cr.ticket_type, issues);
+    check_wrapped(&join(base, "attendee_name"), &cr.attendee_name, issues);
+    check_wrapped(&join(base, "registration_system"), &cr.registration_system, issues);
 }
 
 // ─── Leaf checks ───────────────────────────────────────────────────────────

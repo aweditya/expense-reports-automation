@@ -586,6 +586,7 @@ document.addEventListener('click', function(e) {
     ['transport', 'Ground Transport'],
     ['lodging', 'Lodging Folio'],
     ['airfare', 'Airfare / Flight Ticket'],
+    ['conference_registration', 'Conference Registration'],
     ['miscellaneous', 'Miscellaneous (posters, printing, etc.)'],
     ['membership', 'Membership Dues (ACM, IEEE, …)'],
     ['mileage', 'Personal Mileage (Google Maps screenshot)'],
@@ -1388,6 +1389,14 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
         html.push_str("</div>\n");
     }
 
+    if let Some(cr) = &line.conference_registration_details {
+        html.push_str("<h4 class=\"subsection-title\">Conference Registration Details</h4>\n");
+        html.push_str("<div class=\"field-grid\">\n");
+        let cp = format!("expense_report.transaction_lines[{idx}].conference_registration_details");
+        render_conference_details(html, cr, &cp);
+        html.push_str("</div>\n");
+    }
+
     html.push_str("</div>\n</details>\n");
 }
 
@@ -1502,6 +1511,23 @@ fn render_airfare_details(
         |a| format_money_with_currency(*a, printed_currency),
     );
     field_card_text(html, "Booking Method", &airfare.booking_method, &format!("{path}.booking_method"), |b| title_case(b.as_str()));
+}
+
+// conference_start_date / conference_end_date (T2) and meals_included
+// (T1) are intentionally not rendered here: the registration receipt
+// doesn't carry them (dates come from supporting-doc aggregation, meals
+// from the FA), so they'd render "—" and clutter the grid until that
+// path is wired.
+fn render_conference_details(
+    html: &mut String,
+    cr: &crate::expense_report_model::ExpenseReportTransactionLinesItemConferenceRegistrationDetails,
+    path: &str,
+) {
+    field_card_text(html, "Conference", &cr.conference_name, &format!("{path}.conference_name"), |s: &String| s.clone());
+    field_card_text(html, "Attendee", &cr.attendee_name, &format!("{path}.attendee_name"), |s: &String| s.clone());
+    field_card_text(html, "Ticket Type", &cr.ticket_type, &format!("{path}.ticket_type"), |s: &String| s.clone());
+    field_card_text(html, "Order Number", &cr.order_number, &format!("{path}.order_number"), |s: &String| s.clone());
+    field_card_text(html, "Registration System", &cr.registration_system, &format!("{path}.registration_system"), |r| title_case(r.as_str()));
 }
 
 // ─── Source documents (bottom) ─────────────────────────────────────────────
@@ -1643,6 +1669,14 @@ fn line_summary_headline(line: &ExpenseReportTransactionLinesItem) -> String {
             }
         }
         return "(no hotel name)".to_owned();
+    }
+    if let Some(cr) = &line.conference_registration_details {
+        if let Some(name) = cr.conference_name.value.as_deref() {
+            if !name.is_empty() {
+                return name.to_owned();
+            }
+        }
+        return "(conference)".to_owned();
     }
     "—".to_owned()
 }
