@@ -407,6 +407,9 @@ fn walk_transaction_lines(report: &ExpenseReport, issues: &mut Vec<ValidationIss
                 issues,
             );
         }
+        if let Some(anc) = &line.ancillary_details {
+            walk_ancillary_details(anc, &join(&base, "ancillary_details"), issues);
+        }
         // Remaining detail blocks (airfare / car_rental / gift /
         // human_subject) intentionally not walked yet — future kinds add
         // them when we have real receipts to ground the schema in.
@@ -527,6 +530,18 @@ fn walk_conference_details(
     check_wrapped(&join(base, "ticket_type"), &cr.ticket_type, issues);
     check_wrapped(&join(base, "attendee_name"), &cr.attendee_name, issues);
     check_wrapped(&join(base, "registration_system"), &cr.registration_system, issues);
+}
+
+// Ancillary airline fee. All 3 T3 leaves are required and extracted
+// from the receipt, so check_wrapped flags any the model failed to read.
+fn walk_ancillary_details(
+    a: &crate::expense_report_model::ExpenseReportTransactionLinesItemAncillaryDetails,
+    base: &str,
+    issues: &mut Vec<ValidationIssue>,
+) {
+    check_wrapped(&join(base, "fee_category"), &a.fee_category, issues);
+    check_wrapped(&join(base, "airline"), &a.airline, issues);
+    check_wrapped(&join(base, "description"), &a.description, issues);
 }
 
 // ─── Leaf checks ───────────────────────────────────────────────────────────

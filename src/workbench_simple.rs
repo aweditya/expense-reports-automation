@@ -587,6 +587,7 @@ document.addEventListener('click', function(e) {
     ['lodging', 'Lodging Folio'],
     ['airfare', 'Airfare / Flight Ticket'],
     ['conference_registration', 'Conference Registration'],
+    ['ancillary', 'Ancillary Airline Fee (wifi, baggage, seat)'],
     ['miscellaneous', 'Miscellaneous (posters, printing, etc.)'],
     ['membership', 'Membership Dues (ACM, IEEE, …)'],
     ['mileage', 'Personal Mileage (Google Maps screenshot)'],
@@ -829,6 +830,7 @@ fn kind_breakdown(report: &ExpenseReport) -> Vec<BreakdownSegment> {
         BreakdownSegment { label: "Car Rental",icon: "🚙", color: "#14b8a6", amount: 0.0 },
         BreakdownSegment { label: "Gift",      icon: "🎁", color: "#eab308", amount: 0.0 },
         BreakdownSegment { label: "Human Subject", icon: "🧪", color: "#6b7280", amount: 0.0 },
+        BreakdownSegment { label: "Ancillary", icon: "🧳", color: "#ef4444", amount: 0.0 },
         BreakdownSegment { label: "Other",     icon: "📄", color: "#9ca3af", amount: 0.0 },
     ];
 
@@ -847,7 +849,8 @@ fn kind_breakdown(report: &ExpenseReport) -> Vec<BreakdownSegment> {
             else if line.car_rental_details.is_some() { 5 }
             else if line.gift_details.is_some() { 6 }
             else if line.human_subject_details.is_some() { 7 }
-            else { 8 };
+            else if line.ancillary_details.is_some() { 8 }
+            else { 9 };
         totals[bucket].amount += amt;
     }
 
@@ -1397,6 +1400,14 @@ fn render_transaction_line(html: &mut String, idx: usize, line: &ExpenseReportTr
         html.push_str("</div>\n");
     }
 
+    if let Some(anc) = &line.ancillary_details {
+        html.push_str("<h4 class=\"subsection-title\">Ancillary Airline Fee Details</h4>\n");
+        html.push_str("<div class=\"field-grid\">\n");
+        let ap = format!("expense_report.transaction_lines[{idx}].ancillary_details");
+        render_ancillary_details(html, anc, &ap);
+        html.push_str("</div>\n");
+    }
+
     html.push_str("</div>\n</details>\n");
 }
 
@@ -1530,6 +1541,16 @@ fn render_conference_details(
     field_card_text(html, "Registration System", &cr.registration_system, &format!("{path}.registration_system"), |r| title_case(r.as_str()));
 }
 
+fn render_ancillary_details(
+    html: &mut String,
+    a: &crate::expense_report_model::ExpenseReportTransactionLinesItemAncillaryDetails,
+    path: &str,
+) {
+    field_card_text(html, "Fee Category", &a.fee_category, &format!("{path}.fee_category"), |c| title_case(c.as_str()));
+    field_card_text(html, "Airline", &a.airline, &format!("{path}.airline"), |s: &String| s.clone());
+    field_card_text(html, "Description", &a.description, &format!("{path}.description"), |s: &String| s.clone());
+}
+
 // ─── Source documents (bottom) ─────────────────────────────────────────────
 
 fn render_source_documents(html: &mut String, receipts: &[ExtractedReceipt]) {
@@ -1616,6 +1637,9 @@ fn line_kind_icon(line: &ExpenseReportTransactionLinesItem) -> &'static str {
     if line.conference_registration_details.is_some() {
         return "🎟️";
     }
+    if line.ancillary_details.is_some() {
+        return "🧳";
+    }
     if line.car_rental_details.is_some() {
         return "🚙";
     }
@@ -1677,6 +1701,15 @@ fn line_summary_headline(line: &ExpenseReportTransactionLinesItem) -> String {
             }
         }
         return "(conference)".to_owned();
+    }
+    if let Some(anc) = &line.ancillary_details {
+        let airline = anc.airline.value.as_deref().unwrap_or("");
+        let cat = anc.fee_category.value.as_ref().map(|c| title_case(c.as_str())).unwrap_or_default();
+        return match (airline.is_empty(), cat.is_empty()) {
+            (false, false) => format!("{airline} — {cat} fee"),
+            (false, true) => airline.to_owned(),
+            _ => "(ancillary fee)".to_owned(),
+        };
     }
     "—".to_owned()
 }
