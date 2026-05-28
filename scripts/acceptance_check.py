@@ -35,6 +35,7 @@ EXTRACTORS = {
     "lodging": REPO_ROOT / "scripts" / "extract_lodging.py",
     "airfare": REPO_ROOT / "scripts" / "extract_airfare.py",
     "conference_registration": REPO_ROOT / "scripts" / "extract_conference_registration.py",
+    "ancillary": REPO_ROOT / "scripts" / "extract_ancillary.py",
 }
 
 # Detail block expected on a per-doc JSON for each extractor kind. The
@@ -46,6 +47,7 @@ DETAIL_BLOCK_BY_KIND = {
     "lodging": "lodging_details",
     "airfare": "airfare_details",
     "conference_registration": "conference_registration_details",
+    "ancillary": "ancillary_details",
 }
 
 
@@ -476,6 +478,46 @@ RECEIPTS = [
             "conference_registration_details.ticket_type.value": lambda v: v and "Workshops" in v,
             "conference_registration_details.attendee_name.value": lambda v: v and "Sobotka" in v,
             "conference_registration_details.registration_system.value": "whova",
+            "extras.printed_currency.value": "USD",
+        },
+    },
+
+    # ─── Ancillary airline fees ─────────────────────────────────────────────
+    # Two real airline confirmations that bundle the base fare with optional
+    # extras. The ancillary line must capture ONLY the fees (summed), never
+    # the base fare — the dual-line contract that keeps the trip total from
+    # double-counting when the same PDF is also filed as airfare. AA: two
+    # paid seats = $22.06 (single category 'seat'). United: Wi-Fi $8.00 +
+    # Preferred Zone Seat $44.99 = $52.99 (mixed categories → 'other').
+    {
+        "image": "receipts/ancillary_2024-11-04_american-sfo-mia-seat-selection.pdf",
+        "output": ".scratch/spike/ancillary-aa-seats.json",
+        "extractor": "ancillary",
+        "expect": {
+            "common.date.value": "2024-11-04",
+            "common.line_amount_usd.value": 22.06,
+            "common.original_currency.value": None,
+            "common.original_amount.value": None,
+            "common.expense_type.value": "ancillary_airline_fee",
+            "ancillary_details.fee_category.value": "seat",
+            "ancillary_details.airline.value": lambda v: v and "American" in v,
+            "ancillary_details.description.value": lambda v: v and "Seat" in v,
+            "extras.printed_currency.value": "USD",
+        },
+    },
+    {
+        "image": "receipts/ancillary_2024-10-15_united-sfo-mia-wifi-seat.pdf",
+        "output": ".scratch/spike/ancillary-united-wifi-seat.json",
+        "extractor": "ancillary",
+        "expect": {
+            "common.line_amount_usd.value": 52.99,
+            "common.original_currency.value": None,
+            "common.original_amount.value": None,
+            "common.expense_type.value": "ancillary_airline_fee",
+            # Mixed wifi + seat on one receipt collapses to 'other'.
+            "ancillary_details.fee_category.value": "other",
+            "ancillary_details.airline.value": lambda v: v and "United" in v,
+            "ancillary_details.description.value": lambda v: v and "Wi-Fi" in v,
             "extras.printed_currency.value": "USD",
         },
     },
