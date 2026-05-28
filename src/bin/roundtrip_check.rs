@@ -147,17 +147,21 @@ fn numbers_equal(a: &serde_json::Number, b: &serde_json::Number) -> bool {
     }
 }
 
-/// Mismatches the codegen documents as expected. Per the
-/// `scripts/generate_schema_artifacts.py` comment on bare-struct fields:
-/// reduction populates `common.source_document` before serializing the
-/// report, so the field is always present on the way out — except in
-/// this round-trip check, which operates at the **per-receipt** layer
-/// (before reduction runs). The empty-default emit at that layer is
-/// correct, not contract drift. Filtering keeps real round-trip
-/// failures (token_ids drop, value mismatches, type swaps) visible
-/// without the source_document noise drowning them out.
+/// Mismatches the codegen documents as expected. Both are T1
+/// bare-struct fields populated AFTER the per-receipt layer this check
+/// operates at, so Python omits them and Rust emits an empty default on
+/// re-serialize — correct, not contract drift:
+///   - `common.source_document`: reduction sets it before serializing
+///     the report.
+///   - `conference_registration_details.meals_included`: the FA fills it
+///     in the workbench (which meals the conference provides).
+/// Filtering keeps real round-trip failures (token_ids drop, value
+/// mismatches, type swaps) visible without this expected noise drowning
+/// them out. Only the ADDED direction is benign — a DROPPED on either
+/// would be real drift and is intentionally NOT matched here.
 fn is_benign_mismatch(line: &str) -> bool {
     line.contains(".common.source_document ADDED")
+        || line.contains(".conference_registration_details.meals_included ADDED")
 }
 
 fn diff_at(path: &str, lhs: &Value, rhs: &Value, out: &mut Vec<String>) {
@@ -228,6 +232,17 @@ mod tests {
         ));
         assert!(is_benign_mismatch(
             "[2].common.source_document ADDED (Rust default-filled a field Python omitted)"
+        ));
+    }
+
+    #[test]
+    fn benign_matcher_catches_per_receipt_meals_included_added() {
+        assert!(is_benign_mismatch(
+            "[0].conference_registration_details.meals_included ADDED (Rust default-filled a field Python omitted)"
+        ));
+        // DROPPED is the dangerous direction — real drift, not benign.
+        assert!(!is_benign_mismatch(
+            "[0].conference_registration_details.meals_included DROPPED (Rust lost a field Python wrote)"
         ));
     }
 

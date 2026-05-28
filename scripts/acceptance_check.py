@@ -34,6 +34,7 @@ EXTRACTORS = {
     "transport": REPO_ROOT / "scripts" / "extract_transport.py",
     "lodging": REPO_ROOT / "scripts" / "extract_lodging.py",
     "airfare": REPO_ROOT / "scripts" / "extract_airfare.py",
+    "conference_registration": REPO_ROOT / "scripts" / "extract_conference_registration.py",
 }
 
 # Detail block expected on a per-doc JSON for each extractor kind. The
@@ -44,6 +45,7 @@ DETAIL_BLOCK_BY_KIND = {
     "transport": "ground_transport_details",
     "lodging": "lodging_details",
     "airfare": "airfare_details",
+    "conference_registration": "conference_registration_details",
 }
 
 
@@ -431,6 +433,50 @@ RECEIPTS = [
             "airfare_details.ticket_amount.value": 102.40,
             "extras.printed_currency.value": "USD",
             "extras.segments": lambda v: v and len(v) >= 1,
+        },
+    },
+
+    # ─── Conference registration ───────────────────────────────────────────
+    # Two real Whova-issued ASPLOS 2026 receipts: the main-conference
+    # registration and a workshops/tutorials registration. Both are
+    # US-domestic USD. Literals for date/amount/currency (unambiguous on
+    # the receipt); contains-predicates for the text fields the model
+    # formats freely (conference name, ticket tier, attendee). The
+    # workshop receipt's conference_name is inferred (the receipt prints
+    # the tier, not "ASPLOS 2026"), so the predicate only checks the
+    # ASPLOS substring, not an exact string.
+    {
+        "image": "receipts/conference_2026-01-29_asplos-main-registration.png",
+        "output": ".scratch/spike/conference-asplos-main.json",
+        "extractor": "conference_registration",
+        "expect": {
+            "common.date.value": "2026-01-29",
+            "common.line_amount_usd.value": 550.0,
+            "common.original_currency.value": None,
+            "common.original_amount.value": None,
+            "common.expense_type.value": "conference_registration",
+            "conference_registration_details.conference_name.value": lambda v: v and "ASPLOS" in v,
+            "conference_registration_details.ticket_type.value": lambda v: v and "Main Conference" in v,
+            "conference_registration_details.attendee_name.value": lambda v: v and "Sobotka" in v,
+            "conference_registration_details.registration_system.value": "whova",
+            "extras.printed_currency.value": "USD",
+        },
+    },
+    {
+        "image": "receipts/conference_2026-02-03_asplos-workshop-registration.png",
+        "output": ".scratch/spike/conference-asplos-workshop.json",
+        "extractor": "conference_registration",
+        "expect": {
+            "common.date.value": "2026-02-03",
+            "common.line_amount_usd.value": 250.0,
+            "common.original_currency.value": None,
+            "common.original_amount.value": None,
+            "common.expense_type.value": "conference_registration",
+            "conference_registration_details.conference_name.value": lambda v: v and "ASPLOS" in v,
+            "conference_registration_details.ticket_type.value": lambda v: v and "Workshops" in v,
+            "conference_registration_details.attendee_name.value": lambda v: v and "Sobotka" in v,
+            "conference_registration_details.registration_system.value": "whova",
+            "extras.printed_currency.value": "USD",
         },
     },
 ]
