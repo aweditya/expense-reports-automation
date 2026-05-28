@@ -80,6 +80,12 @@ KIND_EXPENSE_TYPES: dict[str, list[str]] = {
     # current IRS rate (generated/irs_mileage_rates.json) to get the
     # line amount.
     "mileage": ["personal_mileage"],
+    # Ancillary airline fees (inflight wifi, checked/excess baggage, paid
+    # seat selection/upgrade, priority boarding). One enum value; the
+    # detail block's fee_category distinguishes the type. The same airfare
+    # ticket can be uploaded as both airfare and ancillary — the ancillary
+    # line carries only the fee total, not the base fare.
+    "ancillary": ["ancillary_airline_fee"],
 }
 
 
@@ -461,6 +467,31 @@ def conference_registration_details_block_schema() -> dict:
             "attendee_name",
             "registration_system",
         ],
+    }
+
+
+def ancillary_details_block_schema() -> dict:
+    """Per-receipt ancillary-airline-fee detail block.
+
+    3 T3 leaves (fee_category, airline, description) — well under the
+    single-call ceiling, so no split. The line carries the TOTAL of the
+    ancillary fees on the receipt in common.line_amount_usd (NOT the base
+    fare, which the airfare extractor handles separately); description
+    itemizes them. fee_category is `other` when a receipt mixes types.
+    """
+    return {
+        "type": "object",
+        "properties": {
+            "fee_category": leaf(
+                {
+                    "type": "string",
+                    "enum": ["wifi", "baggage", "seat", "priority_boarding", "other"],
+                }
+            ),
+            "airline": leaf({"type": "string"}),
+            "description": leaf({"type": "string"}),
+        },
+        "required": ["fee_category", "airline", "description"],
     }
 
 
@@ -938,6 +969,17 @@ SCHEMAS_TO_GENERATE: list[tuple[str, dict]] = [
             expense_type_values=KIND_EXPENSE_TYPES["mileage"],
             detail_block_name="mileage_details",
             detail_block=mileage_details_block_schema(),
+        ),
+    ),
+    # Ancillary airline fees. Single-call: common (8) + 3 detail leaves +
+    # extras (2) sits under Vertex's ceiling. Extras carries
+    # printed_currency for foreign-currency fees.
+    (
+        "response_schema_ancillary.json",
+        dict(
+            expense_type_values=KIND_EXPENSE_TYPES["ancillary"],
+            detail_block_name="ancillary_details",
+            detail_block=ancillary_details_block_schema(),
         ),
     ),
 ]

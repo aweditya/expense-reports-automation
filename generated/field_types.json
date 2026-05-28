@@ -285,6 +285,18 @@
       "type": "boolean",
       "nullable": true
     },
+    "expense_report.transaction_lines[].ancillary_details.fee_category": {
+      "type": "enum",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].ancillary_details.airline": {
+      "type": "string",
+      "nullable": false
+    },
+    "expense_report.transaction_lines[].ancillary_details.description": {
+      "type": "string",
+      "nullable": false
+    },
     "expense_report.transaction_lines[].meal_details.venue_name": {
       "type": "string",
       "nullable": false

@@ -551,6 +551,31 @@ expense_report:
                       dinner:
                         type: boolean
 
+        ancillary_details:
+          required: "expense_type == ancillary_airline_fee"
+          fields:
+            fee_category:
+              type: enum
+              required: true
+              source: T3
+              allowed_values:
+                - wifi
+                - baggage
+                - seat
+                - priority_boarding
+                - other
+              infer_from: "The kind of ancillary airline fee on the receipt. 'seat' covers paid seat selection / upgrade / preferred-zone; 'other' when the receipt bundles multiple fee types or none fit."
+            airline:
+              type: string
+              required: true
+              source: T3
+              infer_from: "Carrier that charged the fee (e.g. 'United', 'American')."
+            description:
+              type: string
+              required: true
+              source: T3
+              infer_from: "Short FA-facing description of the ancillary fee(s) as printed (e.g. 'Wi-Fi Day Pass', 'Preferred Zone Seat', '2 paid seats SFO-MIA + MIA-SFO'). List each when the receipt has multiple."
+
         meal_details:
           required: "expense_type in [business_meal, group_travel_meal]"
           fields:

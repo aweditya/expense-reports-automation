@@ -92,6 +92,13 @@
       "usenix",
       "other"
     ],
+    "expense_report.transaction_lines[].ancillary_details.fee_category": [
+      "wifi",
+      "baggage",
+      "seat",
+      "priority_boarding",
+      "other"
+    ],
     "expense_report.transaction_lines[].mileage_details.vehicle_class": [
       "personal_car",
       "motorcycle"

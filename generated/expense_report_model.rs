@@ -575,6 +575,54 @@ impl core::fmt::Display for ExpenseReportTransactionLinesItemConferenceRegistrat
     }
 }
 
+/// Source tier: T3
+/// Infer from:  The kind of ancillary airline fee on the receipt. 'seat' covers paid seat
+/// Infer from: selection / upgrade / preferred-zone; 'other' when the receipt bundles multiple
+/// Infer from: fee types or none fit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExpenseReportTransactionLinesItemAncillaryDetailsFeeCategoryEnum {
+    #[default]
+    Wifi,
+    Baggage,
+    Seat,
+    PriorityBoarding,
+    Other,
+}
+
+impl ExpenseReportTransactionLinesItemAncillaryDetailsFeeCategoryEnum {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Wifi => "wifi",
+            Self::Baggage => "baggage",
+            Self::Seat => "seat",
+            Self::PriorityBoarding => "priority_boarding",
+            Self::Other => "other",
+        }
+    }
+}
+
+impl core::str::FromStr for ExpenseReportTransactionLinesItemAncillaryDetailsFeeCategoryEnum {
+    type Err = &'static str;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "wifi" => Ok(Self::Wifi),
+            "baggage" => Ok(Self::Baggage),
+            "seat" => Ok(Self::Seat),
+            "priority_boarding" => Ok(Self::PriorityBoarding),
+            "other" => Ok(Self::Other),
+            _ => Err("invalid enum value"),
+        }
+    }
+}
+
+impl core::fmt::Display for ExpenseReportTransactionLinesItemAncillaryDetailsFeeCategoryEnum {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 ///  Personal car (default for IRS rate). Future: motorcycle/etc. could have different rates.
 /// Source tier: T1
 /// Infer from:  Default personal_car; FA can override
@@ -1150,6 +1198,28 @@ pub struct ExpenseReportTransactionLinesItemConferenceRegistrationDetails {
 
 }
 
+/// Conditionally required when:  expense_type == ancillary_airline_fee
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct ExpenseReportTransactionLinesItemAncillaryDetails {
+    /// Source tier: T3
+    /// Infer from:  The kind of ancillary airline fee on the receipt. 'seat' covers paid seat
+    /// Infer from: selection / upgrade / preferred-zone; 'other' when the receipt bundles
+    /// Infer from: multiple fee types or none fit.
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
+    pub fee_category: Wrapped<ExpenseReportTransactionLinesItemAncillaryDetailsFeeCategoryEnum>,
+    /// Source tier: T3
+    /// Infer from:  Carrier that charged the fee (e.g. 'United', 'American').
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
+    pub airline: Wrapped<String>,
+    /// Source tier: T3
+    /// Infer from:  Short FA-facing description of the ancillary fee(s) as printed (e.g. 'Wi-Fi
+    /// Infer from: Day Pass', 'Preferred Zone Seat', '2 paid seats SFO-MIA + MIA-SFO'). List
+    /// Infer from: each when the receipt has multiple.
+    #[serde(default, skip_serializing_if = "Wrapped::is_unknown")]
+    pub description: Wrapped<String>,
+
+}
+
 /// Source tier: T1
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct ExpenseReportTransactionLinesItemMealDetailsAttendeesItem {
@@ -1328,6 +1398,9 @@ pub struct ExpenseReportTransactionLinesItem {
     /// Conditionally required when:  expense_type == conference_registration
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub conference_registration_details: Option<ExpenseReportTransactionLinesItemConferenceRegistrationDetails>,
+    /// Conditionally required when:  expense_type == ancillary_airline_fee
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ancillary_details: Option<ExpenseReportTransactionLinesItemAncillaryDetails>,
     /// Conditionally required when:  expense_type in [business_meal, group_travel_meal]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub meal_details: Option<ExpenseReportTransactionLinesItemMealDetails>,

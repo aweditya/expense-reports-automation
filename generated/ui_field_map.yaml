@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-generated_at_utc: '2026-05-23T17:33:44+00:00'
+generated_at_utc: '2026-05-28T18:08:52+00:00'
 sections:
 - key: general_information
   label: General Information
@@ -728,6 +728,38 @@ sections:
     required: false
     required_expression: null
     review_priority: low
+    allowed_values: []
+  - path: expense_report.transaction_lines[].ancillary_details.fee_category
+    label: Fee Category
+    control: select
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
+    allowed_values:
+    - wifi
+    - baggage
+    - seat
+    - priority_boarding
+    - other
+  - path: expense_report.transaction_lines[].ancillary_details.airline
+    label: Airline
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: high
+    allowed_values: []
+  - path: expense_report.transaction_lines[].ancillary_details.description
+    label: Description
+    control: text
+    source: T3
+    entry_mode: model_prefill_review
+    required: true
+    required_expression: null
+    review_priority: medium
     allowed_values: []
   - path: expense_report.transaction_lines[].meal_details.venue_name
     label: Venue Name

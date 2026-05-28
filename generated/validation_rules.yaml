@@ -1,5 +1,5 @@
 schema_version: 0.1.0
-generated_at_utc: '2026-05-23T17:33:44+00:00'
+generated_at_utc: '2026-05-28T18:08:52+00:00'
 field_rules:
 - path: expense_report
   node_kind: object
@@ -1319,6 +1319,69 @@ field_rules:
   description: null
   infer_from: null
   validation: null
+- path: expense_report.transaction_lines[].ancillary_details
+  node_kind: object
+  schema_type: object
+  rust_type: ExpenseReportTransactionLinesItemAncillaryDetails
+  required: false
+  required_expression: expense_type == ancillary_airline_fee
+  source: null
+  effective_source: null
+  depends_on: []
+  allowed_values: []
+  default: null
+  description: null
+  infer_from: null
+  validation: null
+- path: expense_report.transaction_lines[].ancillary_details.fee_category
+  node_kind: field
+  schema_type: enum
+  rust_type: ExpenseReportTransactionLinesItemAncillaryDetailsFeeCategoryEnum
+  required: true
+  required_expression: null
+  source: T3
+  effective_source: T3
+  depends_on: []
+  allowed_values:
+  - wifi
+  - baggage
+  - seat
+  - priority_boarding
+  - other
+  default: null
+  description: null
+  infer_from: The kind of ancillary airline fee on the receipt. 'seat' covers paid seat selection / upgrade / preferred-zone;
+    'other' when the receipt bundles multiple fee types or none fit.
+  validation: null
+- path: expense_report.transaction_lines[].ancillary_details.airline
+  node_kind: field
+  schema_type: string
+  rust_type: String
+  required: true
+  required_expression: null
+  source: T3
+  effective_source: T3
+  depends_on: []
+  allowed_values: []
+  default: null
+  description: null
+  infer_from: Carrier that charged the fee (e.g. 'United', 'American').
+  validation: null
+- path: expense_report.transaction_lines[].ancillary_details.description
+  node_kind: field
+  schema_type: string
+  rust_type: String
+  required: true
+  required_expression: null
+  source: T3
+  effective_source: T3
+  depends_on: []
+  allowed_values: []
+  default: null
+  description: null
+  infer_from: Short FA-facing description of the ancillary fee(s) as printed (e.g. 'Wi-Fi Day Pass', 'Preferred Zone Seat',
+    '2 paid seats SFO-MIA + MIA-SFO'). List each when the receipt has multiple.
+  validation: null
 - path: expense_report.transaction_lines[].meal_details
   node_kind: object
   schema_type: object
@@ -2320,6 +2383,9 @@ conditional_rules:
 - rule_type: required_when
   target_path: expense_report.transaction_lines[].conference_registration_details
   expression: expense_type == conference_registration
+- rule_type: required_when
+  target_path: expense_report.transaction_lines[].ancillary_details
+  expression: expense_type == ancillary_airline_fee
 - rule_type: required_when
   target_path: expense_report.transaction_lines[].meal_details
   expression: expense_type in [business_meal, group_travel_meal]
