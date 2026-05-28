@@ -145,7 +145,11 @@ class PipelineError(RuntimeError):
 # instead of this dict. The local fallback is preserved for dev
 # environments without ADC + tests. Flipping the env var is the rollback.
 JOBS: dict[str, dict] = {}
-JOBS_LOCK = threading.Lock()
+# Reentrant: _update_file holds this lock across a read-modify-write and
+# calls _get_job/_set_job inside, which re-acquire it. A plain Lock
+# deadlocks that nesting on the in-memory path (USE_FIRESTORE_JOBS=0);
+# the Firestore path never touches this lock so prod never hit it.
+JOBS_LOCK = threading.RLock()
 USE_FIRESTORE_JOBS = os.environ.get("USE_FIRESTORE_JOBS", "0") == "1"
 # Dual-write reports to Firestore alongside the disk write.
 # Flip the gate off to revert to disk-only writes.
