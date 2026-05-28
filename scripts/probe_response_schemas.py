@@ -48,10 +48,7 @@ MODEL = "gemini-3-flash-preview"
 # them today. Surfaced by the probe but skipped for gate purposes so
 # active schemas don't get bundled with already-known-broken ones.
 # When you wire one of these, drop it from this dict + ship the split.
-KNOWN_BROKEN: dict[str, str] = {
-    "response_schema_conference_registration.json":
-        "exceeds Vertex ceiling; needs split-call wiring (planned post-9c.2)",
-}
+KNOWN_BROKEN: dict[str, str] = {}
 
 
 def get_client() -> genai.Client:

@@ -5,11 +5,11 @@ Reads `schema.yaml` and emits one or more
 `generated/response_schema_<name>.json` files. Multi-call kinds (the
 ones whose typed detail block pushes past Vertex's schema property-
 count ceiling) split into `<kind>_main` + `<kind>_extras` schema
-files that get merged in `scripts/extract_<kind>.py`. Today, 
+files that get merged in `scripts/extract_<kind>.py`. Today,
 split applies to meal, transport, lodging (which also includes the
-per-night-rate breakdown in its extras) and airfare (which uses a
-3-call split: main + aux + extras). Single-call kinds — miscellaneous,
-membership, conference_registration — emit one file each.
+per-night-rate breakdown in its extras), conference_registration, and
+airfare (which uses a 3-call split: main + aux + extras). Single-call
+kinds — miscellaneous, membership, mileage — emit one file each.
 
 The split-call pattern is forced by Vertex's response-schema
 property-count ceiling. The orchestration of parallel calls lives
@@ -427,11 +427,11 @@ def conference_registration_details_block_schema() -> dict:
     """Per-receipt conference-registration detail block.
 
     5 T3 leaves (only the model-extracted ones; conference_start_date /
-    conference_end_date are T2-derived in reduction from supporting_doc
-    aggregation, and meals_included is T1 — all absent from this
-    response_schema). At the proven 5-leaf single-call ceiling.
-
-    See docs/phase-5-design.md.
+    conference_end_date are T2-derived in reduction, and meals_included
+    is T1 — all absent from this response_schema). common (8) + these 5
+    + extras (2) overflows Vertex's single-call ceiling (probe 400s), so
+    conference uses the lodging-style 2-call split: main (common +
+    detail) + extras.
     """
     return {
         "type": "object",
@@ -881,17 +881,29 @@ SCHEMAS_TO_GENERATE: list[tuple[str, dict]] = [
             include_segments=True,
         ),
     ),
-    # Conference registration: 5 T3 detail leaves at the single-call
-    # ceiling. The receipt extractor produces a transaction line in the
-    # standard pattern. Supporting docs and the synthesis-bundle output
-    # use their own (non-transaction-line) schemas — written separately
-    # in main() below since they don't fit transaction_line_schema.
+    # Conference registration: 2-call split (mirror lodging). common (8)
+    # + 5 detail leaves + extras (2) overflows Vertex's single-call
+    # ceiling (probe 400s), so main carries common + the detail block and
+    # extras carries the merchant_address + printed_currency pair. The two
+    # calls run in parallel in extract_conference_registration.py and are
+    # merged before the per-doc JSON is written. Supporting docs and the
+    # synthesis-bundle output use their own (non-transaction-line) schemas
+    # — written separately in main() below since they don't fit
+    # transaction_line_schema.
     (
-        "response_schema_conference_registration.json",
+        "response_schema_conference_registration_main.json",
         dict(
             expense_type_values=KIND_EXPENSE_TYPES["conference_registration"],
             detail_block_name="conference_registration_details",
             detail_block=conference_registration_details_block_schema(),
+            include_extras=False,
+        ),
+    ),
+    (
+        "response_schema_conference_registration_extras.json",
+        dict(
+            include_common=False,
+            include_detail=False,
         ),
     ),
     # Miscellaneous (posters, printing, etc.): no kind-specific detail
