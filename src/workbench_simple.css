@@ -70,23 +70,38 @@ body {
 .hero-downloads {
   margin: 10px 0 0;
   display: flex;
-  gap: 12px;
+  gap: 64px;
   flex-wrap: wrap;
   align-items: center;
 }
 .download-link {
-  font-size: 12px;
+  font-size: 15px;
+  font-weight: 600;
   color: #1e40af;
   text-decoration: none;
-  padding: 4px 10px;
-  border: 1px solid #bfdbfe;
-  border-radius: 4px;
+  padding: 8px 16px;
+  border: 1px solid #93c5fd;
+  border-radius: 6px;
   background: #eff6ff;
+  display: inline-block;
 }
 .download-link:hover {
   background: #dbeafe;
-  border-color: #60a5fa;
+  border-color: #3b82f6;
   text-decoration: none;
+}
+.hero-back {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.hero-back a {
+  color: #4b5563;
+  text-decoration: none;
+}
+.hero-back a:hover {
+  color: #1e40af;
+  text-decoration: underline;
 }
 
 /* Dropdown holding multiple CSV options. Uses native <details>/<summary>

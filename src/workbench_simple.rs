@@ -702,6 +702,7 @@ fn render_hero(html: &mut String, report: &ExpenseReport, validation: &Validatio
     let event = leaf_text(&report.general_information.event_name).unwrap_or("(event not yet set)");
 
     html.push_str("<header class=\"hero\">\n");
+    html.push_str("<p class=\"hero-back\"><a href=\"/\">← Dashboard</a></p>\n");
     html.push_str("<h1>Review &amp; File</h1>\n");
     html.push_str(&format!(
         "<p class=\"hero-status\"><span class=\"pill {status_class}\">{}</span></p>\n",
@@ -728,8 +729,8 @@ fn render_hero(html: &mut String, report: &ExpenseReport, validation: &Validatio
         if domestic_lines > 0 {
             html.push_str(&format!(
                 "<li><a href=\"lines-domestic.csv\" download \
-                 title=\"Stanford ERS Expense Lines (Domestic)\">\
-                 Stanford ERS — Domestic ({domestic_lines})</a></li>"
+                 title=\"ER Transaction Lines (Domestic)\">\
+                 ER Transaction Lines ({domestic_lines})</a></li>"
             ));
         }
         if foreign_lines > 0 {
