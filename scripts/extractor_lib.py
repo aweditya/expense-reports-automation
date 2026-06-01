@@ -368,9 +368,12 @@ def single_call(
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=response_schema,
-                # Gemini 3 includes "thinking" tokens in this budget.
-                # 65536 leaves headroom for multi-page PDFs and the
-                # per-leaf confidence_reason payload.
+                # max_output_tokens is a HARD model ceiling (65536) shared
+                # between thinking and the answer on Gemini 3 Flash. Dense
+                # multi-page PDFs (e.g. United 6-page eTicket) can let
+                # default thinking consume the whole budget -> MAX_TOKENS
+                # with empty answer. Mitigation deferred; see the
+                # extract.usage log emitted below for headroom visibility.
                 max_output_tokens=DEFAULT_MAX_OUTPUT_TOKENS,
                 temperature=0.0,
             ),
@@ -379,6 +382,25 @@ def single_call(
     response = _retry_with_backoff(
         _do_call,
         label=f"generate_content {image_filename}{f' ({diag_label})' if diag_label else ''}",
+    )
+
+    # Observability: thinking + output token usage per call. Gemini 3
+    # shares max_output_tokens between thoughts and the answer, so a
+    # runaway thinking trace can starve the JSON (finish_reason
+    # MAX_TOKENS, empty text). Logging this on every call makes the
+    # thinking-budget headroom visible instead of only surfacing on a
+    # truncation failure.
+    usage = getattr(response, "usage_metadata", None)
+    cands = getattr(response, "candidates", None) or []
+    log_event(
+        "extract.usage",
+        image_filename=image_filename,
+        diag_label=diag_label or "single",
+        prompt_tokens=getattr(usage, "prompt_token_count", None),
+        thoughts_tokens=getattr(usage, "thoughts_token_count", None),
+        candidates_tokens=getattr(usage, "candidates_token_count", None),
+        total_tokens=getattr(usage, "total_token_count", None),
+        finish_reason=str(getattr(cands[0], "finish_reason", None)) if cands else None,
     )
 
     raw_text = response.text or ""
